@@ -1,0 +1,9 @@
+
+xdp.o
+*.o
+
+kernel_space/xdp.o
+kernel_space/*.o
+
+user_space/__pycache__
+user_space/__pycache__/*
