@@ -18,6 +18,11 @@ struct __domain_event {
 #define MAX_DNS_DOMAIN_LENGTH 255;
 #define DEBUG true
 
+extern enum MALICIOUS_FLAGS {
+        BENIGN = 0,
+        MALICIOUS,
+        SUSPICIOUS
+};
 
 extern struct dns_header {
     __be16 id;

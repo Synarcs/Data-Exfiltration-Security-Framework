@@ -13,47 +13,41 @@
 #include <linux/if_ether.h>
 #include <linux/udp.h>
 #include <linux/tcp.h>
+#include <sys/mman.h>
 
 #include "header.h"
+#include "maps.h"
+#include "events.h"
 
 /**
  *  Need to use the tail Stack recursion to save some space for the stack in the kernel
  *   Return and use bpf_tail_call for n order tail func call in the bpf stack space.
  */
 
-
-struct bpf_map_def SEC("maps") dnsBuffer = {
-        .type = BPF_MAP_TYPE_LRU_HASH,
-        .key_size = sizeof(__u64),
-        .value_size = sizeof(__u64),
-        .max_entries = 1 << 10,
-};
-
-// please delete the entry from the map once consumed from the user space
-struct bpf_map_def SEC("maps") dns_event_buffer = {
-        .type = BPF_MAP_TYPE_ARRAY,
-        .key_size = sizeof (int),
-        .value_size = sizeof (struct __domain_event),
-        .max_entries = 1024,
-};
-
+/*
+ *  All the XDP Signature defnation functions
+ */
+static __always_inline bool __verify_sub_domain_count(char *buffer);
+static __always_inline bool __verify_sub_domain_length(char *buffer);
+static __always_inline bool __verify_dns_labels(char *buffer);
+static __always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_dns_data_section, struct dns_query_section *q);
+static __always_inline bool __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip);
+static __always_inline bool __parse_ip_header(struct iphdr *ip, struct xdp_md *mem);
 
 /**
  *   All the static rule checks that the xdp process handles for processing
  */
 static
-__always_inline bool __verify_sub_domain_count(char *buffer){
-    return true;
-}
+__always_inline bool __verify_sub_domain_count(char *buffer){ return true; }
 
 static
-__always_inline bool __verify_sub_domain_length(char *buffer){
-    return true;
-}
+__always_inline bool __verify_sub_domain_length(char *buffer){ return true;}
 
 static
-__always_inline bool __verify_dns_labels(char *buffer){
-    return false;
+__always_inline bool __verify_dns_labels(char *buffer) {return false;}
+
+static __always_inline bool __parse_ip_header(struct iphdr *ip, struct xdp_md *mem){
+    return true;
 }
 
 static
@@ -75,7 +69,10 @@ __always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_d
 #endif
             break;
         }
-        if (*(char *)(curs) == 0){
+
+        uint8_t label_len = *(uint8_t *)curs;
+
+        if (label_len == 0){
             if (curs + 5 > mem_end){
 #ifdef DEBUG
                 bpf_printk("Error: boundary exceeded while retrieving DNS record type and class");
@@ -87,11 +84,19 @@ __always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_d
             }
             return namepos + 2 + 2 + 1;
         }
+        if (label_len + namepos >= sizeof (q -> domain_name)){
+#ifdef DEBUG
+            bpf_printk("Error: Exceed Memory boundry for processing memory buffer");
+#endif
+            break;
+        }
+
         q->domain_name[namepos] = *(char *)curs;
+        bpf_printk("#### The Read Domain name for the buffer is %c", q->domain_name[namepos]);
         namepos++;
         curs++;
     }
-    bpf_printk("The domain parsed for the query is %s %u and %c", q->domain_name, q->record_type,  *(char *)q->class);
+
     return -1;
 }
 
@@ -152,6 +157,14 @@ __always_inline bool __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *sk
                  */
                 uint32_t  proc_id  = bpf_get_smp_processor_id();
                 bpf_printk("The processing running the program is %u32", proc_id);
+
+                struct dns_event event;
+                char *buffer_payload = "loader.prog";
+                memset(&event.eventname, 0, sizeof (event.eventname));
+                memcpy(&event.eventname, buffer_payload, sizeof (event.eventname));
+                memset(&event, 0, sizeof (event.size));
+
+                bpf_printk("The loaded null memory is  %c", event.eventname);
 
 //                strcpy(domainEvent.domain, payload);
 //                strcpy(domainEvent.classification, type);
