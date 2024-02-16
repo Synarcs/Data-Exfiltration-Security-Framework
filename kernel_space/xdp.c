@@ -37,15 +37,6 @@ struct bpf_map_def SEC("maps") dns_event_buffer = {
         .max_entries = 1024,
 };
 
-struct dns_header {
-    __be16 id;
-    __be16 flags;
-    __be16 qdcount;
-    __be16 ancount;
-    __be16 nscount;
-    __be16 arcount;
-};
-
 
 /**
  *   All the static rule checks that the xdp process handles for processing
@@ -65,12 +56,44 @@ __always_inline bool __verify_dns_labels(char *buffer){
     return false;
 }
 
-
 static
-__always_inline bool check_mem_overflow(struct xdp_md *xdp, void * header_ptr_verifier){
-    return (void *) header_ptr_verifier + sizeof (struct dns_header) > (void *) xdp -> data_end ? true : false;
-}
+__always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_dns_data_section,
+                struct dns_query_section *q){
+    void *mem_end = (void *) (long) skb->data_end;
+    void *curs = extra_dns_data_section;
 
+    int namepos = 0;
+
+    memset(&q->domain_name[0], 0, sizeof(q->domain_name));
+    q->record_type = 0;
+    q->class = 0;
+
+    for (int i=0; i < (int) 255; i++){
+        if (curs + i > mem_end){
+#ifdef  DEBUG
+            bpf_printk("Error the Reading out for a unsafe mem location");
+#endif
+            break;
+        }
+        if (*(char *)(curs) == 0){
+            if (curs + 5 > mem_end){
+#ifdef DEBUG
+                bpf_printk("Error: boundary exceeded while retrieving DNS record type and class");
+#endif
+            }
+            else{
+                q->record_type = bpf_htons(*(uint16_t *)(curs + 1));
+                q->class = bpf_htons(*(uint16_t *)(curs + 3));
+            }
+            return namepos + 2 + 2 + 1;
+        }
+        q->domain_name[namepos] = *(char *)curs;
+        namepos++;
+        curs++;
+    }
+    bpf_printk("The domain parsed for the query is %s %u and %c", q->domain_name, q->record_type,  *(char *)q->class);
+    return -1;
+}
 
 // pass the latest order buffer for top 2 layers of the protocol
 static
@@ -103,18 +126,21 @@ __always_inline bool __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *sk
 
         struct dns_header *dnsHeader = dns_head;
         if ((void *) dnsHeader + sizeof (struct dns_header) > (void *) skb->data_end){
-            bpf_printk("The header length for the payload exceed the max range");
+            #ifdef DEBUG
+                bpf_printk("The header length for the payload exceed the max range");
+            #endif
             return false;
         }
         else {
-            void *extra_dns_section = (void *) dnsHeader + sizeof (struct dns_header);
-            if ((void *) extra_dns_section + sizeof (struct dns_header) > (void *) skb->data_end){
+            void *extra_dns_data_section = (void *) dnsHeader + sizeof (struct dns_header);
+            if ((void *) extra_dns_data_section + sizeof (struct dns_header) > (void *) skb->data_end){
                 return false;
             }
-            if (dnsHeader->qdcount >= 1
-                    || dnsHeader -> ancount >= 1){
+            if (dnsHeader->qd_count >= 1
+                    || dnsHeader -> ans_count >= 1){
+                struct dns_query_section querySection;
 
-
+                __parse_dns_query_sections(skb,  extra_dns_data_section, &querySection);
                 // only possible is to check for the domain names and lalbels in the domain
                 /**
                  * TODO
@@ -124,18 +150,12 @@ __always_inline bool __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *sk
                  *
                  *      emit the suspicious to user space for stateless packet evaluation using deep learning
                  */
-                char *buffer = (char *) extra_dns_section;
-                bpf_printk("extra buffer %c ", buffer);
-
-
-                struct __domain_event domainEvent = {};
                 uint32_t  proc_id  = bpf_get_smp_processor_id();
                 bpf_printk("The processing running the program is %u32", proc_id);
 
 //                strcpy(domainEvent.domain, payload);
 //                strcpy(domainEvent.classification, type);
-                bpf_printk("%u %u", ntohs(dnsHeader->qdcount), ntohs(dnsHeader->ancount));
-                bpf_printk("%p ", &domainEvent);
+                bpf_printk("%u %u", ntohs(dnsHeader->qd_count), ntohs(dnsHeader->ans_count));
             }
         }
         return true;
@@ -158,6 +178,13 @@ int handler(struct xdp_md *ctx) {
 
     if ((void *)eth + sizeof(*eth) <= data_end) {
         struct iphdr *ip = data + sizeof(*eth);
+
+        int buffer[100];
+        int size = sizeof buffer / sizeof  buffer[0];
+
+        for (int i=0 ; i < size; i++){
+            buffer[i] = i * i;
+        }
 
         if ((void *)ip + sizeof(*ip) <= data_end) {
             switch (ip->protocol) {
