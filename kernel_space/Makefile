@@ -10,7 +10,7 @@ unload:
 	sudo rm /sys/fs/bpf/xdp
 
 attach:
-	sudo bpftool net attach xdp id 66 dev docker0
+	sudo bpftool net attach xdp id 127 dev docker0
 	# network attach <sec> bpf prog id dev <interface>
 
 list:
@@ -25,4 +25,5 @@ map:
 mapDump:
 	sudo bpftool map dump xdp.bss
 
-detach:
+llvmDump:
+	sudo llvm-objdump -S xdp.o

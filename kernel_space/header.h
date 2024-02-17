@@ -18,13 +18,13 @@ struct __domain_event {
 #define MAX_DNS_DOMAIN_LENGTH 255;
 #define DEBUG true
 
-extern enum MALICIOUS_FLAGS {
+ enum MALICIOUS_FLAGS {
         BENIGN = 0,
         MALICIOUS,
         SUSPICIOUS
 };
 
-extern struct dns_header {
+ struct dns_header {
     __be16 id;
     uint8_t rd: 1;      //Recursion desired
     uint8_t tc: 1;      //Truncated
@@ -42,7 +42,7 @@ extern struct dns_header {
     __be16 add_count;  //Number of resource RRs
 };
 
-extern struct dns_answer_section {
+ struct dns_answer_section {
     uint16_t query_pointer;
     uint16_t record_type;
     uint16_t class;
@@ -50,13 +50,13 @@ extern struct dns_answer_section {
     uint16_t data_length;
 } __attribute__((packed));
 
-extern struct dns_query_section {
+ struct dns_query_section {
     uint16_t record_type;
     uint16_t class;
     char domain_name[(1 << 8) - 1];
 };
 
-extern struct a_record {
+ struct a_record {
     struct in_addr ip_addr;
     uint32_t ttl;
 };
