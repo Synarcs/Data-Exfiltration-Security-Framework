@@ -53,7 +53,7 @@ struct __domain_event {
  struct dns_query_section {
     uint16_t record_type;
     uint16_t class;
-    char domain_name[(1 << 8) - 1];
+    char domain_name[255];
 };
 
  struct a_record {

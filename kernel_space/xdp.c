@@ -28,7 +28,9 @@
  *   All the static rule checks that the xdp process handles for processing
  */
 static
-__always_inline bool __verify_sub_domain_count(char *buffer){ return true; }
+__always_inline bool __verify_sub_domain_count(char *buffer){
+    return *(buffer) == '.' ? true : false;
+}
 
 static
 __always_inline bool __verify_sub_domain_length(char *buffer){ return true;}
@@ -44,10 +46,11 @@ static
 __always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_dns_data_section,
                 struct dns_query_section *q){
     void *mem_end = (void *) (long) skb->data_end;
-    void *curs = extra_dns_data_section;
+    void *cursor = extra_dns_data_section;
 
 
     int namepos = 0;
+    uint16_t  i = 0; // max value is 1 << 8 + 1
 
     memset(&q->domain_name[0], 0, sizeof(q->domain_name));
     memset(&q->record_type, 0, sizeof (uint16_t));
@@ -56,41 +59,46 @@ __always_inline int __parse_dns_query_sections(struct xdp_md *skb, void *extra_d
     q->record_type = 0;
     q->class = 0;
 
+    // 16 bit is enough to count the subdomains
+    uint16_t subdomain_count = 0;
 
-    for (int i=0; i < (int) 255; i++){
-        if (curs + i > mem_end){
+    for (i=0; i < (int) 255; i++){
+        if (cursor + 1 > mem_end) {
 #ifdef  DEBUG
             bpf_printk("Error the Reading out for a unsafe mem location");
 #endif
             break;
         }
 
-        uint8_t label_len = *(uint8_t *)curs;
-
-        if (label_len == 0){
-            if (curs + 5 > mem_end){
+        // check for the null length termination at the end, reached the string end
+        if (*(char *) cursor == 0){
+            if (cursor + 5 > mem_end){
 #ifdef DEBUG
                 bpf_printk("Error: boundary exceeded while retrieving DNS record type and class");
 #endif
+            } else {
+                q->record_type = bpf_htons(*(uint16_t *)(cursor + 1));
+                q->class = bpf_htons(*(uint16_t *)(cursor + 3));
             }
-            else{
-                q->record_type = bpf_htons(*(uint16_t *)(curs + 1));
-                q->class = bpf_htons(*(uint16_t *)(curs + 3));
-            }
-            return namepos + 2 + 2 + 1;
-        }
-        if (label_len + namepos >= sizeof (q -> domain_name)){
-#ifdef DEBUG
-            bpf_printk("Error: Exceed Memory boundry for processing memory buffer");
-#endif
-            break;
+            return namepos + 2 + 2 + 1; // handle the mem offsets
         }
 
-        q->domain_name[namepos] = *(char *)curs;
-        bpf_printk("#### The Read Domain name for the buffer is %c", q->domain_name[namepos]);
+        q->domain_name[namepos] = *(char *)cursor;
+        int val = (int) q->domain_name[namepos];
+
+        if (val <= 20)
+            q->domain_name[namepos] = (char ) '.';
+
+        if (strlen((char *) cursor) == 0) bpf_printk("A null value found need to espace it");
+        else
+            bpf_printk("Bufffer value found need that to be processed is %c", q->domain_name[namepos]);
+
+        if (__verify_sub_domain_count(&q->domain_name[namepos])) subdomain_count++;
         namepos++;
-        curs++;
+        cursor++;
     }
+    subdomain_count--; // remove the delimeter in the domain count
+    __verify_dns_labels(q->domain_name);
 
     return -1;
 }
@@ -114,14 +122,12 @@ __always_inline bool __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *sk
     uint16_t dest = bpf_ntohs(udp_hdr->dest);
 
     bpf_printk("A UDP Packet was found and loaded Possibly DNS %u", dest);
-    switch (ip->version) {
-        case 4: {
+    switch (ip->protocol) {
+        case IPPROTO_IP: {
             uint32_t val = bpf_ntohs(ip->saddr);
             uint64_t  time = bpf_ktime_get_ns();
         }
-        case 6: {
-
-        }
+        case IPPROTO_IPV6: {}
     }
 
     if (dest == 53) {

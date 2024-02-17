@@ -10,8 +10,8 @@
 /*
  *  All the XDP Signature defination functions
  */
-static __always_inline bool __verify_sub_domain_count(char *buffer);
-static __always_inline bool __verify_sub_domain_length(char *buffer);
+static __always_inline bool __verify_sub_domain_count(char* buffer);
+static __always_inline bool __verify_sub_domain_length(char* buffer);
 static __always_inline bool __verify_dns_labels(char *buffer);
 
 
