@@ -1,3 +1,5 @@
+#pragma once
+
 #include <linux/bpf.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
@@ -11,17 +13,22 @@ struct __domain_event {
     #define DNS_PORT = 53
 #endif
 
-
+//bpf map parameters
 #define MAX_SIZE 1024;
 #define MAX_ENTRIES 1024;
-#define MAX_DNS_SUBDOMAIN_LENGTH 55;
-#define MAX_DNS_DOMAIN_LENGTH 255;
+
 #define DEBUG true
 
- enum MALICIOUS_FLAGS {
+enum MALICIOUS_FLAGS {
         BENIGN = 0,
         MALICIOUS,
-        SUSPICIOUS
+        SUSPICIOUS,
+        DROP
+};
+
+enum XDP_DECISION {
+    ALLOW = 0,
+    DENY,
 };
 
  struct dns_header {
@@ -42,7 +49,13 @@ struct __domain_event {
     __be16 add_count;  //Number of resource RRs
 };
 
- struct dns_answer_section {
+struct dns_query_section {
+    uint16_t record_type;
+    uint16_t class;
+    char domain_name[256];
+};
+
+struct dns_answer_section {
     uint16_t query_pointer;
     uint16_t record_type;
     uint16_t class;
@@ -50,14 +63,19 @@ struct __domain_event {
     uint16_t data_length;
 } __attribute__((packed));
 
- struct dns_query_section {
-    uint16_t record_type;
-    uint16_t class;
-    char domain_name[255];
-};
-
- struct a_record {
+struct a_record {
     struct in_addr ip_addr;
     uint32_t ttl;
+};
+
+struct dns_record_limits {
+    int MAX_DOMAIN_LENGTH;
+    int MAX_SUBDOMAIN_LENGTH;
+    int MAX_SUBDOMAIN_NESTING;
+    int MALICIOUS_DOMAIN_QUERY_LENGTH;
+} DNS_RECORD_LIMITS = {
+        255, 63,
+        127,
+        55
 };
 

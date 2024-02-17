@@ -1,11 +1,12 @@
 #!/bin/python3
 
 from bcc import BPF
-import dnslib as dns
 import torch
 import torch.nn as nn
-import os, subprocess
+from torch.func import  hessian
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from scapy.all import *
+import asyncio
 
 
 class ModelTrained(nn.Module):
