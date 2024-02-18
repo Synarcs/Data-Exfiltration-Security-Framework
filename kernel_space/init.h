@@ -13,6 +13,7 @@
 static __always_inline bool __verify_dns_domain_sperator(char* buffer);
 static __always_inline bool __verify_sub_domain_length(int * label_count);
 static __always_inline bool __verify_dns_labels(char *buffer);
+static __always_inline bool __verify_suspicious_subdomain_length(int *label_count);
 
 
 // header parsers for the bpf header

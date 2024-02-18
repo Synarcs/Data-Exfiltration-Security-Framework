@@ -18,6 +18,8 @@ struct __domain_event {
 #define MAX_ENTRIES 1024;
 
 #define DEBUG true
+#define DNS_DEBUG false
+
 
 enum MALICIOUS_FLAGS {
         BENIGN = 0,
@@ -30,6 +32,7 @@ enum XDP_DECISION {
     ALLOW = 0,
     DENY,
 };
+
 
  struct dns_header {
     __be16 id;
@@ -67,6 +70,7 @@ struct a_record {
     struct in_addr ip_addr;
     uint32_t ttl;
 };
+
 
 struct dns_record_limits {
     int MAX_DOMAIN_LENGTH;

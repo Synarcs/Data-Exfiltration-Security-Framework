@@ -38,6 +38,11 @@ __always_inline bool __verify_sub_domain_length(int *label_count){
 }
 
 static
+__always_inline bool __verify_suspicious_subdomain_length(int *label_count){
+    return *(label_count) > DNS_RECORD_LIMITS.MALICIOUS_DOMAIN_QUERY_LENGTH;
+}
+
+static
 __always_inline bool __verify_dns_labels(char *buffer) {return false;}
 
 static __always_inline bool __parse_ip_header(struct iphdr *ip, struct xdp_md *mem){
@@ -59,22 +64,18 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
     void *mem_end = (void *) (long) skb->data_end;
     void *cursor = extra_dns_data_section;
 
-    int namepos = 0;
-    uint16_t i = 0; // max value is 1 << 8 - 1
+    int namepos = 0; uint16_t i = 0; // max value is 1 << 8 - 1
+    // 16 bit is enough to count the subdomains
+    uint16_t subdomain_count = 0;
+    int label_count = 0; int domain_length = 0;
+
 
     memset(&q->domain_name[0], 0, sizeof(q->domain_name));
     memset(&q->record_type, 0, sizeof(uint16_t));
     memset(&q->class, 0, sizeof (uint32_t));
 
-    q->record_type = 0;
-    q->class = 0;
 
-    const int max = 255;
-    // 16 bit is enough to count the subdomains
-    uint16_t *subdomain_count; *(subdomain_count) = 0;
-    int label_count = 0; int domain_length = 0;
-
-    for (i = 0; i < (int) max  ; i++) {
+    for (i = 0; i < (int) 255  ; i++) {
         if (cursor + 1 > mem_end) {
 #ifdef  DEBUG
             bpf_printk("Error the Reading out for a unsafe mem location");
@@ -100,55 +101,64 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
 
         if (val <= 20) {
             q->domain_name[namepos] = (char) '.';
-            if (__verify_sub_domain_length(&label_count)){
-#ifdef DEBUG
+            if (__verify_sub_domain_length(&label_count)) {
+#ifdef DNS_DEBUG
                 bpf_printk("Error the length of the subdomain exceed limit is malicious");
 #endif
                 return DROP;
             }
+
+            if (__verify_suspicious_subdomain_length) {
+#ifdef DNS_DEBUG
+                bpf_printk("Possibily A malicious since contain domain greater than 55")
+#endif
+                return SUSPICIOUS;
+            }
+
+            if (__verify_dns_domain_sperator(&q->domain_name[namepos]))  subdomain_count++;
             label_count = 0;
         }else {
             label_count++;
         }
 
-        domain_length++;
+#ifdef DNS_DEBUG
+        bpf_printk("the payload is %c %d %d", q->domain_name[namepos], label_count, subdomain_count);
+        bpf_printk("the payload is %d :: ", val);
+#endif
 
-        if (__verify_dns_domain_sperator(&q->domain_name[namepos])) {
-            *subdomain_count = *(subdomain_count)+1;
-        }
+        domain_length++;
         namepos++;
         cursor++;
     }
 
-    *(subdomain_count) = *(subdomain_count) - 1; // remove the delimeter in the domain count
+    subdomain_count--;
+    domain_length--;
 
-#ifdef DEBUG
-    bpf_printk("The process label count is %d and domain length %d: and subdomains :: %d", label_count, domain_length,
-                            *subdomain_count);
+#ifdef DNS_DEBUG
+    bpf_printk("the first char is : %c", q->domain_name[0]);
 #endif
 
-    if (label_count > 0 && __verify_sub_domain_length(&label_count))
+#ifdef DNS_DEBUG
+    bpf_printk("The process label count is %d and domain length %d: and subdomains", domain_length,
+                            subdomain_count);
+#endif
+
+    if (label_count > 0 && __verify_sub_domain_length(&label_count)) // verify the last remaining tld
         return DROP;
 
-    if (*subdomain_count > DNS_RECORD_LIMITS.MALICIOUS_DOMAIN_QUERY_LENGTH)
-        return MALICIOUS;
-
-
-
-    if (*subdomain_count < 1){
+    if (*(uint16_t *) subdomain_count < 1){
         // a invalid packet because it does not follow the dns rfc
         return DROP;
-    }else if (*subdomain_count  == 1) { // a tld allow it it is a valid dmain
+    }else if (*(uint16_t *)subdomain_count == 1) { // a tld allow it it is a valid dmain
         return BENIGN;
     }else {  // since it has more domain length or also an mal formed packet let the user space process and handle it
-        return SUSPICIOUS;
+        return SUSPICIOUS; // let user space handle it
     }
 }
 
 static
 __always_inline enum MALICIOUS_FLAGS __parse_dns_answer_sections(struct xdp_md *skb, void *extra_dns_data_section,
                                                 struct dns_query_section *q){
-
     return -1;
 }
 
@@ -163,67 +173,68 @@ static
 __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip){
     uint16_t dest = bpf_ntohs(udp_hdr->dest);
 
-    bpf_printk("A UDP Packet was found and loaded Possibly DNS %u", dest);
-
     if (dest == 53) {
-        void * dns_head = (void *) udp_hdr + sizeof (udp_hdr);
-
+        void * dns_head = (void *) udp_hdr + sizeof (*udp_hdr);
+        bpf_printk("A UDP Packet was found and loaded Possibly DNS %u", dest);
         struct dns_header *dnsHeader = dns_head;
-        if ((void *) dnsHeader + sizeof (struct dns_header) > (void *) skb->data_end){
+        if ((void *) dnsHeader + sizeof (*dnsHeader) > (void *) skb->data_end){
 #ifdef DEBUG
             bpf_printk("The header length for the payload exceed the max range");
 #endif
             return DENY;
         }
         else {
-            void *extra_dns_data_section = (void *) dnsHeader + sizeof (struct dns_header);
-            if ((void *) extra_dns_data_section + sizeof (struct dns_header) > (void *) skb->data_end){
+            if ((void *) dnsHeader + sizeof (*dnsHeader) > (void *) skb->data_end){
+                bpf_printk("fuck found bad");
                 return DENY;
             }
-            struct dns_query_section querySection;
+            void *extra_dns_data_section = (void *) dnsHeader + sizeof (*dnsHeader);
 
-            if (dnsHeader->qd_count == 1 && dnsHeader->ans_count == 0){
-                // possibly the malware is trying to do exfiltration to get attacker's ip address a ipv4 or ipv6 from A type domain
-                // to the attacker's namesapce
-                switch (__parse_dns_query_sections(skb,  extra_dns_data_section, &querySection)) {
-                    case DROP:
-                    case MALICIOUS: {
-                        return DENY;
+#ifdef DNS_DEBUG
+            bpf_printk("A DNS Packet was found with some extra : %u :: %u", dnsHeader->qr , dnsHeader->opcode);
+            bpf_printk("A DNS Packet was found with some extra : %u :: %u",             bpf_ntohs(dnsHeader->qd_count)
+            ,            bpf_ntohs(dnsHeader->ans_count)
+            );
+#endif
+
+            if (dnsHeader->opcode == 1) return DENY;
+
+            switch (dnsHeader->qr) {
+                case 0:{
+                    // a request query packet
+                    uint16_t queryCount = bpf_ntohs(dnsHeader->qd_count);
+                    uint16_t responseCount = bpf_ntohs(dnsHeader->ans_count);
+                    struct dns_query_section querySection;
+
+                    switch ( __parse_dns_query_sections(skb, extra_dns_data_section, &querySection)) {
+                        case MALICIOUS:
+                        DROP:
+                            return DENY;
+                        case BENIGN:
+                            return ALLOW;
+                        case SUSPICIOUS:{
+                            dnsHeader->z = 1; // set the 1 flag as let user space make decious
+                            return ALLOW;
+                        }
                     }
-                    case BENIGN: {
-                        return ALLOW;
-                    }
-                    case SUSPICIOUS: {
-                        // add the z header padding for the user space to define the faith
-                        dnsHeader->z = (uint8_t) 1;
-                        return ALLOW;
-                    }
+
                 }
-                // only possible is to check for the domain names and lalbels in the domain
-                /**
-                 * TODO
-                 *      check for the labels
-                 *      check for the domains names
-                 *      check for subdomain length count
-                 *      check for subdomain count
-                 *      check for entropy if the instruction cycle for the space remains inside limit
-                 *
-                 *      emit the suspicious to user space for stateless packet evaluation using deep learning
-                 */
-                bpf_printk("%u %u", ntohs(dnsHeader->qd_count), ntohs(dnsHeader->ans_count));
-            }else if (dnsHeader->qd_count >= 1
-                      && dnsHeader ->ans_count >= 1){
-                __parse_dns_query_sections(skb,  extra_dns_data_section, &querySection);
-                __parse_dns_answer_sections(skb,  extra_dns_data_section, &querySection);
-                /*
-                 * Check both the query as well as the answer section for the dns-header
-                 */
+                case 1:{
+                    uint16_t queryCount = bpf_ntohs(dnsHeader->qd_count);
+                    uint16_t responseCount = bpf_ntohs(dnsHeader->ans_count);
+                    struct dns_answer_section answerSection;
+                    struct dns_query_section querySection;
 
+                    __parse_dns_query_sections(skb, extra_dns_data_section, &querySection);
+                }
+                default: return DENY;
             }
+
+
         }
-        return true;
+        return ALLOW;
     }
-    return false;
+    return ALLOW;
 }
 
 SEC("xdp")

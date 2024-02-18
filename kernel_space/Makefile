@@ -10,7 +10,7 @@ unload:
 	sudo rm /sys/fs/bpf/xdp
 
 attach:
-	sudo bpftool net attach xdp id 362 dev docker0
+	sudo bpftool net attach xdp id 84 dev docker0
 	# network attach <sec> bpf prog id dev <interface>
 
 list:
