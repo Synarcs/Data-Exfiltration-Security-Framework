@@ -13,7 +13,6 @@
 #include <linux/if_ether.h>
 #include <linux/udp.h>
 #include <linux/tcp.h>
-#include <sys/mman.h>
 
 #include "header.h"
 #include "maps.h"
@@ -60,7 +59,7 @@ static __always_inline bool __parse_ip_header(struct iphdr *ip, struct xdp_md *m
  */
 static
 __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *skb, void *extra_dns_data_section,
-                                               struct dns_query_section *q) {
+                                                                struct dns_query_section *q) {
     void *mem_end = (void *) (long) skb->data_end;
     void *cursor = extra_dns_data_section;
 
@@ -97,34 +96,21 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
         }
 
         q->domain_name[namepos] = *(char *) cursor;
-        int val = (int) q->domain_name[namepos];
 
-        if (val <= 20) {
+        if ( (int) q->domain_name[namepos] <= 20) {
             q->domain_name[namepos] = (char) '.';
-            if (__verify_sub_domain_length(&label_count)) {
-#ifdef DNS_DEBUG
-                bpf_printk("Error the length of the subdomain exceed limit is malicious");
-#endif
-                return DROP;
-            }
 
-            if (__verify_suspicious_subdomain_length) {
-#ifdef DNS_DEBUG
-                bpf_printk("Possibily A malicious since contain domain greater than 55")
-#endif
-                return SUSPICIOUS;
-            }
-
-            if (__verify_dns_domain_sperator(&q->domain_name[namepos]))  subdomain_count++;
-            label_count = 0;
+//
+//            if (label_count > DNS_RECORD_LIMITS.MALICIOUS_DOMAIN_QUERY_LENGTH) return SUSPICIOUS;
+//            subdomain_count++;
+//            label_count = 0;
         }else {
             label_count++;
         }
 
-#ifdef DNS_DEBUG
+//#ifdef DNS_DEBUG
         bpf_printk("the payload is %c %d %d", q->domain_name[namepos], label_count, subdomain_count);
-        bpf_printk("the payload is %d :: ", val);
-#endif
+//#endif
 
         domain_length++;
         namepos++;
@@ -140,16 +126,16 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
 
 #ifdef DNS_DEBUG
     bpf_printk("The process label count is %d and domain length %d: and subdomains", domain_length,
-                            subdomain_count);
+               subdomain_count);
 #endif
 
     if (label_count > 0 && __verify_sub_domain_length(&label_count)) // verify the last remaining tld
         return DROP;
 
-    if (*(uint16_t *) subdomain_count < 1){
+    if ( subdomain_count < 1){
         // a invalid packet because it does not follow the dns rfc
         return DROP;
-    }else if (*(uint16_t *)subdomain_count == 1) { // a tld allow it it is a valid dmain
+    }else if (subdomain_count == 1) { // a tld allow it it is a valid dmain
         return BENIGN;
     }else {  // since it has more domain length or also an mal formed packet let the user space process and handle it
         return SUSPICIOUS; // let user space handle it
@@ -158,7 +144,7 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
 
 static
 __always_inline enum MALICIOUS_FLAGS __parse_dns_answer_sections(struct xdp_md *skb, void *extra_dns_data_section,
-                                                struct dns_query_section *q){
+                                                                 struct dns_query_section *q){
     return -1;
 }
 
@@ -170,7 +156,8 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_addon_sections(struct xdp_md *s
 
 // pass the latest order buffer for top 2 layers of the protocol
 static
-__always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip){
+__always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip,
+                    struct tcphdr *tcp_hdr){
     uint16_t dest = bpf_ntohs(udp_hdr->dest);
 
     if (dest == 53) {
@@ -201,14 +188,12 @@ __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, stru
 
             switch (dnsHeader->qr) {
                 case 0:{
-                    // a request query packet
                     uint16_t queryCount = bpf_ntohs(dnsHeader->qd_count);
-                    uint16_t responseCount = bpf_ntohs(dnsHeader->ans_count);
                     struct dns_query_section querySection;
 
                     switch ( __parse_dns_query_sections(skb, extra_dns_data_section, &querySection)) {
                         case MALICIOUS:
-                        DROP:
+                        case DROP:
                             return DENY;
                         case BENIGN:
                             return ALLOW;
@@ -229,10 +214,7 @@ __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, stru
                 }
                 default: return DENY;
             }
-
-
         }
-        return ALLOW;
     }
     return ALLOW;
 }
@@ -260,16 +242,14 @@ int handler(struct xdp_md *ctx) {
                 case IPPROTO_UDP:
                 {
                     struct udphdr *udp = (void *)ip + sizeof(*ip);
-
                     uint64_t dport = bpf_ntohs(udp->dest);
-
                     if ((void *)udp + sizeof(*udp) <= data_end) {
                         switch (bpf_htons(udp->dest)) {
                             case 53: {
-                                if (__parse_dns_spoof(udp, ctx, ip)) {
-                                    return XDP_DROP;
+                                switch (__parse_dns_spoof(udp, ctx, ip, NULL)) {
+                                    case ALLOW: return XDP_PASS;
+                                    case DENY: return XDP_DROP;
                                 }
-                                return XDP_PASS;
                             }
                             default:{
                                 return XDP_PASS;
@@ -283,10 +263,15 @@ int handler(struct xdp_md *ctx) {
                     }
                 }
                 case IPPROTO_TCP: {
-                    struct tcphdr *tcp_header = (void *)ip + sizeof (struct iphdr);
-                    if ((void *) tcp_header + sizeof (struct  tcphdr) < data_end){}
-                    uint64_t ddport = ntohs(tcp_header->dest);
-                    return XDP_PASS;
+                      struct tcphdr *tcp_header = (void *)ip + sizeof (struct iphdr);
+                    if ((void *) tcp_header + sizeof (*tcp_header) >= data_end){
+                        return XDP_DROP;
+                    } else {
+                        uint64_t dport = bpf_htons(tcp_header->dest);
+                        uint64_t sport = bpf_htons(tcp_header->source);
+
+                        return XDP_PASS;
+                    }
                 }
                 default: {
                     return XDP_PASS;

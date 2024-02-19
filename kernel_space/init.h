@@ -2,6 +2,7 @@
 
 #include <linux/bpf.h>
 #include <linux/udp.h>
+#include <linux/tcp.h>
 
 #include <stdbool.h>
 
@@ -22,4 +23,5 @@ static __always_inline enum MALICIOUS_FLAGS __parse_dns_answer_sections(struct x
 static __always_inline enum MALICIOUS_FLAGS __parse_dns_addon_sections(struct xdp_md *skb, void *extra_dns_data_section, struct dns_query_section *q);
 
 
-static __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip);
+static __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, struct xdp_md *skb, struct iphdr *ip,
+                struct tcphdr *tcp_header);

@@ -1,6 +1,6 @@
 
 run:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o xdp.o -c xdp.c
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o xdp.o -c xdp.c
 
 load:
 	sudo bpftool prog load xdp.o /sys/fs/bpf/xdp
@@ -10,7 +10,7 @@ unload:
 	sudo rm /sys/fs/bpf/xdp
 
 attach:
-	sudo bpftool net attach xdp id 84 dev docker0
+	sudo bpftool net attach xdp id 172 dev docker0
 	# network attach <sec> bpf prog id dev <interface>
 
 list:
