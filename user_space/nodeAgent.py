@@ -1,11 +1,10 @@
-from concurrent.futures import ProcessPoolExecutor as pool 
-import netifaces, sys, multiprocessing as mp, os 
-from bcc import BPF
-from scapy.all import * 
+from concurrent.futures import ProcessPoolExecutor as pool
+from concurrent.futures import ThreadPoolExecutor as threadPool
+import netifaces, sys, multiprocessing as mp, os
+from scapy.all import *
 from enum import Enum 
-import socket as sc 
-from typing import List 
-import logging , grpc 
+from typing import List
+import logging, grpc
 
 
 class EGRESS(Enum):
@@ -37,13 +36,21 @@ class Agent(object):
          print('listening to the present raw IF_INET socket in user-sapce', os.getpid(), interface)
          sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3)) 
          sock.bind((interface, 0))
-            
+
+         def dns_threadHandler(dns_packet):
+             egress.add(dns_packet.id)
+             dns_packet.z = 1
+             print(dns_packet.show())
+
+
          while True:
             packet, dest = sock.recvfrom((1 << 16) - 1)
             ether = Ether(packet)
             egress = set() 
 
             if IP in ether:
+                if ICMP in ether[IP]: print('imcp packet on interface', interface, ICMP(ether[IP][ICMP]))
+
                 if ether[IP].haslayer(UDP):
                     packet = ether[IP][UDP]
                     sport, dport = packet.sport, packet.dport 
@@ -52,9 +59,8 @@ class Agent(object):
                         if DNS in ether[IP][UDP][DNS]:
                             dns_packet = ether[IP][UDP][DNS]
                             if dns_packet.id not in egress:
-                                egress.add(dns_packet.id)
-                                dns_packet.z = 1
-                                print(dns_packet.show())
+                                with threadPool(max_workers=mp.cpu_count()) as childPool:
+                                    childPool.submit(dns_threadHandler, (dns_packet,))
                             else:
                                 print('packet leaving socket  on interface handled by process', interface, os.getpid())
                     elif sport == self.DNS_PORT:

@@ -4,6 +4,9 @@
 #include <linux/icmp.h>
 #include <linux/types.h>
 
+//only for debugging purpose to debuf strace
+//#include <bpf/bpf_helpers.h>
+
 BPF_HASH(icmp_contrack, u64, u64 );
 BPF_PERF_OUTPUT(perf_output); // a per output for now later a ring buffer
 
@@ -15,6 +18,7 @@ struct icmp_event {
 int xdp(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
+
 
     struct icmphdr *icmp = is_icmp_layer3(data, data_end);
     struct tcphdr *tcp = is_tcp_header(data, data_end);

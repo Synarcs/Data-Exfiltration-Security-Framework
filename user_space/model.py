@@ -1,7 +1,7 @@
 
-import torch 
-import torch.nn as nn 
-import os
+import torch
+import torch.nn as nn
+import signal, os
 
 
 class ModelTrained(nn.Module):

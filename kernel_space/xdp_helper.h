@@ -6,6 +6,19 @@
 #include <linux/in.h>
 
 #include "header.h"
+#include "init.h"
+
+static __always_inline unsigned short  is_eth_v6_header(void *data, void *date_end){
+
+    struct ethhdr *eth = data;
+
+    switch (eth->h_proto) {
+        case ETH_P_IP: return 0;
+        case ETH_P_IPV6: return 1;
+        default: return 0;
+    }
+    return 0;
+}
 
 static __always_inline struct iphdr * is_ip_header(void *data,
                     void *data_end){

@@ -4,17 +4,15 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 
-#include <stdbool.h>
-
-
+//#include <stdbool.h>
 
 /*
  *  All the XDP Signature defination functions
  */
-static __always_inline bool __verify_dns_domain_sperator(char* buffer);
-static __always_inline bool __verify_sub_domain_length(int * label_count);
-static __always_inline bool __verify_dns_labels(char *buffer);
-static __always_inline bool __verify_suspicious_subdomain_length(int *label_count);
+static __always_inline unsigned short __verify_dns_domain_sperator(char* buffer);
+static __always_inline unsigned short __verify_sub_domain_length(int * label_count);
+static __always_inline unsigned short __verify_dns_labels(char *buffer);
+static __always_inline unsigned short __verify_suspicious_subdomain_length(int *label_count);
 
 
 // header parsers for the bpf header
