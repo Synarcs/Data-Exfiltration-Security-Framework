@@ -15,8 +15,8 @@
 #include <linux/tcp.h>
 
 #include "header.h"
-#include "maps.h"
 #include "init.h"
+#include "xdp_helper.h"
 
 /**
  *  Need to use the tail Stack recursion to save some space for the stack in the kernel
@@ -81,36 +81,36 @@ __always_inline enum MALICIOUS_FLAGS __parse_dns_query_sections(struct xdp_md *s
 #endif
             break;
         }
-        // check for the null length termination at the end, reached the string end
-        if (*(char *) cursor == 0) {
-            if (cursor + 5 > mem_end) {
-#ifdef DEBUG
-                bpf_printk("Error: boundary exceeded while retrieving DNS record type and class");
-#endif
-            } else {
-                q->record_type = bpf_htons(*(uint16_t *) (cursor + 1));
-                q->class = bpf_htons(*(uint16_t *) (cursor + 3));
-            }
-            namepos = namepos * 2 * 2 + 1;
-            break;
-        }
-
-        q->domain_name[namepos] = *(char *) cursor;
-
-        if ( (int) q->domain_name[namepos] <= 20) {
-            q->domain_name[namepos] = (char) '.';
-
-//
-//            if (label_count > DNS_RECORD_LIMITS.MALICIOUS_DOMAIN_QUERY_LENGTH) return SUSPICIOUS;
-//            subdomain_count++;
-//            label_count = 0;
-        }else {
-            label_count++;
-        }
-
-//#ifdef DNS_DEBUG
-        bpf_printk("the payload is %c %d %d", q->domain_name[namepos], label_count, subdomain_count);
+//        // check for the null length termination at the end, reached the string end
+//        if (*(char *) cursor == 0) {
+//            if (cursor + 5 > mem_end) {
+//#ifdef DEBUG
+//                bpf_printk("Error: boundary exceeded while retrieving DNS record type and class");
 //#endif
+//            } else {
+//                q->record_type = bpf_htons(*(uint16_t *) (cursor + 1));
+//                q->class = bpf_htons(*(uint16_t *) (cursor + 3));
+//            }
+//            namepos = namepos * 2 * 2 + 1;
+//            break;
+//        }
+//
+//        q->domain_name[namepos] = *(char *) cursor;
+//
+//        if ( (int) q->domain_name[namepos] <= 20) {
+//            q->domain_name[namepos] = (char) '.';
+//
+////
+////            if (label_count > DNS_RECORD_LIMITS.MALICIOUS_DOMAIN_QUERY_LENGTH) return SUSPICIOUS;
+////            subdomain_count++;
+////            label_count = 0;
+//        }else {
+//            label_count++;
+//        }
+
+#ifdef DNS_DEBUG
+        bpf_printk("the payload is %c %d %d", q->domain_name[namepos], label_count, subdomain_count);
+#endif
 
         domain_length++;
         namepos++;
@@ -168,6 +168,7 @@ __always_inline enum XDP_DECISION __parse_dns_spoof(struct udphdr *udp_hdr, stru
 #ifdef DEBUG
             bpf_printk("The header length for the payload exceed the max range");
 #endif
+
             return DENY;
         }
         else {
@@ -280,6 +281,7 @@ int handler(struct xdp_md *ctx) {
         }
     }
 
+    bpf_ktime_get_ns();
     return XDP_PASS;
 }
 

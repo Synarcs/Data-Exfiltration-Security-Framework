@@ -5,7 +5,8 @@ from scapy.all import *
 from enum import Enum 
 import socket as sc 
 from typing import List 
-import logging 
+import logging , grpc 
+
 
 class EGRESS(Enum):
     EGRESS_BENIGN = 1,
