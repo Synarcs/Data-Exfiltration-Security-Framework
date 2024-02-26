@@ -1,3 +1,4 @@
+import socket
 from concurrent.futures import ProcessPoolExecutor as pool
 from concurrent.futures import ThreadPoolExecutor as threadPool
 import netifaces, sys, multiprocessing as mp, os
@@ -34,7 +35,7 @@ class Agent(object):
     
     def listen_raw_socket(self, interface):
          print('listening to the present raw IF_INET socket in user-sapce', os.getpid(), interface)
-         sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3)) 
+         sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
          sock.bind((interface, 0))
 
          def dns_threadHandler(dns_packet):

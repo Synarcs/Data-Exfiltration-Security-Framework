@@ -7,5 +7,4 @@
 - Deep Learning 
 - GRPC 
 - SDN
-- Software Switches 
-- 
+- Software Switches

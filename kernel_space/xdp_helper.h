@@ -67,7 +67,7 @@ static __always_inline struct tcphdr * is_tcp_header(void *data, void *data_end)
     return tcp_header;
 }
 
-static __always_inline struct tcphdr * is_udp_header(void *data, void *data_end){
+static __always_inline struct udphdr * is_udp_header(void *data, void *data_end){
     struct iphdr *iph = is_ip_header(data, data_end);
     if (!iph) return NULL;
 
@@ -80,10 +80,24 @@ static __always_inline struct tcphdr * is_udp_header(void *data, void *data_end)
     return udp_header;
 }
 
-static __always_inline unsigned short is_dns(void *data, void *data_end){
+static __always_inline struct dns_header * is_dns(void *data, void *data_end){
 
     struct udphdr *udp_header = is_udp_header(data, data_end);
     if (!udp_header) return NULL;
 
-    return 0;
+    void * layer7_header = udp_header + sizeof (struct udphdr);
+    if (layer7_header > data_end)
+        return NULL;
+
+    if (layer7_header +sizeof (struct dns_header) > data_end) return NULL;
+
+
+    struct dns_header *dnsHeader = (struct dns_header *) layer7_header;
+
+    if (dnsHeader + sizeof (struct dns_header) > data_end) return NULL;
+
+    void *buffer_section = dnsHeader + sizeof (struct dns_header);
+
+    return dnsHeader;
 }
+

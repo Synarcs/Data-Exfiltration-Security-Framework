@@ -19,10 +19,8 @@ int xdp(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
 
-
     struct icmphdr *icmp = is_icmp_layer3(data, data_end);
     struct tcphdr *tcp = is_tcp_header(data, data_end);
-
     struct icmp_event event = {};
     if (icmp){
         bpf_trace_printk("Got ping packet");

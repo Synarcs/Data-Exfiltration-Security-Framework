@@ -5,29 +5,55 @@ from concurrent.futures import ProcessPoolExecutor as pool
 import netifaces as nif
 from bcc import  BPF
 from queue import Queue
-import logging
-import signal
+import logging, signal
+from typing import List
+from pyroute2 import IPRoute
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-class EbpfAgent(object):
+class NetInterfaces(object):
+
+    def __init__(self): super()
+    def get_interfaces(self) -> List:
+        return nif.interfaces()
+
+
+class EbpfTCAgent(NetInterfaces):
+    netlink: IPRoute = IPRoute()
+    bpf: BPF
+    def __init__(self):
+        super().__init__()
+        self.bpf = BPF(src_file='egress.c')
+    def handletracerouteRule(self, interface):
+        id =  self.netlink.link_lookup(interface)[0]
+        self.netlink.tc("add", "egress", id, "ffff:")
+        self.netlink.tc("add-filter", "bpf", id, ":1",
+                            fd= self.bpf.load_func("egress_handler", BPF.SCHED_CLS))
+
+    def attachTc(self):
+        interfaces = self.get_interfaces()
+        with pool(max_workers=mp.cpu_count()) as processPool:
+            processPool.map()
+
+
+class EbpfXDPAgent(NetInterfaces):
     egressQueue :Queue = Queue()
     ingressQueue :Queue = Queue()
     bpf: BPF = None
 
     def __init__(self):
-        super()
+        super().__init__()
         b = BPF(src_file="main.c")
         self.bpf = b
 
     def attach_xdp(self, interface: str):
-        print(f'Bpf interface handled by process interface {interface} and {os.getpid()}')
+        print(f'XDP BPF interface handled by process interface {interface} and {os.getpid()}')
         # XDP will be the first program hit when a packet is received ingress before the nwtwork route
         BPF.attach_xdp(interface, self.bpf.load_func("xdp", BPF.XDP), 0)
 
     def loadIngress(self):
-        interfaces = nif.interfaces()
+        interfaces = self.get_interfaces()
         with pool(max_workers=mp.cpu_count()) as bpfQueue:
             bpfQueue.map(self.attach_xdp, interfaces)
 
@@ -70,6 +96,6 @@ if __name__ == "__main__":
     user_space_interrupt = signal.signal(signal.SIGINT, handleProcessInterrupt)
     # user_space_kill = signal.signal(signal.SIGKILL, handleKiller)
 
-    agent = EbpfAgent()
+    agent = EbpfXDPAgent()
     agent.loadIngress()
     agent.listenIcmpevents()
