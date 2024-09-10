@@ -10,12 +10,17 @@ import (
 	"syscall"
 
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
+	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/vishvananda/netlink"
 )
 
 func main() {
 	mkae := tc.NodeTcHandler([3]int{-1, -2, -3})
 	var tst chan os.Signal = make(chan os.Signal)
+
+	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
+		panic(err.Error())
+	}
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT)
 
