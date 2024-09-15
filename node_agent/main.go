@@ -18,7 +18,10 @@ func main() {
 	mkae := tc.NodeTcHandler([3]int{-1, -2, -3})
 	var tst chan os.Signal = make(chan os.Signal)
 
-	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
+	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
+
+	// }
+	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
 		panic(err.Error())
 	}
 

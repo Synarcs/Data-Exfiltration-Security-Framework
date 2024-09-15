@@ -49,7 +49,7 @@ int test_runner(void *__restrict size_ptr) {
 __attribute__((always_inline))
 int test_print(int *__restrict size) { bpf_trace_printk("\n ////// the size is %d //// \n", *size); return 0; }
 
-__attribute__((always_inline))
+static __always_inline
 void * hoc(int (*test_func_ptr)(int *), int mxSize) {
     test_func_ptr(&mxSize);
 

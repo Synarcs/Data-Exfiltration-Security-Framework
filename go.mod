@@ -1,6 +1,6 @@
 module github.com/Data-Exfiltration-Security-Framework
 
-go 1.22.3
+go 1.23
 
 require (
 	github.com/cilium/ebpf v0.16.0 // indirect

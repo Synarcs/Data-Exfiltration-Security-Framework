@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.p4": "p4",
+        "if_ether.h": "c",
+        "bpf_endian.h": "c",
+        "bpf_helpers.h": "c",
+        "inet.h": "c",
+        "pkt_cls.h": "c"
+    }
+}
