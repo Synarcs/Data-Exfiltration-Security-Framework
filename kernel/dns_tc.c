@@ -1,33 +1,239 @@
 #include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/pkt_cls.h>
-#include <linux/udp.h>
-#include <arpa/inet.h>
-#include <netinet/ip.h>
 
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/udp.h>
+#include <linux/tcp.h>
+
+#include <linux/pkt_cls.h>
+#include <stdbool.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-struct dns_tc_event{
-    int * (*buffer) (struct dns_tc_event *node);
-    struct dns_tc_event * (* event_node) (void * size, int * (*fn) (int *));
+#include "dns.h"
+
+#define SIZE_INFO(ptr, data, end) \
+    if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
+
+#define PRINT_DEBUG(fmt, ...) bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__)
+#define ull unsigned long long 
+#define uc unsigned char 
+#define ll long 
+
+#define DNS_PORT 53 
+
+#define DEBUG false 
+
+#ifndef tc
+    #define TC_FORWARD TC_ACT_OK
+    #define TC_DEFAULT TC_ACT_UNSPEC
+    #define TC_DROP TC_ACT_SHOT
+#endif
+
+#ifndef xdp 
+    #define XDP_FORWARD XDP_PASS
+    #define XDP_DROP XDP_DROP
+#endif
+
+struct skb_cursor {
+    void *data;
+    void *data_end;
 };
 
-#define SIZE_INFO(ptr, data, end) \ 
-    if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
-#define PRINT_DEBUG(fmt, ...) bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__)
-#define PRINT_DEBUG(...) bpf_trace_printk(__VAR__ARGS);
-#define ull unsigned long long 
-#define ll long 
+struct vlanhdr {
+	__u16 tci;
+	__u16 encap_proto;
+};
+
+struct packet_actions {
+    void (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
+    struct packet_actions (*packet_class_action) (struct packet_actions actions);
+    // link layer
+    struct ethhdr * (*parse_eth) (struct skb_cursor *);
+    // router layer 3
+    __u8 (*parse_ipv4) (struct skb_cursor *);
+    __u8 (*parse_ipv6) (struct skb_cursor *);
+    // transport layer 4 
+    __u8 (*parse_udpv4) (struct skb_cursor *);
+    __u8 (*parse_udpv6) (struct skb_cursor *);
+    __u8 (*parse_tcpv4) (struct skb_cursor *);
+    __u8 (*parse_tcpv6) (struct skb_cursor *);
+
+    // app layer 
+    __u8 (*parse_dns) (struct skb_cursor *, uc *, __u32, __u32);
+};
+
+__u32 INSECURE = 0;
+
+struct dns_event {
+    __u32 pid;
+    __u32 src_ip;
+    __u32 dst_ip;
+    __u16 src_port;
+    __u16 dst_port;
+    __u32 payload_size;
+};
+
+static 
+__always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
+    cursor->data = (void *)(ll)(skb->data);
+    cursor->data_end = (void *)(ll)(skb->data_end);
+    return true;  // Added return statement
+}
+
+static 
+__always_inline __u8 parse_eth(struct skb_cursor *skb) {
+    struct ethhdr *eth = skb->data;
+    if ((void *) (eth + 1) > skb->data_end) return 0; // Proper boundary check
+    return 1;
+}
+
+static 
+__always_inline __u8 parse_ipv4(struct skb_cursor *skb) {
+    struct iphdr *ip = skb->data + sizeof(struct ethhdr);
+
+    if ((void *) (ip + 1) > skb->data_end ) return 0; // Proper boundary check
+    __u32 saddr = bpf_ntohl(ip->saddr);  // Corrected to use `bpf_ntohl`
+    __u8 s1 = (saddr >> 24) & 0xFF;  // First octet
+    __u8 s2 = (saddr >> 16) & 0xFF;  // Second octet
+    __u8 s3 = (saddr >> 8) & 0xFF;   // Third octet
+    __u8 s4 = saddr & 0xFF;          // Fourth octet
+    
+    if (ip->protocol == IPPROTO_ICMP) {
+        __u8 ttl_icmp = ip->ttl;
+        // Remove these lines if you don't want to log ICMP packets
+        #ifdef DEBUG
+            bpf_printk("ICMP packet found with TTL %u", ttl_icmp);
+            bpf_printk("Source Address: %u.%u", s1, s2);
+            bpf_printk("Source Address: %u.%u", s3, s4);
+        #endif
+    }
+
+    return 1;
+}
+
+static 
+__always_inline __u8 parse_ipv6(struct skb_cursor *skb) {
+    struct iphdr *ipv6 = skb->data + sizeof(struct ethhdr);
+    if ((void *)(ipv6 + 1) > skb->data_end) return 1; 
+    return 0;
+}
+
+static 
+__always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, struct skb_cursor *skb) {
+    __u16 udp_len = bpf_ntohs(udp->len);
+    __u16 udp_len_payload = udp_len - sizeof(struct udphdr); // Ensure payload size is valid
+
+    // Pointer to the start of the UDP payload
+    void *udp_data = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+
+    // Check if the UDP payload fits within the packet
+    if ((void *)udp_data + udp_len_payload > skb->data_end) {
+        #ifdef DEBUG
+            bpf_printk("UDP payload exceeds packet boundary");
+        #endif
+        return 0;  // Return error if boundary is exceeded
+    }
+
+    // Check if the UDP payload fits within the packet
+    if ((void *)udp_data + udp_len_payload > skb->data_end) {
+        bpf_printk("UDP payload exceeds packet boundary");
+        return 0;  // Return error if boundary is exceeded
+    }
+
+    return 1;
+}
+
+
+static 
+__always_inline __u8 parse_udpv4(struct  skb_cursor *skb) {
+    struct udphdr *udp = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+    if ((void *)(udp + 1) > skb->data_end) return 0;
+
+    if (process_udp_payload_mem_verification(udp, skb) == 0) 
+        return 0;
+    
+
+    #ifdef DEBUG
+        __u16 dport = bpf_htons(udp->dest);
+        __u16 sport = bpf_htons(udp->source);
+        bpf_printk("The Dest and src port for UDP packet are %u %u", dport, sport);
+    #endif
+
+    return 1;
+}
+
+static 
+__always_inline __u8 parse_udpv6(struct  skb_cursor *skb) {
+     struct udphdr *udp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+    if ((void *)(udp + 1) > skb->data_end) return 1; 
+
+
+    if (process_udp_payload_mem_verification(udp, skb) == 0) 
+        return 0;
+
+
+    #ifdef DEBUG
+        __u16 dport = bpf_htons(udp->dest);
+        __u16 sport = bpf_htons(udp->source);
+        bpf_printk("The Dest and src port for UDP packet for Base ipv6 are %u %u", dport, sport);
+    #endif
+
+    return 1;
+}
+
+
+static 
+__always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
+    struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+    if ((void *)(tcp + 1) > skb->data_end) return 1; 
+
+    #ifdef DEBUG
+        __u16 dport = bpf_htons(tcp->dest);
+        __u16 sport = bpf_htons(tcp->source);
+        bpf_printk("The Dest and src port for TCP packet are %u %u", dport, sport);
+    #endif
+    return 0;   
+}
+
+static 
+__always_inline __u8 parse_tcpv6(struct  skb_cursor *skb) {
+     struct udphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+    if ((void *)(tcp + 1) > skb->data_end) return 1; 
+    return 0;   
+}
+
+
+static 
+__always_inline __u8 parse_dns(struct skb_cursor *skb, uc * dns_header_payload, 
+            __u32 udp_payload_len, __u32 *udp_payload_exclude_header) {
+
+        
+        return 1;
+}
+
+
+static 
+__always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
+    actions.cursor_init = &cursor_init;
+    actions.parse_eth = &parse_eth;
+    actions.parse_ipv4 = &parse_ipv4;
+    actions.parse_ipv6 = &parse_ipv6;
+    actions.parse_udpv4 = &parse_udpv4;
+    actions.parse_udpv6 = &parse_udpv6;
+    return actions;
+}
 
 struct ring_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
-} dns_events SEC(".maps");
+} dns_ring_events SEC(".maps");
 
 struct payload_data {
   __u32 len;
-  __u8 data[1500]; // Max Ethernet frame size
+  __u8 data[1500]; 
 };
 
 struct kernel_handler_map {
@@ -37,78 +243,86 @@ struct kernel_handler_map {
     __type(value, __u16);
 } maps SEC(".maps");
 
-
 SEC("filter")
 int classify(struct __sk_buff *skb){
     
-    void *data_end = (void *) (ull *) (skb->data_end);
-    void *data = (void *) (ull *) (skb->data);
-    
-    struct ethhdr *eth = data;
-    if ((void *)eth + sizeof (struct ethhdr) > data_end) return TC_ACT_SHOT;
+    struct skb_cursor cursor; 
+    struct packet_actions actions;
 
-    struct iphdr *iphdr = data + sizeof(struct ethhdr);
+    actions.packet_class_action = &packet_class_action;
+    actions = actions.packet_class_action(actions);
 
-    if ((void *)iphdr + sizeof(struct iphdr) > data_end) return TC_ACT_SHOT;
+    struct ethhdr *eth;
+    struct iphdr *ip; 
+    struct ipv6hdr *ipv6; 
 
-    __u32 saddr = bpf_ntohs(iphdr->saddr); 
-    __u8 s1 = (saddr >> 24) & 0xFF;  // First octet
-    __u8 s2 = (saddr >> 16) & 0xFF;  // Second octet
-    __u8 s3 = (saddr >> 8) & 0xFF;   // Third octet
-    __u8 s4 = saddr & 0xFF;          // Fourth octet
-    
+    // Initialize cursor and parse Ethernet header
+    actions.cursor_init(&cursor, skb);
+    if (actions.parse_eth(&cursor) == 0) return TC_DROP;
+    eth = cursor.data;
 
-    switch(iphdr->protocol) {
-        case IPPROTO_ICMP: {
-            __u8 ttl_icmp = iphdr->ttl;
-            bpf_printk("the icmp packet found %u", ttl_icmp);
-            bpf_printk("Address is %u.%u", s1, s2);
-            bpf_printk("Address is %u.%u", s3, s4);
-            break;
-        }
-        case IPPROTO_UDP: {
-            struct udphdr *udp = data + sizeof(struct ethhdr) + sizeof(struct iphdr);
-            if ((void *) udp + sizeof(struct udphdr) > data_end) return TC_ACT_OK;
-            __u16 src_port = bpf_ntohs(udp -> source);
-            __u8 dest_port = bpf_ntohs(udp -> dest);
+    struct udphdr *udp; struct tcphdr *tcp;
 
-            #pragma unroll(1)
-            for (int i=1; i <= 1; i++) bpf_printk("src and dest port are %u %u", src_port, dest_port);
+    // Parse IPv4 or IPv6 based on Ethernet protocol type
+    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        if (actions.parse_ipv4(&cursor) == 0) return TC_DROP;
+        ip = cursor.data + sizeof(struct ethhdr);
+        if (ip > cursor.data_end) return TC_DROP;
 
-            //  pass the single ring buff to user space 
-            // void *ring_buff_store = bpf_ringbuf_reserve(&dns_events, udp->len - sizeof(struct udphdr), BPF_ANY);
+        if (ip->protocol == IPPROTO_UDP) {
+            if (actions.parse_udpv4(&cursor) == 0) return TC_DROP;
+            udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+            if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
+            void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+            if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
 
-            __u16 udp_len = bpf_ntohs(udp->len);
-            __u16 udp_len_payload = udp_len - sizeof(struct udphdr);
+            __u32 udp_payload_len = bpf_ntohs(udp->len);
+            __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
 
-            void *udp_data = data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
-            if (udp_data > data_end) return TC_ACT_OK;
-            if (udp_data + udp_len_payload > data_end) return TC_ACT_OK;
+            if (udp->dest == bpf_htons(DNS_PORT)) {
+                bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
+
+                struct dns_event *event;
+
+                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(*event), 0);
+                if (!event) {
+                    bpf_printk("Error in allocating ring buffer space in kernel");
+                    return TC_DROP;
+                }
+                
+                event->pid = bpf_get_prandom_u32();
+                event->src_ip = ip->saddr;
+                event->dst_ip = ip->daddr;
+                event->src_port = udp->source;
+                event->dst_port = udp->dest;
+                event->payload_size = udp_payload_exclude_header;
+
+                bpf_printk("Submitting poll from kernel for dns udp event");
+                bpf_ringbuf_submit(event, 0);
 
 
-            if (bpf_map_update_elem(&maps, (void *) &dest_port, (void *) &udp_len_payload, BPF_ANY) < 0){
-                bpf_printk("Error Update the base map");
-                return TC_ACT_OK;
+                                
+                return TC_FORWARD;
+                // for now learn dns ring buff event;
+            }else {
+                // do deep packet inspection on the packet contetnt and the associated payload 
             }
-            // struct payload_data *pd;
+            return TC_FORWARD;
+        }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
+	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+        if (actions.parse_ipv6(&cursor) == 0) return TC_DROP;
+        ipv6 = cursor.data + sizeof(struct ethhdr);
 
-            // pd = bpf_ringbuf_reserve(&dns_events, sizeof(struct payload_data), BPF_ANY);
-            // if (!pd) {
-            //     bpf_printk("The Kernel Size exceed capacity for ring buffer reserve");
-            //     return TC_ACT_OK;
-            // }
+        if (ip->protocol == IPPROTO_UDP) {
+            if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
+            udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+            return TC_FORWARD;
 
-            // pd->len = udp_len_payload;
+        }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
+    } else return TC_FORWARD;
 
-            // if (bpf_skb_load_bytes(skb, udp_data - data, pd->data, udp_len_payload) < 0){
-            //     bpf_ringbuf_discard(pd, 0);
-            // }
-
-        }
-    }
 
     return TC_ACT_OK;
 }
 
 char __license[] SEC("license") = "Dual MIT/GPL";
-

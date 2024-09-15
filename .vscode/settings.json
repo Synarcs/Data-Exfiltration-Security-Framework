@@ -5,6 +5,7 @@
         "bpf_endian.h": "c",
         "bpf_helpers.h": "c",
         "inet.h": "c",
-        "pkt_cls.h": "c"
+        "pkt_cls.h": "c",
+        "dns.h": "c"
     }
 }

@@ -5,6 +5,13 @@ import (
 	"reflect"
 )
 
+type TCHandler struct {
+}
+
+func (tc *TCHandler) readInterfaces() error {
+	return nil 
+}
+
 func NodeTcHandler(id ...interface{}) interface{} {
 	for _, val := range id {
 		switch reflect.TypeOf(val).Kind() {
@@ -17,3 +24,4 @@ func NodeTcHandler(id ...interface{}) interface{} {
 	}
 	return nil
 }
+

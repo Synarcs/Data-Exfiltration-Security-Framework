@@ -2,10 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "tc",
-    srcs = [
-        "read.go",
-        "tc.go",
-    ],
+    srcs = ["tc.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/tc",
     visibility = ["//visibility:public"],
 )

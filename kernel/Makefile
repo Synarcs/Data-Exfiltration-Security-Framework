@@ -1,6 +1,6 @@
 
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o icmp.o -c dns_tc.c 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o icmp.o -c dns_tc.c  
 
 tc:
 	sudo tc qdisc add dev enp0s1 clsact
