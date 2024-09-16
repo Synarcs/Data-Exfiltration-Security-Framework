@@ -16,7 +16,7 @@ type TCHandler struct {
 }
 
 func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpec, error) {
-	spec, err := ebpf.LoadCollectionSpec("main.o")
+	spec, err := ebpf.LoadCollectionSpec("icmp.o")
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,16 @@ func (tc *TCHandler) ReadInterfaces() error {
 		log.Println(err)
 		return err
 	}
-	tc.interfaces = links
+	customLinks := make([]netlink.Link, 0)
+
+	for _, link := range links {
+		if link.Attrs().Name == "enp0s1" {
+			fmt.Println("found a link ", link.Attrs().Name)
+			customLinks = append(customLinks, link)
+		}
+	}
+	fmt.Println("the custom link to process are ", customLinks)
+	tc.interfaces = customLinks
 	return nil
 }
 

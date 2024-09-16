@@ -10,7 +10,7 @@ gazelle:
 	bazel run //:gazelle 
 
 node_agent:
-	bazel run //node_agent
+	bazel build //node_agent && bazel run //node_agent
 
 kernel:
 	bazel run //:kernel 

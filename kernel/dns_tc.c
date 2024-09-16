@@ -60,8 +60,8 @@ struct packet_actions {
     __u8 (*parse_tcpv6) (struct skb_cursor *);
 
     // app layer 
-    __u8 (*parse_dns_header_size) (struct skb_cursor *);
-    __u8 (*parse_dns) (struct skb_cursor *, uc *, __u32, __u32);
+    __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
+    __u8 (*parse_dns) (struct skb_cursor *, uc *, __u32, __u32,  bool);
 };
 
 __u32 INSECURE = 0;
@@ -145,13 +145,13 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
         #ifdef DEBUG
             bpf_printk("UDP payload exceeds packet boundary");
         #endif
-        return 0;  // Return error if boundary is exceeded
+        return 0;  // Return error for the kernel memory limit exceed for memory safety 
     }
 
     // Check if the UDP payload fits within the packet
     if ((void *)udp_data + udp_len_payload > skb->data_end) {
         bpf_printk("UDP payload exceeds packet boundary");
-        return 0;  // Return error if boundary is exceeded
+        return 0;  // Return error for the kernel memory limit exceed for memory safety 
     }
 
     return 1;
@@ -218,20 +218,40 @@ __always_inline __u8 parse_tcpv6(struct  skb_cursor *skb) {
 
 
 static 
-__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool ispv4) {
+__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, __u32 udp_payload_exclude_header) {
     // verify the dns header payload from root of the skbuff 
-    struct dns_header *dns = skb->data + sizeof(struct ethhdr) + ( ispv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr) ) 
-                + sizeof(struct udphdr);
-    if ((void *) (dns + 1) > skb->data_end) return 0;
+
+
+    /*
+        TODO: Need to think about other layer 7 protocols and their memory safety for size
+    */
+    if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
+        // this is definitely not a layer 7 dns header allow this 
+        return 1;
+    }
+
+    // the size of the header is matching for dns header must be  a dns header for ipv4 
+    struct dns_header *dns_hdr = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+
+    #ifdef DEBUG 
+        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->transaction_id));
+        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->qr), bpf_ntohs(dns_hdr->opcode));
+    #endif
+
     return 1;
 }
 
 
 static 
 __always_inline __u8 parse_dns_data(struct skb_cursor *skb, uc * dns_header_payload, 
-            __u32 udp_payload_len, __u32 *udp_payload_exclude_header) {
-
+            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, void * dns_payload_sec_start) {
         
+        // the kernel verifier enforce and need to be strict and assume the buffer is validated before itself 
+        if ((void *) dns_payload_sec_start + udp_payload_exclude_header > skb->data_end) return 0;
+
+        void *dns_payload_start = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
+
+        if (dns_payload_sec_start > skb->data_end) return 0;
         return 1;
 }
 
@@ -244,6 +264,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_ipv6 = &parse_ipv6;
     actions.parse_udpv4 = &parse_udpv4;
     actions.parse_udpv6 = &parse_udpv6;
+    actions.parse_dns_header_size = &parse_dns_header_size;
     return actions;
 }
 
@@ -317,6 +338,13 @@ int classify(struct __sk_buff *skb){
                 bpf_printk("Submitting poll from kernel for dns udp event");
                 bpf_ringbuf_submit(event, 0);
 
+                
+                if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
+                    return TC_DROP;
+
+
+
+                // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
                 return TC_FORWARD;
                 // for now learn dns ring buff event;
             }else {
@@ -327,6 +355,7 @@ int classify(struct __sk_buff *skb){
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
         if (actions.parse_ipv6(&cursor) == 0) return TC_DROP;
         ipv6 = cursor.data + sizeof(struct ethhdr);
+        if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
 
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;

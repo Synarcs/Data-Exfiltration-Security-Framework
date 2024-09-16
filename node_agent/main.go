@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,41 +11,82 @@ import (
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
-	"github.com/vishvananda/netlink"
+	"github.com/cilium/ebpf/ringbuf"
+)
+
+const (
+	TC_CONTROL_PROG = "classify"
 )
 
 func tcHandler() {
 
 	tcHandler := tc.TCHandler{}
 	ctx := context.Background()
-	spec, err := tcHandler.ReadEbpfFromSpec(&ctx)
+
+	tcHandler.ReadInterfaces()
+	handler, err := tcHandler.ReadEbpfFromSpec(&ctx)
 
 	if err != nil {
 		panic(err.Error())
 	}
 
-	collection, err := ebpf.NewCollection(spec)
+	spec, err := ebpf.NewCollection(handler)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	defer collection.Close()
+	defer spec.Close()
 
-	if len(collection.Programs) > 0 {
+	if len(spec.Programs) > 1 {
 		fmt.Println("Multiple programs found in the root collection")
 	}
-	prog := collection.Programs["classify"]
-	if prog == nil {
-		panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
+	if len(spec.Programs) == 0 {
+		fmt.Println("The Ebpf Bytecode is corrupt or malformed")
 	}
 
-	tcHandler.AttachTcHandler(&ctx, prog)
+	prog := spec.Programs[TC_CONTROL_PROG]
+
+	if prog == nil {
+		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
+	}
+
+	if err := tcHandler.AttachTcHandler(&ctx, prog); err != nil {
+		fmt.Println("Error attaching the clsact bpf qdisc for netdev")
+		panic(err.Error())
+	}
+
+	ringBuffer, err := ringbuf.NewReader(spec.Maps["dns_ring_events"])
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer ringBuffer.Close()
+
+	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
+
+	go func() {
+		for {
+			fmt.Println("polling the ring buffer")
+			data, err := ringBuffer.Read()
+			if err != nil {
+				if errors.Is(err, ringbuf.ErrClosed) {
+					return
+				}
+				panic(err.Error())
+			}
+			fmt.Println("Data from ring buffer is ", data, string(data.RawSample))
+		}
+	}()
+	// if prog == nil {
+	// 	panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
+	// }
+
+	// tcHandler.AttachTcHandler(&ctx, prog)
 }
 
 func main() {
-	mkae := tc.NodeTcHandler([3]int{-1, -2, -3})
 	var tst chan os.Signal = make(chan os.Signal)
-
 	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
 
 	// }
@@ -55,33 +95,12 @@ func main() {
 	}
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT)
-
-	var ctx context.Context
-	mux := http.NewServeMux()
-	info := &http.Server{
-		Addr:    ":3000",
-		Handler: mux,
-		BaseContext: func(l net.Listener) context.Context {
-			ctx = context.WithValue(context.Background(), ":3000", l.Addr().String())
-			return ctx
-		},
-	}
-	fmt.Println("Server listen on port :: ", info.Addr)
-
-	links, err := netlink.LinkList()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	for _, link := range links {
-		fmt.Println(link.Attrs().MTU, link.Attrs().Name)
-	}
+	go tcHandler()
 
 	_, ok := <-tst
 
 	if ok {
-		fmt.Println("channel is closed", os.Getpid())
-		return
+		fmt.Println("Root Process Sig Interrup terminating all the routines")
+		os.Exit(1)
 	}
-	fmt.Println(mkae)
 }

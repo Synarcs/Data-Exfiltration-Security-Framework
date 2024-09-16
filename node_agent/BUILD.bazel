@@ -8,7 +8,7 @@ go_library(
     deps = [
         "//pkg/tc",
         "//pkg/xdp",
-        "@com_github_vishvananda_netlink//:netlink",
+        "@com_github_cilium_ebpf//:ebpf",
     ],
 )
 
