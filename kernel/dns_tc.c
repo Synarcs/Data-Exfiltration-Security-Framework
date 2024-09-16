@@ -24,8 +24,6 @@
 
 #define DNS_PORT 53 
 
-#define DEBUG false 
-
 #ifndef tc
     #define TC_FORWARD TC_ACT_OK
     #define TC_DEFAULT TC_ACT_UNSPEC
@@ -48,10 +46,10 @@ struct vlanhdr {
 };
 
 struct packet_actions {
-    void (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
+    bool (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
     struct packet_actions (*packet_class_action) (struct packet_actions actions);
     // link layer
-    struct ethhdr * (*parse_eth) (struct skb_cursor *);
+    __u8 (*parse_eth) (struct skb_cursor *);
     // router layer 3
     __u8 (*parse_ipv4) (struct skb_cursor *);
     __u8 (*parse_ipv6) (struct skb_cursor *);
@@ -62,6 +60,7 @@ struct packet_actions {
     __u8 (*parse_tcpv6) (struct skb_cursor *);
 
     // app layer 
+    __u8 (*parse_dns_header_size) (struct skb_cursor *);
     __u8 (*parse_dns) (struct skb_cursor *, uc *, __u32, __u32);
 };
 
@@ -75,6 +74,18 @@ struct dns_event {
     __u16 dst_port;
     __u32 payload_size;
 };
+
+struct ring_event {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} dns_ring_events SEC(".maps");
+
+struct exfil_security_config_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, __u64);
+    __uint(max_entries, 1 << 9);
+} fk_config SEC(".maps");
 
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -201,13 +212,23 @@ __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
 static 
 __always_inline __u8 parse_tcpv6(struct  skb_cursor *skb) {
      struct udphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-    if ((void *)(tcp + 1) > skb->data_end) return 1; 
+    if ((void *)(tcp + 1) > skb->data_end) return 0;
     return 0;   
 }
 
 
 static 
-__always_inline __u8 parse_dns(struct skb_cursor *skb, uc * dns_header_payload, 
+__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool ispv4) {
+    // verify the dns header payload from root of the skbuff 
+    struct dns_header *dns = skb->data + sizeof(struct ethhdr) + ( ispv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr) ) 
+                + sizeof(struct udphdr);
+    if ((void *) (dns + 1) > skb->data_end) return 0;
+    return 1;
+}
+
+
+static 
+__always_inline __u8 parse_dns_data(struct skb_cursor *skb, uc * dns_header_payload, 
             __u32 udp_payload_len, __u32 *udp_payload_exclude_header) {
 
         
@@ -226,10 +247,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     return actions;
 }
 
-struct ring_event {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);
-} dns_ring_events SEC(".maps");
 
 struct payload_data {
   __u32 len;
@@ -267,7 +284,7 @@ int classify(struct __sk_buff *skb){
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {
         if (actions.parse_ipv4(&cursor) == 0) return TC_DROP;
         ip = cursor.data + sizeof(struct ethhdr);
-        if (ip > cursor.data_end) return TC_DROP;
+        if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
 
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udpv4(&cursor) == 0) return TC_DROP;
@@ -300,8 +317,6 @@ int classify(struct __sk_buff *skb){
                 bpf_printk("Submitting poll from kernel for dns udp event");
                 bpf_ringbuf_submit(event, 0);
 
-
-                                
                 return TC_FORWARD;
                 // for now learn dns ring buff event;
             }else {

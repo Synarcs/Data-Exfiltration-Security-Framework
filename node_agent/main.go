@@ -11,8 +11,37 @@ import (
 
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
+	"github.com/cilium/ebpf"
 	"github.com/vishvananda/netlink"
 )
+
+func tcHandler() {
+
+	tcHandler := tc.TCHandler{}
+	ctx := context.Background()
+	spec, err := tcHandler.ReadEbpfFromSpec(&ctx)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	collection, err := ebpf.NewCollection(spec)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer collection.Close()
+
+	if len(collection.Programs) > 0 {
+		fmt.Println("Multiple programs found in the root collection")
+	}
+	prog := collection.Programs["classify"]
+	if prog == nil {
+		panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
+	}
+
+	tcHandler.AttachTcHandler(&ctx, prog)
+}
 
 func main() {
 	mkae := tc.NodeTcHandler([3]int{-1, -2, -3})

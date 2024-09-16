@@ -5,4 +5,9 @@ go_library(
     srcs = ["tc.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/tc",
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_cilium_ebpf//:ebpf",
+        "@com_github_vishvananda_netlink//:netlink",
+        "@org_golang_x_sys//unix",
+    ],
 )
