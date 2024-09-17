@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
@@ -18,13 +19,9 @@ const (
 	TC_CONTROL_PROG = "classify"
 )
 
-func tcHandler() {
+func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) {
 
-	tcHandler := tc.TCHandler{}
-	ctx := context.Background()
-
-	tcHandler.ReadInterfaces()
-	handler, err := tcHandler.ReadEbpfFromSpec(&ctx)
+	handler, err := tc.ReadEbpfFromSpec(ctx)
 
 	if err != nil {
 		panic(err.Error())
@@ -50,7 +47,7 @@ func tcHandler() {
 		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
 	}
 
-	if err := tcHandler.AttachTcHandler(&ctx, prog); err != nil {
+	if err := tc.AttachTcHandler(ctx, prog); err != nil {
 		fmt.Println("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
@@ -78,29 +75,37 @@ func tcHandler() {
 			fmt.Println("Data from ring buffer is ", data, string(data.RawSample))
 		}
 	}()
-	// if prog == nil {
-	// 	panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
-	// }
+	if prog == nil {
+		panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
+	}
 
 	// tcHandler.AttachTcHandler(&ctx, prog)
 }
 
 func main() {
 	var tst chan os.Signal = make(chan os.Signal)
-	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
 
+	// multi go route to handle for each tc chain handler
+	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
 	// }
+
+	iface := netinet.NetIface{}
+	iface.ReadInterfaces()
+	ctx := context.Background()
+	tc := tc.TCHandler{}
+
+	tcHandler(&ctx, &iface, &tc)
 	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
 		panic(err.Error())
 	}
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT)
-	go tcHandler()
 
 	_, ok := <-tst
 
 	if ok {
 		fmt.Println("Root Process Sig Interrup terminating all the routines")
+		tc.DetachHandler(&ctx)
 		os.Exit(1)
 	}
 }

@@ -4,3 +4,11 @@
 #ifndef DNS_EGRESS_PORT
     #define DNS_EGRESS_PORT 53 
 #endif
+
+
+
+enum exfil_thread_level {
+    BENIGN = 0,
+    SUSPICIOUS = 1, // TRAFFIC MIRRO FOR KERNEL HANDLER 
+    HARMFUL = 2, // NEED TO CREATE THE THREAT TRACING MAP LRU FOR KERNEL 
+};

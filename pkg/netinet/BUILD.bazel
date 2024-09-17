@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "netinet",
+    srcs = ["iface.go"],
+    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/netinet",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_vishvananda_netlink//:netlink",
+        "@org_golang_x_sys//unix",
+    ],
+)

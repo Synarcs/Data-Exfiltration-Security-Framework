@@ -62,22 +62,19 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
-func (tc *TCHandler) ReadInterfaces() error {
-	links, err := netlink.LinkList()
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	customLinks := make([]netlink.Link, 0)
-
-	for _, link := range links {
-		if link.Attrs().Name == "enp0s1" {
-			fmt.Println("found a link ", link.Attrs().Name)
-			customLinks = append(customLinks, link)
+func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
+	for _, link := range tc.interfaces {
+		err := netlink.QdiscDel(&netlink.Clsact{
+			QdiscAttrs: netlink.QdiscAttrs{
+				LinkIndex: link.Attrs().Index,
+				Parent:    netlink.HANDLE_CLSACT,
+				Handle:    netlink.MakeHandle(0xffff, 0),
+			},
+		})
+		if err != nil {
+			fmt.Println("No Matching clsact desc found to delete")
 		}
 	}
-	fmt.Println("the custom link to process are ", customLinks)
-	tc.interfaces = customLinks
 	return nil
 }
 

@@ -11,7 +11,7 @@ tc-remove:
 	sudo tc qdisc del dev enp0s1 clsact
 
 tc-filter:
-	sudo tc filter add dev enp0s1 egress bpf direct-action obj icmp.o sec filter
+	sudo tc filter add dev enp0s1 egress bpf direct-action obj icmp.o sec tc
 
 tc-show:
 	sudo tc qdisc show 

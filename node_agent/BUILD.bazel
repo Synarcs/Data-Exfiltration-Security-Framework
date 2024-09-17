@@ -6,9 +6,11 @@ go_library(
     importpath = "github.com/Data-Exfiltration-Security-Framework/node_agent",
     visibility = ["//visibility:public"],
     deps = [
+        "//pkg/netinet",
         "//pkg/tc",
         "//pkg/xdp",
         "@com_github_cilium_ebpf//:ebpf",
+        "@com_github_cilium_ebpf//ringbuf",
     ],
 )
 

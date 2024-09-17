@@ -28,7 +28,6 @@
 typedef uint64_t uSizemax_t;
 typedef uint32_t uSizemid_t;
 
-
 #define GENERIC_bpf_trace_printk(x, ...) _Generic((x), \
     uSizemax_t: bpf_trace_printk("\n \\\\\\ %lu", x), \
     u_int16_t: __DEBUG__  ? bpf_trace_printk("\n %lu", x) : NULL, \ 

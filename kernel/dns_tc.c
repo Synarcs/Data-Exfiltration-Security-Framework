@@ -30,11 +30,6 @@
     #define TC_DROP TC_ACT_SHOT
 #endif
 
-#ifndef xdp 
-    #define XDP_FORWARD XDP_PASS
-    #define XDP_DROP XDP_DROP
-#endif
-
 struct skb_cursor {
     void *data;
     void *data_end;
@@ -61,7 +56,7 @@ struct packet_actions {
 
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
-    __u8 (*parse_dns) (struct skb_cursor *, uc *, __u32, __u32,  bool);
+    __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, struct dns_header *, __u32);
 };
 
 __u32 INSECURE = 0;
@@ -73,6 +68,8 @@ struct dns_event {
     __u16 src_port;
     __u16 dst_port;
     __u32 payload_size;
+    __u32 udp_frame_size;
+    char payload[4096];
 };
 
 struct ring_event {
@@ -80,12 +77,28 @@ struct ring_event {
     __uint(max_entries, 1 << 24);
 } dns_ring_events SEC(".maps");
 
+struct ring_payload {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} dns_ring_payload SEC(".maps");
+
 struct exfil_security_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32);
     __type(value, __u64);
     __uint(max_entries, 1 << 9);
 } fk_config SEC(".maps");
+
+struct exfil_map_domain_config {
+    char domains[255]; // max size of any dns domain as per dns rfc 
+};
+
+struct exfil_security_blk_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, struct exfil_map_domain_config);
+    __type(value, __u8);
+    __uint(max_entries, 1 << 20);
+} fk_blk SEC(".maps");
 
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -234,8 +247,10 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
     struct dns_header *dns_hdr = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
 
     #ifdef DEBUG 
-        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->transaction_id));
-        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->qr), bpf_ntohs(dns_hdr->opcode));
+        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->opcode), bpf_ntohs(dns_hdr->transaction_id));
+        bpf_printk("the info for dns question is %u and answercount %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->ans_count));
+        if (bpf_ntohs(dns_hdr->add_count) > 0)
+            bpf_printk("the addon count %u", bpf_ntohs(dns_hdr->add_count));
     #endif
 
     return 1;
@@ -243,15 +258,21 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
 
 static 
-__always_inline __u8 parse_dns_data(struct skb_cursor *skb, uc * dns_header_payload, 
-            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, void * dns_payload_sec_start) {
+__always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payload, 
+            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, struct dns_header * dns_header, __u32 skb_len) {
         
         // the kernel verifier enforce and need to be strict and assume the buffer is validated before itself 
-        if ((void *) dns_payload_sec_start + udp_payload_exclude_header > skb->data_end) return 0;
 
-        void *dns_payload_start = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
+        if (udp_payload_len > skb_len || udp_payload_exclude_header > skb_len) return 0;
 
-        if (dns_payload_sec_start > skb->data_end) return 0;
+
+        #ifdef DEBUG 
+            bpf_printk("The size of the dns payload %u and buffer %u", sizeof(*dns_payload), udp_payload_exclude_header);
+        #endif
+
+        if (bpf_ntohs(dns_header->ans_count) >= 3 || bpf_htons(dns_header->add_count) >= 3) {
+            // perform more detailed octed abased DPI for the entire dns internal header 
+        }
         return 1;
 }
 
@@ -265,6 +286,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_udpv4 = &parse_udpv4;
     actions.parse_udpv6 = &parse_udpv6;
     actions.parse_dns_header_size = &parse_dns_header_size;
+    actions.parse_dns_payload = &parse_dns_payload;
     return actions;
 }
 
@@ -281,7 +303,7 @@ struct kernel_handler_map {
     __type(value, __u16);
 } maps SEC(".maps");
 
-SEC("filter")
+SEC("tc")
 int classify(struct __sk_buff *skb){
     
     struct skb_cursor cursor; 
@@ -298,6 +320,9 @@ int classify(struct __sk_buff *skb){
     actions.cursor_init(&cursor, skb);
     if (actions.parse_eth(&cursor) == 0) return TC_DROP;
     eth = cursor.data;
+    __u32 nhoff = ETH_HLEN;
+
+	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 
     struct udphdr *udp; struct tcphdr *tcp;
 
@@ -314,8 +339,13 @@ int classify(struct __sk_buff *skb){
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
             if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
 
+            __u32 total_offset = nhoff + sizeof(struct iphdr) + sizeof(struct udphdr);
+            if (total_offset > skb->len) return TC_DROP;
+
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
+
+            if (udp_payload_exclude_header > 100) return TC_DROP;
 
             if (udp->dest == bpf_htons(DNS_PORT)) {
                 bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
@@ -334,16 +364,30 @@ int classify(struct __sk_buff *skb){
                 event->src_port = udp->source;
                 event->dst_port = udp->dest;
                 event->payload_size = udp_payload_exclude_header;
+                event->udp_frame_size = bpf_ntohs(udp->len);
+
+                // load the kernel buffer data into skb 
+                // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
+                bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
 
                 bpf_printk("Submitting poll from kernel for dns udp event");
                 bpf_ringbuf_submit(event, 0);
 
-                
                 if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
 
+                int payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
 
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
+                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
+                struct dns_header *dns = (struct dns_header *) (udp_data);
 
+                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) {
+                    return TC_DROP;
+                }
+
+                bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
+                            udp_payload_exclude_header, payload_size);
                 // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
                 return TC_FORWARD;
                 // for now learn dns ring buff event;
