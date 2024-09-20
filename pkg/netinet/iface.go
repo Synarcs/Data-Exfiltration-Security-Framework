@@ -9,8 +9,8 @@ import (
 )
 
 type NetIface struct {
-	links  []netlink.Link
-	routes map[string][]netlink.Route
+	Links  []netlink.Link
+	Routes map[string][]netlink.Route
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -28,19 +28,19 @@ func (nf *NetIface) ReadInterfaces() error {
 		}
 	}
 	fmt.Println("the custom link to process are ", customLinks)
-	nf.links = links
+	nf.Links = links
 	return nil
 }
 
 func (nf *NetIface) ReadRoutes() error {
 
-	for _, link := range nf.links {
+	for _, link := range nf.Links {
 		routes, err := netlink.RouteList(link, unix.ETH_P_ALL)
 		if err != nil {
 			log.Println(err)
 			return err
 		}
-		nf.routes[link.Attrs().Name] = routes
+		nf.Routes[link.Attrs().Name] = routes
 	}
 	return nil
 }

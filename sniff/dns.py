@@ -5,7 +5,7 @@ import os, random
 dns = DNS(id=random.randint(1, 1 << 16), rd=1)
 domains = ["google.com", "apple.com", "intel.com"]
 
-dns.an = DNSRR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300)
+dns.an = DNSRR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300) /  DNSRR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300)
 
 
 dns_req = IP(dst='8.8.8.8') / UDP(dport=53) / dns

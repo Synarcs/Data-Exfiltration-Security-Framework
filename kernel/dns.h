@@ -33,7 +33,6 @@ struct dns_header {
     __be16 ans_count;  //Number of answer RRs
     __be16 auth_count; //Number of authority RRs
     __be16 add_count;  //Number of resource RRs
-
 } __attribute__((packed));
 
 struct dns_query_section {
@@ -65,4 +64,16 @@ struct dns_record_limits {
         255, 63,
         127,
         55
+};
+
+
+struct dns_event {
+    __u32 pid;
+    __u32 src_ip;
+    __u32 dst_ip;
+    __u16 src_port;
+    __u16 dst_port;
+    __u32 payload_size;
+    __u32 udp_frame_size;
+    char payload[4096];
 };

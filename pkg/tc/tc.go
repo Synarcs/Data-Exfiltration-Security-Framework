@@ -12,7 +12,7 @@ import (
 )
 
 type TCHandler struct {
-	interfaces []netlink.Link
+	Interfaces []netlink.Link
 }
 
 func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpec, error) {
@@ -25,7 +25,8 @@ func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpe
 
 func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
 
-	for _, link := range tc.interfaces {
+	for _, link := range tc.Interfaces {
+		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
 		if err != nil {
 			panic(err.Error())
@@ -63,7 +64,7 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 }
 
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
-	for _, link := range tc.interfaces {
+	for _, link := range tc.Interfaces {
 		err := netlink.QdiscDel(&netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,

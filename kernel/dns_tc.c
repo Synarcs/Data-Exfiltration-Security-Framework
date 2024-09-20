@@ -61,16 +61,6 @@ struct packet_actions {
 
 __u32 INSECURE = 0;
 
-struct dns_event {
-    __u32 pid;
-    __u32 src_ip;
-    __u32 dst_ip;
-    __u16 src_port;
-    __u16 dst_port;
-    __u32 payload_size;
-    __u32 udp_frame_size;
-    char payload[4096];
-};
 
 struct ring_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -146,12 +136,12 @@ __always_inline __u8 parse_ipv6(struct skb_cursor *skb) {
 }
 
 static 
-__always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, struct skb_cursor *skb) {
+__always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, struct skb_cursor *skb, bool isIPv4) {
     __u16 udp_len = bpf_ntohs(udp->len);
     __u16 udp_len_payload = udp_len - sizeof(struct udphdr); // Ensure payload size is valid
 
     // Pointer to the start of the UDP payload
-    void *udp_data = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
+    void *udp_data = skb->data + sizeof(struct ethhdr) + (isIPv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr);
 
     // Check if the UDP payload fits within the packet
     if ((void *)udp_data + udp_len_payload > skb->data_end) {
@@ -176,7 +166,7 @@ __always_inline __u8 parse_udpv4(struct  skb_cursor *skb) {
     struct udphdr *udp = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr);
     if ((void *)(udp + 1) > skb->data_end) return 0;
 
-    if (process_udp_payload_mem_verification(udp, skb) == 0) 
+    if (process_udp_payload_mem_verification(udp, skb, true) == 0) 
         return 0;
     
 
@@ -195,9 +185,8 @@ __always_inline __u8 parse_udpv6(struct  skb_cursor *skb) {
     if ((void *)(udp + 1) > skb->data_end) return 1; 
 
 
-    if (process_udp_payload_mem_verification(udp, skb) == 0) 
+    if (process_udp_payload_mem_verification(udp, skb, false) == 0) 
         return 0;
-
 
     #ifdef DEBUG
         __u16 dport = bpf_htons(udp->dest);
@@ -211,8 +200,8 @@ __always_inline __u8 parse_udpv6(struct  skb_cursor *skb) {
 
 static 
 __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
-    struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-    if ((void *)(tcp + 1) > skb->data_end) return 1; 
+    struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+    if ((void *)(tcp + 1) > skb->data_end) return 1;
 
     #ifdef DEBUG
         __u16 dport = bpf_htons(tcp->dest);
@@ -239,7 +228,7 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
         TODO: Need to think about other layer 7 protocols and their memory safety for size
     */
     if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
-        // this is definitely not a layer 7 dns header allow this 
+        // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
     }
 
@@ -267,12 +256,14 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 
 
         #ifdef DEBUG 
-            bpf_printk("The size of the dns payload %u and buffer %u", sizeof(*dns_payload), udp_payload_exclude_header);
+            bpf_printk("The size of the dns payload %u and buffer %u and pyload %u", sizeof(*dns_payload), udp_payload_exclude_header, bpf_htons(dns_header->ans_count));
         #endif
 
-        if (bpf_ntohs(dns_header->ans_count) >= 3 || bpf_htons(dns_header->add_count) >= 3) {
-            // perform more detailed octed abased DPI for the entire dns internal header 
+        if (bpf_htons(dns_header->qd_count) >= 1) {
+            #pragma unroll(255)
+            for (__u8 i=0; i < (1 << 8) - 1; i++) {}
         }
+
         return 1;
 }
 
@@ -341,42 +332,24 @@ int classify(struct __sk_buff *skb){
 
             __u32 total_offset = nhoff + sizeof(struct iphdr) + sizeof(struct udphdr);
             if (total_offset > skb->len) return TC_DROP;
-
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
 
             if (udp_payload_exclude_header > 100) return TC_DROP;
 
+            // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_PORT)) {
                 bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
 
-                struct dns_event *event;
-
-                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(*event), 0);
-                if (!event) {
-                    bpf_printk("Error in allocating ring buffer space in kernel");
-                    return TC_DROP;
-                }
-                
-                event->pid = bpf_get_prandom_u32();
-                event->src_ip = ip->saddr;
-                event->dst_ip = ip->daddr;
-                event->src_port = udp->source;
-                event->dst_port = udp->dest;
-                event->payload_size = udp_payload_exclude_header;
-                event->udp_frame_size = bpf_ntohs(udp->len);
 
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
-                bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
 
                 bpf_printk("Submitting poll from kernel for dns udp event");
-                bpf_ringbuf_submit(event, 0);
 
                 if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
 
-                int payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
@@ -386,8 +359,31 @@ int classify(struct __sk_buff *skb){
                     return TC_DROP;
                 }
 
+                struct dns_event *event;
+
+                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
+                if (!event) {
+                    bpf_printk("Error in allocating ring buffer space in kernel");
+                    return TC_FORWARD;
+                }
+
+                event->pid = bpf_get_prandom_u32();
+                event->src_ip = bpf_ntohl(ip->saddr);
+                event->dst_ip = bpf_ntohl(ip->daddr);
+                event->src_port = bpf_ntohs(udp->source);
+                event->dst_port = bpf_ntohs(udp->dest);
+                event->payload_size = (__u32)udp_payload_exclude_header;
+                event->udp_frame_size = bpf_ntohs(udp->len); 
+
+                __u16 payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
+            
+                bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
+                bpf_ringbuf_submit(event, 0);
+
+
                 bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
                             udp_payload_exclude_header, payload_size);
+                bpf_printk("event info %u %u %u", bpf_ntohs(dns->qd_count), bpf_ntohs(dns->ans_count), bpf_ntohs(dns->add_count));
                 // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
                 return TC_FORWARD;
                 // for now learn dns ring buff event;
@@ -395,7 +391,9 @@ int classify(struct __sk_buff *skb){
                 // do deep packet inspection on the packet contetnt and the associated payload 
             }
             return TC_FORWARD;
-        }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
+        }else if (ip->protocol == IPPROTO_TCP) {
+            return TC_FORWARD;
+        }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
         if (actions.parse_ipv6(&cursor) == 0) return TC_DROP;
         ipv6 = cursor.data + sizeof(struct ethhdr);

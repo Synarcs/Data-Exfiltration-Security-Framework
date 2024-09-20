@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
@@ -16,11 +21,19 @@ import (
 )
 
 const (
-	TC_CONTROL_PROG = "classify"
+	TC_CONTROL_PROG = "classify" // CLSACT
 )
 
-func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) {
+func parseIp(saddr uint32) string {
+	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
+	var s2 uint8 = (uint8)(saddr>>16) & 0xFF
+	var s3 uint8 = (uint8)(saddr>>8) & 0xFF
+	var s4 uint8 = (uint8)(saddr & 0xFF)
+	return fmt.Sprintf("%d.%d.%d.%d", uint8(s1), uint8(s2), uint8(s3), uint8(s4))
+}
 
+func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) {
+	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
 	handler, err := tc.ReadEbpfFromSpec(ctx)
 
 	if err != nil {
@@ -64,21 +77,26 @@ func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) 
 
 	go func() {
 		for {
-			fmt.Println("polling the ring buffer")
-			data, err := ringBuffer.Read()
+			fmt.Println("polling the ring buffer", "using th map", spec.Maps["dns_ring_events"])
+			record, err := ringBuffer.Read()
 			if err != nil {
 				if errors.Is(err, ringbuf.ErrClosed) {
 					return
 				}
 				panic(err.Error())
 			}
-			fmt.Println("Data from ring buffer is ", data, string(data.RawSample))
+			var event events.DnsEvent
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+			if err != nil {
+				log.Fatalf("Failed to parse event: %v", err)
+			}
+
+			// No further conversion is needed; values are already in host byte order
+			fmt.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
+				event.PID, parseIp(event.SrcIP), parseIp(event.DstIP), event.SrcPort, event.DstPort)
+			fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
 		}
 	}()
-	if prog == nil {
-		panic(fmt.Errorf("No Cliassify TC Egress collection found").Error())
-	}
-
 	// tcHandler.AttachTcHandler(&ctx, prog)
 }
 
@@ -92,13 +110,16 @@ func main() {
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
 	ctx := context.Background()
-	tc := tc.TCHandler{}
+	tc := tc.TCHandler{
+		Interfaces: iface.Links,
+	}
 
 	tcHandler(&ctx, &iface, &tc)
 	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
 		panic(err.Error())
 	}
 
+	time.Sleep(time.Hour)
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT)
 
 	_, ok := <-tst
