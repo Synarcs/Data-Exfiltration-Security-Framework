@@ -10,12 +10,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
-	xdp "github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 )
@@ -75,58 +74,75 @@ func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) 
 
 	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
 
-	go func() {
-		for {
-			fmt.Println("polling the ring buffer", "using th map", spec.Maps["dns_ring_events"])
-			record, err := ringBuffer.Read()
-			if err != nil {
-				if errors.Is(err, ringbuf.ErrClosed) {
-					return
-				}
-				panic(err.Error())
+	// go func() {
+	for {
+		fmt.Println("polling the ring buffer", "using th map", spec.Maps["dns_ring_events"])
+		record, err := ringBuffer.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return
 			}
-			var event events.DnsEvent
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
-
-			// No further conversion is needed; values are already in host byte order
-			fmt.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
-				event.PID, parseIp(event.SrcIP), parseIp(event.DstIP), event.SrcPort, event.DstPort)
-			fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
+			panic(err.Error())
 		}
-	}()
+		var event events.DnsEvent
+		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+		if err != nil {
+			log.Fatalf("Failed to parse event: %v", err)
+		}
+
+		// No further conversion is needed; values are already in host byte order
+		fmt.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
+			event.PID, parseIp(event.SrcIP), parseIp(event.DstIP), event.SrcPort, event.DstPort)
+		fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
+
+		fmt.Println(event.IsTcp, event.IsUdp)
+	}
+	// }()
 	// tcHandler.AttachTcHandler(&ctx, prog)
 }
 
-func main() {
-	var tst chan os.Signal = make(chan os.Signal)
+func xdpHandler(ctx *context.Context, iface *netinet.NetIface, xdp *tc.TCHandler) {
+}
 
-	// multi go route to handle for each tc chain handler
-	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil }); err != nil {
-	// }
+func main() {
+	tst := make(chan os.Signal, 1)
+	var term chan os.Signal = make(chan os.Signal, 1)
 
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
 	ctx := context.Background()
+
+	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	tc := tc.TCHandler{
 		Interfaces: iface.Links,
 	}
+	go tcHandler(&ctx, &iface, &tc)
 
-	tcHandler(&ctx, &iface, &tc)
+	// kernel xdp ingress for ifindex over xdp inside kernel
+	xdp := xdp.XdpHandler{
+		NetIfIndex: iface.Links[0].Attrs().Index,
+	}
 	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
 		panic(err.Error())
 	}
 
-	time.Sleep(time.Hour)
-	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT)
+	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
 
-	_, ok := <-tst
+	go func(term chan os.Signal, tst chan os.Signal) {
+		sig := <-tst
+		term <- sig
+	}(term, tst)
 
-	if ok {
-		fmt.Println("Root Process Sig Interrup terminating all the routines")
+	go tc.CreateDPIInterfaceTc(&ctx)
+
+	sigType, done := <-term
+	if done {
+		switch sigType {
+		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
+			fmt.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
+		}
+		fmt.Println("Killing the root node agent ebpf programs atatched in Kernel")
 		tc.DetachHandler(&ctx)
-		os.Exit(1)
+		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 }

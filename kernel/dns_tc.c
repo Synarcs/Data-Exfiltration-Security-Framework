@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include <bpf/bpf_tracing.h>
 
 #include "dns.h"
 
@@ -66,11 +67,6 @@ struct ring_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
 } dns_ring_events SEC(".maps");
-
-struct ring_payload {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);
-} dns_ring_payload SEC(".maps");
 
 struct exfil_security_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -367,23 +363,27 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
 
-                event->pid = bpf_get_prandom_u32();
+                event->eventId = bpf_get_prandom_u32();
                 event->src_ip = bpf_ntohl(ip->saddr);
                 event->dst_ip = bpf_ntohl(ip->daddr);
                 event->src_port = bpf_ntohs(udp->source);
                 event->dst_port = bpf_ntohs(udp->dest);
                 event->payload_size = (__u32)udp_payload_exclude_header;
                 event->udp_frame_size = bpf_ntohs(udp->len); 
+                event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
+                event->isUDP = (__u8) 1;
+                event->isIpv4 = (__u8) 1;
 
                 __u16 payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
-            
+
                 bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
                 bpf_ringbuf_submit(event, 0);
-
+                
 
                 bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
                             udp_payload_exclude_header, payload_size);
                 bpf_printk("event info %u %u %u", bpf_ntohs(dns->qd_count), bpf_ntohs(dns->ans_count), bpf_ntohs(dns->add_count));
+
                 // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
                 return TC_FORWARD;
                 // for now learn dns ring buff event;

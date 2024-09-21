@@ -6,6 +6,7 @@
         "bpf_helpers.h": "c",
         "inet.h": "c",
         "pkt_cls.h": "c",
-        "dns.h": "c"
+        "dns.h": "c",
+        "bpf_tracing.h": "c"
     }
 }

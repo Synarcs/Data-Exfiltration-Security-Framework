@@ -9,6 +9,9 @@ tc:
 
 tc-remove:
 	sudo tc qdisc del dev enp0s1 clsact
+	sudo tc qdisc del dev lo clsact
+	sudo tc qdisc del dev docker0 clsact
+
 
 tc-filter:
 	sudo tc filter add dev enp0s1 egress bpf direct-action obj icmp.o sec tc
