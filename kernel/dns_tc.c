@@ -142,7 +142,8 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
     // Check if the UDP payload fits within the packet
     if ((void *)udp_data + udp_len_payload > skb->data_end) {
         #ifdef DEBUG
-            bpf_printk("UDP payload exceeds packet boundary");
+            if (DEBUG)
+                bpf_printk("UDP payload exceeds packet boundary");
         #endif
         return 0;  // Return error for the kernel memory limit exceed for memory safety 
     }
@@ -167,9 +168,11 @@ __always_inline __u8 parse_udpv4(struct  skb_cursor *skb) {
     
 
     #ifdef DEBUG
-        __u16 dport = bpf_htons(udp->dest);
-        __u16 sport = bpf_htons(udp->source);
-        bpf_printk("The Dest and src port for UDP packet are %u %u", dport, sport);
+        if (DEBUG) {
+            __u16 dport = bpf_htons(udp->dest);
+            __u16 sport = bpf_htons(udp->source);
+            bpf_printk("The Dest and src port for UDP packet are %u %u", dport, sport);
+        }
     #endif
 
     return 1;
@@ -185,9 +188,11 @@ __always_inline __u8 parse_udpv6(struct  skb_cursor *skb) {
         return 0;
 
     #ifdef DEBUG
-        __u16 dport = bpf_htons(udp->dest);
-        __u16 sport = bpf_htons(udp->source);
-        bpf_printk("The Dest and src port for UDP packet for Base ipv6 are %u %u", dport, sport);
+        if (DEBUG) {
+            __u16 dport = bpf_htons(udp->dest);
+            __u16 sport = bpf_htons(udp->source);
+            bpf_printk("The Dest and src port for UDP packet for Base ipv6 are %u %u", dport, sport);
+        }
     #endif
 
     return 1;
@@ -200,9 +205,11 @@ __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
     if ((void *)(tcp + 1) > skb->data_end) return 1;
 
     #ifdef DEBUG
-        __u16 dport = bpf_htons(tcp->dest);
-        __u16 sport = bpf_htons(tcp->source);
-        bpf_printk("The Dest and src port for TCP packet are %u %u", dport, sport);
+        if (DEBUG) {
+            __u16 dport = bpf_htons(tcp->dest);
+            __u16 sport = bpf_htons(tcp->source);
+            bpf_printk("The Dest and src port for TCP packet are %u %u", dport, sport);
+        }
     #endif
     return 0;   
 }
@@ -333,15 +340,19 @@ int classify(struct __sk_buff *skb){
 
             if (udp_payload_exclude_header > 100) return TC_DROP;
 
+            
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_PORT)) {
-                bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
 
 
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
-
-                bpf_printk("Submitting poll from kernel for dns udp event");
+                #ifdef DEBUG
+                    if (DEBUG) {
+                        bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
+                        bpf_printk("Submitting poll from kernel for dns udp event");
+                    }
+                #endif
 
                 if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
@@ -374,18 +385,22 @@ int classify(struct __sk_buff *skb){
                 event->isUDP = (__u8) 1;
                 event->isIpv4 = (__u8) 1;
 
-                __u16 payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
-
-                bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
+                // __u16 payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
+                // bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
                 bpf_ringbuf_submit(event, 0);
                 
+                #ifdef DEBUG
+                    if (DEBUG) {
+                        bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
+                            udp_payload_exclude_header);
+                        bpf_printk("event info %u %u %u", bpf_ntohs(dns->qd_count), bpf_ntohs(dns->ans_count), bpf_ntohs(dns->add_count));
+                    }
+                #endif
 
-                bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
-                            udp_payload_exclude_header, payload_size);
-                bpf_printk("event info %u %u %u", bpf_ntohs(dns->qd_count), bpf_ntohs(dns->ans_count), bpf_ntohs(dns->add_count));
-
+                bpf_l3_csum_replace(sdb, )
+          
                 // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
-                return TC_FORWARD;
+                return TC_ACT_UNSPEC;
                 // for now learn dns ring buff event;
             }else {
                 // do deep packet inspection on the packet contetnt and the associated payload 

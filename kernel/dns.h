@@ -79,5 +79,4 @@ struct dns_event {
     __u32 dns_payload_size; // size of payload excluding the dns header 
     __u8 isUDP; // offset udp calc 
     __u8 isIpv4; // ipv4 processing 
-    char payload[4096];
 };

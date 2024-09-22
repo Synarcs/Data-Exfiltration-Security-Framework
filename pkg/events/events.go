@@ -9,7 +9,6 @@ type DnsEvent struct {
 	DstPort      uint16
 	PayloadSize  uint32
 	UdpFrameSize uint32
-	Payload      [4096]byte
 	IsUdp        uint8
 	IsTcp        uint8
 }

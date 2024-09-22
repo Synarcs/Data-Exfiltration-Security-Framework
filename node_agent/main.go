@@ -14,7 +14,6 @@ import (
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 )
@@ -94,8 +93,6 @@ func tcHandler(ctx *context.Context, iface *netinet.NetIface, tc *tc.TCHandler) 
 		fmt.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
 			event.PID, parseIp(event.SrcIP), parseIp(event.DstIP), event.SrcPort, event.DstPort)
 		fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
-
-		fmt.Println(event.IsTcp, event.IsUdp)
 	}
 	// }()
 	// tcHandler.AttachTcHandler(&ctx, prog)
@@ -110,21 +107,23 @@ func main() {
 
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
+
 	ctx := context.Background()
 
-	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
+	// // kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	tc := tc.TCHandler{
-		Interfaces: iface.Links,
+		Interfaces: iface.PhysicalLinks,
 	}
 	go tcHandler(&ctx, &iface, &tc)
+	go tc.ProcessSniffDPIPacketCapture(&iface, nil)
 
-	// kernel xdp ingress for ifindex over xdp inside kernel
-	xdp := xdp.XdpHandler{
-		NetIfIndex: iface.Links[0].Attrs().Index,
-	}
-	if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
-		panic(err.Error())
-	}
+	// // kernel xdp ingress for ifindex over xdp inside kernel
+	// xdp := xdp.XdpHandler{
+	// 	NetIfIndex: iface.Links[0].Attrs().Index,
+	// }
+	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
+	// 	panic(err.Error())
+	// }
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
 
@@ -132,8 +131,6 @@ func main() {
 		sig := <-tst
 		term <- sig
 	}(term, tst)
-
-	go tc.CreateDPIInterfaceTc(&ctx)
 
 	sigType, done := <-term
 	if done {

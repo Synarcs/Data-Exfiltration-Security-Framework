@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"reflect"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/cilium/ebpf"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -117,6 +120,66 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
+func (tc *TCHandler) processDNSCaptureForDPi(packet gopacket.Packet) error {
+	eth := packet.Layer(layers.LayerTypeEthernet)
+	if eth == nil {
+		return fmt.Errorf("no ethernet layer")
+	}
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
+
+	if ipLayer == nil || ipv6Layer == nil {
+		return fmt.Errorf("An Empty layer 4 packet cannot be processed")
+	}
+
+	udpLayer := packet.Layer(layers.LayerTypeUDP)
+	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+
+	if udpLayer == nil || tcpLayer == nil {
+		return fmt.Errorf("Empty tcp segment or udp datagram passed")
+	}
+
+	// init conside for pcap over udp dg only for now
+	dnsLayer := packet.Layer(layers.LayerTypeDNS)
+
+	if dnsLayer != nil {
+		dns, _ := dnsLayer.(*layers.DNS)
+		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount)
+		fmt.Println(dns.Questions, dns.Answers)
+	}
+
+	return nil
+}
+
+func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
+	nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
+	if err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	fmt.Println(nsHandle.UniqueId(), nsHandle.String())
+	cap, err := pcap.OpenLive("enp0s1", 1500, true, pcap.BlockForever)
+	if err != nil {
+		fmt.Println("error opening packet capture over hte interface from kernel")
+		return err
+	}
+	defer cap.Close()
+
+	if err := cap.SetBPFFilter("udp and port 53"); err != nil {
+		log.Fatalf("Error setting BPF filter: %v", err)
+	}
+
+	packets := gopacket.NewPacketSource(cap, cap.LinkType())
+	for packet := range packets.Packets() {
+		err := tc.processDNSCaptureForDPi(packet)
+		if err != nil {
+			log.Println("Error parsing the dns packet for DPI")
+		}
+	}
+	return nil
+}
+
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 	for _, link := range tc.Interfaces {
 		err := netlink.QdiscDel(&netlink.Clsact{
@@ -128,19 +191,6 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		})
 		if err != nil {
 			fmt.Println("No Matching clsact desc found to delete")
-		}
-	}
-	return nil
-}
-
-func NodeTcHandler(id ...interface{}) interface{} {
-	for _, val := range id {
-		switch reflect.TypeOf(val).Kind() {
-		case reflect.Array:
-			{
-				fmt.Println(reflect.TypeOf(val))
-
-			}
 		}
 	}
 	return nil
