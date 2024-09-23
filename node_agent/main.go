@@ -6,12 +6,17 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 )
+
+func cpuArch() string {
+	return runtime.GOARCH
+}
 
 func main() {
 	log.Println("[x] The Node Agent Booted up with thte process Id", os.Getpid())

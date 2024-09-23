@@ -41,12 +41,17 @@ const (
 	NETNS_NETLINK_BRIDGE_DPI = "br0"
 )
 
+const (
+	TC_EGRESS_ROOT_NETIFACE_INT   = "tc.o"
+	TC_EGRESS_BRIDGE_NETIFACE_INT = "bridge.o"
+)
+
 func GenerateDnsParserModelUtils() *model.DnsPacketGen {
 	return &model.DnsPacketGen{}
 }
 
-func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpec, error) {
-	spec, err := ebpf.LoadCollectionSpec("tc.o")
+func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
+	spec, err := ebpf.LoadCollectionSpec(ebpfProgCode)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +149,7 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := tc.ReadEbpfFromSpec(ctx)
+	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
 		panic(err.Error())
@@ -216,7 +221,25 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	// tcHandler.AttachTcHandler(&ctx, prog)
 }
 
-func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
+func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netinet.NetIface) error {
+	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+	if err != nil {
+		return err
+	}
+
+	spec, err := ebpf.NewCollection(handler)
+	if err != nil {
+		return err
+	}
+
+	for _, maps := range spec.Maps {
+		fmt.Println(maps.String())
+	}
+	return nil
+}
+
+func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, handler *pcap.Handle) error {
+
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
 	var isUdp bool
@@ -236,6 +259,9 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 		if ipv6Packet != nil {
 			isIpv4 = false
 		}
+	}
+	if utils.DEBUG {
+		fmt.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
@@ -286,7 +312,10 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 			}
 		}
 		// debug kernel redirection packet for egress route via a bpf_id_redirect
-		tc.DnsPacketGen.GenerateDnsPacket(ipLayer, udpLayer, dnsLayer, isIpv4, isUdp)
+		// if err != nil {
+		// a valid packet found from the process redirect map for DPI and kernel redirect scan
+		tc.DnsPacketGen.GeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum, handler)
+		// }
 		// fmt.Println(dns.Questions, dns.Answers)
 	}
 
@@ -302,8 +331,12 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		return err
 	}
 
+	if len(ifaceHandler.PhysicalLinks) > 0 {
+		log.Println("Processing of multiple Physical links")
+	}
+
 	fmt.Println(nsHandle.UniqueId(), nsHandle.String())
-	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, 1500, true, pcap.BlockForever)
+	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
 		fmt.Println("error opening packet capture over hte interface from kernel")
 		return err
@@ -316,10 +349,7 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		err := tc.processDNSCaptureForDPI(packet)
-		if err != nil {
-			log.Println("Error parsing the dns packet for DPI", err)
-		}
+		tc.processDNSCaptureForDPI(packet, cap)
 	}
 	return nil
 }

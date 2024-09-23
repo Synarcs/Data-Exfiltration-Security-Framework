@@ -393,7 +393,7 @@ int classify(struct __sk_buff *skb){
                 
                 // update the dns query id with the check sum value prior to bpf function redirection to new ifnet interface
                 __u16 *map_layer3_redirect_value;
-                __u16 layer3_checksum = bpf_ntohs(ip->check);
+                __u16 layer3_checksum = bpf_htons(ip->check);
                 map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
@@ -404,6 +404,11 @@ int classify(struct __sk_buff *skb){
                         }
                     }
                 } else {
+                    if (DEBUG){
+                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
+                    }
+                    bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                    return TC_FORWARD;
                     // not possible since the dnds query id are always unique 
                 }
                 
