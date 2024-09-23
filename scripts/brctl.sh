@@ -40,12 +40,12 @@ sudo ip netns exec sx2 ip link set sx2-eth0 up
 sudo ip netns exec sx1 ip neigh show 
 sudo ip netns exec sx2 ip neigh show
 
-suod ip netns exec sx1 arp 
-suod ip netns exec sx2 arp 
+sudo ip netns exec sx1 arp 
+sudo ip netns exec sx2 arp 
 
 sudo ip addr add 10.200.0.0/24 dev br0
 
 sudo ip netns exec sx1 ip route add 192.168.64.0/24 via 10.200.0.0
-sudo ip netns exec sx1 ip route add 192.168.64.0/24 via 10.200.0.0
+sudo ip netns exec sx2 ip route add 192.168.64.0/24 via 10.200.0.0
 
 

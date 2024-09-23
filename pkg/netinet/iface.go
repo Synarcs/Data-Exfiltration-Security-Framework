@@ -13,11 +13,16 @@ import (
 const (
 	NETNS_RNETLINK_EGREESS_DPI = "sx1"
 	NETNS_RNETLINK_INGRESS_DPI = "sx2"
+
+	NETNS_NETLINK_BRIDGE_DPI = "br0"
 )
 
+// each link has net_device virt / physical socket -> netlink -> netfilter -> contrack -> tc (classful / classless) -> xdp -> net_device
 type NetIface struct {
-	Links         []netlink.Link
-	PhysicalLinks []netlink.Link
+	Links         []netlink.Link // netlink liks for all links on the device
+	PhysicalLinks []netlink.Link // physical veth links with hardware mac and MTU as (1500)
+	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
+	LoopBackLinks []netlink.Link // loopback links
 	Routes        map[string][]netlink.Route
 }
 
@@ -38,9 +43,15 @@ func (nf *NetIface) ReadInterfaces() error {
 
 	fmt.Println("the custom link to process are ", customLinks)
 	nf.Links = links
-	hardwareInterfaces := nf.findPhysicalInterfaces()
+	hardwareInterfaces, logicalInterfaces, bridgeInterfaces := nf.findLinkAddressByType()
 	if len(hardwareInterfaces) > 0 {
 		nf.PhysicalLinks = hardwareInterfaces
+	}
+	if len(logicalInterfaces) > 0 {
+		nf.LoopBackLinks = logicalInterfaces
+	}
+	if len(bridgeInterfaces) > 0 {
+		nf.BridgeLinks = bridgeInterfaces
 	}
 	return nil
 }
@@ -58,35 +69,11 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
-func (nf *NetIface) CreateNamespace(nsName string) {
-	_, err := netns.NewNamed(nsName)
-	if err != nil {
-		log.Fatalf("Failed to create namespace %s: %v", nsName, err)
-	}
-	fmt.Printf("Created namespace: %s\n", nsName)
-}
 
-func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
-
-	nsHandle, _ := netns.GetFromName(nsName)
-
-	defer nsHandle.Close()
-	link, err := netlink.LinkByName(veth)
-
-	if err != nil {
-		log.Printf("Failed to get link %s: %v", veth, err)
-		return err
-	}
-
-	if err := netlink.LinkSetNsFd(link, int(nsHandle)); err != nil {
-		log.Fatalf("Failed to set veth %s to namespace %s: %v", veth, nsName, err)
-	}
-	fmt.Printf("Set %s to namespace %s\n", veth, nsName)
-	return nil
-}
-
-func (nf *NetIface) findPhysicalInterfaces() []netlink.Link {
+func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {
 	hardwardIntefaces := make([]netlink.Link, 0)
+	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
+	bridgeInterfaces := make([]netlink.Link, 0)
 	for _, link := range nf.Links {
 		_, isEth := link.(*netlink.Device)
 		attrs := link.Attrs()
@@ -100,8 +87,14 @@ func (nf *NetIface) findPhysicalInterfaces() []netlink.Link {
 		if isEth && !isVirtual && !isLoopBack {
 			hardwardIntefaces = append(hardwardIntefaces, link)
 		}
+		if isLoopBack {
+			loopBackInterface = append(loopBackInterface, link)
+		}
+		if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
+			bridgeInterfaces = append(bridgeInterfaces, link)
+		}
 	}
-	return hardwardIntefaces
+	return hardwardIntefaces, loopBackInterface, bridgeInterfaces
 }
 
 func (nf *NetIface) GetNetworkNamespace(route string) (*netns.NsHandle, error) {

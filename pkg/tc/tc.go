@@ -1,13 +1,19 @@
 package tc
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -21,6 +27,14 @@ type TCHandler struct {
 
 const (
 	TC_INGRESS_MONITOR_MAP = "bpf_sx"
+	TC_CONTROL_PROG        = "classify" // CLSACT
+)
+
+const (
+	NETNS_RNETLINK_EGREESS_DPI = "sx1"
+	NETNS_RNETLINK_INGRESS_DPI = "sx2"
+
+	NETNS_NETLINK_BRIDGE_DPI = "br0"
 )
 
 func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpec, error) {
@@ -120,38 +134,117 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
-func (tc *TCHandler) processDNSCaptureForDPi(packet gopacket.Packet) error {
+func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
+	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
+	handler, err := tc.ReadEbpfFromSpec(ctx)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	spec, err := ebpf.NewCollection(handler)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer spec.Close()
+
+	if len(spec.Programs) > 1 {
+		fmt.Println("Multiple programs found in the root collection")
+	}
+	if len(spec.Programs) == 0 {
+		fmt.Println("The Ebpf Bytecode is corrupt or malformed")
+	}
+
+	prog := spec.Programs[TC_CONTROL_PROG]
+
+	if prog == nil {
+		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
+	}
+
+	if err := tc.AttachTcHandler(ctx, prog); err != nil {
+		fmt.Println("Error attaching the clsact bpf qdisc for netdev")
+		panic(err.Error())
+	}
+
+	ringBuffer, err := ringbuf.NewReader(spec.Maps["dns_ring_events"])
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer ringBuffer.Close()
+
+	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
+
+	// go func() {
+	for {
+		if utils.DEBUG {
+			fmt.Println("polling the ring buffer", "using th map", spec.Maps["dns_ring_events"])
+		}
+		record, err := ringBuffer.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return
+			}
+			panic(err.Error())
+		}
+		var event events.DnsEvent
+		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+		if err != nil {
+			log.Fatalf("Failed to parse event: %v", err)
+		}
+
+		// No further conversion is needed; values are already in host byte order
+		if utils.DEBUG {
+			fmt.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
+				event.PID, utils.ParseIp(event.SrcIP), utils.ParseIp(event.DstIP), event.SrcPort, event.DstPort)
+			fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
+		}
+	}
+	// }()
+	// tcHandler.AttachTcHandler(&ctx, prog)
+}
+
+func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	if eth == nil {
 		return fmt.Errorf("no ethernet layer")
 	}
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
-
-	if ipLayer == nil || ipv6Layer == nil {
-		return fmt.Errorf("An Empty layer 4 packet cannot be processed")
+	// ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
+	if ipLayer == nil {
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-
-	if udpLayer == nil || tcpLayer == nil {
-		return fmt.Errorf("Empty tcp segment or udp datagram passed")
+	// tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	if udpLayer == nil {
 	}
-
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
-		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount)
-		fmt.Println(dns.Questions, dns.Answers)
+		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount, "Packet id is ", dns.ID)
+		if dns.QDCount > 0 {
+			for _, qd := range dns.Questions {
+				fmt.Println(string(qd.Name), qd.Class, qd.Type)
+			}
+		}
+		if dns.ANCount > 0 {
+			for _, an := range dns.Answers {
+				fmt.Println(string(an.Data), an.String())
+			}
+		}
+		// fmt.Println(dns.Questions, dns.Answers)
 	}
 
 	return nil
 }
 
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
+	fmt.Println("called here for process Invoke")
+
 	nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
 	if err != nil {
 		log.Println(err.Error())
@@ -159,7 +252,7 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 	}
 
 	fmt.Println(nsHandle.UniqueId(), nsHandle.String())
-	cap, err := pcap.OpenLive("enp0s1", 1500, true, pcap.BlockForever)
+	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, 1500, true, pcap.BlockForever)
 	if err != nil {
 		fmt.Println("error opening packet capture over hte interface from kernel")
 		return err
@@ -172,9 +265,9 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		err := tc.processDNSCaptureForDPi(packet)
+		err := tc.processDNSCaptureForDPI(packet)
 		if err != nil {
-			log.Println("Error parsing the dns packet for DPI")
+			log.Println("Error parsing the dns packet for DPI", err)
 		}
 	}
 	return nil

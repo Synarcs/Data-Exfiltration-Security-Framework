@@ -13,9 +13,16 @@
     #define XDP_DROP XDP_DROP
 #endif
 
+struct xdp_actions {
+    void (* parse_eth) (void *data, void *data_end);
+};
+
 
 SEC("xdp")
 int xdp_process(struct xdp_md *ctx) {
+    void *data = (void *)(long *) ctx->data;
+    void *data_end = (void *)(long *) ctx->data_end;
+
     return XDP_DROP;
 }
 

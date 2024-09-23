@@ -14,22 +14,29 @@
 #include <bpf/bpf_tracing.h>
 
 #include "dns.h"
+#include "consts.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
 
 #define PRINT_DEBUG(fmt, ...) bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__)
-#define ull unsigned long long 
-#define uc unsigned char 
-#define ll long 
-
-#define DNS_PORT 53 
 
 #ifndef tc
     #define TC_FORWARD TC_ACT_OK
     #define TC_DEFAULT TC_ACT_UNSPEC
     #define TC_DROP TC_ACT_SHOT
 #endif
+
+
+#define IP_DST_OFF (ETH_HLEN + offsetof(struct iphdr, daddr))
+#define IP_CHECK_FF (ETH_HLEN + offsetof(struct iphdr, check))
+#define IP_CHECK_FF_V6 (ETH_HLEN + offsetof(struct ipv6hdr, check))
+
+#define UDP_CHECK_FF (ETH_HLEN + offsetof(struct udphdr, check))
+#define TCP_CHECK_FF (ETH_HLEN + offsetof(struct tcphdr, check))
+
+#define IP_MF	  0x2000
+#define IP_OFFSET 0x1FFF
 
 struct skb_cursor {
     void *data;
@@ -68,22 +75,12 @@ struct ring_event {
     __uint(max_entries, 1 << 24);
 } dns_ring_events SEC(".maps");
 
-struct exfil_security_config_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
+
+struct exfil_security_egress_order_map {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
     __type(key, __u32);
-    __type(value, __u64);
-    __uint(max_entries, 1 << 9);
-} fk_config SEC(".maps");
-
-struct exfil_map_domain_config {
-    char domains[255]; // max size of any dns domain as per dns rfc 
-};
-
-struct exfil_security_blk_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, struct exfil_map_domain_config);
-    __type(value, __u8);
-    __uint(max_entries, 1 << 20);
+    __type(value, struct exfil_map_domain_config);
+    __uint(max_entries, 1 << 4);
 } fk_blk SEC(".maps");
 
 static 
@@ -105,22 +102,7 @@ __always_inline __u8 parse_ipv4(struct skb_cursor *skb) {
     struct iphdr *ip = skb->data + sizeof(struct ethhdr);
 
     if ((void *) (ip + 1) > skb->data_end ) return 0; // Proper boundary check
-    __u32 saddr = bpf_ntohl(ip->saddr);  // Corrected to use `bpf_ntohl`
-    __u8 s1 = (saddr >> 24) & 0xFF;  // First octet
-    __u8 s2 = (saddr >> 16) & 0xFF;  // Second octet
-    __u8 s3 = (saddr >> 8) & 0xFF;   // Third octet
-    __u8 s4 = saddr & 0xFF;          // Fourth octet
-    
-    if (ip->protocol == IPPROTO_ICMP) {
-        __u8 ttl_icmp = ip->ttl;
-        // Remove these lines if you don't want to log ICMP packets
-        #ifdef DEBUG
-            bpf_printk("ICMP packet found with TTL %u", ttl_icmp);
-            bpf_printk("Source Address: %u.%u", s1, s2);
-            bpf_printk("Source Address: %u.%u", s3, s4);
-        #endif
-    }
-
+  
     return 1;
 }
 
@@ -285,6 +267,8 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
 }
 
 
+
+
 struct payload_data {
   __u32 len;
   __u8 data[1500]; 
@@ -296,6 +280,16 @@ struct kernel_handler_map {
     __type(key, __u8);
     __type(value, __u16);
 } maps SEC(".maps");
+
+static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
+{
+	__u16 frag_off;
+
+	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);
+	frag_off = __bpf_ntohs(frag_off);
+	return frag_off & (IP_MF | IP_OFFSET);
+}
+
 
 SEC("tc")
 int classify(struct __sk_buff *skb){
@@ -326,6 +320,8 @@ int classify(struct __sk_buff *skb){
         ip = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
 
+        if (ip_is_fragment(skb, nhoff)) return TC_DROP;
+
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udpv4(&cursor) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
@@ -342,8 +338,28 @@ int classify(struct __sk_buff *skb){
 
             
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
-            if (udp->dest == bpf_htons(DNS_PORT)) {
+            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
+                
+                struct dns_event *event;
 
+                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
+                if (!event) {
+                    bpf_printk("Error in allocating ring buffer space in kernel");
+                    return TC_FORWARD;
+                }
+
+                event->eventId = 10;
+                event->src_ip = bpf_ntohl(ip->saddr);
+                event->dst_ip = bpf_ntohl(ip->daddr);
+                event->src_port = bpf_ntohs(udp->source);
+                event->dst_port = bpf_ntohs(udp->dest);
+                event->payload_size = (__u32)udp_payload_exclude_header;
+                event->udp_frame_size = bpf_ntohs(udp->len); 
+                event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
+                event->isUDP = (__u8) 1;
+                event->isIpv4 = (__u8) 1;
+
+                bpf_ringbuf_submit(event, 0);
 
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
@@ -365,48 +381,79 @@ int classify(struct __sk_buff *skb){
                 if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
+                // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
-                struct dns_event *event;
+                __be32 current_dest_addr;
+                __be32 dest_addr_route = bpf_htonl(0x0AC80001); // 10.200.0.1
 
-                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
-                if (!event) {
-                    bpf_printk("Error in allocating ring buffer space in kernel");
-                    return TC_FORWARD;
+                if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
+                    // 4 bytes for the ipv4 address offset 
+                    #ifdef DEBUG   
+                        if (DEBUG) {
+                            bpf_printk("Error restoring current offset store");
+                        }
+                    #endif
+                } 
+                __u32 csum_diff = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
+
+                if (IP_DST_OFF > skb->len) {
+                    return TC_DROP;  // Check if offset is within bounds
                 }
 
-                event->eventId = bpf_get_prandom_u32();
-                event->src_ip = bpf_ntohl(ip->saddr);
-                event->dst_ip = bpf_ntohl(ip->daddr);
-                event->src_port = bpf_ntohs(udp->source);
-                event->dst_port = bpf_ntohs(udp->dest);
-                event->payload_size = (__u32)udp_payload_exclude_header;
-                event->udp_frame_size = bpf_ntohs(udp->len); 
-                event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
-                event->isUDP = (__u8) 1;
-                event->isIpv4 = (__u8) 1;
+                if (bpf_l3_csum_replace(skb, ETH_HLEN + offsetof(struct iphdr, check), 0, csum_diff, 0) < 0) {
+                        return TC_ACT_OK;
+                }
 
-                // __u16 payload_size = sizeof(event->payload) / sizeof(event->payload[0]);
-                // bpf_skb_load_bytes(skb, total_offset, event->payload, sizeof(event->payload));
-                bpf_ringbuf_submit(event, 0);
-                
-                #ifdef DEBUG
+
+                if (bpf_skb_store_bytes(skb, ETH_HLEN + offsetof(struct iphdr, daddr), &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
+                    return TC_ACT_OK;
+                }
+
+                __u32 redirect_skb_mark = 1;
+                if (skb->mark != (__u32) redirect_skb_mark) {
                     if (DEBUG) {
-                        bpf_printk("Mirroring the whole skbuff from kernel space with the payload size here %u and exclude_header %u and payload_buffer %d", udp_payload_len , 
-                            udp_payload_exclude_header);
-                        bpf_printk("event info %u %u %u", bpf_ntohs(dns->qd_count), bpf_ntohs(dns->ans_count), bpf_ntohs(dns->add_count));
+                        bpf_printk("Marking the packet over kernel redirection for DPI");
+                    }
+                    skb->mark = redirect_skb_mark;
+                }
+    
+                #ifdef DEBUG 
+                    if (!DEBUG) {
+                        __u32 mod = bpf_ntohl(ip->daddr);
+                        __u32 d1 = (mod >> 24) &0xFF;
+                        __u32 d2 = (mod >> 16) &0xFF;
+                        __u32 d3 = (mod >> 8) &0xFF;
+                        __u32 d4 = mod  & 0xFF;
+                        bpf_printk("current copied dest addres %u %u", d1, d2);
+                        bpf_printk("current copied dest addres %u %u", d3, d4);
                     }
                 #endif
 
-                bpf_l3_csum_replace(sdb, )
-          
-                // bpf_printk("A compile dns packet found %u %u", dns->qd_count, dns->id);
-                return TC_ACT_UNSPEC;
+                __u32 br_index = 4;
+                return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else {
+
                 // do deep packet inspection on the packet contetnt and the associated payload 
             }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) {
+            if (actions.parse_tcpv4(&cursor) == 0) return TC_DROP;
+            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+            if ((void *) (tcp + 1) > cursor.data_end) return TC_DROP;
+
+            void *tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
+            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
+
+            // verify for standard or enhanced dpi inspection over the payload header 
+            
+            if (tcp-> dest == bpf_htons(DNS_EGRESS_PORT)) {
+                // a standard port used for tcp data forwarding 
+                return TC_FORWARD;
+            }else {
+                // need more dpi over the dns header payload format either via forwarding or payload size;
+            }
+
             return TC_FORWARD;
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {

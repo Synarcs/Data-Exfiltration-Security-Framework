@@ -2,7 +2,8 @@ from scapy.all import DNS, DNSRR, IP, sr1, UDP, DNSQR
 from scapy.all import ICMP, send
 import os, random
 
-dns = DNS(rd=1, qd=DNSQR(qname='intel.com'))
+custom_id = random.randint(1, 1 << 10)
+dns = DNS(id=custom_id,rd=1, qd=DNSQR(qname='intel.com'))
 domains = ["google.com", "apple.com", "intel.com"]
 
 #dns.qr = DNSQR(qname=random.choice(domains))
