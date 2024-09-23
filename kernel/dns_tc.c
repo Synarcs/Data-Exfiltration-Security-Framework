@@ -76,12 +76,12 @@ struct ring_event {
 } dns_ring_events SEC(".maps");
 
 
-struct exfil_security_egress_order_map {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u32);
-    __type(value, struct exfil_map_domain_config);
+struct exfil_security_egress_redirect_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u16); // dns query id prior DPI
+    __type(value, __u16);   // layer 4 checksum prior redirect non clone skb 
     __uint(max_entries, 1 << 4);
-} fk_blk SEC(".maps");
+} exfil_security_egress_redirect_map SEC(".maps");
 
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -267,8 +267,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
 }
 
 
-
-
 struct payload_data {
   __u32 len;
   __u8 data[1500]; 
@@ -359,7 +357,7 @@ int classify(struct __sk_buff *skb){
                 event->isUDP = (__u8) 1;
                 event->isIpv4 = (__u8) 1;
 
-                bpf_ringbuf_submit(event, 0);
+                bpf_ringbuf_submit(event, 0);   
 
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
@@ -369,6 +367,7 @@ int classify(struct __sk_buff *skb){
                         bpf_printk("Submitting poll from kernel for dns udp event");
                     }
                 #endif
+                
 
                 if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
@@ -381,6 +380,31 @@ int classify(struct __sk_buff *skb){
                 if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
+
+                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+
+                if (DEBUG) {
+                    bpf_printk("[x] The transaction id Forward for the DNS Request Packet is %d ", transaction_id);
+                }
+
+                
+                // update the dns query id with the check sum value prior to bpf function redirection to new ifnet interface
+                __u16 *map_layer3_redirect_value;
+                __u16 layer3_checksum = bpf_ntohs(ip->check);
+                map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                if (!map_layer3_redirect_value) {
+                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
+                    int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
+                    if (ret < 0) {
+                        if (DEBUG){
+                            bpf_printk("Error updating the bpf redirect from tc kernel layer");
+                        }
+                    }
+                } else {
+                    // not possible since the dnds query id are always unique 
+                }
+                
+
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
                 __be32 current_dest_addr;

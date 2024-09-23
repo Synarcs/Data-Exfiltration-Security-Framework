@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "netinet",
-    srcs = ["iface.go"],
+    srcs = [
+        "iface.go",
+        "overlay.go",
+    ],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/netinet",
     visibility = ["//visibility:public"],
     deps = [

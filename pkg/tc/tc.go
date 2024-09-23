@@ -22,7 +22,9 @@ import (
 )
 
 type TCHandler struct {
-	Interfaces []netlink.Link
+	Interfaces   []netlink.Link
+	Prog         *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
+	TcCollection *ebpf.Collection // ebpf tc program collection order spec
 }
 
 const (
@@ -161,6 +163,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	if prog == nil {
 		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
 	}
+	tc.Prog = prog
+	tc.TcCollection = spec
 
 	if err := tc.AttachTcHandler(ctx, prog); err != nil {
 		fmt.Println("Error attaching the clsact bpf qdisc for netdev")
@@ -217,15 +221,27 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	// tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 	if udpLayer == nil {
+	}
+	if tcpLayer == nil {
 	}
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
+	dnsMapRedirectMap := tc.TcCollection.Maps["exfil_security_egress_redirect_map"]
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
 		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount, "Packet id is ", dns.ID)
+
+		var dns_packet_id uint16 = uint16(dns.ID)
+		var ip_layer3_checksum uint16
+		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum)
+		if err != nil {
+			fmt.Println("Required redirected packet id is not found in the map", err)
+		} else {
+			fmt.Println("found the required key from BPF Hash fd ", uint16(ip_layer3_checksum))
+		}
 		if dns.QDCount > 0 {
 			for _, qd := range dns.Questions {
 				fmt.Println(string(qd.Name), qd.Class, qd.Type)

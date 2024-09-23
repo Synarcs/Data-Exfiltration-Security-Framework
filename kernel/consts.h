@@ -29,8 +29,3 @@ struct exfil_security_config_map {
     __uint(max_entries, 1 << 9);
 } fk_config SEC(".maps");
 
-enum exfil_thread_level {
-    BENIGN = 0,
-    SUSPICIOUS = 1, // TRAFFIC MIRRO FOR KERNEL HANDLER 
-    HARMFUL = 2, // NEED TO CREATE THE THREAT TRACING MAP LRU FOR KERNEL 
-};

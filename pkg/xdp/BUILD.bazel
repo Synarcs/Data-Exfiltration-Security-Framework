@@ -5,4 +5,5 @@ go_library(
     srcs = ["xdp.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/xdp",
     visibility = ["//visibility:public"],
+    deps = ["//pkg/netinet"],
 )

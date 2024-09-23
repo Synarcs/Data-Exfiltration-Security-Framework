@@ -19,7 +19,7 @@ enum MALICIOUS_FLAGS {
 
 
 struct dns_header {
-    __be16 transaction_id;
+    __u16 transaction_id;
     __u8 rd: 1;      //Recursion desired
     __u8 tc: 1;      //Truncated
     __u8 aa: 1;      //Authoritive answer
