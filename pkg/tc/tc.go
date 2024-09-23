@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
@@ -25,6 +26,7 @@ type TCHandler struct {
 	Interfaces   []netlink.Link
 	Prog         *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
 	TcCollection *ebpf.Collection // ebpf tc program collection order spec
+	DnsPacketGen *model.DnsPacketGen
 }
 
 const (
@@ -39,8 +41,12 @@ const (
 	NETNS_NETLINK_BRIDGE_DPI = "br0"
 )
 
+func GenerateDnsParserModelUtils() *model.DnsPacketGen {
+	return &model.DnsPacketGen{}
+}
+
 func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context) (*ebpf.CollectionSpec, error) {
-	spec, err := ebpf.LoadCollectionSpec("icmp.o")
+	spec, err := ebpf.LoadCollectionSpec("tc.o")
 	if err != nil {
 		return nil, err
 	}
@@ -212,24 +218,46 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 	eth := packet.Layer(layers.LayerTypeEthernet)
+	var isIpv4 bool
+	var isUdp bool
 	if eth == nil {
 		return fmt.Errorf("no ethernet layer")
 	}
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	// ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
-	if ipLayer == nil {
+	ipPacket := ipLayer.(*layers.IPv4)
+	if ipPacket != nil {
+		isIpv4 = true
+		if utils.DEBUG {
+			fmt.Println("current packet checksum", ipPacket.Checksum)
+		}
+	} else {
+		ipv6Packet := ipLayer.(*layers.IPv6)
+		if ipv6Packet != nil {
+			isIpv4 = false
+		}
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
-	if udpLayer == nil {
-	}
-	if tcpLayer == nil {
+
+	udpPacket := udpLayer.(*layers.UDP)
+	if udpPacket != nil {
+		isUdp = true
+	} else {
+		tcpPacket := tcpLayer.(*layers.TCP)
+		if tcpPacket != nil {
+			isUdp = false
+		}
 	}
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
 	dnsMapRedirectMap := tc.TcCollection.Maps["exfil_security_egress_redirect_map"]
+	configMap := tc.TcCollection.Maps["exfil_security_config_map"]
+	if configMap != nil {
+	}
+
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
 		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount, "Packet id is ", dns.ID)
@@ -247,11 +275,18 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet) error {
 				fmt.Println(string(qd.Name), qd.Class, qd.Type)
 			}
 		}
+		if dns.ARCount > 0 {
+			for _, ar := range dns.Authorities {
+				fmt.Println(string(ar.Name), ar.Class, ar.Type, ar.TTL)
+			}
+		}
 		if dns.ANCount > 0 {
 			for _, an := range dns.Answers {
 				fmt.Println(string(an.Data), an.String())
 			}
 		}
+		// debug kernel redirection packet for egress route via a bpf_id_redirect
+		tc.DnsPacketGen.GenerateDnsPacket(ipLayer, udpLayer, dnsLayer, isIpv4, isUdp)
 		// fmt.Println(dns.Questions, dns.Answers)
 	}
 

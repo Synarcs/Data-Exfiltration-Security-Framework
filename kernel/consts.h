@@ -25,7 +25,7 @@ struct exfil_map_domain_config {
 struct exfil_security_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32);
-    __type(value, __u64);
-    __uint(max_entries, 1 << 9);
-} fk_config SEC(".maps");
+    __type(value, struct exfil_map_domain_config);
+    __uint(max_entries, 1 << 6);
+} exfil_security_config_map SEC(".maps");
 

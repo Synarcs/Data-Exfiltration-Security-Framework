@@ -5,4 +5,9 @@ go_library(
     srcs = ["parse.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/model",
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_google_gopacket//:gopacket",
+        "@com_github_google_gopacket//layers",
+        "@com_github_miekg_dns//:dns",
+    ],
 )

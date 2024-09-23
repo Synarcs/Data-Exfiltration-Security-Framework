@@ -2,6 +2,7 @@
 #include <linux/if_ether.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+#include <dns_tc>
 
 #ifndef XDP 
     #define XDP_MAX_PAYLOAD_SIZE 101111

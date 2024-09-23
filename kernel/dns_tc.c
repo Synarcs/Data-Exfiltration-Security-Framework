@@ -65,6 +65,7 @@ struct packet_actions {
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
     __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, struct dns_header *, __u32);
+    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *);
 };
 
 __u32 INSECURE = 0;
@@ -77,10 +78,10 @@ struct ring_event {
 
 
 struct exfil_security_egress_redirect_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // dns query id prior DPI
     __type(value, __u16);   // layer 4 checksum prior redirect non clone skb 
-    __uint(max_entries, 1 << 4);
+    __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
 
 static 
@@ -239,18 +240,19 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 
         if (udp_payload_len > skb_len || udp_payload_exclude_header > skb_len) return 0;
 
-
         #ifdef DEBUG 
             bpf_printk("The size of the dns payload %u and buffer %u and pyload %u", sizeof(*dns_payload), udp_payload_exclude_header, bpf_htons(dns_header->ans_count));
         #endif
 
-        if (bpf_htons(dns_header->qd_count) >= 1) {
-            #pragma unroll(255)
-            for (__u8 i=0; i < (1 << 8) - 1; i++) {}
-        }
-
         return 1;
 }
+
+
+static 
+__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload) {
+    // dns header already validated and payload and header memory safetyy already cosnidered 
+    return 1;
+} 
 
 
 static 
@@ -263,6 +265,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_udpv6 = &parse_udpv6;
     actions.parse_dns_header_size = &parse_dns_header_size;
     actions.parse_dns_payload = &parse_dns_payload;
+    actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     return actions;
 }
 

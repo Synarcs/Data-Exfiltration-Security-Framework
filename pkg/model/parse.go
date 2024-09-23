@@ -15,7 +15,9 @@ type DnsParser struct {
 
 type DnsPacketGen struct{}
 
-func (d *DnsPacketGen) GenerateDnsPacket(ipLayer, udpLayer, dnsLayer gopacket.Layer) *dns.Msg {
+func (d *DnsPacketGen) GenerateDnsPacket(ipLayer, udpLayer, dnsLayer gopacket.Layer,
+	isIpv4, isUdp bool) *dns.Msg {
+
 	dnsPacket := dns.Msg{}
 
 	dns, err := dnsLayer.(*layers.DNS)

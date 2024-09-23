@@ -1,7 +1,7 @@
 
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o icmp.o -c dns_tc.c  
-	cp icmp.o ../node_agent/
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o tc.o -c dns_tc.c  
+	cp tc.o ../node_agent/
 	
 tc:
 	sudo tc qdisc add dev enp0s1 clsact
@@ -22,4 +22,10 @@ tc-show:
 
 tc-tracing:
 	sudo cat /sys/kernel/debug/tracing/trace_pipe
+
+xdp-compile:
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o xdp.o -c dns_tc.c  
+
+
+xdp:
 	
