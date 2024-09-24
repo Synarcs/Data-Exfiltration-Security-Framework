@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -13,10 +15,11 @@ import (
 type DnsParserActions interface{}
 
 type DnsParser struct {
-	pkHandler *pcap.Handle
 }
 
-type DnsPacketGen struct{}
+type DnsPacketGen struct {
+	IfaceHandler *netinet.NetIface
+}
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 	return layers.DNS{
@@ -45,8 +48,8 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle) error {
 
-	fmt.Println("Calling packet creation here")
-	fmt.Println("[x] Re crafting the entire DNS packet")
+	st := time.Now().Nanosecond()
+	log.Println("[x] Recrafting the entire DNS packet")
 	ethernet := ethLayer.(*layers.Ethernet)
 
 	ipv4 := ipLayer.(*layers.IPv4)
@@ -72,11 +75,15 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		return err
 	}
 
+	serialize := time.Now().Nanosecond()
+	log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
 	outputPacket := buffer.Bytes()
 
 	if err := handler.WritePacketData(outputPacket); err != nil {
 		log.Println("Error writing packet to pcap file")
 		return err
 	}
+
+	log.Println("time took to send the whole packet", time.Now().Nanosecond()-serialize)
 	return nil
 }

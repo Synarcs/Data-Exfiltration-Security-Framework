@@ -8,6 +8,21 @@ import (
 
 const DEBUG = false
 
+const (
+	TC_INGRESS_MONITOR_MAP = "bpf_sx"
+	TC_CONTROL_PROG        = "classify" // CLSACT
+)
+
+const (
+	NETNS_RNETLINK_EGREESS_DPI = "sx1"
+	NETNS_RNETLINK_INGRESS_DPI = "sx2"
+
+	NETNS_RNETLINK_EGREESS_DPI_INTERFACE = "sx1-eth0"
+	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
+
+	NETNS_NETLINK_BRIDGE_DPI = "br0"
+)
+
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
 	var s2 uint8 = (uint8)(saddr>>16) & 0xFF

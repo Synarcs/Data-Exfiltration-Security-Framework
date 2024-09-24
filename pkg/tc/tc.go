@@ -19,6 +19,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 )
 
@@ -30,24 +31,14 @@ type TCHandler struct {
 }
 
 const (
-	TC_INGRESS_MONITOR_MAP = "bpf_sx"
-	TC_CONTROL_PROG        = "classify" // CLSACT
-)
-
-const (
-	NETNS_RNETLINK_EGREESS_DPI = "sx1"
-	NETNS_RNETLINK_INGRESS_DPI = "sx2"
-
-	NETNS_NETLINK_BRIDGE_DPI = "br0"
-)
-
-const (
 	TC_EGRESS_ROOT_NETIFACE_INT   = "tc.o"
 	TC_EGRESS_BRIDGE_NETIFACE_INT = "bridge.o"
 )
 
-func GenerateDnsParserModelUtils() *model.DnsPacketGen {
-	return &model.DnsPacketGen{}
+func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface) *model.DnsPacketGen {
+	return &model.DnsPacketGen{
+		IfaceHandler: ifaceHandler,
+	}
 }
 
 func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
@@ -61,15 +52,15 @@ func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string)
 func (tc *TCHandler) CreateDPIInterfaceTc(ctx *context.Context) error {
 	log.Println("Creating the TC ingress monitor for the DPI")
 
-	fd, err := netlink.LinkByName(TC_INGRESS_MONITOR_MAP)
+	fd, err := netlink.LinkByName(utils.TC_INGRESS_MONITOR_MAP)
 	if err == nil {
-		fmt.Println("Link already exists with name ", TC_INGRESS_MONITOR_MAP)
+		fmt.Println("Link already exists with name ", utils.TC_INGRESS_MONITOR_MAP)
 		netlink.LinkDel(fd)
 	}
 
 	err = netlink.LinkAdd(&netlink.Dummy{
 		LinkAttrs: netlink.LinkAttrs{
-			Name: TC_INGRESS_MONITOR_MAP,
+			Name: utils.TC_INGRESS_MONITOR_MAP,
 			MTU:  1500,
 		},
 	})
@@ -79,14 +70,14 @@ func (tc *TCHandler) CreateDPIInterfaceTc(ctx *context.Context) error {
 		return err
 	}
 
-	link, err := netlink.LinkByName(TC_INGRESS_MONITOR_MAP)
+	link, err := netlink.LinkByName(utils.TC_INGRESS_MONITOR_MAP)
 	if err := netlink.LinkSetUp(link); err != nil {
 		fmt.Println("error setting the monitoring link for kernel")
 		return err
 	}
 
 	if err != nil {
-		log.Fatal("Error finding the link with name ", TC_INGRESS_MONITOR_MAP)
+		log.Fatal("Error finding the link with name ", utils.TC_INGRESS_MONITOR_MAP)
 		return err
 	}
 
@@ -169,7 +160,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		fmt.Println("The Ebpf Bytecode is corrupt or malformed")
 	}
 
-	prog := spec.Programs[TC_CONTROL_PROG]
+	prog := spec.Programs[utils.TC_CONTROL_PROG]
 
 	if prog == nil {
 		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
@@ -238,7 +229,7 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 	return nil
 }
 
-func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, handler *pcap.Handle) error {
+func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -261,7 +252,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, handler *pc
 		}
 	}
 	if utils.DEBUG {
-		fmt.Println("packet L3 and L4 ", isIpv4, isUdp)
+		log.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
@@ -325,18 +316,36 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, handler *pc
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	fmt.Println("called here for process Invoke")
 
+	rootNs, err := netns.Get()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer rootNs.Close()
+
 	nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
+
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
+
+	defer nsHandle.Close()
+	defer rootNs.Close()
 
 	if len(ifaceHandler.PhysicalLinks) > 0 {
 		log.Println("Processing of multiple Physical links")
 	}
 
 	fmt.Println(nsHandle.UniqueId(), nsHandle.String())
-	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+
+	// // change the namespace for kernel pcap open
+	// if err := netns.Set(*nsHandle); err != nil {
+	// 	log.Println("error changing the Network Namespace")
+	// 	panic(err)
+	// }
+
+	cap, err := pcap.OpenLive(utils.NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
 		fmt.Println("error opening packet capture over hte interface from kernel")
 		return err
@@ -349,7 +358,7 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		tc.processDNSCaptureForDPI(packet, cap)
+		tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
 	}
 	return nil
 }

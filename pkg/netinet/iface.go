@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
@@ -69,7 +71,6 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
-
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {
 	hardwardIntefaces := make([]netlink.Link, 0)
 	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
@@ -115,4 +116,26 @@ func (nf *NetIface) GetNetworkNamespace(route string) (*netns.NsHandle, error) {
 
 	defer netHandle.Close()
 	return &netHandle, nil
+}
+
+func (nf *NetIface) GetRootNamespace() (*netns.NsHandle, error) {
+
+	rootNs, err := netns.Get()
+	if err != nil {
+		log.Println("[x] Error Getting the Root Namespace")
+		return nil, err
+	}
+	return &rootNs, nil
+}
+
+func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
+
+	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	return cap, err
+}
+
+func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
+
+	cap, err := pcap.OpenLive(utils.NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	return cap, err
 }

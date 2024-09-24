@@ -65,7 +65,7 @@ struct packet_actions {
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
     __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, struct dns_header *, __u32);
-    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *);
+    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *);
 };
 
 __u32 INSECURE = 0;
@@ -73,7 +73,7 @@ __u32 INSECURE = 0;
 
 struct ring_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);
+    __uint(max_entries, 1 << 16);
 } dns_ring_events SEC(".maps");
 
 
@@ -83,6 +83,14 @@ struct exfil_security_egress_redirect_map {
     __type(value, __u16);   // layer 4 checksum prior redirect non clone skb 
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
+
+
+struct exfil_security_egress_redirect_count_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(value, __u32);   // count of hte packet for multiple redirection 
+    __uint(max_entries, 1);
+} exfil_security_egress_redirect_count_map SEC(".maps");
 
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -222,10 +230,15 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
     struct dns_header *dns_hdr = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
 
     #ifdef DEBUG 
-        bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->opcode), bpf_ntohs(dns_hdr->transaction_id));
-        bpf_printk("the info for dns question is %u and answercount %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->ans_count));
-        if (bpf_ntohs(dns_hdr->add_count) > 0)
+        if (DEBUG) {
+            bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->opcode), bpf_ntohs(dns_hdr->transaction_id));
+            bpf_printk("the info for dns question is %u and answercount %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->ans_count));
+            if (bpf_ntohs(dns_hdr->add_count) > 0) {
+                #pragma unroll(255)
+                for (__u8 i=0; i < (1 << 8); i++){}
+            }
             bpf_printk("the addon count %u", bpf_ntohs(dns_hdr->add_count));
+        }
     #endif
 
     return 1;
@@ -241,17 +254,18 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
         if (udp_payload_len > skb_len || udp_payload_exclude_header > skb_len) return 0;
 
         #ifdef DEBUG 
-            bpf_printk("The size of the dns payload %u and buffer %u and pyload %u", sizeof(*dns_payload), udp_payload_exclude_header, bpf_htons(dns_header->ans_count));
+            if (DEBUG){
+                bpf_printk("The size of the dns payload %u and buffer %u and pyload %u", sizeof(*dns_payload), udp_payload_exclude_header, bpf_htons(dns_header->ans_count));
+            } 
         #endif
 
         return 1;
 }
 
-
 static 
-__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload) {
+__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
-    return 1;
+    return 0;
 } 
 
 
@@ -384,6 +398,22 @@ int classify(struct __sk_buff *skb){
                     return TC_DROP;
                 }
 
+                __u8 action_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
+
+                flags = action_flag;
+        
+                bool deep_scan = false;
+                switch (flags) {
+                    case SUSPICIOUS:
+                    case MALICIOUS: {
+                        deep_scan = true;
+                        break;
+                    }
+                    default: {
+                        break;
+                    }
+                }
+
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
 
                 if (DEBUG) {
@@ -408,10 +438,18 @@ int classify(struct __sk_buff *skb){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
                     }
                     bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                    return TC_FORWARD;
-                    // not possible since the dnds query id are always unique 
+                    return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
                 }
                 
+
+                __u16 ipv4_map_key = bpf_htonl(ip->daddr);
+                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &ipv4_map_key);
+                if (ct_val) {
+                    __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
+                }else {
+                    __u32 init_map_redirect_count = 1;
+                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &ipv4_map_key, &init_map_redirect_count, BPF_ANY);
+                }
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
@@ -450,7 +488,7 @@ int classify(struct __sk_buff *skb){
                 }
     
                 #ifdef DEBUG 
-                    if (!DEBUG) {
+                    if (DEBUG) {
                         __u32 mod = bpf_ntohl(ip->daddr);
                         __u32 d1 = (mod >> 24) &0xFF;
                         __u32 d2 = (mod >> 16) &0xFF;

@@ -6,7 +6,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-
 #include "consts.h"
 #include "dns.h"
 

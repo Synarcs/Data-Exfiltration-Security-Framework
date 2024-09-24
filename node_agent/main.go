@@ -32,7 +32,7 @@ func main() {
 	// // kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	tc := tc.TCHandler{
 		Interfaces:   iface.PhysicalLinks,
-		DnsPacketGen: tc.GenerateDnsParserModelUtils(),
+		DnsPacketGen: tc.GenerateDnsParserModelUtils(&iface),
 	}
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 	go tc.ProcessSniffDPIPacketCapture(&iface, nil)

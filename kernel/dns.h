@@ -7,15 +7,14 @@
 #define MAX_SIZE 1024;
 #define MAX_ENTRIES 1024;
 
-#define DEBUG true
-#define DNS_DEBUG false
+#define DEBUG false 
 
 enum MALICIOUS_FLAGS {
         BENIGN = 0,
         MALICIOUS,
         SUSPICIOUS,
         DROP
-};
+} flags;
 
 
 struct dns_header {
