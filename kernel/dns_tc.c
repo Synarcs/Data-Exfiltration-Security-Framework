@@ -357,24 +357,28 @@ int classify(struct __sk_buff *skb){
                 
                 struct dns_event *event;
 
-                event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
-                if (!event) {
-                    bpf_printk("Error in allocating ring buffer space in kernel");
-                    return TC_FORWARD;
-                }
+                // event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
+                // if (!event) {
+                //     bpf_printk("Error in allocating ring buffer space in kernel");
+                //     return TC_FORWARD;
+                // }
 
-                event->eventId = 10;
-                event->src_ip = bpf_ntohl(ip->saddr);
-                event->dst_ip = bpf_ntohl(ip->daddr);
-                event->src_port = bpf_ntohs(udp->source);
-                event->dst_port = bpf_ntohs(udp->dest);
-                event->payload_size = (__u32)udp_payload_exclude_header;
-                event->udp_frame_size = bpf_ntohs(udp->len); 
-                event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
-                event->isUDP = (__u8) 1;
-                event->isIpv4 = (__u8) 1;
 
-                bpf_ringbuf_submit(event, 0);   
+
+                // __u32 dest_ip = bpf_ntohl(ip->daddr);
+                
+                // event->eventId = 10;
+                // event->src_ip = bpf_ntohl(ip->saddr);
+                // event->dst_ip = bpf_ntohl(ip->daddr);
+                // event->src_port = bpf_ntohs(udp->source);
+                // event->dst_port = bpf_ntohs(udp->dest);
+                // event->payload_size = (__u32)udp_payload_exclude_header;
+                // event->udp_frame_size = bpf_ntohs(udp->len); 
+                // event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
+                // event->isUDP = (__u8) 1;
+                // event->isIpv4 = (__u8) 1;
+
+                // bpf_ringbuf_submit(event, 0);   
 
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 

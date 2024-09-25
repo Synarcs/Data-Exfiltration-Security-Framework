@@ -36,8 +36,15 @@ const (
 )
 
 func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface) *model.DnsPacketGen {
+	netInterface, fd, err := ifaceHandler.GetRootNamespaceRawSocketFd()
+	if err != nil {
+		log.Fatalln("Error fetching the raw socket fd for the socket")
+		panic(err.Error())
+	}
 	return &model.DnsPacketGen{
-		IfaceHandler: ifaceHandler,
+		IfaceHandler:        ifaceHandler,
+		SockSendFdInterface: netInterface,
+		SocketSendFd:        fd,
 	}
 }
 

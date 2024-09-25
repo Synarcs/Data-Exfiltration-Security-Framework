@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"syscall"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/pcap"
@@ -134,8 +135,22 @@ func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 	return cap, err
 }
 
-func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
+func (nf *NetIface) GetRootNamespaceRawSocketFd() (*net.Interface, *int, error) {
+	log.Println("[x] Creating a socket fd to send packet")
+	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
+	if err != nil {
+		log.Println("Error in opening a raw socket fd to the bridge socket")
+		return nil, nil, err
+	}
+	netInterface, err := net.InterfaceByName(nf.LoopBackLinks[0].Attrs().Name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting interface: %v", err)
+	}
 
+	return netInterface, &fd, nil
+}
+
+func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(utils.NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	return cap, err
 }

@@ -9,6 +9,8 @@ go_library(
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/netinet",
     visibility = ["//visibility:public"],
     deps = [
+        "//pkg/utils",
+        "@com_github_google_gopacket//pcap",
         "@com_github_vishvananda_netlink//:netlink",
         "@com_github_vishvananda_netns//:netns",
         "@org_golang_x_sys//unix",
