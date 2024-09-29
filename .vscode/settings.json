@@ -19,6 +19,8 @@
         "utility": "c",
         "common.h": "c",
         "ip.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "string_view": "c",
+        "initializer_list": "c"
     }
 }

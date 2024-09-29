@@ -248,7 +248,6 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
     #ifdef DEBUG 
         if (DEBUG) {
-            bpf_printk("the info for buffer is %u and id %u", bpf_ntohs(dns_hdr->opcode), bpf_ntohs(dns_hdr->transaction_id));
             bpf_printk("the info for dns question is %u and answercount %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->ans_count));
             if (bpf_ntohs(dns_hdr->add_count) > 0) {
                 #pragma unroll(255)
@@ -310,53 +309,55 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
     // debug the size and content of questions, answer auth and add count in dns header 
-    bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
-    bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
+
+    struct dns_flags  flags = get_dns_flags(dns_header);
+    #ifdef DEBUG
+        if (!DEBUG) {
+        bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
+        bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
+        bpf_printk("the query opcode %d",  flags.opcode);
+        }
+    #endif
 
     // qeuries section 
-    __u8 max_dns_qCount = bpf_ntohs(dns_header->qd_count);
+    __u16 qd_count = bpf_ntohs(dns_header->qd_count);
+    __u16 ans_count = bpf_ntohs(dns_header->ans_count);
+    __u16 auth_count = bpf_ntohs(dns_header->auth_count);
+    __u16 add_count = bpf_ntohs(dns_header->add_count);
+
+
+    if (qd_count > MAX_DNS_QDCOUNT || ans_count > MAX_DNS_ANS_COUNT ||
+            auth_count > MAX_DNS_AUTH_COUNT || add_count > MAX_DNS_ADD_COUNT) {
+        return SUSPICIOUS;
+    }
 
     if (bpf_ntohs(dns_header->qd_count) > MAX_DNS_QDCOUNT) {
-        max_dns_qCount = MAX_DNS_QDCOUNT;
+        qd_count = MAX_DNS_QDCOUNT;
     }
 
-    for (__u8 i=0; i < max_dns_qCount; i++){
+    for (__u8 i=0; i < qd_count; i++){
         bpf_printk("testing the count ");
     }
 
-    // rr section 
-    __u8 max_dns_anount = bpf_ntohs(dns_header->ans_count);
-    if (bpf_ntohs(dns_header->ans_count) > MAX_DNS_ANS_COUNT) {
-        max_dns_anount = MAX_DNS_ANS_COUNT;
+    // // rr section 
+    if (ans_count > MAX_DNS_ANS_COUNT) {
+        ans_count = MAX_DNS_ANS_COUNT;
     }
-    
-    for (__u8 i=0; i < max_dns_anount; i++){
+
+    for (__u8 i=0; i < ans_count; i++){
         bpf_printk("testing the count ");
     }
 
-    // auth count 
-    __u8 max_dns_auth_count = bpf_ntohs(dns_header->auth_count);
-    if (bpf_ntohs(dns_header->auth_count) > MAX_DNS_AUTH_COUNT) {
-        max_dns_auth_count = MAX_DNS_AUTH_COUNT;
-    }
-    
-    for (__u8 i=0; i < max_dns_auth_count; i++){
-        bpf_printk("testing the count ");
-    }
+    // // auth count 
+    // for (__u8 i=0; i < auth_count; i++){
+    //     bpf_printk("testing the count ");
+    // }
 
-
-    // addon count 
-    __u8 max_dns_addon_count = bpf_ntohs(dns_header->add_count);
-    if (bpf_ntohs(dns_header->add_count) > MAX_DNS_ADD_COUNT) {
-        max_dns_addon_count = MAX_DNS_ADD_COUNT;
-    }
-    
-    for (__u8 i=0; i < max_dns_addon_count; i++){
-        bpf_printk("testing the count ");
-    }
-
-    return  (bpf_ntohs(dns_header->qd_count) > 1 || bpf_ntohs(dns_header->ans_count) > 1 || bpf_ntohs(dns_header->add_count) > 1 || bpf_ntohs(dns_header->auth_count) > 1) ? 1 : 0;
-} 
+    // for (__u8 i=0; i < add_count; i++){
+    //     bpf_printk("testing the count ");
+    // }
+    return BENIGN;
+}   
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP) {
@@ -512,6 +513,7 @@ int classify(struct __sk_buff *skb){
                     bpf_printk("[x] The transaction id Forward for the DNS Request Packet is %d ", transaction_id);
                 }
 
+                
                 bpf_printk("Suspicious pacekt found perform DPI here and action flag %u", action_flag);
 
                 struct exfil_security_dropped_payload_event *dropped_packet_dns;
