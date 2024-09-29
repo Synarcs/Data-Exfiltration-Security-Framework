@@ -65,7 +65,17 @@ struct packet_actions {
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
     __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, struct dns_header *, __u32);
-    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *);
+    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
+
+    // dns header parser section fro the enitr query labels 
+    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, struct dns_header *, void *);
+    __u8 (*parse_dns_payload_answer_section) (struct skb_cursor *, struct dns_header *, void *);
+    __u8 (*parse_dns_payload_auth_section) (struct skb_cursor *, struct dns_header *, void *);
+    __u8 (*parse_dns_payload_addon_section) (struct skb_cursor *, struct dns_header *, void *);
+
+    // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
+    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor *, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP);
+
 };
 
 __u32 INSECURE = 0;
@@ -215,8 +225,8 @@ __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
 static 
 __always_inline __u8 parse_tcpv6(struct  skb_cursor *skb) {
      struct udphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-    if ((void *)(tcp + 1) > skb->data_end) return 0;
-    return 0;   
+    if ((void *)(tcp + 1) > skb->data_end) return 1;
+    return 0;
 }
 
 
@@ -269,6 +279,32 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
         return 1;
 }
 
+static
+  __always_inline __u8 parse_dns_payload_queries_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
+
+        return SUSPICIOUS;
+  }
+
+static
+ __always_inline __u8 parse_dns_payload_answer_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
+
+        return SUSPICIOUS;
+}
+
+static
+__always_inline __u8 parse_dns_payload_auth_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
+
+        return SUSPICIOUS;
+}
+
+
+static
+__always_inline __u8 parse_dns_payload_addon_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
+
+        return SUSPICIOUS;
+}
+
+
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
@@ -277,8 +313,56 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
     bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
     bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
 
+    // qeuries section 
+    __u8 max_dns_qCount = bpf_ntohs(dns_header->qd_count);
+
+    if (bpf_ntohs(dns_header->qd_count) > MAX_DNS_QDCOUNT) {
+        max_dns_qCount = MAX_DNS_QDCOUNT;
+    }
+
+    for (__u8 i=0; i < max_dns_qCount; i++){
+        bpf_printk("testing the count ");
+    }
+
+    // rr section 
+    __u8 max_dns_anount = bpf_ntohs(dns_header->ans_count);
+    if (bpf_ntohs(dns_header->ans_count) > MAX_DNS_ANS_COUNT) {
+        max_dns_anount = MAX_DNS_ANS_COUNT;
+    }
+    
+    for (__u8 i=0; i < max_dns_anount; i++){
+        bpf_printk("testing the count ");
+    }
+
+    // auth count 
+    __u8 max_dns_auth_count = bpf_ntohs(dns_header->auth_count);
+    if (bpf_ntohs(dns_header->auth_count) > MAX_DNS_AUTH_COUNT) {
+        max_dns_auth_count = MAX_DNS_AUTH_COUNT;
+    }
+    
+    for (__u8 i=0; i < max_dns_auth_count; i++){
+        bpf_printk("testing the count ");
+    }
+
+
+    // addon count 
+    __u8 max_dns_addon_count = bpf_ntohs(dns_header->add_count);
+    if (bpf_ntohs(dns_header->add_count) > MAX_DNS_ADD_COUNT) {
+        max_dns_addon_count = MAX_DNS_ADD_COUNT;
+    }
+    
+    for (__u8 i=0; i < max_dns_addon_count; i++){
+        bpf_printk("testing the count ");
+    }
+
     return  (bpf_ntohs(dns_header->qd_count) > 1 || bpf_ntohs(dns_header->ans_count) > 1 || bpf_ntohs(dns_header->add_count) > 1 || bpf_ntohs(dns_header->auth_count) > 1) ? 1 : 0;
 } 
+
+static 
+__always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP) {
+
+    return 1;
+}
 
 
 static 
@@ -292,6 +376,11 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_header_size = &parse_dns_header_size;
     actions.parse_dns_payload = &parse_dns_payload;
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
+    actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
+    actions.parse_dns_payload_queries_section = &parse_dns_payload_queries_section;
+    actions.parse_dns_payload_answer_section = &parse_dns_payload_answer_section;
+    actions.parse_dns_payload_auth_section  = &parse_dns_payload_auth_section;
+    actions.parse_dns_payload_addon_section = &parse_dns_payload_addon_section;
     return actions;
 }
 
@@ -586,7 +675,7 @@ int classify(struct __sk_buff *skb){
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
             // verify for standard or enhanced dpi inspection over the payload header 
-            
+
             if (tcp-> dest == bpf_htons(DNS_EGRESS_PORT)) {
                 // a standard port used for tcp data forwarding 
                 return TC_FORWARD;
@@ -600,15 +689,19 @@ int classify(struct __sk_buff *skb){
         if (actions.parse_ipv6(&cursor) == 0) return TC_DROP;
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
-
+        
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-            return TC_FORWARD;
+            if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
+            udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+            if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
+            void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
+            if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
 
+            return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
     } else return TC_FORWARD;
-
 
     return TC_ACT_OK;
 }

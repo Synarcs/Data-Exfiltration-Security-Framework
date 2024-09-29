@@ -29,3 +29,12 @@ struct exfil_security_config_map {
     __uint(max_entries, 1 << 6);
 } exfil_security_config_map SEC(".maps");
 
+
+
+#define MAX_DNS_QDCOUNT 3 
+#define MAX_DNS_ANS_COUNT 3
+#define MAX_DNS_AUTH_COUNT 3 
+#define MAX_DNS_ADD_COUNT 3 
+
+
+

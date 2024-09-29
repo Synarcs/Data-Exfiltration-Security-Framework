@@ -32,7 +32,7 @@ int xdp_process(struct xdp_md *ctx) {
     void *data = (void *)(long *) ctx->data;
     void *data_end = (void *)(long *) ctx->data_end;
 
-    return XDP_DROP;
+    return XDP_PASS;
 }
 
 char __license[] SEC("license") = "MIT / GPL";
