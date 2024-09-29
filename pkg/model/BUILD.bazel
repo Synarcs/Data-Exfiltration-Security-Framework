@@ -2,7 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "model",
-    srcs = ["parse.go"],
+    srcs = ["parse.go", "vlan.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/model",
     visibility = ["//visibility:public"],
     deps = [

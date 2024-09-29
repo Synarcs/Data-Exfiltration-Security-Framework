@@ -6,8 +6,7 @@ sudo ip netns exec sx2 ip link del sx2-eth0
 
 echo "[x] Cleaning the Network NS"
 sudo ip netns del sx1
-sudo ip netns del sx2
-
+sudo ip netns del sx
 echo "[x] Cleaning the bridge"
 sudo ip link del br0
 

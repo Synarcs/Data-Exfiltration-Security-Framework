@@ -1,15 +1,14 @@
 from scapy.all import DNS, DNSRR, IP, sr1, UDP, DNSQR, IPv6 
 from scapy.all import ICMP, send
 import os, random
+from pathlib import Path
+ 
 
 domains = ["google.com", "apple.com", "intel.com"]
-custom_id = random.randint(1, 1 << 10)
-dns = DNS(id=custom_id,rd=1, qd=DNSQR(qname=random.choice(domains)))
+dns = DNS(id=100,rd=1)
 
-#dns.qr = DNSQR(qname=random.choice(domains))
-
-#dns.an = DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300) /  DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300)
-
+dns.qd = DNSQR(qname="intel.com") / DNSQR(qname="apple.com") 
+# dns.an = DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300) /  DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300)
 
 dns_req = IP(dst='192.168.64.1') / UDP(dport=53) / dns
 

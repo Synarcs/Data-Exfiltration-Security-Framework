@@ -85,6 +85,13 @@ struct exfil_security_egress_redirect_map {
 } exfil_security_egress_redirect_map SEC(".maps");
 
 
+// count the malicious packets dropped from kernel 
+struct exfil_security_egress_drop_ring_buff {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} exfil_security_egress_drop_ring_buff SEC(".maps");
+
+
 struct exfil_security_egress_redirect_count_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
@@ -265,7 +272,12 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
-    return 0;
+
+    // debug the size and content of questions, answer auth and add count in dns header 
+    bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
+    bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
+
+    return  (bpf_ntohs(dns_header->qd_count) > 1 || bpf_ntohs(dns_header->ans_count) > 1 || bpf_ntohs(dns_header->add_count) > 1 || bpf_ntohs(dns_header->auth_count) > 1) ? 1 : 0;
 } 
 
 
@@ -357,29 +369,6 @@ int classify(struct __sk_buff *skb){
                 
                 struct dns_event *event;
 
-                // event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
-                // if (!event) {
-                //     bpf_printk("Error in allocating ring buffer space in kernel");
-                //     return TC_FORWARD;
-                // }
-
-
-
-                // __u32 dest_ip = bpf_ntohl(ip->daddr);
-                
-                // event->eventId = 10;
-                // event->src_ip = bpf_ntohl(ip->saddr);
-                // event->dst_ip = bpf_ntohl(ip->daddr);
-                // event->src_port = bpf_ntohs(udp->source);
-                // event->dst_port = bpf_ntohs(udp->dest);
-                // event->payload_size = (__u32)udp_payload_exclude_header;
-                // event->udp_frame_size = bpf_ntohs(udp->len); 
-                // event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
-                // event->isUDP = (__u8) 1;
-                // event->isIpv4 = (__u8) 1;
-
-                // bpf_ringbuf_submit(event, 0);   
-
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
                 #ifdef DEBUG
@@ -406,14 +395,24 @@ int classify(struct __sk_buff *skb){
 
                 flags = action_flag;
         
-                bool deep_scan = false;
+                bool deep_scan_mirror = false;
+                bool drop = false;
+                bool isBenign = false;
                 switch (flags) {
-                    case SUSPICIOUS:
+                    case SUSPICIOUS: {
+                        deep_scan_mirror = true;
+                        break;
+                    }
                     case MALICIOUS: {
-                        deep_scan = true;
+                        drop = true;
+                        break;
+                    }
+                    case BENIGN: {
+                        isBenign = true;
                         break;
                     }
                     default: {
+                        deep_scan_mirror = true;
                         break;
                     }
                 }
@@ -424,11 +423,52 @@ int classify(struct __sk_buff *skb){
                     bpf_printk("[x] The transaction id Forward for the DNS Request Packet is %d ", transaction_id);
                 }
 
-                
+                bpf_printk("Suspicious pacekt found perform DPI here and action flag %u", action_flag);
+
+                struct exfil_security_dropped_payload_event *dropped_packet_dns;
+
+                if (isBenign) {
+                    #ifdef DEBUG
+                        if (DEBUG) {
+                            bpf_printk("Allowing the packet as benign with no further DPI from kernel"); 
+                        }
+                    #endif
+                    return TC_FORWARD;
+                }else if (drop){
+                    dropped_packet_dns = bpf_ringbuf_reserve(&exfil_security_egress_drop_ring_buff, sizeof(struct exfil_security_egress_drop_ring_buff), 0);
+                    if (!dropped_packet_dns) {
+                        return TC_DROP;
+                    }
+                    #ifdef DEBUG
+                           if (DEBUG) {
+                              bpf_printk("tracking the following malicous dropped macket from DPI in TC Layer within Kernel");
+                           }
+                    #endif 
+                    dropped_packet_dns->dst_ip = bpf_ntohs(ip->saddr);
+                    dropped_packet_dns->dst_port = bpf_ntohs(udp->dest);
+                    dropped_packet_dns->src_ip = bpf_ntohs(ip->daddr);
+                    dropped_packet_dns->src_port = bpf_ntohs(udp->source);
+                    dropped_packet_dns->protocol = bpf_ntohs(ip->protocol);
+
+                    dropped_packet_dns->qd_count = bpf_htons(dns->qd_count);
+                    dropped_packet_dns->add_count = bpf_htons(dns->add_count);
+                    dropped_packet_dns->qd_count = bpf_htons(dns->qd_count);
+                    dropped_packet_dns->ans_count = bpf_htons(dns->ans_count);
+                    bpf_ringbuf_submit(dropped_packet_dns, 0);
+                    return TC_FORWARD;
+                }else if (deep_scan_mirror){
+                    return TC_DROP;
+                }
+
+
+                // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
+
                 // update the dns query id with the check sum value prior to bpf function redirection to new ifnet interface
                 __u16 *map_layer3_redirect_value;
                 __u16 layer3_checksum = bpf_htons(ip->check);
                 map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                bool isRedirectFirst = false;
+                bool processCloneRedirectRun = false;
                 if (!map_layer3_redirect_value) {
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
                     int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
@@ -437,12 +477,38 @@ int classify(struct __sk_buff *skb){
                             bpf_printk("Error updating the bpf redirect from tc kernel layer");
                         }
                     }
+                    isRedirectFirst = true;
                 } else {
                     if (DEBUG){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
                     }
                     bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
                     return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
+                }
+                
+
+                // host event for monitoring all the dns traffic operatingover the tc control layer 
+                if (isRedirectFirst && processCloneRedirectRun) {
+                    event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
+                    if (!event) {
+                        bpf_printk("Error in allocating ring buffer space in kernel");
+                        return TC_FORWARD;
+                    }
+
+                    __u32 dest_ip = bpf_ntohl(ip->daddr);
+                    
+                    event->eventId = 10;
+                    event->src_ip = bpf_ntohl(ip->saddr);
+                    event->dst_ip = bpf_ntohl(ip->daddr);
+                    event->src_port = bpf_ntohs(udp->source);
+                    event->dst_port = bpf_ntohs(udp->dest);
+                    event->payload_size = (__u32)udp_payload_exclude_header;
+                    event->udp_frame_size = bpf_ntohs(udp->len); 
+                    event->dns_payload_size = bpf_htons(udp->len) - sizeof(struct udphdr)  - sizeof(struct dns_header);
+                    event->isUDP = (__u8) 1;
+                    event->isIpv4 = (__u8) 1;
+
+                    bpf_ringbuf_submit(event, 0);   
                 }
                 
 

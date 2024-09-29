@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -52,7 +53,9 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 	l3_bpfMap_checksum uint16, handler *pcap.Handle) error {
 
 	st := time.Now().Nanosecond()
-	log.Println("[x] Recrafting the entire DNS packet")
+	if utils.DEBUG {
+		log.Println("[x] Recrafting the entire DNS packet")
+	}
 	ethernet := ethLayer.(*layers.Ethernet)
 
 	ipv4 := ipLayer.(*layers.IPv4)
@@ -69,8 +72,10 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 	udpPacket := udpLayer.(*layers.UDP)
 	udpPacket.SetNetworkLayerForChecksum(ipv4)
 
-	fmt.Println("src ip is", ipv4.SrcIP.To4(), "dest ip ", ipv4.DstIP.To4())
-	fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
+	if utils.DEBUG {
+		fmt.Println("src ip is", ipv4.SrcIP.To4(), "dest ip ", ipv4.DstIP.To4())
+		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
+	}
 
 	dnsPacket := d.GenerateDnsPacket(*dns)
 
@@ -86,8 +91,10 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		return err
 	}
 
-	serialize := time.Now().Nanosecond()
-	log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
+	if utils.DEBUG {
+		// serialize := time.Now().Nanosecond()
+		log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
+	}
 	outputPacket := buffer.Bytes()
 
 	// send to a raw open fd via sniff socket fd  and associated mapped handle
@@ -105,6 +112,8 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		log.Println("Error in sending the packet to the raw socket")
 	}
 
-	log.Println("time took to send the whole packet", time.Now().Nanosecond()-serialize)
+	// if utils.DEBUG {
+	// 	log.Println("time took to send the whole packet", time.Now().Nanosecond()-serialize)
+	// }
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
@@ -138,7 +139,7 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 			DirectAction: true,
 		}
 
-		if netlink.FilterReplace(&filter); err != nil {
+		if err := netlink.FilterReplace(&filter); err != nil {
 			panic(err.Error())
 		}
 	}
@@ -294,21 +295,25 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 		} else {
 			fmt.Println("found the required key from BPF Hash fd ", uint16(ip_layer3_checksum))
 		}
-		if dns.QDCount > 0 {
-			for _, qd := range dns.Questions {
-				fmt.Println(string(qd.Name), qd.Class, qd.Type)
+
+		if utils.DEBUG {
+			if dns.QDCount > 0 {
+				for _, qd := range dns.Questions {
+					fmt.Println(string(qd.Name), qd.Class, qd.Type)
+				}
+			}
+			if dns.ARCount > 0 {
+				for _, ar := range dns.Authorities {
+					fmt.Println(string(ar.Name), ar.Class, ar.Type, ar.TTL)
+				}
+			}
+			if dns.ANCount > 0 {
+				for _, an := range dns.Answers {
+					fmt.Println(string(an.Data), an.String())
+				}
 			}
 		}
-		if dns.ARCount > 0 {
-			for _, ar := range dns.Authorities {
-				fmt.Println(string(ar.Name), ar.Class, ar.Type, ar.TTL)
-			}
-		}
-		if dns.ANCount > 0 {
-			for _, an := range dns.Answers {
-				fmt.Println(string(an.Data), an.String())
-			}
-		}
+
 		// debug kernel redirection packet for egress route via a bpf_id_redirect
 		// if err != nil {
 		// a valid packet found from the process redirect map for DPI and kernel redirect scan
@@ -323,6 +328,9 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	fmt.Println("called here for process Invoke")
 
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	rootNs, err := netns.Get()
 	if err != nil {
 		panic(err.Error())
@@ -330,42 +338,48 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	defer rootNs.Close()
 
-	nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
+	ns, err := netns.GetFromName("sx1")
+
+	// nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
 
 	if err != nil {
 		log.Println(err.Error())
 		return err
 	}
 
-	defer nsHandle.Close()
-	defer rootNs.Close()
+	defer ns.Close()
 
 	if len(ifaceHandler.PhysicalLinks) > 0 {
 		log.Println("Processing of multiple Physical links")
 	}
 
-	fmt.Println(nsHandle.UniqueId(), nsHandle.String())
+	// if err := netns.Set(ns); err != nil {
+	// 	log.Fatal("error changing the Network Namespace:", err)
+	// }
 
+	fmt.Println(ns.UniqueId(), ns.String())
+	// interfaceName := "sx1-eth0"
 	// // change the namespace for kernel pcap open
 	// if err := netns.Set(*nsHandle); err != nil {
 	// 	log.Println("error changing the Network Namespace")
 	// 	panic(err)
 	// }
 
-	cap, err := pcap.OpenLive(utils.NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
 		fmt.Println("error opening packet capture over hte interface from kernel")
 		return err
 	}
 	defer cap.Close()
 
-	if err := cap.SetBPFFilter("udp and port 53"); err != nil {
+	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
 		log.Fatalf("Error setting BPF filter: %v", err)
 	}
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
+		fmt.Println("sniff the packet over the kernel namespace", packet.Layers())
+		go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
 	}
 	return nil
 }
