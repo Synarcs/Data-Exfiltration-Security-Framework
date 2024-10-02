@@ -12,3 +12,8 @@ type DnsEvent struct {
 	IsUdp        uint8
 	IsTcp        uint8
 }
+
+const (
+	EXFIL_SECURITY_EGRESS_REDIRECT_MAP = "exfil_security_egress_redirect_map"
+	EXFIL_SECURITY_KERNEL_CONFIG_MAP   = "exfil_security_config_map"
+)

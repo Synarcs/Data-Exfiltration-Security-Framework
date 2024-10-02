@@ -1,16 +1,22 @@
+tc_kernel := dns_tc.c 
+tc_kernel_out := tc.o 
+
+bridge_tc_kernel := bridge_tc.c
+bridge_tc_kernel_out := bridge.o 
+
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o tc.o -c dns_tc.c  
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o bridge.o -c bridge_tc.c	
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 
 # for x86 compilation of cpu 
 .PHONY: compile-x86
 compile-x86:
-	sudo clang -target bpf -g -O3 -o tc.o -c dns_tc.c 
-	sudo clang -target bpf -g -O3 -o bridge.o -c bridge_tc.c 
+	sudo clang -target bpf -g -O3 -o tc.o -c $(tc_kernel)
+	sudo clang -target bpf -g -O3 -o bridge.o -c $(bridge_tc)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 

@@ -60,6 +60,8 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 
 	ipv4 := ipLayer.(*layers.IPv4)
 
+	// do feature engineering
+
 	ipv4.DstIP = net.IP{192, 168, 64, 1}
 	ipv4.Checksum = l3_bpfMap_checksum
 

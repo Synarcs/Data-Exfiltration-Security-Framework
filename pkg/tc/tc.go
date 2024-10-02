@@ -278,8 +278,8 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
-	dnsMapRedirectMap := tc.TcCollection.Maps["exfil_security_egress_redirect_map"]
-	configMap := tc.TcCollection.Maps["exfil_security_config_map"]
+	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_REDIRECT_MAP]
+	configMap := tc.TcCollection.Maps[events.EXFIL_SECURITY_KERNEL_CONFIG_MAP]
 	if configMap != nil {
 	}
 

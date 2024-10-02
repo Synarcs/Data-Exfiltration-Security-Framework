@@ -12,7 +12,7 @@
 typedef struct Proc {
     int processId;
     struct Proc *next;
-    void  (*handler) (void *, void *, int)
+    void * (*handler) (void *, void *, int)
 } procMap;
 
 void *handler (void *start, void *end, int size) {
@@ -24,7 +24,7 @@ void *handler (void *start, void *end, int size) {
         }
     }
 
-    return NULL;
+    return (void *) start + sizeof(procMap) * size;
 }
 
 int main(void){

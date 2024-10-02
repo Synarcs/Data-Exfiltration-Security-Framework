@@ -69,9 +69,6 @@ struct packet_actions {
 
     // dns header parser section fro the enitr query labels 
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, struct dns_header *, void *);
-    __u8 (*parse_dns_payload_answer_section) (struct skb_cursor *, struct dns_header *, void *);
-    __u8 (*parse_dns_payload_auth_section) (struct skb_cursor *, struct dns_header *, void *);
-    __u8 (*parse_dns_payload_addon_section) (struct skb_cursor *, struct dns_header *, void *);
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor *, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP);
@@ -284,25 +281,6 @@ static
         return SUSPICIOUS;
   }
 
-static
- __always_inline __u8 parse_dns_payload_answer_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
-
-        return SUSPICIOUS;
-}
-
-static
-__always_inline __u8 parse_dns_payload_auth_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
-
-        return SUSPICIOUS;
-}
-
-
-static
-__always_inline __u8 parse_dns_payload_addon_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
-
-        return SUSPICIOUS;
-}
-
 
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
@@ -312,7 +290,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
     struct dns_flags  flags = get_dns_flags(dns_header);
     #ifdef DEBUG
-        if (!DEBUG) {
+        if (DEBUG) {
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
         bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
         bpf_printk("the query opcode %d",  flags.opcode);
@@ -325,37 +303,45 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
     __u16 auth_count = bpf_ntohs(dns_header->auth_count);
     __u16 add_count = bpf_ntohs(dns_header->add_count);
 
-
-    if (qd_count > MAX_DNS_QDCOUNT || ans_count > MAX_DNS_ANS_COUNT ||
-            auth_count > MAX_DNS_AUTH_COUNT || add_count > MAX_DNS_ADD_COUNT) {
+    // the size of char containing the dns payload char size 
+    __u8 *dns_payload_buffer = (__u8 *) dns_payload;
+    /*
+        Usually a dns resolvert sends 1 requestt query for a single request to the remote DNS server 
+        The clsact qdisc is only meant for egress traffic and tc control flow system after fa_codel and default tc action from kernel
+        Direct action appled over the egress traffic 
+        DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections, making it more flexible and stealthy
+    */
+   if (qd_count == 1) {
+     if (ans_count == 0) {
+        // a questions record and its an benign packet but need DPI and kernel can do DPI for the entire packet frame 
+        qd_count = 1; // let the ebpf verifier proceed during JIT and memory check 
+        if (auth_count >= 1 || add_count >= 1) { // a question cannot send auth in queries for benign 
+            return SUSPICIOUS;
+        }
+        int oc = 0;
+        // bpf_printk("[x] Performing DPI over the single question section for DPI inside Kernel");
+        for (__u8 i=0; i < qd_count; i++){
+            if ((void *) dns_payload_buffer > skb->data_end) return SUSPICIOUS;
+            if ((void *) dns_payload_buffer + sizeof(__u8) > skb->data_end) return SUSPICIOUS;
+            __u8 label_len = *dns_payload_buffer;
+            dns_payload_buffer = dns_payload_buffer + label_len + 1;
+            while ((void *)dns_payload_buffer <= skb->data_end) {
+                __u8 oct = *dns_payload_buffer;
+                dns_payload_buffer = dns_payload_buffer + sizeof(__u8) * oct;
+            }
+            if ((void *) dns_payload_buffer > skb->data_end) return SUSPICIOUS;
+            __u8 class_1 = *dns_payload_buffer;
+            bpf_printk("the class %u", class_1);
+            if ((void *) dns_payload_buffer + 1 > skb->data_end) return SUSPICIOUS;
+            __u8 class_2 = *dns_payload_buffer;
+            bpf_printk("the class %u %u", class_1, class_2);
+        }
+     }else return SUSPICIOUS;
+   }else {
+        /// the question is malicious since the malicious client is sending multiple questions a C2C where malware is asking next commands 
         return SUSPICIOUS;
-    }
+   }
 
-    if (bpf_ntohs(dns_header->qd_count) > MAX_DNS_QDCOUNT) {
-        qd_count = MAX_DNS_QDCOUNT;
-    }
-
-    for (__u8 i=0; i < qd_count; i++){
-        bpf_printk("testing the count ");
-    }
-
-    // // rr section 
-    if (ans_count > MAX_DNS_ANS_COUNT) {
-        ans_count = MAX_DNS_ANS_COUNT;
-    }
-
-    for (__u8 i=0; i < ans_count; i++){
-        bpf_printk("testing the count ");
-    }
-
-    // // auth count 
-    // for (__u8 i=0; i < auth_count; i++){
-    //     bpf_printk("testing the count ");
-    // }
-
-    // for (__u8 i=0; i < add_count; i++){
-    //     bpf_printk("testing the count ");
-    // }
     return BENIGN;
 }   
 
@@ -379,9 +365,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
     actions.parse_dns_payload_queries_section = &parse_dns_payload_queries_section;
-    actions.parse_dns_payload_answer_section = &parse_dns_payload_answer_section;
-    actions.parse_dns_payload_auth_section  = &parse_dns_payload_auth_section;
-    actions.parse_dns_payload_addon_section = &parse_dns_payload_addon_section;
     return actions;
 }
 
@@ -640,7 +623,6 @@ int classify(struct __sk_buff *skb){
                     return TC_ACT_OK;
                 }
 
-                __u32 redirect_skb_mark = 1;
                 if (skb->mark != (__u32) redirect_skb_mark) {
                     if (DEBUG) {
                         bpf_printk("Marking the packet over kernel redirection for DPI");
@@ -700,6 +682,7 @@ int classify(struct __sk_buff *skb){
             if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
             if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
+
 
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;

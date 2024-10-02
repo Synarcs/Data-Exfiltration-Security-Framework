@@ -2,6 +2,7 @@
 #include <linux/in.h>
 #include <linux/types.h>
 #include <linux/icmp.h>
+#include <bpf/bpf_tracing.h>
 #include <bpf/bpf_endian.h>
 
 //bpf map parameters
@@ -30,7 +31,7 @@ enum MALICIOUS_FLAGS {
 #define DNS_TC_MASK     0x0200 
 #define DNS_AA_MASK     0x0400  
 #define DNS_OPCODE_MASK 0x7800 
-#define DNS_QR_MASK     0x8000  
+#define DNS_QR_MASK     0x8000
 
 
 #define DNS_RCODE_SHIFT  0   
@@ -55,6 +56,23 @@ struct dns_flags {
     __u8 ad;
     __u8 cd;
     __u8 rcode;
+};
+
+struct qtypes {
+    __u8 A; __u8 NS; __u8 CNAME;__u8 SOA;__u8 PTR;__u8 MX;__u8 TXT;__u8 AAAA;__u8 SRV;__u8 NAPTR;__u8 OPT;__u8 ANY;
+} qtypes = {
+    .A =  0x0001,
+    .NS = 0x0002,
+    .CNAME =  0x0005,
+    .SOA = 0x0006,
+    .PTR = 0x000C,
+    .MX = 0x000F,
+    .TXT = 0x0010,
+    .AAAA = 0x001C,
+    .SRV = 0x0021,
+    .NAPTR = 0x0023,
+    .OPT = 0x0029, 
+    .ANY = 0x00FF,
 };
 
 struct dns_header {
@@ -85,19 +103,50 @@ __always_inline struct dns_flags  get_dns_flags (struct dns_header * dns_header)
     return flags;
 }
 
-
+//   0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                                               |
+// /                     QNAME                     /
+// /                                               /
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                     QTYPE                     |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+// |                     QCLASS                    |
+// +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
 struct dns_query_section {
     __u16 record_type;
     __u16 classId;
-    char domain_name[256];
+    __u16 qclass;
 } __attribute__((packed));
 
+
+ //   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // |                                               |
+ // /                                               /
+ // /                      NAME                     /
+ // |                                               |
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // |                      TYPE                     |
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // |                     CLASS                     |
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // |                      TTL                      |
+ // |                                               |
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ // |                   RDLENGTH                    |
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--|
+ // /                     RDATA                     /
+ // /                                               /
+ // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+ 
 struct dns_answer_section {
-    __u16 query_pointer;
+    __u16 name;
     __u16 record_type;
-    __u16 classId;
-    __u32 ttl;
-    __u16 data_length;
+    __u16 class;
+    __u16 ttl;
+    __u16 rdlength;
+    __u16 rdata;
 } __attribute__((packed));
 
 struct a_record {

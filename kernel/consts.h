@@ -35,6 +35,7 @@ struct exfil_security_config_map {
 #define MAX_DNS_ANS_COUNT 3
 #define MAX_DNS_AUTH_COUNT 3 
 #define MAX_DNS_ADD_COUNT 3 
+#define MAX_PACKET_OFF 0xffff
 
 
-
+__u32 redirect_skb_mark = 1;
