@@ -15,6 +15,7 @@
 
 #include "dns.h"
 #include "consts.h"
+#include "utils.h" 
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
@@ -68,11 +69,10 @@ struct packet_actions {
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
-    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, struct dns_header *, void *);
+    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, void *, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor *, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP);
-
 };
 
 __u32 INSECURE = 0;
@@ -216,6 +216,7 @@ __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
             bpf_printk("The Dest and src port for TCP packet are %u %u", dport, sport);
         }
     #endif
+
     return 0;   
 }
 
@@ -276,11 +277,30 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 }
 
 static
-  __always_inline __u8 parse_dns_payload_queries_section(struct skb_cursor *skb, struct dns_header *dns_header, void *dns_payload) {
+  __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, void *dns_query_class, struct qtypes qt) {
 
+        __u8 A = qt.A;
+
+        switch (*(__u16 *) dns_query_class){
+            case 0x0001: 
+            case 0x0002:
+            case 0x0005:
+            case 0x0006: 
+            case 0x001C: 
+                return BENIGN;
+            case 0x000F:
+            case 0x0021:
+            case 0x0023:
+            case 0x0029: 
+                return SUSPICIOUS;
+            case 0x0010:    
+                return MALICIOUS;
+            default: {
+                return SUSPICIOUS;
+            }
+        }
         return SUSPICIOUS;
   }
-
 
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
@@ -311,6 +331,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         Direct action appled over the egress traffic 
         DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections, making it more flexible and stealthy
     */
+
    if (qd_count == 1) {
      if (ans_count == 0) {
         // a questions record and its an benign packet but need DPI and kernel can do DPI for the entire packet frame 
@@ -319,22 +340,46 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             return SUSPICIOUS;
         }
         int oc = 0;
+        
         // bpf_printk("[x] Performing DPI over the single question section for DPI inside Kernel");
         for (__u8 i=0; i < qd_count; i++){
-            if ((void *) dns_payload_buffer > skb->data_end) return SUSPICIOUS;
-            if ((void *) dns_payload_buffer + sizeof(__u8) > skb->data_end) return SUSPICIOUS;
-            __u8 label_len = *dns_payload_buffer;
-            dns_payload_buffer = dns_payload_buffer + label_len + 1;
-            while ((void *)dns_payload_buffer <= skb->data_end) {
-                __u8 oct = *dns_payload_buffer;
-                dns_payload_buffer = dns_payload_buffer + sizeof(__u8) * oct;
+            __u16 offset = 0;
+            __u8 label_count = 0; __u8 mx_label_ln = 0;
+            for (int j = 0; j < MAX_DNS_NAME_LENGTH; j++) {
+                if ((void *) (dns_payload_buffer + offset + 1) > skb->data_end) return SUSPICIOUS;
+
+                __u8 label_len = *(__u8 *) (dns_payload_buffer + offset);
+
+                mx_label_ln = max(mx_label_ln, label_len);
+                if (label_len == 0x00) break;
+                label_count++;
+                offset += label_len + 1;
+                if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
-            if ((void *) dns_payload_buffer > skb->data_end) return SUSPICIOUS;
-            __u8 class_1 = *dns_payload_buffer;
-            bpf_printk("the class %u", class_1);
-            if ((void *) dns_payload_buffer + 1 > skb->data_end) return SUSPICIOUS;
-            __u8 class_2 = *dns_payload_buffer;
-            bpf_printk("the class %u %u", class_1, class_2);
+            #ifdef DEBUG
+                if (DEBUG) 
+                    bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
+            #endif 
+            // parse the remaining and left over 2 bytes from the processed header for query type to be at offset end of the query label 
+            __u16 query_type = 0x00; __u16 query_class = 0x00;
+            if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+            query_type = *(__u16 *) (dns_payload_buffer + offset); 
+            
+            offset += sizeof(__u16);
+            if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+            
+            query_class = *(__u16 *) (dns_payload_buffer + offset);
+            offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
+
+            __u8 processQueryTypeFLag = parse_dns_qeury_type_section(skb, (void *) (__u16 *) &query_type, qtypes);
+            bpf_printk("the query type value is %u", query_type);
+            if (label_count <= 2) return BENIGN;
+
+            if (label_count >= (1 << 2) && label_count <= 12 || mx_label_ln >= 15) {
+                return processQueryTypeFLag;
+            } else if (label_count >= (1 << 4)) return SUSPICIOUS;
+            // if (processQueryTypeFLag == MALICIOUS) return MALICIOUS;
+            // return processQueryTypeFLag;
         }
      }else return SUSPICIOUS;
    }else {
@@ -364,7 +409,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload = &parse_dns_payload;
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
-    actions.parse_dns_payload_queries_section = &parse_dns_payload_queries_section;
+    actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
     return actions;
 }
 
@@ -436,7 +481,6 @@ int classify(struct __sk_buff *skb){
 
             if (udp_payload_exclude_header > 100) return TC_DROP;
 
-            
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
                 
@@ -511,7 +555,12 @@ int classify(struct __sk_buff *skb){
                 }else if (drop){
                     dropped_packet_dns = bpf_ringbuf_reserve(&exfil_security_egress_drop_ring_buff, sizeof(struct exfil_security_egress_drop_ring_buff), 0);
                     if (!dropped_packet_dns) {
-                        return TC_DROP;
+                        #ifdef DEBUG
+                          if (!DEBUG) 
+                            bpf_printk("the required size for malicious dns packet ring buffer reserve bexceed allowed kernel memory limit");
+                        #endif 
+                        bpf_ringbuf_discard(&dropped_packet_dns, 0);
+                        return TC_FORWARD;
                     }
                     #ifdef DEBUG
                            if (DEBUG) {

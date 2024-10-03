@@ -18,7 +18,7 @@ typedef struct Proc {
 void *handler (void *start, void *end, int size) {
 
     for (int i = 0; i < size; i++){
-        if (((procMap *) start + sizeof(procMap) * i) <= ((procMap *) end + sizeof(procMap))) {
+        if ((void *)((procMap *) start + sizeof(procMap) * i) <= (void *)((procMap *) end + sizeof(procMap))) {
             procMap curr = *((procMap *)start + sizeof(procMap) * i);
             printf("Process ID: %d\n", curr.processId);
         }

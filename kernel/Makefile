@@ -7,8 +7,8 @@ bridge_tc_kernel_out := bridge.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o $(tc_kernel_out) -c $(tc_kernel) 
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 

@@ -38,4 +38,10 @@ struct exfil_security_config_map {
 #define MAX_PACKET_OFF 0xffff
 
 
+
+#define MAX_DNS_NAME_LENGTH 255 
+#define MAX_DNS_LABEL_LENGTH 63 
+#define MAX_DNS_LABEL_COUNT 127
+
+
 __u32 redirect_skb_mark = 1;

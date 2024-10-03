@@ -231,8 +231,10 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 		return err
 	}
 
-	for _, maps := range spec.Maps {
-		fmt.Println(maps.String())
+	if utils.DEBUG {
+		for _, maps := range spec.Maps {
+			fmt.Println(maps.String())
+		}
 	}
 	return nil
 }

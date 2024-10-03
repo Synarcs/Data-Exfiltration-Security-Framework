@@ -1,12 +1,15 @@
 #include <linux/bpf.h>
+
 #include <linux/if_ether.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
+
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-
 #include "consts.h"
 #include "dns.h"
-
+#include "utils.h"
 
 #ifndef XDP 
     #define XDP_MAX_PAYLOAD_SIZE 101111
@@ -31,6 +34,7 @@ SEC("xdp")
 int xdp_process(struct xdp_md *ctx) {
     void *data = (void *)(long *) ctx->data;
     void *data_end = (void *)(long *) ctx->data_end;
+
 
     return XDP_PASS;
 }
