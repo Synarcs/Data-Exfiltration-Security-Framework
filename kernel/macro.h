@@ -1,6 +1,8 @@
+#include <cstdint>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <bpf/bpf_helpers.h>
+#include <sys/cdefs.h>
 #include <unistd.h>
 #include <stdint.h>
 
@@ -22,7 +24,7 @@
     _x < _y ? _x : _y; })
     
 #define MASK(X) ((u_int64_t)1 << (X))
-#define VAR_NAME(X, Y) X##Y
+#define VAR_NAME(X, Y) X## Y
 #define GENERIC_VAR_(TYPE, default) TYPE VAR_NAME(test_, default)
 
 typedef uint64_t uSizemax_t;
@@ -37,6 +39,10 @@ typedef uint32_t uSizemid_t;
 #define ForN(TYPE, val , ...) for (TYPE i=1; i <= val; i++) { GENERIC_bpf_trace_printk(i, __VA_ARGS__); bpf_trace_printk(__VA_ARGS__); }
 #define ForNArr(TYPE,buf, ... ) for (TYPE i=0; i < sizeof(buf) / sizeof(buf[0]); i++) GENERIC_bpf_trace_printk(buf[i], __VA_ARGS__)
 
+typedef struct packedOptimized {
+    uint64_t size;
+} handler __attribute((packed));
+
 __attribute__((always_inline))
 int test_runner(void *__restrict size_ptr) {
     double *cast = (double *)(size_ptr);
@@ -45,7 +51,7 @@ int test_runner(void *__restrict size_ptr) {
     return -1;
 }
 
-__attribute__((always_inline))
+static __always_inline
 int test_print(int *__restrict size) { bpf_trace_printk("\n ////// the size is %d //// \n", *size); return 0; }
 
 static __always_inline

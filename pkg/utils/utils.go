@@ -9,8 +9,8 @@ import (
 const DEBUG = false
 
 const (
-	TC_INGRESS_MONITOR_MAP = "bpf_sx"
-	TC_CONTROL_PROG        = "classify" // CLSACT
+	TC_CONTROL_PROG  = "classify" // CLSACT
+	XDP_CONTROL_PROG = "xdp"      // XDP Non Offloaded
 )
 
 const (

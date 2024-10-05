@@ -45,3 +45,15 @@ struct exfil_security_config_map {
 
 
 __u32 redirect_skb_mark = 1;
+
+
+// 10.200.0.1
+#ifndef BRIDGE_REDIRECT_ADDRESS_IPV4
+    #define BRIDGE_REDIRECT_ADDRESS_IPV4 0x0AC80001 
+#endif
+
+
+// fe80::5c0a:20ff:fe93:9ef1
+#ifndef BRIDGE_REDIRECT_ADDRESS_IPV6
+    #define BRIDGE_REDIRECT_ADDRESS_IPV6 0xfe800000000000005c0a20fffe939ef1
+#endif

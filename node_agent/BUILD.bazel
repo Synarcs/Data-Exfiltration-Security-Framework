@@ -9,7 +9,7 @@ go_library(
         "//pkg/netinet",
         "//pkg/tc",
         "//pkg/xdp",
-        "//pkg/eve"
+        "//pkg/events"
         "@com_github_cilium_ebpf//:ebpf",
         "@com_github_cilium_ebpf//ringbuf",
         "@org_golang_x_sys//cpu",

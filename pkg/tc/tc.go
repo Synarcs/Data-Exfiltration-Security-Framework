@@ -7,8 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
@@ -57,55 +58,6 @@ func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string)
 	return spec, nil
 }
 
-func (tc *TCHandler) CreateDPIInterfaceTc(ctx *context.Context) error {
-	log.Println("Creating the TC ingress monitor for the DPI")
-
-	fd, err := netlink.LinkByName(utils.TC_INGRESS_MONITOR_MAP)
-	if err == nil {
-		fmt.Println("Link already exists with name ", utils.TC_INGRESS_MONITOR_MAP)
-		netlink.LinkDel(fd)
-	}
-
-	err = netlink.LinkAdd(&netlink.Dummy{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: utils.TC_INGRESS_MONITOR_MAP,
-			MTU:  1500,
-		},
-	})
-
-	if err != nil {
-		log.Fatalf("error Setting up the Link for DPI used for egress redirection to Ingress")
-		return err
-	}
-
-	link, err := netlink.LinkByName(utils.TC_INGRESS_MONITOR_MAP)
-	if err := netlink.LinkSetUp(link); err != nil {
-		fmt.Println("error setting the monitoring link for kernel")
-		return err
-	}
-
-	if err != nil {
-		log.Fatal("Error finding the link with name ", utils.TC_INGRESS_MONITOR_MAP)
-		return err
-	}
-
-	err = netlink.RouteAdd(&netlink.Route{
-		LinkIndex: link.Attrs().Index,
-		Dst:       &net.IPNet{IP: net.ParseIP("10.2.0.0"), Mask: net.CIDRMask(16, 32)},
-		Protocol:  unix.ETH_P_ALL,
-		Scope:     unix.RT_SCOPE_UNIVERSE,
-		Priority:  1,
-		Table:     254,
-	})
-
-	if err != nil {
-		fmt.Println("Error Adding the route for the ingress monitor redirected traffic control qdisc")
-		return err
-	}
-
-	return nil
-}
-
 func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
 
 	for _, link := range tc.Interfaces {
@@ -146,42 +98,8 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
-func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
-	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	spec, err := ebpf.NewCollection(handler)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer spec.Close()
-
-	if len(spec.Programs) > 1 {
-		fmt.Println("Multiple programs found in the root collection")
-	}
-	if len(spec.Programs) == 0 {
-		fmt.Println("The Ebpf Bytecode is corrupt or malformed")
-	}
-
-	prog := spec.Programs[utils.TC_CONTROL_PROG]
-
-	if prog == nil {
-		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
-	}
-	tc.Prog = prog
-	tc.TcCollection = spec
-
-	if err := tc.AttachTcHandler(ctx, prog); err != nil {
-		fmt.Println("Error attaching the clsact bpf qdisc for netdev")
-		panic(err.Error())
-	}
-
-	ringBuffer, err := ringbuf.NewReader(spec.Maps["dns_ring_events"])
+func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfMap *ebpf.Map) {
+	ringBuffer, err := ringbuf.NewReader(ebpfMap)
 
 	if err != nil {
 		panic(err.Error())
@@ -189,12 +107,9 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 	defer ringBuffer.Close()
 
-	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
-
-	// go func() {
 	for {
 		if utils.DEBUG {
-			fmt.Println("polling the ring buffer", "using th map", spec.Maps["dns_ring_events"])
+			fmt.Println("polling the ring buffer", "using th map", ebpfMap)
 		}
 		record, err := ringBuffer.Read()
 		if err != nil {
@@ -216,8 +131,55 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			fmt.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
 		}
 	}
-	// }()
-	// tcHandler.AttachTcHandler(&ctx, prog)
+}
+
+func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
+	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
+	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	spec, err := ebpf.NewCollection(handler)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer spec.Close()
+
+	// the node agent does not expect tail calls to the kernel ebpf programs over other network layers
+	if len(spec.Programs) > 1 {
+		log.Println("Multiple programs found in the root collection")
+	}
+	if len(spec.Programs) == 0 {
+		log.Println("The Ebpf Bytecode is corrupt or malformed")
+	}
+
+	prog := spec.Programs[utils.TC_CONTROL_PROG]
+
+	if prog == nil {
+		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
+	}
+	tc.Prog = prog
+	tc.TcCollection = spec
+
+	if err := tc.AttachTcHandler(ctx, prog); err != nil {
+		log.Println("Error attaching the clsact bpf qdisc for netdev")
+		panic(err.Error())
+	}
+
+	for _, maps := range spec.Maps {
+		if strings.Contains(maps.String(), "ring") {
+			// an ring event buffer
+			if utils.DEBUG {
+				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
+			}
+			go tc.PollRingBuffer(ctx, maps)
+		}
+	}
+
+	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
 }
 
 func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netinet.NetIface) error {
@@ -351,38 +313,49 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	defer ns.Close()
 
+	processPcapFilterHandler := func(errorChannel chan<- error) {
+		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+		if err != nil {
+			fmt.Println("error opening packet capture over hz,te interface from kernel")
+			errorChannel <- err
+		}
+		defer cap.Close()
+
+		if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
+			log.Fatalf("Error setting BPF filter: %v", err)
+		}
+
+		packets := gopacket.NewPacketSource(cap, cap.LinkType())
+		for packet := range packets.Packets() {
+			fmt.Println("sniff the packet over the kernel namespace", packet.Layers())
+			go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
+		}
+	}
+
+	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
+
 	if len(ifaceHandler.PhysicalLinks) > 0 {
 		log.Println("Processing of multiple Physical links")
+		processPcapFilterHandler(errorChannel)
+	} else {
+		go processPcapFilterHandler(errorChannel)
 	}
 
-	// if err := netns.Set(ns); err != nil {
-	// 	log.Fatal("error changing the Network Namespace:", err)
-	// }
-
-	fmt.Println(ns.UniqueId(), ns.String())
-	// interfaceName := "sx1-eth0"
-	// // change the namespace for kernel pcap open
-	// if err := netns.Set(*nsHandle); err != nil {
-	// 	log.Println("error changing the Network Namespace")
-	// 	panic(err)
-	// }
-
-	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(ifaceHandler.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
-	if err != nil {
-		fmt.Println("error opening packet capture over hte interface from kernel")
-		return err
-	}
-	defer cap.Close()
-
-	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
-		log.Fatalf("Error setting BPF filter: %v", err)
-	}
-
-	packets := gopacket.NewPacketSource(cap, cap.LinkType())
-	for packet := range packets.Packets() {
-		fmt.Println("sniff the packet over the kernel namespace", packet.Layers())
-		go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
-	}
+	go func() {
+		for {
+			select {
+			case paylaod, ok := <-errorChannel:
+				{
+					if !ok {
+						return
+					}
+					fmt.Println(paylaod.Error())
+				}
+			default:
+				time.Sleep(time.Second * 1)
+			}
+		}
+	}()
 	return nil
 }
 

@@ -8,7 +8,6 @@
     default: printf("Generic type not processed\n") \
 );
 
-
 typedef struct Proc {
     int processId;
     struct Proc *next;
@@ -24,6 +23,15 @@ void *handler (void *start, void *end, int size) {
         }
     }
 
+    struct Proc proc[10];
+    void (* make)(void *, void *, int) = &handler;
+    for (int i=0; i < (sizeof(proc) /  sizeof(proc[0])); i++){
+        proc[i] = (procMap) {
+            .processId = 1 << 20, 
+            .next = NULL,
+            .handler = make,
+        };
+    }
     return (void *) start + sizeof(procMap) * size;
 }
 

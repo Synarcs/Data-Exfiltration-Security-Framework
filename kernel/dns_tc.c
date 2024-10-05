@@ -345,6 +345,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
+            __u16 total_length_domain = 0;
+            __u16 total_length_domain_exclude_tld = 0;
+
+            int ld_count = 0;
             for (int j = 0; j < MAX_DNS_NAME_LENGTH; j++) {
                 if ((void *) (dns_payload_buffer + offset + 1) > skb->data_end) return SUSPICIOUS;
 
@@ -353,13 +357,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 mx_label_ln = max(mx_label_ln, label_len);
                 if (label_len == 0x00) break;
                 label_count++;
+                total_length_domain += label_len;
+                if (ld_count > 2) {
+                    total_length_domain_exclude_tld += label_len;
+                }else ld_count++; // tld + root domain 
                 offset += label_len + 1;
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
-            #ifdef DEBUG
-                if (DEBUG) 
-                    bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
-            #endif 
+
             // parse the remaining and left over 2 bytes from the processed header for query type to be at offset end of the query label 
             __u16 query_type = 0x00; __u16 query_class = 0x00;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
@@ -371,11 +376,17 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
-            __u8 processQueryTypeFLag = parse_dns_qeury_type_section(skb, (void *) (__u16 *) &query_type, qtypes);
-            bpf_printk("the query type value is %u", query_type);
+            #ifdef DEBUG
+                if (!DEBUG) 
+                    bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
+                    bpf_printk("the query type is %d and class is %d", query_type, query_class);
+            #endif 
+
+            __u8 processQueryTypeFLag = parse_dns_qeury_type_section(skb, (void *) (__u16 *) &query_class, qtypes);
+            bpf_printk("the query type value is %d", query_type);
             if (label_count <= 2) return BENIGN;
 
-            if (label_count >= (1 << 2) && label_count <= 12 || mx_label_ln >= 15) {
+            if (label_count >= (1 << 2) && label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LABEL_COUNT || mx_label_ln >= 15) {
                 return processQueryTypeFLag;
             } else if (label_count >= (1 << 4)) return SUSPICIOUS;
             // if (processQueryTypeFLag == MALICIOUS) return MALICIOUS;
@@ -479,13 +490,9 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
 
-            if (udp_payload_exclude_header > 100) return TC_DROP;
-
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
                 
-                struct dns_event *event;
-
                 // load the kernel buffer data into skb 
                 // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
                 #ifdef DEBUG
@@ -559,7 +566,6 @@ int classify(struct __sk_buff *skb){
                           if (!DEBUG) 
                             bpf_printk("the required size for malicious dns packet ring buffer reserve bexceed allowed kernel memory limit");
                         #endif 
-                        bpf_ringbuf_discard(&dropped_packet_dns, 0);
                         return TC_FORWARD;
                     }
                     #ifdef DEBUG
@@ -612,6 +618,7 @@ int classify(struct __sk_buff *skb){
 
                 // host event for monitoring all the dns traffic operatingover the tc control layer 
                 if (isRedirectFirst && processCloneRedirectRun) {
+                    struct dns_event *event;
                     event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
                     if (!event) {
                         bpf_printk("Error in allocating ring buffer space in kernel");
@@ -647,7 +654,7 @@ int classify(struct __sk_buff *skb){
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
                 __be32 current_dest_addr;
-                __be32 dest_addr_route = bpf_htonl(0x0AC80001); // 10.200.0.1
+                __be32 dest_addr_route = bpf_htonl(BRIDGE_REDIRECT_ADDRESS_IPV4); // 10.200.0.1
 
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                     // 4 bytes for the ipv4 address offset 
@@ -696,6 +703,28 @@ int classify(struct __sk_buff *skb){
                 // for now learn dns ring buff event;
             }else {
 
+                // always forward from kernel if the pacekt is using a non standard udp port and trying to send a dns packet over non standard port 
+                if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
+                    // an non dns protocol based udp packet (no dns header found) 
+                    return TC_FORWARD;
+                
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
+                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
+                struct dns_header *dns = (struct dns_header *) (udp_data);
+
+                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) 
+                    return TC_FORWARD;
+                
+                // get the dns flags from the dns header 
+                struct dns_flags flags = get_dns_flags(dns);
+                
+                #ifdef DEBUG 
+                  if (!DEBUG) {
+                    bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
+                  }
+                #endif 
+
+
                 // do deep packet inspection on the packet contetnt and the associated payload 
             }
             return TC_FORWARD;
@@ -708,9 +737,10 @@ int classify(struct __sk_buff *skb){
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
             // verify for standard or enhanced dpi inspection over the payload header 
-
             if (tcp-> dest == bpf_htons(DNS_EGRESS_PORT)) {
                 // a standard port used for tcp data forwarding 
+                void *dns_data =  cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header);
+                if ((void *) dns_data + 1 > cursor.data_end) return TC_DROP;
                 return TC_FORWARD;
             }else {
                 // need more dpi over the dns header payload format either via forwarding or payload size;
@@ -726,13 +756,17 @@ int classify(struct __sk_buff *skb){
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-            if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
-            udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
             if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
             if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
 
+            __u32 total_offset = nhoff + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
+            if (total_offset > skb->len) return TC_DROP;
+            __u32 udp_payload_len = bpf_ntohs(udp->len);
+            __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
 
+
+        
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
     } else return TC_FORWARD;

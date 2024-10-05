@@ -154,13 +154,21 @@ struct a_record {
     __u32 ttl;
 };
 
-struct dns_record_limits {
+// define the malicious domain record limits 
+struct dns_record_limits_malicious {
     int MAX_DOMAIN_LENGTH;
-    int MAX_SUBDOMAIN_LENGTH;
-    int MAX_SUBDOMAIN_NESTING;
-    int MALICIOUS_DOMAIN_QUERY_LENGTH;
-} DNS_RECORD_LIMITS = {
-        255, 63,
+
+    // define the per label length range 
+    int MIN_SUBDOMAIN_LENGTH_PER_LABEL;
+    int MAX_SUBDOMAIN_LENGTH_PER_LABEL;
+
+    // define the range for kernel to 
+    int MIN_SUBDOMAIN_LABEL_COUNT;
+    int MAX_SUBDOMAIN_LABEL_COUNT;
+    
+} __attribute__((packed)) DNS_RECORD_LIMITS = {
+        255, 
+        63,
         127,
         55
 };
@@ -178,7 +186,6 @@ struct dns_event {
     __u8 isUDP; // offset udp calc 
     __u8 isIpv4; // ipv4 processing 
 };
-
 
 
 

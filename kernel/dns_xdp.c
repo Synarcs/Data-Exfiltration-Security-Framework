@@ -15,17 +15,19 @@
     #define XDP_MAX_PAYLOAD_SIZE 101111
 #endif
 
-#ifndef xdp 
-    #define XDP_FORWARD XDP_PASS
-    #define XDP_DROP XDP_DROP
-#endif
 
 #define DEBUG_CONFIG_TYPE(X, ...) _Generic(X, \
     __U32:  bpf_printk("the config vvalue stored from map %u", X) \
     default: bpf_printk("the config vvalue stored from map %d", X)
 
 
+struct exfil_security_ingress_drop_ring_buff {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} exfil_security_egress_drop_ring_buff SEC(".maps");
+
 struct xdp_actions {
+    
     void (* parse_eth) (void *data, void *data_end);
 };
 
@@ -35,7 +37,19 @@ int xdp_process(struct xdp_md *ctx) {
     void *data = (void *)(long *) ctx->data;
     void *data_end = (void *)(long *) ctx->data_end;
 
+    struct ethhdr *eth = data;
+    if ((void *) (eth + 1) > data_end) return XDP_DROP;
 
+    switch (eth->h_proto) {
+        case bpf_ntohs(ETH_P_IP): {
+            break;
+        }
+        case bpf_ntohs(ETH_P_IPV6): {
+            break;
+        }
+        default: 
+            return XDP_PASS;
+    }
     return XDP_PASS;
 }
 
