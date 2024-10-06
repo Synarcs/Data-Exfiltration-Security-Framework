@@ -99,6 +99,8 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 }
 
 func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfMap *ebpf.Map) {
+	fmt.Println("map passed to go routine is ", ebpfMap)
+
 	ringBuffer, err := ringbuf.NewReader(ebpfMap)
 
 	if err != nil {

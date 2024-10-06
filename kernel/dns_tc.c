@@ -69,21 +69,33 @@ struct packet_actions {
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
-    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, void *, struct qtypes );
+    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor *, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP);
+
+
+    // final and complete DPI over the dns and events submit 
+    int (*__dns_dpi) (struct skb_cursor *, bool , bool , struct packet_actions *);
 };
 
 __u32 INSECURE = 0;
 
-
+/* ***************************************** Event ring buffeers for kernel detected DNS events ***************************************** */
 struct ring_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 16);
 } dns_ring_events SEC(".maps");
 
+// ring buffer event from kernel storing information for the packet dropped within the kernel 
+struct exfil_security_egress_drop_ring_buff {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 24);
+} exfil_security_egress_drop_ring_buff SEC(".maps");
 
+
+/* ***************************************** Event maps for kernel ***************************************** */
+// stores inofrmation regarding checksum and the redirection of the packet from kernel 
 struct exfil_security_egress_redirect_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // dns query id prior DPI
@@ -91,20 +103,15 @@ struct exfil_security_egress_redirect_map {
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
 
-
-// count the malicious packets dropped from kernel 
-struct exfil_security_egress_drop_ring_buff {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24);
-} exfil_security_egress_drop_ring_buff SEC(".maps");
-
-
+// count the number of packets 
 struct exfil_security_egress_redirect_count_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(type, BPF_MAP_TYPE_ARRAY);
     __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_count_map SEC(".maps");
+
+
 
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -277,23 +284,22 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 }
 
 static
-  __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, void *dns_query_class, struct qtypes qt) {
-
-        __u8 A = qt.A;
-
-        switch (*(__u16 *) dns_query_class){
+  __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, __u16 dns_query_class, struct qtypes qt) {
+        switch (dns_query_class){
             case 0x0001: 
             case 0x0002:
             case 0x0005:
             case 0x0006: 
             case 0x001C: 
+            case 0x0041:
                 return BENIGN;
             case 0x000F:
             case 0x0021:
             case 0x0023:
             case 0x0029: 
                 return SUSPICIOUS;
-            case 0x0010:    
+            case 0x0010:
+            case 0x00FF:
                 return MALICIOUS;
             default: {
                 return SUSPICIOUS;
@@ -345,10 +351,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
-            __u16 total_length_domain = 0;
-            __u16 total_length_domain_exclude_tld = 0;
+            __u8 total_domain_length = 0;
 
-            int ld_count = 0;
             for (int j = 0; j < MAX_DNS_NAME_LENGTH; j++) {
                 if ((void *) (dns_payload_buffer + offset + 1) > skb->data_end) return SUSPICIOUS;
 
@@ -357,10 +361,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 mx_label_ln = max(mx_label_ln, label_len);
                 if (label_len == 0x00) break;
                 label_count++;
-                total_length_domain += label_len;
-                if (ld_count > 2) {
-                    total_length_domain_exclude_tld += label_len;
-                }else ld_count++; // tld + root domain 
+                total_domain_length += label_len;
                 offset += label_len + 1;
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
@@ -380,15 +381,21 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (!DEBUG) 
                     bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
                     bpf_printk("the query type is %d and class is %d", query_type, query_class);
-            #endif 
+                    bpf_printk("the total domain length is %d ", total_domain_length);
+            #endif
 
-            __u8 processQueryTypeFLag = parse_dns_qeury_type_section(skb, (void *) (__u16 *) &query_class, qtypes);
-            bpf_printk("the query type value is %d", query_type);
             if (label_count <= 2) return BENIGN;
 
-            if (label_count >= (1 << 2) && label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LABEL_COUNT || mx_label_ln >= 15) {
-                return processQueryTypeFLag;
-            } else if (label_count >= (1 << 4)) return SUSPICIOUS;
+            if (label_count >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LABEL_COUNT)
+                return SUSPICIOUS;
+            
+            if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL)
+                return SUSPICIOUS;
+            
+            if (total_domain_length >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH)
+                return SUSPICIOUS;
+            
+            return parse_dns_qeury_type_section(skb, query_class, qtypes);
             // if (processQueryTypeFLag == MALICIOUS) return MALICIOUS;
             // return processQueryTypeFLag;
         }
@@ -398,8 +405,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         return SUSPICIOUS;
    }
 
-    return BENIGN;
+   return BENIGN;
 }   
+
+static 
+__always_inline int __dns_dpi(struct skb_cursor *skb, bool isIpv4, bool isUdp, struct packet_actions *actions){
+    return TC_FORWARD;
+}
+
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, bool isIpv4, bool isUDP, bool isIpv6, bool isTCP) {
@@ -421,6 +434,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
+    actions.__dns_dpi = &__dns_dpi;
     return actions;
 }
 
@@ -642,13 +656,13 @@ int classify(struct __sk_buff *skb){
                 }
                 
 
-                __u16 ipv4_map_key = bpf_htonl(ip->daddr);
-                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &ipv4_map_key);
+                __u16 redirection_count_key = 0;
+                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
                 if (ct_val) {
                     __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
                 }else {
                     __u32 init_map_redirect_count = 1;
-                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &ipv4_map_key, &init_map_redirect_count, BPF_ANY);
+                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
                 }
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
@@ -709,7 +723,7 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
-                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
+                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_FORWARD;
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
                 if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) 
@@ -719,7 +733,7 @@ int classify(struct __sk_buff *skb){
                 struct dns_flags flags = get_dns_flags(dns);
                 
                 #ifdef DEBUG 
-                  if (!DEBUG) {
+                  if (DEBUG) {
                     bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
                   }
                 #endif 
@@ -739,7 +753,7 @@ int classify(struct __sk_buff *skb){
             // verify for standard or enhanced dpi inspection over the payload header 
             if (tcp-> dest == bpf_htons(DNS_EGRESS_PORT)) {
                 // a standard port used for tcp data forwarding 
-                void *dns_data =  cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header);
+                void *dns_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header);
                 if ((void *) dns_data + 1 > cursor.data_end) return TC_DROP;
                 return TC_FORWARD;
             }else {

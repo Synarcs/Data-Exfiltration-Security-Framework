@@ -59,7 +59,8 @@ struct dns_flags {
 };
 
 struct qtypes {
-    __u8 A; __u8 NS; __u8 CNAME;__u8 SOA;__u8 PTR;__u8 MX;__u8 TXT;__u8 AAAA;__u8 SRV;__u8 NAPTR;__u8 OPT;__u8 ANY;
+    __u8 A; __u8 NS; __u8 CNAME;__u8 SOA;__u8 PTR;__u8 MX;__u8 TXT;__u8 AAAA;__u8 SRV;__u8 NAPTR;__u8 OPT;
+    __u8 HTTPS;__u8 ANY;
 } qtypes = {
     .A =  0x0001,
     .NS = 0x0002,
@@ -71,7 +72,8 @@ struct qtypes {
     .AAAA = 0x001C,
     .SRV = 0x0021,
     .NAPTR = 0x0023,
-    .OPT = 0x0029, 
+    .OPT = 0x0029,
+    .HTTPS = 0x0041,
     .ANY = 0x00FF,
 };
 
@@ -156,6 +158,7 @@ struct a_record {
 
 // define the malicious domain record limits 
 struct dns_record_limits_malicious {
+    int MIN_DOMAIN_LENGTH;
     int MAX_DOMAIN_LENGTH;
 
     // define the per label length range 
@@ -167,10 +170,14 @@ struct dns_record_limits_malicious {
     int MAX_SUBDOMAIN_LABEL_COUNT;
     
 } __attribute__((packed)) DNS_RECORD_LIMITS = {
+        130,
         255, 
+
+        17,
         63,
-        127,
-        55
+
+        8,
+        127
 };
 
 
