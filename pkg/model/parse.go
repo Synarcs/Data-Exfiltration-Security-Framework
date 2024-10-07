@@ -79,6 +79,8 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
 	}
 
+	ProcessFeatures(dns)
+	
 	dnsPacket := d.GenerateDnsPacket(*dns)
 
 	buffer := gopacket.NewSerializeBuffer()

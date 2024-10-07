@@ -3,6 +3,8 @@
 
 #ifndef DNS_EGRESS_PORT
     #define DNS_EGRESS_PORT 53 
+    #define DOT_EGRESS_PORT 853
+    #define DNS_EGRESS_MULTICAST_PORT 5353
 #endif
 
 
@@ -57,3 +59,10 @@ __u32 redirect_skb_mark = 1;
 #ifndef BRIDGE_REDIRECT_ADDRESS_IPV6
     #define BRIDGE_REDIRECT_ADDRESS_IPV6 0xfe800000000000005c0a20fffe939ef1
 #endif
+
+
+
+// RATE LIMITER 
+#define TIMEWINDOW 10000000000
+#define MAX_VOLUME_PER_SEC 1400 
+

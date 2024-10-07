@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
@@ -145,7 +144,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 	spec, err := ebpf.NewCollection(handler)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 
 	defer spec.Close()
@@ -171,15 +170,15 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		panic(err.Error())
 	}
 
-	for _, maps := range spec.Maps {
-		if strings.Contains(maps.String(), "ring") {
-			// an ring event buffer
-			if utils.DEBUG {
-				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
-			}
-			go tc.PollRingBuffer(ctx, maps)
-		}
-	}
+	// for _, maps := range spec.Maps {
+	// 	if strings.Contains(maps.String(), "exfil_security_egress_drop_ring_buff") {
+	// 		// an ring event buffer
+	// 		if utils.DEBUG {
+	// 			fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
+	// 		}
+	// 		go tc.PollRingBuffer(ctx, maps)
+	// 	}
+	// }
 
 	fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
 }
@@ -262,7 +261,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 			fmt.Println("found the required key from BPF Hash fd ", uint16(ip_layer3_checksum))
 		}
 
-		if utils.DEBUG {
+		if !utils.DEBUG {
 			if dns.QDCount > 0 {
 				for _, qd := range dns.Questions {
 					fmt.Println(string(qd.Name), qd.Class, qd.Type)
@@ -336,11 +335,11 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
 
-	if len(ifaceHandler.PhysicalLinks) > 0 {
+	if len(ifaceHandler.PhysicalLinks) > 1 {
 		log.Println("Processing of multiple Physical links")
 		processPcapFilterHandler(errorChannel)
 	} else {
-		go processPcapFilterHandler(errorChannel)
+		processPcapFilterHandler(errorChannel)
 	}
 
 	go func() {

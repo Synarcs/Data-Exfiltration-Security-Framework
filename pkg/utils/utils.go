@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-const DEBUG = false
+const DEBUG = true
 
 const (
 	TC_CONTROL_PROG  = "classify" // CLSACT
