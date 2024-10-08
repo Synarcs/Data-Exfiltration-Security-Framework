@@ -1,9 +1,10 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
+	"unicode"
 
 	"github.com/google/gopacket/layers"
 )
@@ -44,13 +45,12 @@ func LengthMaxandTotalSubdomains(dns_label []string) (int, int, int, int, int) {
 		mxLen = max(mxLen, len(label))
 
 		for _, val := range label {
-			if val-'0' >= 0 && val-'0' <= 9 {
+			lbl := rune(val)
+			if unicode.IsNumber(lbl) {
 				numCount++
-			}
-			if val-'a' >= 0 && val-'z' <= 0 {
+			} else if unicode.IsLower(lbl) {
 				lowerCharCount++
-			}
-			if val-'A' >= 0 && val-'Z' <= 0 {
+			} else if unicode.IsUpper(lbl) {
 				upperCharCount++
 			}
 		}
@@ -60,13 +60,13 @@ func LengthMaxandTotalSubdomains(dns_label []string) (int, int, int, int, int) {
 }
 
 func ProcessFeatures(dns_packet *layers.DNS) error {
-	log.Println("Called to extract features from the dns packet")
 	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount)
 
 	for _, _ = range dns_packet.Answers {
 	}
 
 	for i, payload := range dns_packet.Questions {
+
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 		mx_len, totalLen, numberCount, _, upperCount := LengthMaxandTotalSubdomains(exclude_tld[:len(exclude_tld)-2])
@@ -74,7 +74,9 @@ func ProcessFeatures(dns_packet *layers.DNS) error {
 		features[i].LengthofSubdomains = totalLen
 		features[i].UCaseCount = upperCount
 		features[i].NumberCount = numberCount
-		fmt.Println("for query ", payload.Name, "the features are ", features[i])
+
+		mrsh, _ := json.Marshal(features[i])
+		fmt.Println(string(mrsh))
 	}
 
 	for _, _ = range dns_packet.Authorities {

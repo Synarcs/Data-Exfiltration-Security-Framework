@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/apache/arrow/go/arrow v0.0.0-20201229220542-30ce2eb5d4dc // indirect
+	github.com/asavie/xdp v0.3.3 // indirect
 	github.com/chewxy/hm v1.0.0 // indirect
 	github.com/chewxy/math32 v1.0.8 // indirect
 	github.com/cilium/ebpf v0.16.0 // indirect

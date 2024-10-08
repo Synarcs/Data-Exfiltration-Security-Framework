@@ -365,9 +365,11 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
-            __u8 total_domain_length = 0;
+            __u8 total_domain_length_exclude_tld = 0; // excluding auth root domain information 
 
             __u8 root_domain  = 0; //domain tld + auth root zone domain 
+            
+            __u8 char_count = 0; __u8 num_count = 0;
             for (int j = 0; j < MAX_DNS_NAME_LENGTH; j++) {
                 if ((void *) (dns_payload_buffer + offset + 1) > skb->data_end) return SUSPICIOUS;
 
@@ -377,11 +379,20 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (label_len == 0x00) break;
                 label_count++;
 
-                if (root_domain > 2){
-                    total_domain_length += label_len;
+                if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
+                    bpf_printk("invoked on  label_length %d",  mx_label_ln);
+                    return SUSPICIOUS;
                 }
-                
-                root_domain++;
+                    
+                if (root_domain > 2){
+                    total_domain_length_exclude_tld += label_len;
+                    __u16 char_label_offset = offset + 1;
+                    label_len = label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL ? DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL 
+                            : label_len;   
+                }
+                else 
+                    root_domain++;
+
                 offset += label_len + 1;
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
@@ -401,7 +412,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (DEBUG) {
                     bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
                     bpf_printk("the query type is %d and class is %d", query_type, query_class);
-                    bpf_printk("the total domain length is %d ", total_domain_length);
+                    bpf_printk("the total domain length is %d ", total_domain_length_exclude_tld);
                 }
             #endif
 
@@ -412,19 +423,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 return SUSPICIOUS;
             }
             
-            if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
-                bpf_printk("invoked on  label_length %d",  mx_label_ln);
-                return SUSPICIOUS;
-            }
-            
-            if (total_domain_length >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH){
-                bpf_printk("invoked on  total domain length %d", total_domain_length);
+            if (total_domain_length_exclude_tld >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length_exclude_tld <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH){
+                bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
                 return SUSPICIOUS;
             }
             
             return parse_dns_qeury_type_section(skb, query_class, qtypes);
-            // if (processQueryTypeFLag == MALICIOUS) return MALICIOUS;
-            // return processQueryTypeFLag;
         }
      }else return SUSPICIOUS;
    }else {
@@ -450,7 +454,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     __u16 auth_count = bpf_ntohs(dns_header->auth_count);   
     __u16 add_count = bpf_ntohs(dns_header->add_count);
 
-    bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
+    //bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
     if (qd_count >= (1 << 8) - 1 || ans_count >= (1 << 8) - 1 || auth_count >= (1 << 8) - 1 || add_count >= (1 << 8) - 1) {
         // the dns payload is non standard port and the protcol encapsulated used is not dns 
         return 1;
@@ -474,13 +478,13 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     __u64 ts = bpf_ktime_get_ns();
 
 
-    struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_rate_limit_map, (void *)&key);
+    struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_rate_limit_map, &key);
     if (!dns_volume_stats) {
         struct dns_volume_stats stats = {
             .packet_size = (__u64) dns_payload_size,
             .last_timestamp = ts
         };
-        bpf_map_update_elem(&exfil_security_egress_rate_limit_map, (void *)&key, &stats, BPF_ANY);
+        bpf_map_update_elem(&exfil_security_egress_rate_limit_map, &key, &stats, BPF_ANY);
         return 1;
     }
 
@@ -489,14 +493,17 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
         dns_volume_stats->packet_size = (__u64) dns_payload_size;
     }else {
         dns_volume_stats->packet_size += dns_payload_size;
-        bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
+        #ifdef DEBUG
+            if (!DEBUG) {
+                bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
+            }
+        #endif
     }
 
     dns_volume_stats->last_timestamp = ts;
     if (dns_volume_stats->packet_size > MAX_VOLUME_PER_SEC) return 0;
     return 1;
 }
-
 
 
 static 
@@ -645,15 +652,17 @@ int classify(struct __sk_buff *skb){
 
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header - sizeof(struct dns_header);
-                __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
+                if (deep_scan_mirror) {
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
 
-                #ifndef DEBUF
-                    if (DEBUG) {
-                        bpf_printk("the rate limit action is %u", dns_rate_limit_action);
-                    }
-                #endif
-                if (dns_rate_limit_action == 0) return TC_DROP;
-                
+                    #ifdef DEBUG
+                        if (DEBUG) {
+                            bpf_printk("the rate limit action is %u", dns_rate_limit_action);
+                        }
+                    #endif
+                    if (dns_rate_limit_action == 0) return TC_DROP;
+                }
+            
                 struct exfil_security_dropped_payload_event *dropped_packet_dns;
 
                 if (isBenign) {
@@ -663,7 +672,8 @@ int classify(struct __sk_buff *skb){
                         }
                     #endif
                     return TC_FORWARD;
-                }else if (drop){
+                }
+                if (drop){
                     dropped_packet_dns = bpf_ringbuf_reserve(&exfil_security_egress_drop_ring_buff, sizeof(struct exfil_security_egress_drop_ring_buff), 0);
                     if (!dropped_packet_dns) {
                         #ifdef DEBUG
@@ -827,7 +837,7 @@ int classify(struct __sk_buff *skb){
                 #endif 
 
                 __u8 action_non_port = actions.parse_dns_payload_non_standard_port(&cursor, dns_payload, dns, true);
-                bpf_printk("NON PORT ACTION %u", action_non_port);
+                // bpf_printk("NON PORT ACTION %u", action_non_port);
                 // encap packet used and normally this packet are not used for dns query 
                 return TC_FORWARD;
 

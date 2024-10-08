@@ -80,18 +80,18 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 	}
 
 	ProcessFeatures(dns)
-	
+
 	dnsPacket := d.GenerateDnsPacket(*dns)
 
 	buffer := gopacket.NewSerializeBuffer()
 
 	opts := gopacket.SerializeOptions{
 		FixLengths:       true,
-		ComputeChecksums: false,
+		ComputeChecksums: true,
 	}
+
 	if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, udpPacket, &dnsPacket); err != nil {
-		log.Println("Error reconstructing the DNS packet")
-		fmt.Println(err)
+		log.Println("Error reconstructing the DNS packet", err)
 		return err
 	}
 
@@ -100,21 +100,28 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
 	}
 	outputPacket := buffer.Bytes()
-
-	// send to a raw open fd via sniff socket fd  and associated mapped handle
-	// if err := handler.WritePacketData(outputPacket); err != nil {
-	// 	log.Println("Error writing packet to pcap file")
-	// 	return err
-	// }
+	// outputPacketLen := len(outputPacket)
 
 	sockAddr := syscall.SockaddrLinklayer{
 		Protocol: syscall.ETH_P_ALL,
 		Ifindex:  d.SockSendFdInterface.Index,
 	}
 
+	// need this to be replaced with xdp
 	if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
-		log.Println("Error in sending the packet to the raw socket")
+		return err
 	}
+
+	// fx := d.SocketSendFd.GetDescs(d.SocketSendFd.NumFreeTxSlots())
+	// for i := range fx {
+	// 	fx[i].Len = uint32(outputPacketLen)
+	// }
+
+	// trxCount := d.SocketSendFd.Transmit(fx)
+
+	// log.Println("Transmitted framecount is ", trxCount)
+	// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
+	// eventually free up some of the bpf maps in tc from the kernel space
 
 	// if utils.DEBUG {
 	// 	log.Println("time took to send the whole packet", time.Now().Nanosecond()-serialize)

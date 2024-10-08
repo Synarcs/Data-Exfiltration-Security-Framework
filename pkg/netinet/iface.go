@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/asavie/xdp"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -135,14 +136,44 @@ func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 	return cap, err
 }
 
+func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*net.Interface, *xdp.Socket, error) {
+	log.Println("[x] Creating XDP socket fd to send packet")
+	_, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
+	if err != nil {
+		log.Println("Error in opening a raw socket fd to the bridge socket")
+		return nil, nil, err
+	}
+
+	// use the egress transfer queue to send the packet on the physical port inside kernel to make directly reach the interface bypass the kernel network stack
+	txQueueId, err := GetCurrentTXQueues(nf.PhysicalLinks[0].Attrs().Name)
+	if err != nil {
+		log.Println("Error in getting the tx TX queue id")
+		return nil, nil, err
+	}
+	fmt.Println("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
+
+	xdpSock, err := xdp.NewSocket(nf.PhysicalLinks[0].Attrs().Index, txQueueId, nil)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	netInterface, err := net.InterfaceByName(nf.PhysicalLinks[0].Attrs().Name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting interface: %v", err)
+	}
+
+	return netInterface, xdpSock, nil
+}
+
 func (nf *NetIface) GetRootNamespaceRawSocketFd() (*net.Interface, *int, error) {
-	log.Println("[x] Creating a socket fd to send packet")
+	log.Println("[x] Creating XDP socket fd to send packet")
 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")
 		return nil, nil, err
 	}
-	netInterface, err := net.InterfaceByName(nf.LoopBackLinks[0].Attrs().Name)
+
+	netInterface, err := net.InterfaceByName(nf.PhysicalLinks[0].Attrs().Name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting interface: %v", err)
 	}

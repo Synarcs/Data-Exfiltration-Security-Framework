@@ -2,6 +2,12 @@ load("@bazel_gazelle//:deps.bzl", "go_repository")
 
 def go_dependencies():
     go_repository(
+        name = "com_github_asavie_xdp",
+        importpath = "github.com/asavie/xdp",
+        sum = "h1:b5Aa3EkMJYBeUO5TxPTIAa4wyUqYcsQr2s8f6YLJXhE=",
+        version = "v0.3.3",
+    )
+    go_repository(
         name = "com_github_cilium_ebpf",
         importpath = "github.com/cilium/ebpf",
         sum = "h1:+BiEnHL6Z7lXnlGUsXQPPAE7+kenAd4ES8MQ5min0Ok=",

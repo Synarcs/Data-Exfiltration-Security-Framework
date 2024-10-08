@@ -3,6 +3,9 @@
 #include <linux/if_ether.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
+#include <linux/in.h>
+#include <linux/ipv6.h>
+#include <linux/ip.h>
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
@@ -42,9 +45,28 @@ int xdp_process(struct xdp_md *ctx) {
 
     switch (eth->h_proto) {
         case bpf_ntohs(ETH_P_IP): {
+
+            struct iphdr *ip = eth;
+            if ((void *) (ip + 1) > data_end) return XDP_DROP;
+
+            switch (ip->protocol) {
+                case IPPROTO_UDP: {
+                    struct udphdr *udp = ip;
+                    if ((void *) (udp + 1) > data_end) return XDP_DROP;
+                    break;
+                }
+                case IPPROTO_TCP: {
+                    struct tcphdr *tcp = ip;
+                    if ((void *) (tcp + 1) > data_end) return XDP_DROP;
+                    break;
+                }
+                default: { return XDP_PASS; }
+            }
             break;
         }
         case bpf_ntohs(ETH_P_IPV6): {
+            struct ipv6hdr *ip = eth;
+            if ((void *) (ip + 1) > data_end) return XDP_DROP;
             break;
         }
         default: 

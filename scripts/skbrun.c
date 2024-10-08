@@ -14,6 +14,18 @@ typedef struct Proc {
     void * (*handler) (void *, void *, int)
 } procMap;
 
+typedef struct actions {
+    union  {
+        void * (* add) (struct handler *, int *rootl);
+        void * (* init) (int *root);
+    };
+} act;
+
+typedef struct handler {
+    int *data; 
+    struct handler *next; 
+} List;
+
 void *handler (void *start, void *end, int size) {
 
     for (int i = 0; i < size; i++){
