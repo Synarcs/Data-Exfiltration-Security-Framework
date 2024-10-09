@@ -9,9 +9,11 @@ import (
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/asavie/xdp"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/vishvananda/netlink"
 )
 
 type DnsParserActions interface{}
@@ -21,8 +23,9 @@ type DnsParser struct {
 
 type DnsPacketGen struct {
 	IfaceHandler        *netinet.NetIface
-	SockSendFdInterface *net.Interface
+	SockSendFdInterface []netlink.Link
 	SocketSendFd        *int
+	XdpSocketSendFd     *xdp.Socket
 }
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
@@ -100,31 +103,30 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
 	}
 	outputPacket := buffer.Bytes()
-	// outputPacketLen := len(outputPacket)
+	outputPacketLen := len(outputPacket)
 
-	sockAddr := syscall.SockaddrLinklayer{
-		Protocol: syscall.ETH_P_ALL,
-		Ifindex:  d.SockSendFdInterface.Index,
+	if d.XdpSocketSendFd == nil {
+		// first check and bind the xdp kernel socket to tx queue for the interface
+		sockAddr := syscall.SockaddrLinklayer{
+			Protocol: syscall.ETH_P_ALL,
+			Ifindex:  d.SockSendFdInterface[0].Attrs().Index,
+		}
+
+		// need this to be replaced with xdp
+		if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
+			return err
+		}
+	} else {
+		// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
+		// eventually free up some of the bpf maps in tc from the kernel space
+
+		fx := d.XdpSocketSendFd.GetDescs(d.XdpSocketSendFd.NumFreeTxSlots())
+		for i := range fx {
+			fx[i].Len = uint32(outputPacketLen)
+		}
+		trxCount := d.XdpSocketSendFd.Transmit(fx)
+		log.Println("Transmitted framecount is ", trxCount)
 	}
 
-	// need this to be replaced with xdp
-	if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
-		return err
-	}
-
-	// fx := d.SocketSendFd.GetDescs(d.SocketSendFd.NumFreeTxSlots())
-	// for i := range fx {
-	// 	fx[i].Len = uint32(outputPacketLen)
-	// }
-
-	// trxCount := d.SocketSendFd.Transmit(fx)
-
-	// log.Println("Transmitted framecount is ", trxCount)
-	// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
-	// eventually free up some of the bpf maps in tc from the kernel space
-
-	// if utils.DEBUG {
-	// 	log.Println("time took to send the whole packet", time.Now().Nanosecond()-serialize)
-	// }
 	return nil
 }

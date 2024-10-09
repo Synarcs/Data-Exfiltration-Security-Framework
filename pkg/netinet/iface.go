@@ -136,49 +136,40 @@ func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 	return cap, err
 }
 
-func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*net.Interface, *xdp.Socket, error) {
+func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
 	log.Println("[x] Creating XDP socket fd to send packet")
 	_, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")
-		return nil, nil, err
+		return nil, err
 	}
 
 	// use the egress transfer queue to send the packet on the physical port inside kernel to make directly reach the interface bypass the kernel network stack
 	txQueueId, err := GetCurrentTXQueues(nf.PhysicalLinks[0].Attrs().Name)
 	if err != nil {
 		log.Println("Error in getting the tx TX queue id")
-		return nil, nil, err
+		return nil, err
 	}
 	fmt.Println("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
 
 	xdpSock, err := xdp.NewSocket(nf.PhysicalLinks[0].Attrs().Index, txQueueId, nil)
 	if err != nil {
-		panic(err.Error())
+		log.Println("Error in binding the AF_XDP Socket to TX Queues")
+		return nil, err
 	}
 
-	netInterface, err := net.InterfaceByName(nf.PhysicalLinks[0].Attrs().Name)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error getting interface: %v", err)
-	}
-
-	return netInterface, xdpSock, nil
+	return xdpSock, nil
 }
 
-func (nf *NetIface) GetRootNamespaceRawSocketFd() (*net.Interface, *int, error) {
+func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
 	log.Println("[x] Creating XDP socket fd to send packet")
 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")
-		return nil, nil, err
+		return nil, err
 	}
 
-	netInterface, err := net.InterfaceByName(nf.PhysicalLinks[0].Attrs().Name)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error getting interface: %v", err)
-	}
-
-	return netInterface, &fd, nil
+	return &fd, nil
 }
 
 func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {

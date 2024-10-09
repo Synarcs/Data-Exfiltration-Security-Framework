@@ -166,9 +166,13 @@ struct dns_record_limits_malicious {
     int MAX_SUBDOMAIN_LENGTH_PER_LABEL;
 
     // define the range for kernel to 
-    int MIN_SUBDOMAIN_LABEL_COUNT;
-    int MAX_SUBDOMAIN_LABEL_COUNT;
-    
+    int MIN_LABEL_COUNT;
+    int MAX_LABEL_COUNT;
+
+    // subdomain labels excluding the tld and auth domains 
+    int MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; 
+    int MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;
+
 } __attribute__((packed)) DNS_RECORD_LIMITS = {
         130,
         255, 
@@ -176,8 +180,11 @@ struct dns_record_limits_malicious {
         17,
         63,
 
-        8,
-        127
+        5,
+        127, 
+
+        3,  // (5 - (tld + root) == 3)
+        125, // (127 - (tld - root) == 125) 
 };
 
 

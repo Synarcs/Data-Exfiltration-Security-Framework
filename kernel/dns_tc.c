@@ -299,6 +299,8 @@ __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payloa
 
 static
   __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, __u16 dns_query_class, struct qtypes qt) {
+
+       
         switch (dns_query_class){
             case 0x0001: 
             case 0x0002:
@@ -356,9 +358,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
      if (ans_count == 0) {
         // a questions record and its an benign packet but need DPI and kernel can do DPI for the entire packet frame 
         qd_count = 1; // let the ebpf verifier proceed during JIT and memory check 
-        if (auth_count >= 1 || add_count >= 1) { // a question cannot send auth in queries for benign 
+
+        if (auth_count >= 1) {
             return SUSPICIOUS;
         }
+
+        if (add_count > 1) return SUSPICIOUS;
+
+        // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
         int oc = 0;
         
         // bpf_printk("[x] Performing DPI over the single question section for DPI inside Kernel");
@@ -377,8 +384,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
                 mx_label_ln = max(mx_label_ln, label_len);
                 if (label_len == 0x00) break;
-                label_count++;
 
+                label_count++;
                 if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
                     bpf_printk("invoked on  label_length %d",  mx_label_ln);
                     return SUSPICIOUS;
@@ -408,6 +415,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
+            __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+
             #ifdef DEBUG
                 if (DEBUG) {
                     bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
@@ -418,7 +427,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count <= 2) return BENIGN;
 
-            if (label_count >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LABEL_COUNT){
+            if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
+
+                if (subdmoain_label_count >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD  && 
+                                    subdmoain_label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) {}
                 bpf_printk("invoked on  label_count %d", label_count);
                 return SUSPICIOUS;
             }
@@ -494,7 +506,7 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     }else {
         dns_volume_stats->packet_size += dns_payload_size;
         #ifdef DEBUG
-            if (!DEBUG) {
+            if (DEBUG) {
                 bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
             }
         #endif

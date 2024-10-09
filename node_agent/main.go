@@ -35,7 +35,6 @@ func main() {
 		DnsPacketGen: tc.GenerateDnsParserModelUtils(&iface),
 	}
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
-	go tc.ProcessSniffDPIPacketCapture(&iface, nil)
 
 	if utils.DEBUG {
 		for _, val := range iface.Links {

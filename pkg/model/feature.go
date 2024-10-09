@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"unicode"
 
@@ -11,15 +12,38 @@ import (
 
 type DNSFeatures struct {
 	UCaseCount         int
+	LCaseCount         int
 	NumberCount        int
+	SpecialCount       int
 	Entropy            float64
 	LongestLabelDomain int
 	LabelCount         int
 	LengthofSubdomains int
 }
 
-func Entropy(dns_label *string) float64 {
-	return 0
+func EntropyLabel(dns_label string) float64 {
+	var freq map[rune]int = make(map[rune]int)
+	for _, val := range dns_label {
+		_, ok := freq[val]
+		if !ok {
+			freq[val] = 1
+		} else {
+			freq[val]++
+		}
+	}
+
+	entropy := 0.0
+	length := float64(len(dns_label))
+
+	for _, ct := range freq {
+		p := float64(ct) / length
+		entropy += p * math.Log2(p)
+	}
+	return entropy
+}
+
+func Entropy(dns_label []string) float64 {
+	return EntropyLabel(strings.Join(dns_label, ""))
 }
 
 func LabelCountExcludeRootDomain(dns_label *string) int {
@@ -33,30 +57,34 @@ func max(a, b int) int {
 	return b
 }
 
-func LengthMaxandTotalSubdomains(dns_label []string) (int, int, int, int, int) {
+func LongestandTotoalLenSubdomains(dns_label []string) (int, int) {
 	mxLen := 0
-	totoalLen := 0
-	numCount := 0
+	totalLen := 0
 
-	lowerCharCount := 0
-	upperCharCount := 0
 	for _, label := range dns_label {
-		totoalLen += len(label)
+		totalLen += len(label)
 		mxLen = max(mxLen, len(label))
-
-		for _, val := range label {
-			lbl := rune(val)
-			if unicode.IsNumber(lbl) {
-				numCount++
-			} else if unicode.IsLower(lbl) {
-				lowerCharCount++
-			} else if unicode.IsUpper(lbl) {
-				upperCharCount++
-			}
-		}
 	}
 
-	return mxLen, totoalLen, numCount, lowerCharCount, upperCharCount
+	fmt.Println("the upper count and lowe count are ")
+	return mxLen, totalLen
+}
+
+func DomainVarsCount(dns_label string) (int, int, int) {
+	ucount, lcount, ncount := 0, 0, 0
+
+	for _, val := range dns_label {
+		if unicode.IsNumber(val) {
+			ncount++
+		}
+		if unicode.IsLower(val) {
+			lcount++
+		}
+		if unicode.IsUpper(val) {
+			ucount++
+		}
+	}
+	return ucount, lcount, ncount
 }
 
 func ProcessFeatures(dns_packet *layers.DNS) error {
@@ -69,12 +97,17 @@ func ProcessFeatures(dns_packet *layers.DNS) error {
 
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-		mx_len, totalLen, numberCount, _, upperCount := LengthMaxandTotalSubdomains(exclude_tld[:len(exclude_tld)-2])
+		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 		features[i].LongestLabelDomain = mx_len
 		features[i].LengthofSubdomains = totalLen
-		features[i].UCaseCount = upperCount
-		features[i].NumberCount = numberCount
 
+		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+
+		features[i].UCaseCount = ucount
+		features[i].NumberCount = ncount
+		features[i].LCaseCount = lcount
+
+		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
 	}
