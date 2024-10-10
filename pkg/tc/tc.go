@@ -26,10 +26,11 @@ import (
 )
 
 type TCHandler struct {
-	Interfaces   []netlink.Link
-	Prog         *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
-	TcCollection *ebpf.Collection // ebpf tc program collection order spec
-	DnsPacketGen *model.DnsPacketGen
+	Interfaces    []netlink.Link
+	Prog          *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
+	TcCollection  *ebpf.Collection // ebpf tc program collection order spec
+	DnsPacketGen  *model.DnsPacketGen
+	ConfigChannel chan interface{}
 }
 
 const (
@@ -316,7 +317,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 }
 
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
-	fmt.Println("called here for process Invoke")
+	log.Println("Loading the Packet Capture over Socket DD")
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()

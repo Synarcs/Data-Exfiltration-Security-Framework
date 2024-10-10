@@ -4,6 +4,7 @@ go_library(
     name = "model",
     srcs = [
         "feature.go",
+        "onnx.go",
         "parse.go",
         "vlan.go",
     ],
@@ -12,8 +13,10 @@ go_library(
     deps = [
         "//pkg/netinet",
         "//pkg/utils",
+        "@com_github_asavie_xdp//:xdp",
         "@com_github_google_gopacket//:gopacket",
         "@com_github_google_gopacket//layers",
         "@com_github_google_gopacket//pcap",
+        "@com_github_vishvananda_netlink//:netlink",
     ],
 )

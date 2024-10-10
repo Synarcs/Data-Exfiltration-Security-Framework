@@ -7,6 +7,9 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/netinet",
+        "//pkg/utils",
+        "@com_github_cilium_ebpf//:ebpf",
+        "@com_github_cilium_ebpf//link",
         "@com_github_vishvananda_netlink//:netlink",
     ],
 )

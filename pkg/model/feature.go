@@ -21,6 +21,10 @@ type DNSFeatures struct {
 	LengthofSubdomains int
 }
 
+type DnsFeaturesEngine struct {
+	onnxModel *OnnxModel
+}
+
 func EntropyLabel(dns_label string) float64 {
 	var freq map[rune]int = make(map[rune]int)
 	for _, val := range dns_label {
@@ -37,7 +41,7 @@ func EntropyLabel(dns_label string) float64 {
 
 	for _, ct := range freq {
 		p := float64(ct) / length
-		entropy += p * math.Log2(p)
+		entropy -= p * math.Log2(p)
 	}
 	return entropy
 }
@@ -87,7 +91,7 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 	return ucount, lcount, ncount
 }
 
-func ProcessFeatures(dns_packet *layers.DNS) error {
+func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
 	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount)
 
 	for _, _ = range dns_packet.Answers {
@@ -114,5 +118,6 @@ func ProcessFeatures(dns_packet *layers.DNS) error {
 
 	for _, _ = range dns_packet.Authorities {
 	}
+
 	return nil
 }

@@ -1,7 +1,7 @@
 
 
 node_agent := main.go 
-output := main 
+output := node_agent 
 debug := false 
 
 .PHONY: build

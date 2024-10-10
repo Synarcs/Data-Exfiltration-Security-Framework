@@ -82,8 +82,14 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
 	}
 
-	ProcessFeatures(dns)
+	dnsFeatureEngine := DnsFeaturesEngine{
+		onnxModel: &OnnxModel{},
+	}
+	predict := dnsFeatureEngine.ProcessFeatures(dns)
 
+	if utils.DEBUG {
+		log.Println("Inferenced output from onnx ", predict)
+	}
 	dnsPacket := d.GenerateDnsPacket(*dns)
 
 	buffer := gopacket.NewSerializeBuffer()

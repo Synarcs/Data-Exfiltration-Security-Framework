@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "netinet",
     srcs = [
+        "eth_xdp.go",
         "iface.go",
         "overlay.go",
     ],
@@ -10,6 +11,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/utils",
+        "@com_github_asavie_xdp//:xdp",
         "@com_github_google_gopacket//pcap",
         "@com_github_vishvananda_netlink//:netlink",
         "@com_github_vishvananda_netns//:netns",

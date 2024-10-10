@@ -405,7 +405,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             }
 
             // parse the remaining and left over 2 bytes from the processed header for query type to be at offset end of the query label 
-            __u16 query_type = 0x00; __u16 query_class = 0x00;
+            __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
             

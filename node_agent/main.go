@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 )
@@ -29,12 +30,21 @@ func main() {
 
 	ctx := context.Background()
 
+	var config chan interface{} = make(chan interface{})
+
 	// // kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	tc := tc.TCHandler{
-		Interfaces:   iface.PhysicalLinks,
-		DnsPacketGen: tc.GenerateDnsParserModelUtils(&iface),
+		Interfaces:    iface.PhysicalLinks,
+		DnsPacketGen:  tc.GenerateDnsParserModelUtils(&iface),
+		ConfigChannel: config,
 	}
+
+	rpcServer := rpc.NodeAgentService{
+		ConfigChannel: config,
+	}
+
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
+	go rpcServer.Server()
 
 	if utils.DEBUG {
 		for _, val := range iface.Links {

@@ -7,7 +7,7 @@ from pathlib import Path
 domains = ["google.com", "apple.com", "intel.com"]
 dns = DNS(id=100,rd=1, opcode=2)
 
-dns.qd = DNSQR(qname="intel.com", qclass=0x0023 )
+dns.qd = DNSQR(qname="intel.com", qclass=0x002 )
 # dns.an = DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300) /  DNSQR(rrname=random.choice(domains), rdata="93.184.216.34", ttl=300)
 
 dns_req = IP(dst='192.168.64.1') / UDP(dport=53) / dns

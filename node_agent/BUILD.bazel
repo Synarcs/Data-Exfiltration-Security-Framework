@@ -4,15 +4,12 @@ go_library(
     name = "node_agent_lib",
     srcs = ["main.go"],
     importpath = "github.com/Data-Exfiltration-Security-Framework/node_agent",
-    visibility = ["//visibility:public"],
+    visibility = ["//visibility:private"],
     deps = [
         "//pkg/netinet",
+        "//pkg/rpc:rpc_lib",
         "//pkg/tc",
-        "//pkg/xdp",
-        "//pkg/events"
-        "@com_github_cilium_ebpf//:ebpf",
-        "@com_github_cilium_ebpf//ringbuf",
-        "@org_golang_x_sys//cpu",
+        "//pkg/utils",
     ],
 )
 
