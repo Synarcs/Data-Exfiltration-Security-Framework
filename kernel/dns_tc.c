@@ -108,6 +108,13 @@ struct exfil_security_egress_redirect_map {
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
 
+struct exfil_security_egress_redurect_ts_verify {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u64); // store the timestamp loaded from userspace when pacekt hits 
+    __type(value, __u8);   // layer 4 checksum prior redirect non clone skb 
+    __uint(max_entries, 1);
+} exfil_security_egress_redurect_ts_verify SEC(".maps");
+
 // count the number of packets 
 struct exfil_security_egress_redirect_count_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -754,8 +761,21 @@ int classify(struct __sk_buff *skb){
                     if (DEBUG){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
                     }
+
                     bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                    return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
+                    __u8 * pres;
+                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &map_layer3_redirect_value->kernel_timets);
+                    if (pres) {
+                        return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
+                    }else {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("the kernel verified timing attack broke and was not  \
+                                                 prevented it with ns timestamp verification after DPI");
+                            }
+                        #endif
+                        return TC_DROP;
+                    }
                 }
                 
 
@@ -796,16 +816,14 @@ int classify(struct __sk_buff *skb){
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
-                __be32 current_dest_addr;
-                __be32 dest_addr_route = bpf_htonl(BRIDGE_REDIRECT_ADDRESS_IPV4); // 10.200.0.1
+                __be32 current_dest_addr; 
+                __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4);
 
                 __u32 out = skb->ifindex;
-
-
                 /*
                     TODO: Work on fixing byte order for redirect address
                 */
-                __be32 * redirect_address = bpf_map_lookup_elem(&exfil_security_config_map, &out);
+                __be32 * redirect_address = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 if (redirect_address) {
                     bpf_printk("kernel config loaded from node agent for redirect %u", *redirect_address);
                     dest_addr_route = bpf_htonl(*redirect_address);

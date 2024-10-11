@@ -47,7 +47,7 @@ func (rpc *NodeAgentService) Server() {
 		panic(err.Error())
 	}
 
-	log.Println("Node Agent RPC Server Listen on POrt :: ", 3200)
+	log.Println("Node Agent RPC Server Listen on POrt :: ", 33333)
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
 	pb.RegisterNodeAgentServiceServer(s, &NodeAgentService{})

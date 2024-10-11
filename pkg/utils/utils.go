@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strconv"
 )
 
 const DEBUG = false
@@ -21,6 +22,11 @@ const (
 	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
 
 	NETNS_NETLINK_BRIDGE_DPI = "br0"
+)
+
+const (
+	BRIDGE_IPAM_IPV4_CIDR = "10.200.0.0/24"
+	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
 
 func ParseIp(saddr uint32) string {
@@ -60,4 +66,8 @@ func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	ip := net.ParseIP(ipv4).To4()
 	// convert to big endian for the kernel to store dest address
 	return binary.BigEndian.Uint32(ip)
+}
+
+func GetIpv4Address(id int) string {
+	return BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id)
 }

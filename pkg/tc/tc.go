@@ -194,8 +194,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 	if configMap != nil {
-		for _, iface := range iface.PhysicalLinks {
-			redirectIp := utils.GenerateBigEndianIpv4("10.200.0.1")
+		for index, iface := range iface.PhysicalLinks {
+			redirectIp := utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1))
 			err := configMap.Put(uint32(iface.Attrs().Index), redirectIp)
 			if err != nil {
 				panic(err.Error())
@@ -290,6 +290,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
+	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
 
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
@@ -303,6 +304,17 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 			fmt.Println("Required redirected packet id is not found in the map", err)
 		} else {
 			fmt.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+
+			timeVal := events.DPIRedirectionTimestampVerify{
+				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
+				UserSpace_Egress_Loaded: 1,
+			}
+
+			if err := dnsMapRedirectVerify.Put(timeVal.Kernel_timets, timeVal.UserSpace_Egress_Loaded); err != nil {
+				log.Println("Error updating the timestamp kernel values for egress traffic")
+				return err
+			}
+			log.Println("the required egress lock field updated successfully from userspace")
 		}
 
 		if !utils.DEBUG {
