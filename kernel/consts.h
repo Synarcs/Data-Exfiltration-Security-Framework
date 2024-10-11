@@ -17,20 +17,18 @@
 #define uc unsigned char 
 #define ll long 
 
-struct exfil_map_domain_config {
+struct exfil_kernel_config  {
     __u32 br_index_id;
-    __u32 br_gateway_subnet; 
-    __u32 br_egress_redirect_ns_ip;
-    __u32 br_egress_forward_ns_ip;
+    __be32 ns_redirect_address_ipv4;
+    __be32 ns_redirect_address_ipv6;
 };
 
 struct exfil_security_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32);
-    __type(value, struct exfil_map_domain_config);
+    __type(value, __be32);
     __uint(max_entries, 1 << 6);
 } exfil_security_config_map SEC(".maps");
-
 
 
 #define MAX_DNS_QDCOUNT 3 
@@ -46,7 +44,7 @@ struct exfil_security_config_map {
 #define MAX_DNS_LABEL_COUNT 127
 
 
-__u32 redirect_skb_mark = 1;
+__u32 redirect_skb_mark = 0xFF;
 
 
 // 10.200.0.1

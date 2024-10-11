@@ -55,3 +55,9 @@ func ConvertIpHex(ipv4 string, isIpv4 bool) (uint32, error) {
 
 	return uint32(binary.BigEndian.Uint32(ip)), nil
 }
+
+func GenerateBigEndianIpv4(ipv4 string) uint32 {
+	ip := net.ParseIP(ipv4).To4()
+	// convert to big endian for the kernel to store dest address
+	return binary.BigEndian.Uint32(ip)
+}

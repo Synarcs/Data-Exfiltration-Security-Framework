@@ -94,11 +94,17 @@ struct exfil_security_egress_drop_ring_buff {
 
 
 /* ***************************************** Event maps for kernel ***************************************** */
+// make the map struct more fine grained to prevent timing attacks from user space malware 
+struct checkSum_redirect_struct_value {
+    __u16 checksum; // the l3 checksum for the kernel packet before redirection 
+    __u64 kernel_timets; // 
+};
+
 // stores inofrmation regarding checksum and the redirection of the packet from kernel 
 struct exfil_security_egress_redirect_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // dns query id prior DPI
-    __type(value, __u16);   // layer 4 checksum prior redirect non clone skb 
+    __type(value, struct checkSum_redirect_struct_value);   // layer 4 checksum prior redirect non clone skb 
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
 
@@ -109,6 +115,7 @@ struct exfil_security_egress_redirect_count_map {
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_count_map SEC(".maps");
+
 
 /* ***************************************** Event maps for Egress Traffiic Rate Limiting ***************************************** */
 struct dns_volume_stats {
@@ -558,6 +565,15 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 }
 
 
+static long callback_fn(struct bpf_map *map, const void *key, void *value, void *ctx) {
+    bpf_printk("[x] // looping over the  map for kernel exfil config ");
+
+    bpf_printk("the key is ", *(__u32 *) key);
+    bpf_printk("the value is ", *(__be32 *) key);
+
+    return 0;
+}
+
 SEC("tc")
 int classify(struct __sk_buff *skb){
     
@@ -716,12 +732,16 @@ int classify(struct __sk_buff *skb){
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
 
                 // update the dns query id with the check sum value prior to bpf function redirection to new ifnet interface
-                __u16 *map_layer3_redirect_value;
-                __u16 layer3_checksum = bpf_htons(ip->check);
-                map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                ;
+                // __u16 layer3_checksum = bpf_htons(ip->check);
+                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 bool isRedirectFirst = false;
                 bool processCloneRedirectRun = false;
                 if (!map_layer3_redirect_value) {
+                    struct checkSum_redirect_struct_value layer3_checksum = {
+                        .checksum =  bpf_htons(ip->check),
+                        .kernel_timets = bpf_ktime_get_ns(),
+                    };
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
                     int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
                     if (ret < 0) {
@@ -765,7 +785,7 @@ int classify(struct __sk_buff *skb){
                 }
                 
 
-                __u16 redirection_count_key = 0;
+                __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
                 __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
                 if (ct_val) {
                     __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
@@ -778,6 +798,21 @@ int classify(struct __sk_buff *skb){
 
                 __be32 current_dest_addr;
                 __be32 dest_addr_route = bpf_htonl(BRIDGE_REDIRECT_ADDRESS_IPV4); // 10.200.0.1
+
+                __u32 out = skb->ifindex;
+
+
+                /*
+                    TODO: Work on fixing byte order for redirect address
+                */
+                __be32 * redirect_address = bpf_map_lookup_elem(&exfil_security_config_map, &out);
+                if (redirect_address) {
+                    bpf_printk("kernel config loaded from node agent for redirect %u", *redirect_address);
+                    dest_addr_route = bpf_htonl(*redirect_address);
+                }else {
+                    bpf_printk("kernel cannot find the requred kernel config redirect map");
+                }
+
 
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                     // 4 bytes for the ipv4 address offset 

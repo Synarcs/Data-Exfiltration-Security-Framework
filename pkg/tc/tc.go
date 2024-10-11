@@ -192,6 +192,27 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		panic(err.Error())
 	}
 
+	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
+	if configMap != nil {
+		for _, iface := range iface.PhysicalLinks {
+			redirectIp := utils.GenerateBigEndianIpv4("10.200.0.1")
+			err := configMap.Put(uint32(iface.Attrs().Index), redirectIp)
+			if err != nil {
+				panic(err.Error())
+			}
+			var loaded uint32
+			err = configMap.Lookup(uint32(iface.Attrs().Index), &loaded)
+			if err != nil {
+				panic(err.Error())
+			} else {
+				binary.BigEndian.PutUint32(make([]byte, 4), loaded)
+				fmt.Println("Loading the redirect in kernel with address ", uint32(iface.Attrs().Index), loaded)
+				fmt.Println("Loaded value in the kernel config is ", loaded)
+			}
+
+		}
+	}
+
 	for _, maps := range spec.Maps {
 		if strings.Contains(maps.String(), "exfil_security_egress_drop_ring_buff") {
 			// an ring event buffer
@@ -268,23 +289,20 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
-	dnsMapRedirectMap := tc.TcCollection.Maps["exfil_security_egress_redirect_map"]
-	configMap := tc.TcCollection.Maps[events.EXFIL_SECURITY_KERNEL_CONFIG_MAP]
-	if configMap != nil {
-	}
+	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
 		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount, "Packet id is ", dns.ID)
 
 		var dns_packet_id uint16 = uint16(dns.ID)
-		var ip_layer3_checksum uint16
+		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum)
+		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum_kernel_ts)
 		if err != nil {
 			fmt.Println("Required redirected packet id is not found in the map", err)
 		} else {
-			fmt.Println("found the required key from BPF Hash fd ", uint16(ip_layer3_checksum))
+			fmt.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
 		}
 
 		if !utils.DEBUG {
@@ -308,7 +326,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 		// debug kernel redirection packet for egress route via a bpf_id_redirect
 		// if err != nil {
 		// a valid packet found from the process redirect map for DPI and kernel redirect scan
-		tc.DnsPacketGen.GeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum, handler)
+		tc.DnsPacketGen.GeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler)
 		// }
 		// fmt.Println(dns.Questions, dns.Answers)
 	}
