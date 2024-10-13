@@ -19,8 +19,14 @@ type DPIRedirectionKernelMap struct {
 	Kernel_timets uint64
 }
 
+// load the kernel config inside the kernel
+type ExfilKernelConfig struct {
+	BridgeIndexId uint32
+	RedirectIpv4  uint32 // redirect to the linux network namesapce
+}
+
 type DPIRedirectionTimestampVerify struct {
-	Kernel_timets    uint64
+	Kernel_timets           uint64
 	UserSpace_Egress_Loaded uint8
 }
 

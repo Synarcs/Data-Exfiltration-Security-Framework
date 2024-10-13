@@ -18,15 +18,14 @@
 #define ll long 
 
 struct exfil_kernel_config  {
-    __u32 br_index_id;
-    __be32 ns_redirect_address_ipv4;
-    __be32 ns_redirect_address_ipv6;
+    __u32 BridgeIndexId;
+    __be32 RedirectIpv4;
 };
 
 struct exfil_security_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32);
-    __type(value, __be32);
+    __type(value, struct exfil_kernel_config);
     __uint(max_entries, 1 << 6);
 } exfil_security_config_map SEC(".maps");
 
@@ -53,8 +52,7 @@ __u32 redirect_skb_mark = 0xFF;
 #endif
 
 
-#ifndef BRIDGE_REDIRECT_ADDRESS_IPV6
-    struct in6_addr {
+    struct in6_addr_src {
         union {
             __u8    u6_addr8[16];
             __u16   u6_addr16[8];
@@ -62,35 +60,33 @@ __u32 redirect_skb_mark = 0xFF;
         } in6_u;
     };
 
-    // 56d3:643a:5621:1b8b:ed44:ea5b:0cce:a22a
-    struct in6_addr bridge_redirect_addr_ipv6_suspicious = {
-        .in6_u.u6_addr32 = {
-           bpf_ntohl(0x56d3), 
-           bpf_ntohl(0x643a), 
-           bpf_ntohl(0x5621), 
-           bpf_ntohl(0x1b8b), 
-           bpf_ntohl(0xed44), 
-           bpf_ntohl(0xea5b), 
-           bpf_ntohl(0x0cce), 
-           bpf_ntohl(0xa22a), 
+    // fe80::d091:3cff:fe25:6d96/64
+    struct in6_addr_src bridge_redirect_addr_ipv6_suspicious = {
+        .in6_u.u6_addr16 = {
+           bpf_ntohs(0xfe80), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0xd091), 
+           bpf_ntohs(0x3cff), 
+           bpf_ntohs(0xfe25), 
+           bpf_ntohs(0x6d96), 
         }
     };
 
-    // b415:2733:54f1:36ae:3cf4:8de3:bbf2:f0b2
-    struct in6_addr bridge_redirect_addr_ipv6_malicious = {
+    // fe80::d091:3cff:fe25:6d97/64
+    struct in6_addr_src bridge_redirect_addr_ipv6_malicious = {
         .in6_u.u6_addr16 = {
-            bpf_ntohl(0xb415),
-            bpf_ntohl(0x2733),
-            bpf_ntohl(0x54f1),
-            bpf_ntohl(0x36ae),
-            bpf_ntohl(0x3cf4),
-            bpf_ntohl(0x8de3),
-            bpf_ntohl(0xbbf2),
-            bpf_ntohl(0xf0b2),
+           bpf_ntohs(0xfe80), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0xd091), 
+           bpf_ntohs(0x3cff), 
+           bpf_ntohs(0xfe25), 
+           bpf_ntohs(0x6d97), 
         }
-    }
-
-#endif
+    };
 
 // fe80::5c0a:20ff:fe93:9ef1
 

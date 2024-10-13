@@ -92,12 +92,12 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 }
 
 func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
-	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount)
+	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ANCount+dns_packet.ARCount)
 
-	for _, _ = range dns_packet.Answers {
-	}
+	// do feature engineering over the entire dns payload section for enhancec lex analysis over each
+	i := 0
 
-	for i, payload := range dns_packet.Questions {
+	for _, payload := range dns_packet.Questions {
 
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
@@ -114,9 +114,44 @@ func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
+		i += 1
 	}
 
-	for _, _ = range dns_packet.Authorities {
+	for _, payload := range dns_packet.Answers {
+		exclude_tld := strings.Split(string(payload.Name), ".")
+		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
+		features[i].LongestLabelDomain = mx_len
+		features[i].LengthofSubdomains = totalLen
+
+		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+
+		features[i].UCaseCount = ucount
+		features[i].NumberCount = ncount
+		features[i].LCaseCount = lcount
+
+		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+		mrsh, _ := json.Marshal(features[i])
+		fmt.Println(string(mrsh))
+		i += 1
+	}
+
+	for _, payload := range dns_packet.Additionals {
+		exclude_tld := strings.Split(string(payload.Name), ".")
+		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
+		features[i].LongestLabelDomain = mx_len
+		features[i].LengthofSubdomains = totalLen
+
+		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+
+		features[i].UCaseCount = ucount
+		features[i].NumberCount = ncount
+		features[i].LCaseCount = lcount
+
+		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+		mrsh, _ := json.Marshal(features[i])
+		fmt.Println(string(mrsh))
 	}
 
 	return nil

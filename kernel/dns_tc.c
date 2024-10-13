@@ -522,7 +522,7 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     }else {
         dns_volume_stats->packet_size += dns_payload_size;
         #ifdef DEBUG
-            if (!DEBUG) {
+            if (DEBUG) {
                 bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
             }
         #endif
@@ -753,15 +753,16 @@ int classify(struct __sk_buff *skb){
                     __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
                     pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
                     if (pres) {
+                        bpf_map_delete_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
                         return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
                     }else {
                         #ifdef DEBUG 
-                            if (!DEBUG) {
+                            if (DEBUG) {
                                 bpf_printk("the kernel verified timing attack broke and was not  \
                                                  prevented it with ns timestamp verification after DPI");
                             }
                         #endif
-                        return TC_DROP;
+                        return TC_FORWARD;
                     }
                 }
 
@@ -783,10 +784,15 @@ int classify(struct __sk_buff *skb){
                 /*
                     TODO: Work on fixing byte order for redirect address
                 */
-                __be32 * redirect_address = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                if (redirect_address) {
-                    bpf_printk("kernel config loaded from node agent for redirect %u", *redirect_address);
-                    dest_addr_route = bpf_htonl(*redirect_address);
+
+                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+                __u32 br_index = 4; 
+
+                if (config) {
+                    __be32 redirect_address_from_config = config->RedirectIpv4;
+                    dest_addr_route = bpf_htonl(redirect_address_from_config);
+                    br_index = config->BridgeIndexId;
+                    bpf_printk("kernel config loaded from node agent for redirect and bridge index %u %u", redirect_address_from_config, config->BridgeIndexId);
                 }else {
                     bpf_printk("kernel cannot find the requred kernel config redirect map");
                 }
@@ -822,7 +828,7 @@ int classify(struct __sk_buff *skb){
                     skb->mark = redirect_skb_mark;
                 }
     
-                __u32 br_index = 4;
+                
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){

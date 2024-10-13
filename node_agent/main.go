@@ -13,6 +13,7 @@ import (
 	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
 
 func cpuArch() string {
@@ -44,8 +45,14 @@ func main() {
 		ConfigChannel: config,
 	}
 
+	var ingress xdp.IngressSniffHandler = xdp.IngressSniffHandler{
+		IfaceHandler: &iface,
+		Ctx:          context.Background(),
+	}
+
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 	go rpcServer.Server()
+	go ingress.SniffEgressForC2C()
 
 	if utils.DEBUG {
 		for _, val := range iface.Links {

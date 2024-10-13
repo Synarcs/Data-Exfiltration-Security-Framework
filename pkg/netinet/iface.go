@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"syscall"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
@@ -20,6 +20,16 @@ const (
 
 	NETNS_NETLINK_BRIDGE_DPI = "br0"
 )
+
+const (
+	NETNS_RNETLINK_EGREESS_DPI_INTERFACE = "sx1-eth0"
+	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
+)
+
+var Iface_Bridge_Subnets map[string]string = map[string]string{
+	NETNS_RNETLINK_EGREESS_DPI_INTERFACE: "10.200.0.1",
+	NETNS_RNETLINK_INGRESS_DPI_INTERFACE: "10.200.0.2",
+}
 
 // each link has net_device virt / physical socket -> netlink -> netfilter -> contrack -> tc (classful / classless) -> xdp -> net_device
 type NetIface struct {
@@ -40,7 +50,7 @@ func (nf *NetIface) ReadInterfaces() error {
 	customLinks := make([]netlink.Link, 0)
 
 	for _, link := range links {
-		if link.Attrs().Name == "enp0s1" {
+		if link.Attrs().Name == "enp0s1" || strings.Contains(link.Attrs().Name, "eth") || strings.Contains(link.Attrs().Name, "enp") || strings.Contains(link.Attrs().Name, "wla") {
 			fmt.Println("found a link ", link.Attrs().Name)
 			customLinks = append(customLinks, link)
 		}
@@ -59,6 +69,22 @@ func (nf *NetIface) ReadInterfaces() error {
 		nf.BridgeLinks = bridgeInterfaces
 	}
 	return nil
+}
+
+func (nf *NetIface) GetRootGateway() (string, error) {
+	if len(nf.Routes) == 0 {
+		return "", fmt.Errorf("No routes found")
+	}
+	gw := ""
+	for _, val := range nf.Routes {
+		for _, route := range val {
+			if route.Dst == nil {
+				gw = route.Gw.String()
+				break
+			}
+		}
+	}
+	return gw, nil
 }
 
 func (nf *NetIface) ReadRoutes() error {
@@ -120,11 +146,7 @@ func (nf *NetIface) GetNetworkNamespace(route string) (*netns.NsHandle, error) {
 		// log.Fatalf("Error Mounting the required Netns for traffic Egress TC DPI")
 		return nil, err
 	}
-	if !netHandle.IsOpen() {
-		return nil, fmt.Errorf("Error the required Netns needs to be mounted and open to bridge")
-	}
 
-	defer netHandle.Close()
 	return &netHandle, nil
 }
 
@@ -181,6 +203,6 @@ func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
 }
 
 func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
-	cap, err := pcap.OpenLive(utils.NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	return cap, err
 }

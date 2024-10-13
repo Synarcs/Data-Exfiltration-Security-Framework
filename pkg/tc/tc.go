@@ -201,36 +201,14 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 
-			addrTable, ok := iface.Addr[link.Attrs().Name]
-			if !ok {
-				log.Fatal("The veth bridge needs to have a virtual layer 3 router layer")
+			var redirectIpv4 events.ExfilKernelConfig = events.ExfilKernelConfig{
+				BridgeIndexId: uint32(iface.BridgeLinks[0].Attrs().Index),
+				RedirectIpv4:  utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1)),
 			}
-
-			ipv6Addr := ""
-			for _, addr := range addrTable {
-				log.Println("Root routing link ", link.Attrs().Name, addr.IP.String())
-				if addr.IP.To16() != nil {
-					ipv6Addr = string(addr.IP.To16().String())
-					break
-				}
-			}
-			log.Println("the ipv6 address on link is ", link.Attrs().Name, ipv6Addr)
-			redirectIpv4 := utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1))
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {
 				panic(err.Error())
 			}
-			var loaded uint32
-			err = configMap.Lookup(uint32(link.Attrs().Index), &loaded)
-			if err != nil {
-				panic(err.Error())
-			} else {
-				binary.BigEndian.PutUint32(make([]byte, 4), loaded)
-				fmt.Println("Loading the redirect ipv4 in kernel over the veth for index ", uint32(link.Attrs().Index), utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index+1)),
-					loaded)
-				fmt.Println("Loaded value in the kernel config is ", loaded)
-			}
-
 		}
 	}
 
@@ -240,7 +218,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			if utils.DEBUG {
 				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
 			}
-			go tc.PollRingBuffer(ctx, maps)
+			// go tc.PollRingBuffer(ctx, maps)
 		}
 	}
 
@@ -249,7 +227,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}
 
 	if INIT_KERNEL_SOCKET {
-		fmt.Println("fuck again wasting time setting socket fd")
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}
@@ -396,7 +373,8 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 	defer ns.Close()
 
-	processPcapFilterHandler := func(linkInterface netlink.Link, errorChannel chan<- error) {
+	processPcapFilterHandler := func(linkInterface netlink.Link,
+		errorChannel chan<- error, isUdp bool, isStandardPort bool) {
 		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
@@ -404,8 +382,18 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		}
 		defer cap.Close()
 
-		if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
-			log.Fatalf("Error setting BPF filter: %v", err)
+		if isUdp && isStandardPort {
+			// runs over br netfilter layer on iptables
+			if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
+				log.Fatalf("Error setting BPF filter: %v", err)
+			}
+		} else if !isUdp && isStandardPort {
+			if err := cap.SetBPFFilter("tcp dst port 53"); err != nil {
+				log.Fatalf("Error setting BPF filter: %v", err)
+			}
+		} else if !isUdp && !isStandardPort {
+			err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
+			fmt.Errorf("err %s", err)
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
@@ -420,10 +408,12 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		log.Println("Processing of multiple Physical links")
 
 		for iface := 0; iface < len(ifaceHandler.PhysicalLinks); iface++ {
-			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[iface], errorChannel)
+			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
+			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
 		}
 	} else {
-		processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel)
+		go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
+		go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
 	}
 
 	go func() {

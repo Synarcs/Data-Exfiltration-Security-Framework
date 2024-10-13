@@ -15,19 +15,17 @@ const (
 )
 
 const (
-	NETNS_RNETLINK_EGREESS_DPI = "sx1"
-	NETNS_RNETLINK_INGRESS_DPI = "sx2"
-
-	NETNS_RNETLINK_EGREESS_DPI_INTERFACE = "sx1-eth0"
-	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
-
-	NETNS_NETLINK_BRIDGE_DPI = "br0"
-)
-
-const (
 	BRIDGE_IPAM_IPV4_CIDR = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
+
+type DomainNodeAgentCacheBlock struct {
+	TLD            string
+	CompleteDomain string
+}
+
+// later implement the nodeagent service cachine layer on this
+var NODE_AGENT_BLACKLISTED_DOMAINS map[string]DomainNodeAgentCacheBlock = make(map[string]DomainNodeAgentCacheBlock)
 
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
@@ -45,21 +43,6 @@ func ParseIpV6(saddr uint32) string {
 	var s5 uint16 = (uint16)(saddr>>8) & 0xFF
 	var s6 uint16 = (uint16)(saddr & 0xFF)
 	return fmt.Sprintf("%x.%x.%x.%x.%x.%x", s1, uint16(s2), uint16(s3), uint16(s4), uint16(s5), uint8(s6))
-}
-
-func ConvertIpHex(ipv4 string, isIpv4 bool) (uint32, error) {
-	var ip net.IP
-
-	if isIpv4 {
-		ip = net.ParseIP(ipv4).To4()
-	} else {
-		ip = net.ParseIP(ipv4).To16()
-	}
-	if ip == nil {
-		return 0, fmt.Errorf("invalid IPv4 address")
-	}
-
-	return uint32(binary.BigEndian.Uint32(ip)), nil
 }
 
 func GenerateBigEndianIpv4(ipv4 string) uint32 {
