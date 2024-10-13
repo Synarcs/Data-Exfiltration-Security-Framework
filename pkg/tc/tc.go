@@ -38,6 +38,11 @@ const (
 	TC_EGRESS_BRIDGE_NETIFACE_INT = "bridge.o"
 )
 
+// init AF_PACKET, AF_XDP socket for the kernel
+var (
+	INIT_KERNEL_SOCKET = true
+)
+
 // a single channel for all go routines to poll kernel evetsn for dns traffic
 var ringBufferChannel chan interface{} = make(chan interface{})
 
@@ -194,19 +199,35 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 	if configMap != nil {
-		for index, iface := range iface.PhysicalLinks {
-			redirectIp := utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1))
-			err := configMap.Put(uint32(iface.Attrs().Index), redirectIp)
+		for index, link := range iface.PhysicalLinks {
+
+			addrTable, ok := iface.Addr[link.Attrs().Name]
+			if !ok {
+				log.Fatal("The veth bridge needs to have a virtual layer 3 router layer")
+			}
+
+			ipv6Addr := ""
+			for _, addr := range addrTable {
+				log.Println("Root routing link ", link.Attrs().Name, addr.IP.String())
+				if addr.IP.To16() != nil {
+					ipv6Addr = string(addr.IP.To16().String())
+					break
+				}
+			}
+			log.Println("the ipv6 address on link is ", link.Attrs().Name, ipv6Addr)
+			redirectIpv4 := utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1))
+			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {
 				panic(err.Error())
 			}
 			var loaded uint32
-			err = configMap.Lookup(uint32(iface.Attrs().Index), &loaded)
+			err = configMap.Lookup(uint32(link.Attrs().Index), &loaded)
 			if err != nil {
 				panic(err.Error())
 			} else {
 				binary.BigEndian.PutUint32(make([]byte, 4), loaded)
-				fmt.Println("Loading the redirect in kernel with address ", uint32(iface.Attrs().Index), loaded)
+				fmt.Println("Loading the redirect ipv4 in kernel over the veth for index ", uint32(link.Attrs().Index), utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index+1)),
+					loaded)
 				fmt.Println("Loaded value in the kernel config is ", loaded)
 			}
 
@@ -226,7 +247,12 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	if utils.DEBUG {
 		fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
 	}
-	tc.ProcessSniffDPIPacketCapture(iface, nil)
+
+	if INIT_KERNEL_SOCKET {
+		fmt.Println("fuck again wasting time setting socket fd")
+		tc.ProcessSniffDPIPacketCapture(iface, nil)
+		INIT_KERNEL_SOCKET = false
+	}
 }
 
 func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netinet.NetIface) error {
@@ -384,7 +410,6 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
 		for packet := range packets.Packets() {
-			fmt.Println("sniff the packet over the kernel namespace", packet.Layers())
 			go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
 		}
 	}

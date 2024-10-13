@@ -188,21 +188,6 @@ struct dns_record_limits_malicious {
 };
 
 
-struct dns_event {
-    __u32 eventId;
-    __u32 src_ip;
-    __u32 dst_ip;
-    __u16 src_port;
-    __u16 dst_port;
-    __u32 payload_size;
-    __u32 udp_frame_size;
-    __u32 dns_payload_size; // size of payload excluding the dns header 
-    __u8 isUDP; // offset udp calc 
-    __u8 isIpv4; // ipv4 processing 
-};
-
-
-
 struct exfil_security_dropped_payload_event {
     union {
         __u32 src_ip;  // src 

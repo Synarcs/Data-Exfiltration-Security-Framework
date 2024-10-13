@@ -27,6 +27,7 @@ func main() {
 
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
+	iface.ReadRoutes()
 
 	ctx := context.Background()
 
@@ -72,7 +73,7 @@ func main() {
 		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
 			fmt.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
-		fmt.Println("Killing the root node agent ebpf programs atatched in Kernel")
+		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}

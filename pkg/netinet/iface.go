@@ -28,6 +28,7 @@ type NetIface struct {
 	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
 	LoopBackLinks []netlink.Link // loopback links
 	Routes        map[string][]netlink.Route
+	Addr          map[string][]netlink.Addr
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -61,13 +62,20 @@ func (nf *NetIface) ReadInterfaces() error {
 }
 
 func (nf *NetIface) ReadRoutes() error {
-
-	for _, link := range nf.Links {
+	nf.Addr = make(map[string][]netlink.Addr)
+	nf.Routes = make(map[string][]netlink.Route)
+	for _, link := range nf.PhysicalLinks {
 		routes, err := netlink.RouteList(link, unix.ETH_P_ALL)
 		if err != nil {
 			log.Println(err)
 			return err
 		}
+		addr, err := netlink.AddrList(link, unix.ETH_P_ALL)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+		nf.Addr[link.Attrs().Name] = addr
 		nf.Routes[link.Attrs().Name] = routes
 	}
 	return nil

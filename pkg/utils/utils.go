@@ -68,6 +68,11 @@ func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
+func GenerateBigEndianIpv6(ipv6 string) (uint64, uint64) {
+	ip := net.ParseIP(ipv6).To16()
+	return binary.BigEndian.Uint64(ip[:len(ipv6)/2]), binary.BigEndian.Uint64(ip[len(ipv6)/2:])
+}
+
 func GetIpv4Address(id int) string {
 	return BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id)
 }

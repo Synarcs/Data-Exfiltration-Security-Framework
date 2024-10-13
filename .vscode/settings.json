@@ -24,6 +24,8 @@
         "initializer_list": "c",
         "random": "c",
         "chrono": "c",
-        "compare": "c"
+        "compare": "c",
+        "nfnetlink.h": "c",
+        "stdbool.h": "c"
     }
 }

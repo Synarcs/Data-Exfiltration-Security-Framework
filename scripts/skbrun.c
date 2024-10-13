@@ -24,6 +24,9 @@ typedef struct actions {
 typedef struct handler {
     int *data; 
     struct handler *next; 
+    union {
+        int (*size) (struct handler *);
+    };
 } List;
 
 void *handler (void *start, void *end, int size) {

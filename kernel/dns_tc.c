@@ -6,6 +6,7 @@
 #include <linux/ipv6.h>
 #include <linux/udp.h>
 #include <linux/tcp.h>
+#include <linux/netfilter/nfnetlink.h>
 
 #include <linux/pkt_cls.h>
 #include <stdbool.h>
@@ -58,14 +59,15 @@ struct packet_actions {
     __u8 (*parse_ipv4) (struct skb_cursor *);
     __u8 (*parse_ipv6) (struct skb_cursor *);
     // transport layer 4 
-    __u8 (*parse_udpv4) (struct skb_cursor *);
-    __u8 (*parse_udpv6) (struct skb_cursor *);
-    __u8 (*parse_tcpv4) (struct skb_cursor *);
-    __u8 (*parse_tcpv6) (struct skb_cursor *);
-
+    __u8 (*parse_udp) (struct skb_cursor *, bool);
+    __u8 (*parse_tcp) (struct skb_cursor *, bool);
+    /* 
+        Each layer 4 parsing overthe header is processed with the previous layer header size offset 
+    */
+    
     // app layer 
-    __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, __u32 );
-    __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, struct dns_header *, __u32);
+    __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool, __u32 );
+    __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, bool, struct dns_header *, __u32);
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
@@ -75,16 +77,13 @@ struct packet_actions {
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *, bool);
 
     // final and complete DPI over the dns and events submit 
-    int (*__dns_dpi) (struct skb_cursor , struct __sk_buff *, bool , bool , struct packet_actions *);
+    __u8 (*__dns_dpi) (struct skb_cursor , struct __sk_buff *, struct packet_actions , 
+                __u32 , void * , __u32  , bool , bool );
 };
 
 __u32 INSECURE = 0;
 
 /* ***************************************** Event ring buffeers for kernel detected DNS events ***************************************** */
-struct ring_event {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 16);
-} dns_ring_events SEC(".maps");
 
 // ring buffer event from kernel storing information for the packet dropped within the kernel 
 struct exfil_security_egress_drop_ring_buff {
@@ -104,7 +103,7 @@ struct checkSum_redirect_struct_value {
 struct exfil_security_egress_redirect_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // dns query id prior DPI
-    __type(value, struct checkSum_redirect_struct_value);   // layer 4 checksum prior redirect non clone skb 
+    __type(value, struct checkSum_redirect_struct_value);   // layer 3 checksum prior redirect using a non clone skb redirect 
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
 
@@ -151,7 +150,7 @@ __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *sk
 static 
 __always_inline __u8 parse_eth(struct skb_cursor *skb) {
     struct ethhdr *eth = skb->data;
-    if ((void *) (eth + 1) > skb->data_end) return 0; // Proper boundary check
+    if ((void *) (eth + 1) > skb->data_end) return 0;  // should strictly be in skb kernel boundary
     return 1;
 }
 
@@ -159,16 +158,16 @@ static
 __always_inline __u8 parse_ipv4(struct skb_cursor *skb) {
     struct iphdr *ip = skb->data + sizeof(struct ethhdr);
 
-    if ((void *) (ip + 1) > skb->data_end ) return 0; // Proper boundary check
+    if ((void *) (ip + 1) > skb->data_end ) return 0; // should strictly be in skb kernel boundary
   
     return 1;
 }
 
 static 
 __always_inline __u8 parse_ipv6(struct skb_cursor *skb) {
-    struct iphdr *ipv6 = skb->data + sizeof(struct ethhdr);
-    if ((void *)(ipv6 + 1) > skb->data_end) return 1; 
-    return 0;
+    struct ipv6hdr *ipv6 = skb->data + sizeof(struct ethhdr);
+    if ((void *)(ipv6 + 1) > skb->data_end) return 0;
+    return 1;
 }
 
 static 
@@ -199,11 +198,11 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
 
 
 static 
-__always_inline __u8 parse_udpv4(struct  skb_cursor *skb) {
-    struct udphdr *udp = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+__always_inline __u8 parse_udp(struct  skb_cursor *skb, bool isIpv4) {
+    struct udphdr *udp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
     if ((void *)(udp + 1) > skb->data_end) return 0;
 
-    if (process_udp_payload_mem_verification(udp, skb, true) == 0) 
+    if (process_udp_payload_mem_verification(udp, skb, isIpv4 ? true : false) == 0) 
         return 0;
     
 
@@ -219,30 +218,9 @@ __always_inline __u8 parse_udpv4(struct  skb_cursor *skb) {
 }
 
 static 
-__always_inline __u8 parse_udpv6(struct  skb_cursor *skb) {
-     struct udphdr *udp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-    if ((void *)(udp + 1) > skb->data_end) return 1; 
-
-
-    if (process_udp_payload_mem_verification(udp, skb, false) == 0) 
-        return 0;
-
-    #ifdef DEBUG
-        if (DEBUG) {
-            __u16 dport = bpf_htons(udp->dest);
-            __u16 sport = bpf_htons(udp->source);
-            bpf_printk("The Dest and src port for UDP packet for Base ipv6 are %u %u", dport, sport);
-        }
-    #endif
-
-    return 1;
-}
-
-
-static 
-__always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
-    struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr);
-    if ((void *)(tcp + 1) > skb->data_end) return 1;
+__always_inline __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
+    struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
+    if ((void *)(tcp+ 1) > skb->data_end) return 0;
 
     #ifdef DEBUG
         if (DEBUG) {
@@ -252,19 +230,11 @@ __always_inline __u8 parse_tcpv4(struct  skb_cursor *skb) {
         }
     #endif
 
-    return 0;   
+    return 1;
 }
 
 static 
-__always_inline __u8 parse_tcpv6(struct  skb_cursor *skb) {
-     struct udphdr *tcp = skb->data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-    if ((void *)(tcp + 1) > skb->data_end) return 1;
-    return 0;
-}
-
-
-static 
-__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, __u32 udp_payload_exclude_header) {
+__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp, __u32 udp_payload_exclude_header) {
     // verify the dns header payload from root of the skbuff 
 
 
@@ -296,7 +266,7 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
 static 
 __always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payload, 
-            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, struct dns_header * dns_header, __u32 skb_len) {
+            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, bool isUdp,  struct dns_header * dns_header, __u32 skb_len) {
         
         // the kernel verifier enforce and need to be strict and assume the buffer is validated before itself 
 
@@ -401,7 +371,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
                 label_count++;
                 if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
-                    bpf_printk("invoked on  label_length %d",  mx_label_ln);
                     return SUSPICIOUS;
                 }
                     
@@ -445,12 +414,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
                 if (subdmoain_label_count >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD  && 
                                     subdmoain_label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) {}
-                bpf_printk("invoked on  label_count %d", label_count);
+                // bpf_printk("invoked on  label_count %d", label_count);
                 return SUSPICIOUS;
             }
             
             if (total_domain_length_exclude_tld >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length_exclude_tld <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH){
-                bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
+                // bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
                 return SUSPICIOUS;
             }
             
@@ -486,14 +455,47 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         return 1;
     }
 
-    // a malicious encap is used to mask the dns traffic 
+    // a malicious encap is used to mask the dns traffPic 
     return 0;
+}
+
+static 
+__always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
+                    __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, bool isIpv4, bool isUdp) {
+      // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
+        if (actions.parse_dns_header_size(&cursor, isIpv4 ? true : false, isUdp ? true : false ,udp_payload_exclude_header) == 0)
+            // an non dns protocol based udp packet (no dns header found) 
+            return 1;
+        
+        
+        void *dns_payload = cursor.data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + 
+                            (isUdp ? sizeof(struct udphdr) : sizeof(struct tcphdr)) + sizeof(struct dns_header);
+        if ((void *) (dns_payload + 1) > cursor.data_end) return TC_FORWARD;
+        struct dns_header *dns = (struct dns_header *) (udp_data);
+        if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, isIpv4 ? true : false, isUdp ? true : false
+                         , dns, skb->len) == 0) 
+            return 1;
+        
+        // get the dns flags from the dns header 
+        struct dns_flags flags = get_dns_flags(dns);
+        
+        #ifdef DEBUG 
+          if (DEBUG) {
+            bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
+          }
+        #endif
+        __u8 action_non_port = actions.parse_dns_payload_non_standard_port(&cursor, dns_payload, dns, true);
+        // bpf_printk("NON PORT ACTION %u", action_non_port);
+        // encap packet used and normally this packet are not used for dns query 
+        return 1;
+        // do deep packet inspection on the packet contett and the associated payload 
 }
 
 
 static 
-__always_inline int __dns_dpi(struct skb_cursor cursor, struct __sk_buff *skb, bool isIpv4, bool isUdp, struct packet_actions *actions){
-    return TC_FORWARD;
+__always_inline __u8 __dns_dpi(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
+                __u32 udp_payload_exclude_header, void * udp_data, __u32 udp_payload_len , bool isIpv4, bool isUdp){
+    return 1;
 }
 
 
@@ -520,14 +522,21 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     }else {
         dns_volume_stats->packet_size += dns_payload_size;
         #ifdef DEBUG
-            if (DEBUG) {
+            if (!DEBUG) {
                 bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
             }
         #endif
     }
 
-    dns_volume_stats->last_timestamp = ts;
-    if (dns_volume_stats->packet_size > MAX_VOLUME_PER_SEC) return 0;
+    if (ts - dns_volume_stats->last_timestamp <= TIMEWINDOW && dns_volume_stats->packet_size > MAX_VOLUME_THRESHOLD){
+        #ifdef DEBUG
+            if (DEBUG) {
+                bpf_printk("kernel started rate limiting the packets for egress");
+            }
+        #endif
+        return 0;
+    }else 
+        dns_volume_stats->last_timestamp = ts;
     return 1;
 }
 
@@ -538,8 +547,8 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_eth = &parse_eth;
     actions.parse_ipv4 = &parse_ipv4;
     actions.parse_ipv6 = &parse_ipv6;
-    actions.parse_udpv4 = &parse_udpv4;
-    actions.parse_udpv6 = &parse_udpv6;
+    actions.parse_udp = &parse_udp;
+    actions.parse_tcp = &parse_tcp;
     actions.parse_dns_header_size = &parse_dns_header_size;
     actions.parse_dns_payload = &parse_dns_payload;
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
@@ -613,7 +622,7 @@ int classify(struct __sk_buff *skb){
         if (ip_is_fragment(skb, nhoff)) return TC_DROP;
 
         if (ip->protocol == IPPROTO_UDP) {
-            if (actions.parse_udpv4(&cursor) == 0) return TC_DROP;
+            if (actions.parse_udp(&cursor, true) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
             if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
@@ -626,37 +635,25 @@ int classify(struct __sk_buff *skb){
 
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
-                
-                // load the kernel buffer data into skb 
-                // use output poll event to send the whole skb for dpi in kernel or use tail calls in kernel 
-                #ifdef DEBUG
-                    if (DEBUG) {
-                        bpf_printk("A dns packet is found in the udp payload excluding header size %u", udp_payload_exclude_header);
-                        bpf_printk("Submitting poll from kernel for dns udp event");
-                    }
-                #endif
-                
 
-                if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
+                if (actions.parse_dns_header_size(&cursor, true, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
-
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
-                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, true, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
-                __u8 action_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
 
-                flags = action_flag;
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
         
                 bool deep_scan_mirror = false;
                 bool drop = false;
                 bool isBenign = false;
-                switch (flags) {
+                switch (parse_flag) {
                     case SUSPICIOUS: {
                         deep_scan_mirror = true;
                         break;
@@ -675,18 +672,12 @@ int classify(struct __sk_buff *skb){
                     }
                 }
 
-                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
-
-                if (DEBUG) {
-                    bpf_printk("[x] The transaction id Forward for the DNS Request Packet is %d ", transaction_id);
-                }
-
-                
-                bpf_printk("Suspicious pacekt found perform DPI here and action flag %u", action_flag);
-
+                if (deep_scan_mirror){
+                    bpf_printk("Suspicious pacekt found perform DPI in UDP Layer over Ipv4 for action flag %u", parse_flag);
+                } 
 
                 //  layer 7 rate limiting of the packet inside kernel 
-                __u16 dns_payload_size = udp_payload_exclude_header - sizeof(struct dns_header);
+                __u16 dns_payload_size = udp_payload_exclude_header;
                 if (deep_scan_mirror) {
                     __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
 
@@ -698,7 +689,6 @@ int classify(struct __sk_buff *skb){
                     if (dns_rate_limit_action == 0) return TC_DROP;
                 }
             
-                struct exfil_security_dropped_payload_event *dropped_packet_dns;
 
                 if (isBenign) {
                     #ifdef DEBUG
@@ -708,7 +698,8 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                if (drop){
+                else if (drop){
+                    struct exfil_security_dropped_payload_event *dropped_packet_dns;
                     dropped_packet_dns = bpf_ringbuf_reserve(&exfil_security_egress_drop_ring_buff, sizeof(struct exfil_security_egress_drop_ring_buff), 0);
                     if (!dropped_packet_dns) {
                         #ifdef DEBUG
@@ -737,16 +728,12 @@ int classify(struct __sk_buff *skb){
                 }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
-
-                // update the dns query id with the check sum value prior to bpf function redirection to new ifnet interface
-                ;
-                // __u16 layer3_checksum = bpf_htons(ip->check);
+                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+                __u16 ip_checksum = bpf_ntohs(ip->check);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                bool isRedirectFirst = false;
-                bool processCloneRedirectRun = false;
                 if (!map_layer3_redirect_value) {
                     struct checkSum_redirect_struct_value layer3_checksum = {
-                        .checksum =  bpf_htons(ip->check),
+                        .checksum =  ip_checksum, 
                         .kernel_timets = bpf_ktime_get_ns(),
                     };
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
@@ -756,7 +743,6 @@ int classify(struct __sk_buff *skb){
                             bpf_printk("Error updating the bpf redirect from tc kernel layer");
                         }
                     }
-                    isRedirectFirst = true;
                 } else {
                     if (DEBUG){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
@@ -764,7 +750,8 @@ int classify(struct __sk_buff *skb){
 
                     bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
                     __u8 * pres;
-                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &map_layer3_redirect_value->kernel_timets);
+                    __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
+                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
                     if (pres) {
                         return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
                     }else {
@@ -777,33 +764,6 @@ int classify(struct __sk_buff *skb){
                         return TC_DROP;
                     }
                 }
-                
-
-                // host event for monitoring all the dns traffic operatingover the tc control layer 
-                if (isRedirectFirst && processCloneRedirectRun) {
-                    struct dns_event *event;
-                    event = bpf_ringbuf_reserve(&dns_ring_events, sizeof(struct dns_event), 0);
-                    if (!event) {
-                        bpf_printk("Error in allocating ring buffer space in kernel");
-                        return TC_FORWARD;
-                    }
-
-                    __u32 dest_ip = bpf_ntohl(ip->daddr);
-                    
-                    event->eventId = 10;
-                    event->src_ip = bpf_ntohl(ip->saddr);
-                    event->dst_ip = bpf_ntohl(ip->daddr);
-                    event->src_port = bpf_ntohs(udp->source);
-                    event->dst_port = bpf_ntohs(udp->dest);
-                    event->payload_size = (__u32)udp_payload_exclude_header;
-                    event->udp_frame_size = bpf_ntohs(udp->len); 
-                    event->dns_payload_size = dns_payload_size;
-                    event->isUDP = (__u8) 1;
-                    event->isIpv4 = (__u8) 1;
-
-                    bpf_ringbuf_submit(event, 0);   
-                }
-                
 
                 __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
                 __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
@@ -862,55 +822,20 @@ int classify(struct __sk_buff *skb){
                     skb->mark = redirect_skb_mark;
                 }
     
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        __u32 mod = bpf_ntohl(ip->daddr);
-                        __u32 d1 = (mod >> 24) &0xFF;
-                        __u32 d2 = (mod >> 16) &0xFF;
-                        __u32 d3 = (mod >> 8) &0xFF;
-                        __u32 d4 = mod  & 0xFF;
-                        bpf_printk("current copied dest addres %u %u", d1, d2);
-                        bpf_printk("current copied dest addres %u %u", d3, d4);
-                    }
-                #endif
-
                 __u32 br_index = 4;
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
-            }else {
-
-
-                // always forward from kernel if the pacekt is using a non standard udp port and trying to send a dns packet over non standard port 
-                if (actions.parse_dns_header_size(&cursor, true, udp_payload_exclude_header) == 0)
-                    // an non dns protocol based udp packet (no dns header found) 
-                    return TC_FORWARD;
-                
-                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
-                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_FORWARD;
-                struct dns_header *dns = (struct dns_header *) (udp_data);
-
-                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, dns, skb->len) == 0) 
-                    return TC_FORWARD;
-                
-                // get the dns flags from the dns header 
-                struct dns_flags flags = get_dns_flags(dns);
-                
-                #ifdef DEBUG 
-                  if (DEBUG) {
-                    bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
-                  }
-                #endif 
-
-                __u8 action_non_port = actions.parse_dns_payload_non_standard_port(&cursor, dns_payload, dns, true);
-                // bpf_printk("NON PORT ACTION %u", action_non_port);
-                // encap packet used and normally this packet are not used for dns query 
+            }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){
                 return TC_FORWARD;
-
-                // do deep packet inspection on the packet contetnt and the associated payload 
+            }else {
+                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
+                                    udp_data, udp_payload_len, true, true) == 1) 
+                    return TC_FORWARD;
+                return TC_DROP;
             }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) {
-            if (actions.parse_tcpv4(&cursor) == 0) return TC_DROP;
+            if (actions.parse_tcp(&cursor, true) == 0) return TC_DROP;
             tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
             if ((void *) (tcp + 1) > cursor.data_end) return TC_DROP;
 
@@ -924,18 +849,17 @@ int classify(struct __sk_buff *skb){
                 if ((void *) dns_data + 1 > cursor.data_end) return TC_DROP;
                 return TC_FORWARD;
             }else {
-                // need more dpi over the dns header payload format either via forwarding or payload size;
+
             }
 
             return TC_FORWARD;
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
-        if (actions.parse_ipv6(&cursor) == 0) return TC_DROP;
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
         
         if (ip->protocol == IPPROTO_UDP) {
-            if (actions.parse_udpv6(&cursor) == 0) return TC_DROP;
+            if (actions.parse_udp(&cursor, false) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
             if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
@@ -945,12 +869,132 @@ int classify(struct __sk_buff *skb){
             if (total_offset > skb->len) return TC_DROP;
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
+       
+            if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+                if (actions.parse_dns_header_size(&cursor, true, true, udp_payload_exclude_header) == 0)
+                    return TC_DROP;
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
+                if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP; 
+                struct dns_header *dns = (struct dns_header *) (udp_data);
 
+                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, true, dns, skb->len) == 0) {
+                    return TC_DROP;
+                }
 
-        
+                // reached app layer no offset processing required from kernel 
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
+
+                bool deep_scan_mirror = false;
+                bool drop = false;
+                bool isBenign = false;
+                switch (parse_flag) {
+                    case SUSPICIOUS: {
+                        deep_scan_mirror = true; break;
+                    }
+                    case MALICIOUS: {
+                        drop = true; break;
+                    }
+                    case BENIGN: {
+                        isBenign = true; break;
+                    }
+                    default: {
+                        deep_scan_mirror = true; break;
+                    }
+                }
+
+                if (deep_scan_mirror){
+                    bpf_printk("Suspicious pacekt found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
+                } 
+
+                //  layer 7 rate limiting of the packet inside kernel 
+                __u16 dns_payload_size = udp_payload_exclude_header;
+                if (deep_scan_mirror) {
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
+
+                    #ifdef DEBUG
+                        if (DEBUG) {
+                            bpf_printk("the rate limit action over layer UDP for Ipv6 header action %u", dns);
+                        }
+                    #endif
+                    if (dns_rate_limit_action == 0) return TC_DROP;
+                }
+
+                // TODO Add event emit for the drop packet processing 
+                if (isBenign) {
+                    #ifdef DEBUG 
+                        if (DEBUG) {
+                            bpf_printk("Benign packet found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
+                        }
+                    #endif 
+                }
+                else if (drop) return TC_DROP;
+
+                bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
+                // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
+                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+                __u16 ip_checksum = bpf_ntohs(ip->check);
+                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                bool isRedirectFirst = false;
+                bool processCloneRedirectRun = false;
+                if (!map_layer3_redirect_value) {
+                    struct checkSum_redirect_struct_value layer3_checksum = {
+                        .checksum =  ip_checksum, 
+                        .kernel_timets = bpf_ktime_get_ns(),
+                    };
+                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
+                    int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
+                    if (ret < 0) {
+                        if (DEBUG){
+                            bpf_printk("Error updating the bpf redirect from tc kernel layer");
+                        }
+                    }
+                    isRedirectFirst = true;
+                } else {
+                    if (DEBUG){
+                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
+                    }
+
+                    bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                    __u8 * pres;
+                    __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
+                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
+                    if (pres) {
+                        return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
+                    }else {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("the kernel verified timing attack broke and was not  \
+                                                 prevented it with ns timestamp verification after DPI");
+                            }
+                        #endif
+                        return TC_DROP;
+                    }
+                }
+
+                __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
+                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
+                if (ct_val) {
+                    __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
+                }else {
+                    __u32 init_map_redirect_count = 1;
+                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+                }
+
+                // TODO need to add the ipv6 checsum recal and packet redirection with u32 * 4 octent sizes stored inside the ipv6 header 
+                // forward the traffic for now 
+
+                return TC_FORWARD;
+
+            } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
+                return TC_FORWARD;
+            }else {
+                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, false, true) == 1)
+                    return TC_FORWARD;
+                return TC_DROP;
+            }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
-    } else return TC_FORWARD;
+    } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 
 
     return TC_ACT_OK;
 }
