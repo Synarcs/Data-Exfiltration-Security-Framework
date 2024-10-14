@@ -5,6 +5,8 @@ sudo ip netns
 
 sudo iptables --policy FORWARD ACCEPT 
 sudo iptables -I FORWARD -i bridge -j ACCEPT
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+sudo sysctl -w net.ipv6.conf.br0.proxy_ndp=1
 
 sudo ip netns add sx1
 sudo ip netns add sx2

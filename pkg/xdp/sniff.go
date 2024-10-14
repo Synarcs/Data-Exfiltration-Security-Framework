@@ -23,7 +23,7 @@ func (ing *IngressSniffHandler) SniffEgressForC2C() error {
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
-		errorChannel chan<- error, isUdp bool, isStandardPort bool) {
+		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
 		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
@@ -42,18 +42,19 @@ func (ing *IngressSniffHandler) SniffEgressForC2C() error {
 			}
 		} else if !isUdp && !isStandardPort {
 			err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
-			fmt.Errorf("err %s", err)
+			return fmt.Errorf("err %s", err)
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
-		for _ = range packets.Packets() {
+		for pack := range packets.Packets() {
+			log.Println("Ingress dns packet closely monitored are ", pack.Layers(), pack.Data())
 		}
+		return nil
 	}
 
 	for _, val := range ing.IfaceHandler.PhysicalLinks {
 		go processPcapFilterHandlerIngress(val, errorChannel, true, true)
 		go processPcapFilterHandlerIngress(val, errorChannel, false, true)
-
 	}
 
 	go func() {

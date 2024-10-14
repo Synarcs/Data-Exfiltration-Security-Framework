@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"runtime"
 	"strings"
 	"time"
 
@@ -21,16 +20,15 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 )
 
 type TCHandler struct {
-	Interfaces    []netlink.Link
-	Prog          *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
-	TcCollection  *ebpf.Collection // ebpf tc program collection order spec
-	DnsPacketGen  *model.DnsPacketGen
-	ConfigChannel chan interface{}
+	Interfaces      []netlink.Link
+	Prog            *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
+	TcCollection    *ebpf.Collection // ebpf tc program collection order spec
+	DnsPacketGen    *model.DnsPacketGen
+	OnnxLoadedModel *model.OnnxModel
 }
 
 const (
@@ -46,7 +44,16 @@ var (
 // a single channel for all go routines to poll kernel evetsn for dns traffic
 var ringBufferChannel chan interface{} = make(chan interface{})
 
-func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface) *model.DnsPacketGen {
+// a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
+func GenerateTcEgressFactory(iface netinet.NetIface, model *model.OnnxModel) TCHandler {
+	return TCHandler{
+		Interfaces:      iface.PhysicalLinks,
+		DnsPacketGen:    GenerateDnsParserModelUtils(&iface, model),
+		OnnxLoadedModel: model,
+	}
+}
+
+func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *model.OnnxModel) *model.DnsPacketGen {
 	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
 
 	if err == nil {
@@ -57,6 +64,7 @@ func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface) *model.DnsPacke
 			SockSendFdInterface: ifaceHandler.PhysicalLinks,
 			XdpSocketSendFd:     xdpSocketFd,
 			SocketSendFd:        nil,
+			OnnxModel:           onnxModel,
 		}
 	} else {
 		log.Println("Error Binding the XDP Socket Physical driver lacking support")
@@ -72,6 +80,7 @@ func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface) *model.DnsPacke
 			SockSendFdInterface: ifaceHandler.PhysicalLinks,
 			SocketSendFd:        fd,
 			XdpSocketSendFd:     nil,
+			OnnxModel:           onnxModel,
 		}
 	}
 }
@@ -222,10 +231,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		}
 	}
 
-	if utils.DEBUG {
-		fmt.Println(spec.Maps, spec.Programs, " prog info ", prog.FD(), prog.String())
-	}
-
 	if INIT_KERNEL_SOCKET {
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
 		INIT_KERNEL_SOCKET = false
@@ -297,7 +302,6 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
-		fmt.Println("Question count ", dns.QDCount, "Answer count", dns.ANCount, "Packet id is ", dns.ID)
 
 		var dns_packet_id uint16 = uint16(dns.ID)
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
@@ -306,7 +310,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 		if err != nil {
 			fmt.Println("Required redirected packet id is not found in the map", err)
 		} else {
-			fmt.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+			log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
 
 			timeVal := events.DPIRedirectionTimestampVerify{
 				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
@@ -352,29 +356,8 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	log.Println("Loading the Packet Capture over Socket DD")
 
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	rootNs, err := netns.Get()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer rootNs.Close()
-
-	ns, err := netns.GetFromName("sx1")
-
-	// nsHandle, err := ifaceHandler.GetNetworkNamespace("egress")
-
-	if err != nil {
-		log.Println(err.Error())
-		return err
-	}
-
-	defer ns.Close()
-
 	processPcapFilterHandler := func(linkInterface netlink.Link,
-		errorChannel chan<- error, isUdp bool, isStandardPort bool) {
+		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
 		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
@@ -393,13 +376,14 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 			}
 		} else if !isUdp && !isStandardPort {
 			err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
-			fmt.Errorf("err %s", err)
+			return fmt.Errorf("err %s", err)
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
 		for packet := range packets.Packets() {
 			go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
 		}
+		return nil
 	}
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
@@ -412,8 +396,8 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
 		}
 	} else {
-		go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
-		go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
+		processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
+		processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
 	}
 
 	go func() {

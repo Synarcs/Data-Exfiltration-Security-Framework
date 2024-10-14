@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 )
 
 const DEBUG = false
@@ -19,13 +20,7 @@ const (
 	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
 
-type DomainNodeAgentCacheBlock struct {
-	TLD            string
-	CompleteDomain string
-}
 
-// later implement the nodeagent service cachine layer on this
-var NODE_AGENT_BLACKLISTED_DOMAINS map[string]DomainNodeAgentCacheBlock = make(map[string]DomainNodeAgentCacheBlock)
 
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
@@ -58,4 +53,12 @@ func GenerateBigEndianIpv6(ipv6 string) (uint64, uint64) {
 
 func GetIpv4Address(id int) string {
 	return BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id)
+}
+
+func ExtractTldFromDomain(fqdn string) string {
+	vv := strings.Split(fqdn, ".")
+	if len(vv) <= 2 {
+		return fqdn
+	}
+	return strings.Join(vv[len(vv)-2:], ".")
 }

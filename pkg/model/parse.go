@@ -26,6 +26,7 @@ type DnsPacketGen struct {
 	SockSendFdInterface []netlink.Link
 	SocketSendFd        *int
 	XdpSocketSendFd     *xdp.Socket
+	OnnxModel           *OnnxModel
 }
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
@@ -65,6 +66,9 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 
 	// do feature engineering
 
+	gw := net.IP(d.IfaceHandler.PhysicalRouterGateway)
+
+	log.Println("the router gateway is ", gw.String())
 	ipv4.DstIP = net.IP{192, 168, 64, 1}
 	ipv4.Checksum = l3_bpfMap_checksum
 
@@ -82,14 +86,23 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
 	}
 
-	dnsFeatureEngine := DnsFeaturesEngine{
-		onnxModel: &OnnxModel{},
-	}
-	predict := dnsFeatureEngine.ProcessFeatures(dns)
+	features, err := ProcessDnsFeatures(dns)
 
-	if utils.DEBUG {
-		log.Println("Inferenced output from onnx ", predict)
+	if err != nil {
+		log.Println("Error generating the features over the packet", err)
+		return err
 	}
+
+	isBenign := d.OnnxModel.Evaluate(features, "DNS")
+
+	if !isBenign {
+		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
+		// add the tld and domain information in packet malicious map for local cache
+		return nil
+	}
+
+	log.Println("Packet Found benign after Deep Lexical Scan Resending the packet")
+
 	dnsPacket := d.GenerateDnsPacket(*dns)
 
 	buffer := gopacket.NewSerializeBuffer()

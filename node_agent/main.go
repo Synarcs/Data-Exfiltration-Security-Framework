@@ -8,7 +8,9 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
@@ -29,18 +31,22 @@ func main() {
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
 	iface.ReadRoutes()
+	iface.GetRootGateway()
+
+	// load the model from onnx lib
+	model, err := model.LoadOnnxModelToMemory(".")
+	if err != nil {
+		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
+		panic(err.Error())
+	}
 
 	ctx := context.Background()
 
-	var config chan interface{} = make(chan interface{})
+	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
+	// keep the iface for now only restrictive over the DNS egress layer
+	tc := tc.GenerateTcEgressFactory(iface, model)
 
-	// // kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
-	tc := tc.TCHandler{
-		Interfaces:    iface.PhysicalLinks,
-		DnsPacketGen:  tc.GenerateDnsParserModelUtils(&iface),
-		ConfigChannel: config,
-	}
-
+	config := make(chan interface{})
 	rpcServer := rpc.NodeAgentService{
 		ConfigChannel: config,
 	}
@@ -59,13 +65,6 @@ func main() {
 			fmt.Println(val.Attrs().Index, val.Attrs().Name)
 		}
 	}
-	// // kernel xdp ingress for ifindex over xdp inside kernel
-	// xdp := xdp.XdpHandler{
-	// 	NetIfIndex: iface.Links[0].Attrs().Index,
-	// }
-	// if err := xdp.LinkXdp(func(interfaceId *int) error { return nil })(1 << 10); err != nil {
-	// 	panic(err.Error())
-	// }
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
 
@@ -74,11 +73,20 @@ func main() {
 		term <- sig
 	}(term, tst)
 
+	go func() {
+		for {
+			goRoutinesCount := runtime.NumGoroutine()
+			if utils.DEBUG {
+				log.Println("Number of goroutines running", goRoutinesCount)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 	sigType, done := <-term
 	if done {
 		switch sigType {
 		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
-			fmt.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
+			log.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)

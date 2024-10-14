@@ -33,12 +33,13 @@ var Iface_Bridge_Subnets map[string]string = map[string]string{
 
 // each link has net_device virt / physical socket -> netlink -> netfilter -> contrack -> tc (classful / classless) -> xdp -> net_device
 type NetIface struct {
-	Links         []netlink.Link // netlink liks for all links on the device
-	PhysicalLinks []netlink.Link // physical veth links with hardware mac and MTU as (1500)
-	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
-	LoopBackLinks []netlink.Link // loopback links
-	Routes        map[string][]netlink.Route
-	Addr          map[string][]netlink.Addr
+	Links                 []netlink.Link // netlink liks for all links on the device
+	PhysicalLinks         []netlink.Link // physical veth links with hardware mac and MTU as (1500)
+	BridgeLinks           []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
+	LoopBackLinks         []netlink.Link // loopback links
+	Routes                map[string][]netlink.Route
+	Addr                  map[string][]netlink.Addr
+	PhysicalRouterGateway net.IP
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -51,7 +52,7 @@ func (nf *NetIface) ReadInterfaces() error {
 
 	for _, link := range links {
 		if link.Attrs().Name == "enp0s1" || strings.Contains(link.Attrs().Name, "eth") || strings.Contains(link.Attrs().Name, "enp") || strings.Contains(link.Attrs().Name, "wla") {
-			fmt.Println("found a link ", link.Attrs().Name)
+			log.Println("Physical links on the Node ", link.Attrs().Name)
 			customLinks = append(customLinks, link)
 		}
 	}
@@ -71,20 +72,18 @@ func (nf *NetIface) ReadInterfaces() error {
 	return nil
 }
 
-func (nf *NetIface) GetRootGateway() (string, error) {
+func (nf *NetIface) GetRootGateway() error {
 	if len(nf.Routes) == 0 {
-		return "", fmt.Errorf("No routes found")
+		return fmt.Errorf("No routes found")
 	}
-	gw := ""
-	for _, val := range nf.Routes {
-		for _, route := range val {
-			if route.Dst == nil {
-				gw = route.Gw.String()
-				break
-			}
-		}
+	var gw net.IP
+	physicalLink := nf.PhysicalLinks[0].Attrs().Name
+	for _, val := range nf.Routes[physicalLink] {
+		gw = val.Gw
+		break
 	}
-	return gw, nil
+	nf.PhysicalRouterGateway = gw
+	return nil
 }
 
 func (nf *NetIface) ReadRoutes() error {
@@ -180,7 +179,7 @@ func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
 		log.Println("Error in getting the tx TX queue id")
 		return nil, err
 	}
-	fmt.Println("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
+	log.Println("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
 
 	xdpSock, err := xdp.NewSocket(nf.PhysicalLinks[0].Attrs().Index, txQueueId, nil)
 	if err != nil {

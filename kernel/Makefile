@@ -24,7 +24,7 @@ compile-llvm-arch:
 	cp bridge.o ../node_agent/
 	sudo llv-objdump -S tc.o 
 
-.PHONY: compile-llvm-x86 
+.PHONY: compile-llvm-x86
 compile-llvm-x86:
 	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
 	cp tc.o ../node_agent/

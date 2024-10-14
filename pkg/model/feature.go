@@ -11,6 +11,7 @@ import (
 )
 
 type DNSFeatures struct {
+	Fqdn               string
 	UCaseCount         int
 	LCaseCount         int
 	NumberCount        int
@@ -19,10 +20,6 @@ type DNSFeatures struct {
 	LongestLabelDomain int
 	LabelCount         int
 	LengthofSubdomains int
-}
-
-type DnsFeaturesEngine struct {
-	onnxModel *OnnxModel
 }
 
 func EntropyLabel(dns_label string) float64 {
@@ -91,7 +88,7 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 	return ucount, lcount, ncount
 }
 
-func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
+func ProcessDnsFeatures(dns_packet *layers.DNS) ([]DNSFeatures, error) {
 	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ANCount+dns_packet.ARCount)
 
 	// do feature engineering over the entire dns payload section for enhancec lex analysis over each
@@ -110,7 +107,7 @@ func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
-
+		features[i].Fqdn = string(payload.Name)
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
@@ -129,6 +126,7 @@ func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].Fqdn = string(payload.Name)
 
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
@@ -148,11 +146,12 @@ func (f *DnsFeaturesEngine) ProcessFeatures(dns_packet *layers.DNS) error {
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].Fqdn = string(payload.Name)
 
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
 	}
 
-	return nil
+	return features, nil
 }
