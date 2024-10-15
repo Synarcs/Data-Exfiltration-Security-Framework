@@ -53,8 +53,8 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 }
 
 // only use for l3 -> ipv4 and l4 -> udp
-func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopacket.Layer,
-	l3_bpfMap_checksum uint16, handler *pcap.Handle) error {
+func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopacket.Layer,
+	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -66,9 +66,8 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 
 	// do feature engineering
 
-	gw := net.IP(d.IfaceHandler.PhysicalRouterGateway)
+	// gw := net.IP(d.IfaceHandler.PhysicalRouterGateway)
 
-	log.Println("the router gateway is ", gw.String())
 	ipv4.DstIP = net.IP{192, 168, 64, 1}
 	ipv4.Checksum = l3_bpfMap_checksum
 
@@ -86,7 +85,7 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
 	}
 
-	features, err := ProcessDnsFeatures(dns)
+	features, err := ProcessDnsFeatures(dns, isEgress)
 
 	if err != nil {
 		log.Println("Error generating the features over the packet", err)
@@ -101,7 +100,9 @@ func (d *DnsPacketGen) GeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopa
 		return nil
 	}
 
-	log.Println("Packet Found benign after Deep Lexical Scan Resending the packet")
+	if utils.DEBUG {
+		log.Println("Packet Found benign after Deep Lexical Scan Resending the packet")
+	}
 
 	dnsPacket := d.GenerateDnsPacket(*dns)
 

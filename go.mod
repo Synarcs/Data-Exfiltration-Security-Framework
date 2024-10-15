@@ -15,6 +15,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/google/gopacket v1.1.19 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/miekg/dns v1.1.62 // indirect
 	github.com/owulveryck/onnx-go v0.5.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

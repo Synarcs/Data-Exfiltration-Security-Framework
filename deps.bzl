@@ -115,3 +115,9 @@ def go_dependencies():
         sum = "h1:gqSGLZqv+AI9lIQzniJ0nZDRG5GBPsSi+DRNHWNz6yA=",
         version = "v0.22.0",
     )
+    go_repository(
+        name = "com_github_hashicorp_golang_lru_v2",
+        importpath = "github.com/hashicorp/golang-lru/v2",
+        sum = "h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k=",
+        version = "v2.0.7",
+    )

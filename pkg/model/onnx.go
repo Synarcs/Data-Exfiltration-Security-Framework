@@ -17,7 +17,6 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 	var castedFeatures []DNSFeatures = features.([]DNSFeatures)
 	switch protocol {
 	case "DNS":
-
 	default:
 		log.Println("the protocol not supported or missing the onnx model for evaluation")
 		return false
@@ -26,7 +25,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 	for _, feature := range castedFeatures {
 		// no need for go routine to do task parallelism on go routine and later sync via channels
 		if !EvaluateModelAgainstSingleFeature(feature) {
-			utils.UpdateDomainBlacklist(feature.Fqdn, utils.DomainNodeAgentCacheBlock{
+			utils.UpdateDomainBlacklistInCache(feature.Fqdn, utils.DomainNodeAgentCacheBlock{
 				TLD:            utils.ExtractTldFromDomain(feature.Fqdn),
 				CompleteDomain: feature.Fqdn,
 			})

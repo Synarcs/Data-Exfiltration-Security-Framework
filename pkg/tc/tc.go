@@ -41,47 +41,12 @@ var (
 	INIT_KERNEL_SOCKET = true
 )
 
-// a single channel for all go routines to poll kernel evetsn for dns traffic
-var ringBufferChannel chan interface{} = make(chan interface{})
-
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, model *model.OnnxModel) TCHandler {
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) TCHandler {
 	return TCHandler{
 		Interfaces:      iface.PhysicalLinks,
-		DnsPacketGen:    GenerateDnsParserModelUtils(&iface, model),
-		OnnxLoadedModel: model,
-	}
-}
-
-func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *model.OnnxModel) *model.DnsPacketGen {
-	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
-
-	if err == nil {
-		log.Println("[x] Using the raw packet with AF_PACKET Fd")
-
-		return &model.DnsPacketGen{
-			IfaceHandler:        ifaceHandler,
-			SockSendFdInterface: ifaceHandler.PhysicalLinks,
-			XdpSocketSendFd:     xdpSocketFd,
-			SocketSendFd:        nil,
-			OnnxModel:           onnxModel,
-		}
-	} else {
-		log.Println("Error Binding the XDP Socket Physical driver lacking support")
-		fd, err := ifaceHandler.GetRootNamespaceRawSocketFd()
-
-		if err != nil {
-			log.Fatalln("Error fetching the raw socket fd for the socket")
-			panic(err.Error())
-		}
-
-		return &model.DnsPacketGen{
-			IfaceHandler:        ifaceHandler,
-			SockSendFdInterface: ifaceHandler.PhysicalLinks,
-			SocketSendFd:        fd,
-			XdpSocketSendFd:     nil,
-			OnnxModel:           onnxModel,
-		}
+		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel),
+		OnnxLoadedModel: onnxModel,
 	}
 }
 
@@ -161,13 +126,12 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfMap *ebpf.Map) {
 			log.Fatalf("Failed to parse event: %v", err)
 		}
 
-		// No further conversion is needed; values are already in host byte order
-		if utils.DEBUG {
-			log.Printf("PID: %d, SrcIP: %s, DstIP: %s, SrcPort: %d, DstPort: %d\n",
-				event.PID, utils.ParseIp(event.SrcIP), utils.ParseIp(event.DstIP), event.SrcPort, event.DstPort)
-			log.Printf("Payload Size: %d, UDP Frame Size: %d\n", event.PayloadSize, event.UdpFrameSize)
-		}
 	}
+}
+
+func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map) error {
+
+	return nil
 }
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
@@ -212,7 +176,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 			var redirectIpv4 events.ExfilKernelConfig = events.ExfilKernelConfig{
 				BridgeIndexId: uint32(iface.BridgeLinks[0].Attrs().Index),
-				RedirectIpv4:  utils.GenerateBigEndianIpv4(utils.GetIpv4Address(index + 1)),
+				RedirectIpv4:  utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {
@@ -227,7 +191,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			if utils.DEBUG {
 				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
 			}
-			// go tc.PollRingBuffer(ctx, maps)
+			go tc.PollRingBuffer(ctx, maps)
 		}
 	}
 
@@ -256,7 +220,7 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 	return nil
 }
 
-func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
+func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -282,6 +246,16 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 		log.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
+	if isIpv4 {
+		fmt.Println(ipPacket)
+		// if !(ipPacket.DstIP.String() == utils.GetIpv4AddressUserSpaceDpIString(1)) {
+		// 	log.Println("The Bridge is only meant for DPI pf suspicious and malicious DNS traffic")
+		// 	return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
+		// } else if !(ipPacket.DstIP.String() == utils.GetIpv4AddressUserSpaceDpIString(2)) {
+		// 	log.Println("The Bridge is only meant for DPI pf suspicious and malicious DNS traffic")
+		// 	return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
+		// }
+	}
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
@@ -296,7 +270,6 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 	}
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
-
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
 
@@ -308,7 +281,7 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 
 		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum_kernel_ts)
 		if err != nil {
-			fmt.Println("Required redirected packet id is not found in the map", err)
+			fmt.Println("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
 		} else {
 			log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
 
@@ -321,70 +294,48 @@ func (tc *TCHandler) processDNSCaptureForDPI(packet gopacket.Packet, ifaceHandle
 				log.Println("Error updating the timestamp kernel values for egress traffic")
 				return err
 			}
-			log.Println("the required egress lock field updated successfully from userspace")
 		}
 
-		if !utils.DEBUG {
-			if dns.QDCount > 0 {
-				for _, qd := range dns.Questions {
-					fmt.Println(string(qd.Name), qd.Class, qd.Type)
-				}
-			}
-			if dns.ARCount > 0 {
-				for _, ar := range dns.Authorities {
-					fmt.Println(string(ar.Name), ar.Class, ar.Type, ar.TTL)
-				}
-			}
-			if dns.ANCount > 0 {
-				for _, an := range dns.Answers {
-					fmt.Println(string(an.Data), an.String())
-				}
-			}
-		}
-
-		// debug kernel redirection packet for egress route via a bpf_id_redirect
-		// if err != nil {
-		// a valid packet found from the process redirect map for DPI and kernel redirect scan
-		tc.DnsPacketGen.GeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler)
-		// }
-		// fmt.Println(dns.Questions, dns.Answers)
+		tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true)
 	}
 
 	return nil
 }
 
+func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
+	errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
+
+	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+	if err != nil {
+		fmt.Println("error opening packet capture over hz,te interface from kernel")
+		errorChannel <- err
+	}
+	defer cap.Close()
+
+	if (isUdp || !isUdp) && isStandardPort {
+		// runs over br netfilter layer on iptables
+		if isUdp {
+			log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer")
+		} else {
+			log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer")
+		}
+		if err := cap.SetBPFFilter("udp dst port 53 or tcp dst port 53"); err != nil {
+			log.Fatalf("Error setting BPF filter: %v", err)
+		}
+	} else if !isUdp && !isStandardPort {
+		err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
+		return fmt.Errorf("err %s", err)
+	}
+
+	packets := gopacket.NewPacketSource(cap, cap.LinkType())
+	for packet := range packets.Packets() {
+		go tc.ProcessEachPacket(packet, ifaceHandler, cap)
+	}
+	return nil
+}
+
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	log.Println("Loading the Packet Capture over Socket DD")
-
-	processPcapFilterHandler := func(linkInterface netlink.Link,
-		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
-		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
-		if err != nil {
-			fmt.Println("error opening packet capture over hz,te interface from kernel")
-			errorChannel <- err
-		}
-		defer cap.Close()
-
-		if isUdp && isStandardPort {
-			// runs over br netfilter layer on iptables
-			if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
-				log.Fatalf("Error setting BPF filter: %v", err)
-			}
-		} else if !isUdp && isStandardPort {
-			if err := cap.SetBPFFilter("tcp dst port 53"); err != nil {
-				log.Fatalf("Error setting BPF filter: %v", err)
-			}
-		} else if !isUdp && !isStandardPort {
-			err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
-			return fmt.Errorf("err %s", err)
-		}
-
-		packets := gopacket.NewPacketSource(cap, cap.LinkType())
-		for packet := range packets.Packets() {
-			go tc.processDNSCaptureForDPI(packet, ifaceHandler, cap)
-		}
-		return nil
-	}
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
 
@@ -392,12 +343,13 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		log.Println("Processing of multiple Physical links")
 
 		for iface := 0; iface < len(ifaceHandler.PhysicalLinks); iface++ {
-			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
-			go processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
+			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true, true)
+			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, false, true)
 		}
 	} else {
-		processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, true, true)
-		processPcapFilterHandler(ifaceHandler.PhysicalLinks[0], errorChannel, false, true)
+		// TODO: Need a fix over go routing getting empty or non valid bad fd for the map
+		tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true, true)
+		// go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, false, true)
 	}
 
 	go func() {

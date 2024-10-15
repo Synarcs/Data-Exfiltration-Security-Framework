@@ -57,7 +57,7 @@ func (nf *NetIface) ReadInterfaces() error {
 		}
 	}
 
-	fmt.Println("the custom link to process are ", customLinks)
+	log.Println("the custom link to process are ", customLinks)
 	nf.Links = links
 	hardwareInterfaces, logicalInterfaces, bridgeInterfaces := nf.findLinkAddressByType()
 	if len(hardwareInterfaces) > 0 {
@@ -166,7 +166,7 @@ func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 }
 
 func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
-	log.Println("[x] Creating XDP socket fd to send packet")
+	log.Println("Creating XDP socket fd to send packet")
 	_, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")

@@ -18,12 +18,8 @@ import (
 	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
 
-func cpuArch() string {
-	return runtime.GOARCH
-}
-
 func main() {
-	log.Println("[x] The Node Agent Booted up with thte process Id", os.Getpid())
+	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
 
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
@@ -32,6 +28,8 @@ func main() {
 	iface.ReadInterfaces()
 	iface.ReadRoutes()
 	iface.GetRootGateway()
+
+	utils.InitCache()
 
 	// load the model from onnx lib
 	model, err := model.LoadOnnxModelToMemory(".")
@@ -51,10 +49,7 @@ func main() {
 		ConfigChannel: config,
 	}
 
-	var ingress xdp.IngressSniffHandler = xdp.IngressSniffHandler{
-		IfaceHandler: &iface,
-		Ctx:          context.Background(),
-	}
+	var ingress xdp.IngressSniffHandler = xdp.GenerateTcIngressFactory(iface, model)
 
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 	go rpcServer.Server()

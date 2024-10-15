@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -20,7 +21,10 @@ const (
 	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
 
-
+// node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
+const (
+	MAX_NODE_AGENT_CACHE_SIZE = 100_000
+)
 
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
@@ -51,8 +55,12 @@ func GenerateBigEndianIpv6(ipv6 string) (uint64, uint64) {
 	return binary.BigEndian.Uint64(ip[:len(ipv6)/2]), binary.BigEndian.Uint64(ip[len(ipv6)/2:])
 }
 
-func GetIpv4Address(id int) string {
+func GetIpv4AddressUserSpaceDpIString(id int) string {
 	return BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id)
+}
+
+func GetIpv4AddressUserspaceDPI(id int) net.IP {
+	return []byte(BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id))
 }
 
 func ExtractTldFromDomain(fqdn string) string {
@@ -61,4 +69,8 @@ func ExtractTldFromDomain(fqdn string) string {
 		return fqdn
 	}
 	return strings.Join(vv[len(vv)-2:], ".")
+}
+
+func cpuArch() string {
+	return runtime.GOARCH
 }

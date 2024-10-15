@@ -3,10 +3,12 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"unicode"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/google/gopacket/layers"
 )
 
@@ -20,6 +22,39 @@ type DNSFeatures struct {
 	LongestLabelDomain int
 	LabelCount         int
 	LengthofSubdomains int
+	IsEgress           bool
+}
+
+func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *OnnxModel) *DnsPacketGen {
+	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
+
+	if err == nil {
+		log.Println("[x] Using the raw packet with AF_PACKET Fd")
+
+		return &DnsPacketGen{
+			IfaceHandler:        ifaceHandler,
+			SockSendFdInterface: ifaceHandler.PhysicalLinks,
+			XdpSocketSendFd:     xdpSocketFd,
+			SocketSendFd:        nil,
+			OnnxModel:           onnxModel,
+		}
+	} else {
+		log.Println("Error Binding the XDP Socket Physical driver lacking support")
+		fd, err := ifaceHandler.GetRootNamespaceRawSocketFd()
+
+		if err != nil {
+			log.Fatalln("Error fetching the raw socket fd for the socket")
+			panic(err.Error())
+		}
+
+		return &DnsPacketGen{
+			IfaceHandler:        ifaceHandler,
+			SockSendFdInterface: ifaceHandler.PhysicalLinks,
+			SocketSendFd:        fd,
+			XdpSocketSendFd:     nil,
+			OnnxModel:           onnxModel,
+		}
+	}
 }
 
 func EntropyLabel(dns_label string) float64 {
@@ -67,7 +102,6 @@ func LongestandTotoalLenSubdomains(dns_label []string) (int, int) {
 		mxLen = max(mxLen, len(label))
 	}
 
-	fmt.Println("the upper count and lowe count are ")
 	return mxLen, totalLen
 }
 
@@ -88,7 +122,7 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 	return ucount, lcount, ncount
 }
 
-func ProcessDnsFeatures(dns_packet *layers.DNS) ([]DNSFeatures, error) {
+func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, error) {
 	var features []DNSFeatures = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ANCount+dns_packet.ARCount)
 
 	// do feature engineering over the entire dns payload section for enhancec lex analysis over each
@@ -109,6 +143,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS) ([]DNSFeatures, error) {
 		features[i].LCaseCount = lcount
 		features[i].Fqdn = string(payload.Name)
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+		features[i].IsEgress = isEgress
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
 		i += 1
@@ -126,12 +161,14 @@ func ProcessDnsFeatures(dns_packet *layers.DNS) ([]DNSFeatures, error) {
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].IsEgress = isEgress
+
 		features[i].Fqdn = string(payload.Name)
 
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		mrsh, _ := json.Marshal(features[i])
 		fmt.Println(string(mrsh))
-		i += 1
+
 	}
 
 	for _, payload := range dns_packet.Additionals {
@@ -146,6 +183,8 @@ func ProcessDnsFeatures(dns_packet *layers.DNS) ([]DNSFeatures, error) {
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].IsEgress = isEgress
+
 		features[i].Fqdn = string(payload.Name)
 
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])

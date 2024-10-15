@@ -676,6 +676,24 @@ int classify(struct __sk_buff *skb){
                     bpf_printk("Suspicious pacekt found perform DPI in UDP Layer over Ipv4 for action flag %u", parse_flag);
                 } 
 
+                __be32 current_dest_addr; 
+                __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4);
+                __be32 dest_addr_route_malicious = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_MALICIOUS);
+
+                __u32 out = skb->ifindex;
+
+                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+                __u32 br_index = 4; 
+
+                if (config) {
+                    __be32 redirect_address_from_config = config->RedirectIpv4;
+                    dest_addr_route = bpf_htonl(redirect_address_from_config);
+                    br_index = config->BridgeIndexId;
+                    bpf_printk("kernel config loaded from node agent for redirect and bridge index %u %u", redirect_address_from_config, config->BridgeIndexId);
+                }else {
+                    bpf_printk("kernel cannot find the requred kernel config redirect map");
+                }
+
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
                 if (deep_scan_mirror) {
@@ -699,32 +717,39 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
                 else if (drop){
-                    struct exfil_security_dropped_payload_event *dropped_packet_dns;
-                    dropped_packet_dns = bpf_ringbuf_reserve(&exfil_security_egress_drop_ring_buff, sizeof(struct exfil_security_egress_drop_ring_buff), 0);
-                    if (!dropped_packet_dns) {
-                        #ifdef DEBUG
-                          if (!DEBUG) 
-                            bpf_printk("the required size for malicious dns packet ring buffer reserve bexceed allowed kernel memory limit");
-                        #endif 
-                        return TC_DROP;
-                    }
-                    #ifdef DEBUG
-                           if (DEBUG) {
-                              bpf_printk("tracking the following malicous dropped macket from DPI in TC Layer within Kernel");
-                           }
-                    #endif 
-                    dropped_packet_dns->dst_ip = bpf_ntohs(ip->saddr);
-                    dropped_packet_dns->dst_port = bpf_ntohs(udp->dest);
-                    dropped_packet_dns->src_ip = bpf_ntohs(ip->daddr);
-                    dropped_packet_dns->src_port = bpf_ntohs(udp->source);
-                    dropped_packet_dns->protocol = bpf_ntohs(ip->protocol);
+                    #ifdef DEBUG 
+                        if (DEBUG) {
+                            bpf_printk("Dropping the packet in Kernel Layer");
+                        }
+                    #endif
 
-                    dropped_packet_dns->qd_count = bpf_htons(dns->qd_count);
-                    dropped_packet_dns->add_count = bpf_htons(dns->add_count);
-                    dropped_packet_dns->qd_count = bpf_htons(dns->qd_count);
-                    dropped_packet_dns->ans_count = bpf_htons(dns->ans_count);
-                    bpf_ringbuf_submit(dropped_packet_dns, 0);
-                    return TC_DROP;
+                    if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
+                        bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
+                        return TC_DROP;
+                    } 
+                    __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route_malicious, 4, 0);
+
+                    if (IP_DST_OFF > skb->len) {
+                        return TC_DROP;  // Check if offset is within bounds
+                    }
+
+                    if (bpf_l3_csum_replace(skb, IP_CHECK_FF, 0, csum_diff_drop, 0) < 0) {
+                            return TC_FORWARD;
+                    }
+
+
+                    if (bpf_skb_store_bytes(skb, IP_DST_OFF, &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
+                        return TC_FORWARD;
+                    }
+
+                    if (skb->mark != (__u32) redirect_skb_mark) {
+                        if (DEBUG) {
+                            bpf_printk("Marking the packet over kernel redirection for DPI");
+                        }
+                        skb->mark = redirect_skb_mark;
+                    }
+
+                    return bpf_redirect(br_index, dest_addr_route);
                 }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
@@ -776,27 +801,6 @@ int classify(struct __sk_buff *skb){
                 }
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
-
-                __be32 current_dest_addr; 
-                __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4);
-
-                __u32 out = skb->ifindex;
-                /*
-                    TODO: Work on fixing byte order for redirect address
-                */
-
-                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4; 
-
-                if (config) {
-                    __be32 redirect_address_from_config = config->RedirectIpv4;
-                    dest_addr_route = bpf_htonl(redirect_address_from_config);
-                    br_index = config->BridgeIndexId;
-                    bpf_printk("kernel config loaded from node agent for redirect and bridge index %u %u", redirect_address_from_config, config->BridgeIndexId);
-                }else {
-                    bpf_printk("kernel cannot find the requred kernel config redirect map");
-                }
-
 
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                     // 4 bytes for the ipv4 address offset 

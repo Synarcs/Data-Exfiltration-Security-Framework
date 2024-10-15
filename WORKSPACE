@@ -865,6 +865,13 @@ go_repository(
     version = "v0.0.0-20241007155032-5fefd90f89a9",
 )
 
+go_repository(
+    name = "com_github_hashicorp_golang_lru_v2",
+    importpath = "github.com/hashicorp/golang-lru/v2",
+    sum = "h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k=",
+    version = "v2.0.7",
+)
+
 # gazelle:repository_macro deps.bzl%go_dependencies
 go_dependencies()
 
