@@ -9,10 +9,13 @@ import (
 	"os"
 
 	pb "github.com/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// the stream client is control my node agent to receive server side streams from server
+// the kernel will detach and remove fd for the socket once the parent process is killed of the node agent
 func exfil_client() {
 	clientId := flag.Int("id", 0, "the client id to use for streaming")
 	flag.Parse()
@@ -48,6 +51,12 @@ func exfil_client() {
 			if err != nil {
 				log.Println("error receive froms erver side stream ")
 				return
+			}
+			if val != nil {
+				utils.UpdateDomainBlacklistInCache(val.GetDomain(), utils.DomainNodeAgentCacheBlock{
+					TLD:            val.Tld,
+					CompleteDomain: val.GetDomain(),
+				})
 			}
 			fmt.Println("got stream ", val)
 		}

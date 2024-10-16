@@ -947,7 +947,8 @@ int classify(struct __sk_buff *skb){
                     return bpf_redirect(br_index, 0);
                 }
 
-                bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
+                if (DEBUG)
+                    bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
                 __u16 ipv6_checksum = 0; // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc 

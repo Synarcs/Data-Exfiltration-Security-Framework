@@ -14,6 +14,7 @@ import (
 type NodeAgentService struct {
 	pb.UnimplementedNodeAgentServiceServer
 	ConfigChannel chan interface{}
+	Ctx           context.Context
 }
 
 func (s *NodeAgentService) GetExfilDomains(context.Context, *pb.ExfilDomains) (*pb.ExfilDomains, error) {

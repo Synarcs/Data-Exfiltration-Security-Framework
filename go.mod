@@ -19,6 +19,7 @@ require (
 	github.com/miekg/dns v1.1.62 // indirect
 	github.com/owulveryck/onnx-go v0.5.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/vishvananda/netlink v1.3.0 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/xtgo/set v1.0.0 // indirect

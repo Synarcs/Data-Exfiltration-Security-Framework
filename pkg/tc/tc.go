@@ -238,6 +238,30 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 	return nil
 }
 
+func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer) {
+	time := time.Now().GoString()
+
+	var redirection_count_key uint16 = 0 // redirect count . the count which kernel count in tc layer and redirect for DPI purpose
+	redirectCountMap := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]
+
+	if redirectCountMap != nil {
+		var currRedirectCount uint32 = 0
+		// TODO: call the prometheus client to stream the redrect count metric
+		err := redirectCountMap.Lookup(redirection_count_key, &currRedirectCount)
+		if err != nil {
+			log.Println("Error Fetching the redirect count value from Kernel")
+		}
+
+		events.ExportPromeEbpfExporterEvents(struct {
+			Time          string
+			redirectCount uint32
+		}{
+			Time:          time,
+			redirectCount: uint32(currRedirectCount),
+		})
+	}
+}
+
 func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
@@ -264,21 +288,6 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		log.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
-	if isIpv4 {
-		ipv4Address := ipPacket.DstIP.To4().String()
-		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
-			log.Println("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
-			return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
-		}
-	} else if !isIpv4 {
-		ipv6Address := ipPacket.DstIP.To16().String()
-
-		if len(ipv6Address) > 0 {
-			log.Println("the ipv6 dst address route checking for the packet")
-		}
-		// TODO: ipv6 processing for the pacekt capture
-	}
-
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
@@ -295,6 +304,24 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
+
+	if isIpv4 {
+		ipv4Address := ipPacket.DstIP.To4().String()
+		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
+			log.Println("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
+			return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
+		}
+
+		go tc.streamRedirectCountStatusPayload(&dnsLayer)
+	} else if !isIpv4 {
+		ipv6Address := ipPacket.DstIP.To16().String()
+
+		if len(ipv6Address) > 0 {
+			log.Println("the ipv6 dst address route checking for the packet")
+		}
+		go tc.streamRedirectCountStatusPayload(&dnsLayer)
+		// TODO: ipv6 processing for the pacekt capture
+	}
 
 	isIpv6 := !isIpv4
 
