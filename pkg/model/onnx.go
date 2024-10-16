@@ -15,6 +15,7 @@ type OnnxModel struct {
 func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 	var castedFeatures []DNSFeatures = features.([]DNSFeatures)
+
 	switch protocol {
 	case "DNS":
 	default:
@@ -35,6 +36,9 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 }
 
 func EvaluateModelAgainstSingleFeature(feature DNSFeatures) bool {
+	if feature.UCaseCount == 0 && feature.NumberCount == 0 && feature.UCaseCount >= 0 {
+		return true
+	}
 	return true
 }
 

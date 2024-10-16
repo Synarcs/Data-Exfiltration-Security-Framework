@@ -114,8 +114,8 @@ func (ing *IngressSniffHandler) SniffEgressForC2C() error {
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
-		for pack := range packets.Packets() {
-			go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
+		for _ = range packets.Packets() {
+			// go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
 		}
 		return nil
 	}

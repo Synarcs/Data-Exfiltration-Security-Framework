@@ -1,4 +1,5 @@
-
+#include <linux/ipv6.h>
+#include <linux/in6.h>
 
 
 #ifndef DNS_EGRESS_PORT
@@ -30,6 +31,18 @@ struct exfil_security_config_map {
 } exfil_security_config_map SEC(".maps");
 
 
+/* 
+    Each key maps to the service limits for the dns traffic, for example 
+    0 --> min_domain_lenth, 1 --> max_domain_length and so on
+*/
+struct exfil_security_egress_dns_limites {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, __u32);
+    __uint(max_entries, 1 << 4);
+} exfil_security_egress_dns_limites SEC(".maps");
+
+
 #define MAX_DNS_QDCOUNT 3 
 #define MAX_DNS_ANS_COUNT 3
 #define MAX_DNS_AUTH_COUNT 3 
@@ -53,16 +66,8 @@ __u32 redirect_skb_mark = 0xFF;
 #endif
 
 
-    struct in6_addr_src {
-        union {
-            __u8    u6_addr8[16];
-            __u16   u6_addr16[8];
-            __u32   u6_addr32[4];
-        } in6_u;
-    };
-
     // fe80::d091:3cff:fe25:6d96/64
-    struct in6_addr_src bridge_redirect_addr_ipv6_suspicious = {
+    struct in6_addr bridge_redirect_addr_ipv6_suspicious = {
         .in6_u.u6_addr16 = {
            bpf_ntohs(0xfe80), 
            bpf_ntohs(0x0000), 
@@ -76,7 +81,7 @@ __u32 redirect_skb_mark = 0xFF;
     };
 
     // fe80::d091:3cff:fe25:6d97/64
-    struct in6_addr_src bridge_redirect_addr_ipv6_malicious = {
+    struct in6_addr bridge_redirect_addr_ipv6_malicious = {
         .in6_u.u6_addr16 = {
            bpf_ntohs(0xfe80), 
            bpf_ntohs(0x0000), 

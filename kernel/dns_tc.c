@@ -249,17 +249,6 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
     // the size of the header is matching for dns header must be  a dns header for ipv4 
     struct dns_header *dns_hdr = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
 
-    #ifdef DEBUG 
-        if (DEBUG) {
-            bpf_printk("the info for dns question is %u and answercount %u", bpf_ntohs(dns_hdr->qd_count), bpf_ntohs(dns_hdr->ans_count));
-            if (bpf_ntohs(dns_hdr->add_count) > 0) {
-                #pragma unroll(255)
-                for (__u8 i=0; i < (1 << 8); i++){}
-            }
-            bpf_printk("the addon count %u", bpf_ntohs(dns_hdr->add_count));
-        }
-    #endif
-
     return 1;
 }
 
@@ -351,7 +340,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
         // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
         int oc = 0;
+        __u32 label_key_subdomain_per_label_min = 2;  __u32 label_key_subdomain_per_label_max = 3;
+        __u32 label_key_label_count_min = 4; __u32 label_key_label_count_max = 5;
         
+        __u32 * MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_min);
+        __u32 * MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_max);
+        __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
+        __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
+
         // bpf_printk("[x] Performing DPI over the single question section for DPI inside Kernel");
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
@@ -369,8 +365,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 mx_label_ln = max(mx_label_ln, label_len);
                 if (label_len == 0x00) break;
 
-                label_count++;
-                if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
+                label_count++; 
+    
+              
+                if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
+                    if (label_len >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && label_len <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
+                }else if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
                     return SUSPICIOUS;
                 }
                     
@@ -409,11 +409,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             #endif
 
             if (label_count <= 2) return BENIGN;
-
-            if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
-
-                if (subdmoain_label_count >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD  && 
-                                    subdmoain_label_count <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) {}
+            
+            if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
+                if (label_count >= *MIN_LABEL_COUNT_KERNEL_MAP && label_count <= *MAX_LABEL_COUNT_KERNEL_MAP) return SUSPICIOUS;
+            }else if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
                 // bpf_printk("invoked on  label_count %d", label_count);
                 return SUSPICIOUS;
             }
@@ -689,7 +688,6 @@ int classify(struct __sk_buff *skb){
                     __be32 redirect_address_from_config = config->RedirectIpv4;
                     dest_addr_route = bpf_htonl(redirect_address_from_config);
                     br_index = config->BridgeIndexId;
-                    bpf_printk("kernel config loaded from node agent for redirect and bridge index %u %u", redirect_address_from_config, config->BridgeIndexId);
                 }else {
                     bpf_printk("kernel cannot find the requred kernel config redirect map");
                 }
@@ -866,9 +864,10 @@ int classify(struct __sk_buff *skb){
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
         ipv6 = cursor.data + sizeof(struct ethhdr);
-        if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
-        
-        if (ip->protocol == IPPROTO_UDP) {
+        if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
+
+        if (ipv6->nexthdr == IPPROTO_UDP) {
+
             if (actions.parse_udp(&cursor, false) == 0) return TC_DROP;
             udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
             if ((void *) udp + 1 > cursor.data_end) return TC_DROP;
@@ -912,21 +911,25 @@ int classify(struct __sk_buff *skb){
                     }
                 }
 
-                if (deep_scan_mirror){
-                    bpf_printk("Suspicious pacekt found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
-                } 
-
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
                 if (deep_scan_mirror) {
-                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
-
-                    #ifdef DEBUG
-                        if (DEBUG) {
-                            bpf_printk("the rate limit action over layer UDP for Ipv6 header action %u", dns);
-                        }
-                    #endif
+                    // __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
+                    __u8 dns_rate_limit_action = 1;
                     if (dns_rate_limit_action == 0) return TC_DROP;
+                }
+
+
+                __u32 out = skb->ifindex;
+
+                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+                __u32 br_index = 4;  // loa  the redirection from the kernel 
+
+                if (config) {
+                    __be32 redirect_address_from_config = config->RedirectIpv4;
+                    br_index = config->BridgeIndexId;
+                }else {
+                    bpf_printk("kernel cannot find the requred kernel config redirect map");
                 }
 
                 // TODO Add event emit for the drop packet processing 
@@ -935,20 +938,24 @@ int classify(struct __sk_buff *skb){
                         if (DEBUG) {
                             bpf_printk("Benign packet found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
                         }
-                    #endif 
+                    #endif
+                    return TC_FORWARD;
                 }
-                else if (drop) return TC_DROP;
+                else if (drop) {
+
+
+                    return bpf_redirect(br_index, 0);
+                }
 
                 bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
-                __u16 ip_checksum = bpf_ntohs(ip->check);
+                __u16 ipv6_checksum = 0; // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc 
+
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                bool isRedirectFirst = false;
-                bool processCloneRedirectRun = false;
                 if (!map_layer3_redirect_value) {
                     struct checkSum_redirect_struct_value layer3_checksum = {
-                        .checksum =  ip_checksum, 
+                        .checksum =  ipv6_checksum, 
                         .kernel_timets = bpf_ktime_get_ns(),
                     };
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
@@ -958,7 +965,6 @@ int classify(struct __sk_buff *skb){
                             bpf_printk("Error updating the bpf redirect from tc kernel layer");
                         }
                     }
-                    isRedirectFirst = true;
                 } else {
                     if (DEBUG){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
@@ -969,6 +975,7 @@ int classify(struct __sk_buff *skb){
                     __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
                     pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
                     if (pres) {
+                        bpf_map_delete_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
                         return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
                     }else {
                         #ifdef DEBUG 
@@ -990,10 +997,11 @@ int classify(struct __sk_buff *skb){
                     bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
                 }
 
-                // TODO need to add the ipv6 checsum recal and packet redirection with u32 * 4 octent sizes stored inside the ipv6 header 
-                // forward the traffic for now 
 
-                return TC_FORWARD;
+                ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
+               
+                // forward the traffic to the brodhe fpr enhanced DPI in userspace 
+                return bpf_redirect(br_index, 0);
 
             } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;

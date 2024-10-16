@@ -157,6 +157,7 @@ struct a_record {
 };
 
 // define the malicious domain record limits 
+// the default limits from the kernel for the node agent default processing 
 struct dns_record_limits_malicious {
     int MIN_DOMAIN_LENGTH;
     int MAX_DOMAIN_LENGTH;
@@ -180,11 +181,10 @@ struct dns_record_limits_malicious {
         17,
         63,
 
-        5,
+        3,
         127, 
 
         3,  // (5 - (tld + root) == 3)
         125, // (127 - (tld - root) == 125) 
 };
-
 

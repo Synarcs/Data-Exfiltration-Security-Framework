@@ -30,4 +30,5 @@ const (
 	EXFILL_SECURITY_EGRESS_REDIRECT_MAP           = "exfil_security_egress_redirect_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP = "exfil_security_egress_redurect_ts_verify"
 	EXFILL_SECURITY_KERNEL_CONFIG_MAP             = "exfil_security_config_map"
+	EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP         = "exfil_security_egress_dns_limites"
 )

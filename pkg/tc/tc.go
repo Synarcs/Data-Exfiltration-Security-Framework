@@ -185,6 +185,24 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		}
 	}
 
+	// populate the limit map from the kernel
+	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
+	if dnsLimitsMap != nil {
+		// grab the fd from the kernel process to load the egress filter map limit
+
+		for index, limit := range events.DNS_LIMITS_CONFIG {
+			err := dnsLimitsMap.Put(
+				index, limit)
+			if err != nil {
+				log.Println("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+			}
+		}
+
+		if utils.DEBUG {
+			log.Println("The Node Agent loaded the dns limits in Kernel successfully")
+		}
+	}
+
 	for _, maps := range spec.Maps {
 		if strings.Contains(maps.String(), "exfil_security_egress_drop_ring_buff") {
 			// an ring event buffer
@@ -247,15 +265,20 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	}
 
 	if isIpv4 {
-		fmt.Println(ipPacket)
-		// if !(ipPacket.DstIP.String() == utils.GetIpv4AddressUserSpaceDpIString(1)) {
-		// 	log.Println("The Bridge is only meant for DPI pf suspicious and malicious DNS traffic")
-		// 	return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
-		// } else if !(ipPacket.DstIP.String() == utils.GetIpv4AddressUserSpaceDpIString(2)) {
-		// 	log.Println("The Bridge is only meant for DPI pf suspicious and malicious DNS traffic")
-		// 	return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
-		// }
+		ipv4Address := ipPacket.DstIP.To4().String()
+		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
+			log.Println("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
+			return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
+		}
+	} else if !isIpv4 {
+		ipv6Address := ipPacket.DstIP.To16().String()
+
+		if len(ipv6Address) > 0 {
+			log.Println("the ipv6 dst address route checking for the packet")
+		}
+		// TODO: ipv6 processing for the pacekt capture
 	}
+
 	udpLayer := packet.Layer(layers.LayerTypeUDP)
 	tcpLayer := packet.Layer(layers.LayerTypeTCP)
 
@@ -273,6 +296,8 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
 
+	isIpv6 := !isIpv4
+
 	if dnsLayer != nil {
 		dns, _ := dnsLayer.(*layers.DNS)
 
@@ -285,6 +310,12 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		} else {
 			log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
 
+			if isIpv6 {
+				// support for ipv6
+				if ip_layer3_checksum_kernel_ts.Checksum != uint16(0) {
+					log.Println("Error in Ipv6 header checksum verification ipv6 has no default checksum")
+				}
+			}
 			timeVal := events.DPIRedirectionTimestampVerify{
 				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
 				UserSpace_Egress_Loaded: 1,
