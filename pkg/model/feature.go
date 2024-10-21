@@ -14,6 +14,7 @@ import (
 
 type DNSFeatures struct {
 	Fqdn               string
+	Tld                string
 	UCaseCount         int
 	LCaseCount         int
 	NumberCount        int
@@ -131,7 +132,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	for _, payload := range dns_packet.Questions {
 
 		exclude_tld := strings.Split(string(payload.Name), ".")
-		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+		features[i].LabelCount = len(exclude_tld) - 2 // the kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
 		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 		features[i].LongestLabelDomain = mx_len
 		features[i].LengthofSubdomains = totalLen
@@ -141,6 +142,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].Tld = exclude_tld[len(exclude_tld)-2]
 		features[i].Fqdn = string(payload.Name)
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		features[i].IsEgress = isEgress
@@ -161,6 +163,8 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].Tld = exclude_tld[len(exclude_tld)-2]
+
 		features[i].IsEgress = isEgress
 
 		features[i].Fqdn = string(payload.Name)
@@ -183,6 +187,8 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
+		features[i].Tld = exclude_tld[len(exclude_tld)-2]
+
 		features[i].IsEgress = isEgress
 
 		features[i].Fqdn = string(payload.Name)

@@ -22,17 +22,15 @@ const (
 )
 
 type Limites struct {
-	MIN_DOMAIN_LENGTH int 
-	MAX_DOMAIN_LENGTH int 
-	MIN_SUBDOMAIN_LENGTH_PER_LABEL int 
-	MIN_LABEL_COUNT int 
-	
+	MIN_DOMAIN_LENGTH              int
+	MAX_DOMAIN_LENGTH              int
+	MIN_SUBDOMAIN_LENGTH_PER_LABEL int
+	MIN_LABEL_COUNT                int
 }
-
 
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
 const (
-	MAX_NODE_AGENT_CACHE_SIZE = 100_000
+	MAX_NODE_AGENT_CACHE_SIZE = 1000
 )
 
 func ParseIp(saddr uint32) string {

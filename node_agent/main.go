@@ -31,8 +31,14 @@ func main() {
 
 	utils.InitCache()
 
+	unixFd, err := model.ListenInferenceUnixClient()
+	if err != nil {
+		log.Println("Error opening unix socket for the inference server")
+		panic(err.Error())
+	}
+
 	// load the model from onnx lib
-	model, err := model.LoadOnnxModelToMemory(".")
+	model, err := model.LoadOnnxModelToMemory(".", unixFd)
 	if err != nil {
 		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())

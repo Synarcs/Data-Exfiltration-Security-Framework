@@ -99,7 +99,7 @@ __always_inline struct dns_flags  get_dns_flags (struct dns_header * dns_header)
         .ra = (host_order_flags & DNS_RA_MASK) >> DNS_RA_SHIFT,
         .z = (host_order_flags & DNS_Z_MASK) >> DNS_Z_SHIFT,
         .ad = (host_order_flags & DNS_AD_MASK) >> DNS_AD_SHIFT,
-        .cd = (host_order_flags & DNS_CD_MASK) >> DNS_CD_SHIFT,
+        .cd = (host_order_flags & DNS_CD_MASK) >> DNS_CD_SHIFT, 
         .rcode = (host_order_flags & DNS_RCODE_MASK) >> DNS_RCODE_SHIFT
     };
     return flags;

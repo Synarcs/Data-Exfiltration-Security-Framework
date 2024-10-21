@@ -7,6 +7,8 @@
 #include <linux/ipv6.h>
 #include <linux/ip.h>
 
+#include <linux/bpf.h>
+
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
@@ -29,11 +31,14 @@ struct exfil_security_ingress_drop_ring_buff {
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_drop_ring_buff SEC(".maps");
 
+struct cursosr {
+    void *data;
+    void *data_end;
+}   __attribute__((packed)) xdp_cursor;
+
 struct xdp_actions {
-    
     void (* parse_eth) (void *data, void *data_end);
 };
-
 
 SEC("xdp")
 int xdp_process(struct xdp_md *ctx) {
@@ -67,6 +72,19 @@ int xdp_process(struct xdp_md *ctx) {
         case bpf_ntohs(ETH_P_IPV6): {
             struct ipv6hdr *ip = eth;
             if ((void *) (ip + 1) > data_end) return XDP_DROP;
+
+            switch (ip->nexthdr) {
+                case IPPROTO_UDP: {
+                    struct udphdr *udp = ip;
+                    if ((void *) (udp + 1) > data_end) return XDP_DROP;
+                    break;
+                } 
+
+                case IPPROTO_TCP: {
+                    struct tcphdr *tcp = ip; 
+                    if ((void *) (tcp + 1) > (void *) data_end) return XDP_DROP;
+                }
+            }
             break;
         }
         default: 

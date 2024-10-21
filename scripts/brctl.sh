@@ -5,14 +5,24 @@ sudo ip netns
 
 sudo iptables --policy FORWARD ACCEPT 
 sudo iptables -I FORWARD -i bridge -j ACCEPT
+
+sudo ip6tables --policy FORWARD ACCEPT 
+sudo ip6tables -I FORWARD -i bridge -j ACCEPT
+
 sudo sysctl -w net.ipv6.conf.all.forwarding=1
-sudo sysctl -w net.ipv6.conf.br0.proxy_ndp=1
 
 sudo ip netns add sx1
 sudo ip netns add sx2
 
+sudo ip netns exec sx1 sysctl -w net.ipv6.conf.all.forwarding=1
+sudo ip netns exec sx2 sysctl -w net.ipv6.conf.all.forwarding=1
+
 # create a bridge
 sudo ip link add br0 type bridge
+
+sudo sysctl -w net.ipv6.conf.br0.proxy_ndp=1
+sudo ip -6 neigh add proxy fe80::d091:3cff:fe25:6d96 dev br0
+sudo ip -6 neigh add proxy fe80::d091:3cff:fe25:6d97 dev br0
 
 sudo ip link add sx1-eth0 type veth peer name sx1-eth0-br
 sudo ip link add sx2-eth0 type veth peer name sx2-eth0-br
@@ -67,5 +77,3 @@ sudo ip -6 addr add fe80::d091:3cff:fe25:6d95/64 dev br0
 # default route via the kernel host bridge as an interface on the host physcial bridge 
 sudo ip netns exec sx1 ip route add 192.168.64.0/24 via 10.200.0.0
 sudo ip netns exec sx2 ip route add 192.168.64.0/24 via 10.200.0.0
-
-

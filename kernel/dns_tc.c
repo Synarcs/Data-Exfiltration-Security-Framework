@@ -7,6 +7,7 @@
 #include <linux/udp.h>
 #include <linux/tcp.h>
 #include <linux/netfilter/nfnetlink.h>
+#include <linux/bpf.h>
 
 #include <linux/pkt_cls.h>
 #include <stdbool.h>
@@ -951,21 +952,17 @@ int classify(struct __sk_buff *skb){
                     bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
-                __u16 ipv6_checksum = 0; // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc 
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    struct checkSum_redirect_struct_value layer3_checksum = {
+                    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc 
+                    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
+                    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
                         .checksum =  ipv6_checksum, 
-                        .kernel_timets = bpf_ktime_get_ns(),
+                        .kernel_timets = ipv6_kernel_time, 
                     };
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
-                    int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
-                    if (ret < 0) {
-                        if (DEBUG){
-                            bpf_printk("Error updating the bpf redirect from tc kernel layer");
-                        }
-                    }
+                    // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
                 } else {
                     if (DEBUG){
                         bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");

@@ -98,10 +98,10 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
-func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfMap *ebpf.Map) {
-	log.Println("Go Routine polling the kernel map ", ebpfMap)
+func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) {
+	log.Println("Go Routine polling the kernel map ", ebpfEvents)
 
-	ringBuffer, err := ringbuf.NewReader(ebpfMap)
+	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
 	if err != nil {
 		panic(err.Error())
@@ -111,7 +111,7 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfMap *ebpf.Map) {
 
 	for {
 		if utils.DEBUG {
-			log.Println("polling the ring buffer", "using th map", ebpfMap)
+			log.Println("polling the ring buffer", "using th map", ebpfEvents)
 		}
 		record, err := ringBuffer.Read()
 		if err != nil {
@@ -239,7 +239,7 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 }
 
 func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer) {
-	time := time.Now().GoString()
+	currTime := time.Now().GoString()
 
 	var redirection_count_key uint16 = 0 // redirect count . the count which kernel count in tc layer and redirect for DPI purpose
 	redirectCountMap := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]
@@ -256,7 +256,7 @@ func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer)
 			Time          string
 			redirectCount uint32
 		}{
-			Time:          time,
+			Time:          currTime,
 			redirectCount: uint32(currRedirectCount),
 		})
 	}

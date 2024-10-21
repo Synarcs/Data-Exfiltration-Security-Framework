@@ -75,7 +75,8 @@ xdp-compile:
 .PHONY: xdp-compile-x86
 xdp-compile-x86:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
-
+	sudo mount -t bpf bpf /sys/fs/bpf/
+	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 
 .PHONY: xdp-umount
 xdp-umount:

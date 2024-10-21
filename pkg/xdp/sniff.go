@@ -101,9 +101,9 @@ func (ing *IngressSniffHandler) SniffEgressForC2C() error {
 		if (isUdp || !isUdp) && isStandardPort {
 			// runs over br netfilter layer on iptables
 			if isUdp {
-				log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer")
+				log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the UDP Layer")
 			} else {
-				log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer")
+				log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the TCP Layer")
 			}
 			if err := cap.SetBPFFilter("udp dst port 53 or tcp dst port 53"); err != nil {
 				log.Fatalf("Error setting BPF filter: %v", err)
