@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
+	onnx "github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
@@ -32,7 +33,7 @@ func main() {
 	utils.InitCache()
 
 	// load the model from onnx lib
-	model, err := model.ConnectRemoteInferenceSocket(".")
+	model, err := onnx.ConnectRemoteInferenceSocket(".")
 	if err != nil {
 		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())
@@ -77,6 +78,24 @@ func main() {
 			time.Sleep(time.Second)
 		}
 	}()
+
+	go func() {
+		for {
+			_, err := os.Stat(onnx.ONNX_INFERENCE_UNIX_SOCKET)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					log.Println("The Unix Local Unix Inference Socket is not available", err.Error())
+					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
+				} else {
+					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
+				}
+				tc.DetachHandler(&ctx)
+				os.Exit(1)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
 	sigType, done := <-term
 	if done {
 		switch sigType {

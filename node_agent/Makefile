@@ -10,10 +10,10 @@ build:
 
 .PHONY: run-inference
 run-inference:
-	sudo python3 ../model/inference.py
+	sudo python3 ../model/infer/inference.py
 
-.PHONY: run 
-run: 
+.PHONY: start 
+start: 
 	sudo ./main 
 
 .PHONY: build-run 
