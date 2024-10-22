@@ -8,6 +8,10 @@ debug := false
 build:
 	go build $(node_agent) 
 
+.PHONY: run-inference
+run-inference:
+	sudo python3 ../model/inference.py
+
 .PHONY: run 
 run: 
 	sudo ./main 

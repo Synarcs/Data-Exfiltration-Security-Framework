@@ -1,8 +1,11 @@
 package model
 
 import (
+	"context"
 	"log"
 	"net"
+	"net/http"
+	"time"
 )
 
 const (
@@ -10,15 +13,29 @@ const (
 )
 
 // process and start a Unix Domain socket for inference
-func ListenInferenceUnixClient() (*net.Conn, error) {
+func GetInferenceUnixClient() (*http.Client, net.Conn, error) {
 
-	listen, err := net.Dial("unix", ONNX_INFERENCE_UNIX_SOCKET)
+	conn, err := net.Dial("unix", ONNX_INFERENCE_UNIX_SOCKET)
 	if err != nil {
 		log.Println("Error binding the inferencce unix server socket ", err)
-		return nil, err
+		return nil, nil, err
 	}
 
+	log.Println("Connected to the Inference Unix Sock ", conn.RemoteAddr())
+
+	// faster and easier layer 7 parse over unix oscket
+	// the kernel all applies on netfilter conntrack layer for IPC
+	client := http.Client{
+		Timeout: time.Second * 20,
+
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return conn, nil
+			},
+			DisableKeepAlives: true,
+		},
+	}
 	log.Println("Inference Unix Socket Listenning")
 
-	return &listen, nil
+	return &client, conn, nil
 }
