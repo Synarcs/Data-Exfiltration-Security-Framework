@@ -87,6 +87,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 			return true, nil
 		}
+
 		eval, err := processRemoteUnixInference()
 		if err != nil {
 			log.Printf("Errpr in processing inference from remote unix socket  %v", err)

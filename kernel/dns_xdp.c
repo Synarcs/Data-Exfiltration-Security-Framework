@@ -6,8 +6,9 @@
 #include <linux/in.h>
 #include <linux/ipv6.h>
 #include <linux/ip.h>
+#include <linux/tcp.h>
 
-#include <linux/bpf.h>
+#include <stdbool.h>
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
@@ -26,6 +27,10 @@
     default: bpf_printk("the config vvalue stored from map %d", X)
 
 
+struct xdp_parse {
+    __u8 (*parse_dns_header) (void * ,struct __sk_buff *, bool, bool);
+};
+
 struct exfil_security_ingress_drop_ring_buff {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
@@ -36,9 +41,16 @@ struct cursosr {
     void *data_end;
 }   __attribute__((packed)) xdp_cursor;
 
-struct xdp_actions {
-    void (* parse_eth) (void *data, void *data_end);
-};
+
+
+static 
+__always_inline void parse_dns_header(void *data, struct __sk_buff *skb, bool isUdp, bool isIpv4) {
+    void *dns_header = data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) 
+            + (isUdp ? sizeof(struct udphdr) : sizeof(struct tcphdr));
+    
+    if (dns_header + 1 > skb->data_end) return;
+    return 1;
+}
 
 SEC("xdp")
 int xdp_process(struct xdp_md *ctx) {

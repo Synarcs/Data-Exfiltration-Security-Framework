@@ -349,68 +349,53 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
 
-        // bpf_printk("[x] Performing DPI over the single question section for DPI inside Kernel");
+        __u8 total_domain_length_exclude_tld = 0;
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
-            __u8 total_domain_length_exclude_tld = 0; // excluding auth root domain information 
 
-            __u8 root_domain  = 0; //domain tld + auth root zone domain 
-            
-            __u8 char_count = 0; __u8 num_count = 0;
-            for (int j = 0; j < MAX_DNS_NAME_LENGTH; j++) {
-                if ((void *) (dns_payload_buffer + offset + 1) > skb->data_end) return SUSPICIOUS;
+            __u8 root_domain  = 0;
 
-                __u8 label_len = *(__u8 *) (dns_payload_buffer + offset);
+            for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
+                if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
-                mx_label_ln = max(mx_label_ln, label_len);
+                __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
+                mx_label_ln = max(mx_label_ln, label_len); 
                 if (label_len == 0x00) break;
+                label_count++;
 
-                label_count++; 
-    
-              
-                if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
-                    if (label_len >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && label_len <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
-                }else if (label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && label_len <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
-                    return SUSPICIOUS;
-                }
-                    
-                if (root_domain > 2){
+                if (root_domain > 2)
                     total_domain_length_exclude_tld += label_len;
-                    __u16 char_label_offset = offset + 1;
-                    label_len = label_len >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL ? DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL 
-                            : label_len;   
-                }
                 else 
                     root_domain++;
 
-                offset += label_len + 1;
+                offset += label_len + 1; 
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
+        
 
-            // parse the remaining and left over 2 bytes from the processed header for query type to be at offset end of the query label 
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
-            
+
+
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
-            #ifdef DEBUG
-                if (DEBUG) {
-                    bpf_printk("the label count is %u and mx label len %u", label_count, mx_label_ln); 
-                    bpf_printk("the query type is %d and class is %d", query_type, query_class);
-                    bpf_printk("the total domain length is %d ", total_domain_length_exclude_tld);
-                }
-            #endif
-
             if (label_count <= 2) return BENIGN;
             
+
+            if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
+                    if (mx_label_ln >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && mx_label_ln <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
+            }else if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
+                    return SUSPICIOUS;
+            }
+
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
                 if (label_count >= *MIN_LABEL_COUNT_KERNEL_MAP && label_count <= *MAX_LABEL_COUNT_KERNEL_MAP) return SUSPICIOUS;
             }else if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
@@ -422,7 +407,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 // bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
                 return SUSPICIOUS;
             }
-            
+
             return parse_dns_qeury_type_section(skb, query_class, qtypes);
         }
      }else return SUSPICIOUS;
@@ -857,8 +842,9 @@ int classify(struct __sk_buff *skb){
                 void *dns_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header);
                 if ((void *) dns_data + 1 > cursor.data_end) return TC_DROP;
                 return TC_FORWARD;
-            }else {
-
+            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) return TC_FORWARD;
+            else {
+                // DPI over the non start port used for transfer 
             }
 
             return TC_FORWARD;

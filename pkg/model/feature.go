@@ -151,7 +151,6 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	i := 0
 
 	for _, payload := range dns_packet.Questions {
-
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
 		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
@@ -172,51 +171,58 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		i += 1
 	}
 
-	for _, payload := range dns_packet.Answers {
-		exclude_tld := strings.Split(string(payload.Name), ".")
-		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-		features[i].LongestLabelDomain = mx_len
-		features[i].LengthofSubdomains = totalLen
+	if len(dns_packet.Answers) > 0 {
+		for _, payload := range dns_packet.Answers {
+			exclude_tld := strings.Split(string(payload.Name), ".")
+			if len(exclude_tld) > 2 {
+				features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+				mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
+				features[i].LongestLabelDomain = mx_len
+				features[i].LengthofSubdomains = totalLen
 
-		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+				ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
-		features[i].UCaseCount = ucount
-		features[i].NumberCount = ncount
-		features[i].LCaseCount = lcount
-		features[i].Tld = exclude_tld[len(exclude_tld)-2]
+				features[i].UCaseCount = ucount
+				features[i].NumberCount = ncount
+				features[i].LCaseCount = lcount
+				features[i].Tld = exclude_tld[len(exclude_tld)-2]
 
-		features[i].IsEgress = isEgress
+				features[i].IsEgress = isEgress
 
-		features[i].Fqdn = string(payload.Name)
+				features[i].Fqdn = string(payload.Name)
 
-		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
-		mrsh, _ := json.Marshal(features[i])
-		fmt.Println(string(mrsh))
-
+				features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+				mrsh, _ := json.Marshal(features[i])
+				fmt.Println(string(mrsh))
+			}
+		}
 	}
 
-	for _, payload := range dns_packet.Additionals {
-		exclude_tld := strings.Split(string(payload.Name), ".")
-		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-		features[i].LongestLabelDomain = mx_len
-		features[i].LengthofSubdomains = totalLen
+	if len(dns_packet.Additionals) > 0 {
+		for _, payload := range dns_packet.Additionals {
+			exclude_tld := strings.Split(string(payload.Name), ".")
+			if len(exclude_tld) > 2 {
+				features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+				mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
+				features[i].LongestLabelDomain = mx_len
+				features[i].LengthofSubdomains = totalLen
 
-		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+				ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
-		features[i].UCaseCount = ucount
-		features[i].NumberCount = ncount
-		features[i].LCaseCount = lcount
-		features[i].Tld = exclude_tld[len(exclude_tld)-2]
+				features[i].UCaseCount = ucount
+				features[i].NumberCount = ncount
+				features[i].LCaseCount = lcount
+				features[i].Tld = exclude_tld[len(exclude_tld)-2]
 
-		features[i].IsEgress = isEgress
+				features[i].IsEgress = isEgress
 
-		features[i].Fqdn = string(payload.Name)
+				features[i].Fqdn = string(payload.Name)
 
-		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
-		mrsh, _ := json.Marshal(features[i])
-		fmt.Println(string(mrsh))
+				features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+				mrsh, _ := json.Marshal(features[i])
+				fmt.Println(string(mrsh))
+			}
+		}
 	}
 
 	return features, nil

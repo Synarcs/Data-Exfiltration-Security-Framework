@@ -159,20 +159,20 @@ struct a_record {
 // define the malicious domain record limits 
 // the default limits from the kernel for the node agent default processing 
 struct dns_record_limits_malicious {
-    int MIN_DOMAIN_LENGTH;
-    int MAX_DOMAIN_LENGTH;
+    __u32 MIN_DOMAIN_LENGTH;
+    __u32 MAX_DOMAIN_LENGTH;
 
     // define the per label length range 
-    int MIN_SUBDOMAIN_LENGTH_PER_LABEL;
-    int MAX_SUBDOMAIN_LENGTH_PER_LABEL;
+    __u32 MIN_SUBDOMAIN_LENGTH_PER_LABEL;
+    __u32 MAX_SUBDOMAIN_LENGTH_PER_LABEL;
 
     // define the range for kernel to 
-    int MIN_LABEL_COUNT;
-    int MAX_LABEL_COUNT;
+    __u32 MIN_LABEL_COUNT;
+    __u32 MAX_LABEL_COUNT;
 
     // subdomain labels excluding the tld and auth domains 
-    int MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; 
-    int MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;
+    __u32 MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; 
+    __u32 MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;
 
 } __attribute__((packed)) DNS_RECORD_LIMITS = {
         130,

@@ -34,11 +34,13 @@ compile-llvm-x86:
 # for x86 compilation of cpu 
 .PHONY: compile-x86
 compile-x86:
-	sudo clang -target bpf -g -O3 -o tc.o -c $(tc_kernel)
-	sudo clang -target bpf -g -O3 -o bridge.o -c $(bridge_tc)
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 
+
+# Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc
 tc: 
 	sudo tc qdisc add dev enp0s1 clsact
@@ -71,6 +73,11 @@ xdp-compile:
 	sudo mount -t bpf bpf /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 
+
+.PHONY: xdp-show
+xdp-show:
+	sudo ip link show dev enp0s1 
+	sudo xdp-loader status 
 
 .PHONY: xdp-compile-x86
 xdp-compile-x86:
