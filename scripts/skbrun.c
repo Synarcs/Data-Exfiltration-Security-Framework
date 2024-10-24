@@ -29,7 +29,7 @@ typedef struct handler {
     };
 } List;
 
-void *handler (void *start, void *end, int size) {
+void * handler (void *start, void *end, int size) {
 
     for (int i = 0; i < size; i++){
         if ((void *)((procMap *) start + sizeof(procMap) * i) <= (void *)((procMap *) end + sizeof(procMap))) {
@@ -39,7 +39,7 @@ void *handler (void *start, void *end, int size) {
     }
 
     struct Proc proc[10];
-    void (* make)(void *, void *, int) = &handler;
+    void * (* make)(void *, void *, int) = &handler;
     for (int i=0; i < (sizeof(proc) /  sizeof(proc[0])); i++){
         proc[i] = (procMap) {
             .processId = 1 << 20, 
@@ -55,6 +55,12 @@ int main(void){
     proc = (struct procMap *) malloc(sizeof(procMap));
 
     int ** mem  = (int **) malloc (sizeof(int *) * 10);
+    const int sz = 1 << 2;
+    int ** onD =  calloc(sizeof(int *), NULL);
+    for (int i=0; i < sz; i++) {
+        *(onD + i) = (int *)malloc(sizeof(int) * (int) (sz - 1));
+        printf("size of the nested memory is %d \n", sizeof(*(onD + i)));
+    }
 
     for (int i=0; i < 10; i++){
         mem[i] = (int *) malloc(sizeof(int) * 10);

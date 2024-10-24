@@ -675,7 +675,11 @@ int classify(struct __sk_buff *skb){
                     dest_addr_route = bpf_htonl(redirect_address_from_config);
                     br_index = config->BridgeIndexId;
                 }else {
-                    bpf_printk("kernel cannot find the requred kernel config redirect map");
+                    #ifdef DEBUG
+                     if (!DEBUG) {
+                        bpf_printk("kernel cannot find the requred kernel config redirect map");
+                     }
+                    #endif
                 }
 
                 //  layer 7 rate limiting of the packet inside kernel 
@@ -849,7 +853,7 @@ int classify(struct __sk_buff *skb){
 
             return TC_FORWARD;
         }
-	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+	}else if (eth->h_proto == bpf_ntohs(ETH_P_IPV6)) {
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
 
@@ -913,7 +917,6 @@ int classify(struct __sk_buff *skb){
                 __u32 br_index = 4;  // loa  the redirection from the kernel 
 
                 if (config) {
-                    __be32 redirect_address_from_config = config->RedirectIpv4;
                     br_index = config->BridgeIndexId;
                 }else {
                     bpf_printk("kernel cannot find the requred kernel config redirect map");
@@ -941,7 +944,7 @@ int classify(struct __sk_buff *skb){
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc 
+                    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
                     __u64 ipv6_kernel_time = bpf_ktime_get_ns();
                     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
                         .checksum =  ipv6_checksum, 
@@ -968,7 +971,7 @@ int classify(struct __sk_buff *skb){
                                                  prevented it with ns timestamp verification after DPI");
                             }
                         #endif
-                        return TC_DROP;
+                        return TC_FORWARD; // need a potential forward timestamp order fix 
                     }
                 }
 
@@ -980,7 +983,6 @@ int classify(struct __sk_buff *skb){
                     __u32 init_map_redirect_count = 1;
                     bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
                 }
-
 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
                

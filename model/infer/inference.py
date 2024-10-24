@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 from typing import NoReturn
 import os, sys, socket, json 
@@ -24,7 +25,9 @@ class OnnxInference(object):
     def __init__(self) -> None:
         pass 
 
-    def load(self) -> None: 
+    def load(self) -> NoReturn: 
+        print('[x] Loading the Onnx Inferencing Mode ...')
+        
         pass 
     
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
@@ -33,6 +36,9 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
         super().__init__(request, client_address, server)
         self.inference = OnnxInference() 
         
+    def infer(self) -> bool:
+        return True 
+
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
         if self.path == "/onnx/dns":
@@ -47,6 +53,11 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 print('Received request for inference ', request_body)
                 # True if benign else False 
                 # TODO: Run onnx evaluation for the model to process the data against trained deep learning model 
+
+                evalFeatureCount = len(request_body['Features']) 
+                with ThreadPoolExecutor(max_workers=evalFeatureCount) as executor:
+                    executor.map(self.infer, request_body["Features"])
+
                 response = {
                     "threat_type": False
                 }
@@ -84,12 +95,15 @@ class UnixSocketHttpServer(socketserver.UnixStreamServer):
         print(f"Request received from {client_address}") 
         return (request, ["local", 0])
 
+class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
+    pass 
+
 def run_server() -> None:
     if os.path.exists(ONNX_INFERENCE_UNIX_SOCKET):
         os.unlink(ONNX_INFERENCE_UNIX_SOCKET)
 
     try:
-        httpd = UnixSocketHttpServer((ONNX_INFERENCE_UNIX_SOCKET), HandleInferenceConnHttpLayer7)
+        httpd = ThreadingUnixSocketHttpServer(ONNX_INFERENCE_UNIX_SOCKET, HandleInferenceConnHttpLayer7)
         print(f'HTTP Server over unix socket transport on {ONNX_INFERENCE_UNIX_SOCKET}')
         httpd.serve_forever()
     except Exception as err:

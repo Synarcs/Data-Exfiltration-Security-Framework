@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/layers"
 )
 
@@ -16,18 +17,17 @@ type DNSFeatures struct {
 	Fqdn                  string
 	Tld                   string
 	TotalChars            int
-	TotalCharsInSubdomain int
+	TotalCharsInSubdomain int // holds the chars which are unicode encodable and can be stored
 	NumberCount           int
 	UCaseCount            int
 	LCaseCount            int
-	SpecialCount          int
 	Entropy               float32
 	PeriodsInSubDomain    int
 	LongestLabelDomain    int
-	LengthofSubdomains    int
 	AveerageLabelLength   float32
 	IsEgress              bool
 }
+
 
 func GenerateFloatVectors(features []DNSFeatures) [][]float32 {
 	floatTensors := make([][]float32, 0)
@@ -155,37 +155,35 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
 		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 		features[i].LongestLabelDomain = mx_len
-		features[i].LengthofSubdomains = totalLen
+		features[i].TotalCharsInSubdomain = totalLen
 
 		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
 		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
 		features[i].LCaseCount = lcount
-		features[i].Tld = exclude_tld[len(exclude_tld)-2]
+		features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 		features[i].Fqdn = string(payload.Name)
 		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		features[i].IsEgress = isEgress
-		mrsh, _ := json.Marshal(features[i])
-		fmt.Println(string(mrsh))
 		i += 1
 	}
 
-	if len(dns_packet.Answers) > 0 {
+	if len(dns_packet.Answers) > 0 && isEgress {
 		for _, payload := range dns_packet.Answers {
 			exclude_tld := strings.Split(string(payload.Name), ".")
 			if len(exclude_tld) > 2 {
 				features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 				mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 				features[i].LongestLabelDomain = mx_len
-				features[i].LengthofSubdomains = totalLen
+				features[i].TotalCharsInSubdomain = totalLen
 
 				ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
 				features[i].UCaseCount = ucount
 				features[i].NumberCount = ncount
 				features[i].LCaseCount = lcount
-				features[i].Tld = exclude_tld[len(exclude_tld)-2]
+				features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 
 				features[i].IsEgress = isEgress
 
@@ -198,6 +196,8 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		}
 	}
 
+	// used for mdns and edns based parsing when addon dns querstios are passed 
+	//  the malware can send more malicious information in the addon section to bypass detection 
 	if len(dns_packet.Additionals) > 0 {
 		for _, payload := range dns_packet.Additionals {
 			exclude_tld := strings.Split(string(payload.Name), ".")
@@ -205,14 +205,14 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 				features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 				mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 				features[i].LongestLabelDomain = mx_len
-				features[i].LengthofSubdomains = totalLen
+				features[i].TotalCharsInSubdomain = totalLen
 
 				ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
 				features[i].UCaseCount = ucount
 				features[i].NumberCount = ncount
 				features[i].LCaseCount = lcount
-				features[i].Tld = exclude_tld[len(exclude_tld)-2]
+				features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 
 				features[i].IsEgress = isEgress
 
@@ -222,6 +222,16 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 				mrsh, _ := json.Marshal(features[i])
 				fmt.Println(string(mrsh))
 			}
+		}
+	}
+
+
+
+	if utils.DEBUG {
+		log.Println("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
+		for _, feature := range features {
+			mrsh, _ := json.Marshal(feature)
+			fmt.Println(string(mrsh))
 		}
 	}
 

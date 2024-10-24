@@ -2,14 +2,16 @@
 
 node_agent := main.go 
 output := node_agent 
-debug := false 
+debug ?= false 
 
 .PHONY: build
 build:
+	@echo "Building and compiling the Ebpf Node Agent"
 	go build $(node_agent) 
 
 .PHONY: run-inference
 run-inference:
+	@echo "Running the Remote unix socket inference server" 
 	sudo python3 ../model/infer/inference.py
 
 .PHONY: start 

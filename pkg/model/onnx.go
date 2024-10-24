@@ -6,33 +6,46 @@ import (
 	"fmt"
 	"io"
 	"log"
+
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 type OnnxModel struct{}
 
+const (
+	DEEP_LEXICAL_INFERENCING  = iota
+	STATIC_BENIGN_INFERENCING // node agent found no further deep lexical analysis required its benign and can be procceed to leave the user space
+)
+
 /*
-The []DNSFeatures is for a single dns packet covering the the entire dns packet queries
-each array resemble the dns request, addon, auth, answer section fqdn domain to perform enhance scanning of those features
+Tells the node agent go routeines to call the remote inference server deep learning model for enhanced scanning
 */
-func (onnx *OnnxModel) GenerateInputLayerFeatures(features *[]DNSFeatures) error {
-	return nil
+func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32) int {
+
+	return DEEP_LEXICAL_INFERENCING
 }
 
 func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 	switch protocol {
 	case "DNS":
-		_, ok := features.([]DNSFeatures)
+		dnsFeatures, ok := features.([]DNSFeatures)
 		if !ok {
 			log.Panic("The Required features needs to adher to the protocol definition")
 		}
-		processRemoteUnixInference := func() (bool, error) {
+		processRemoteUnixInference := func(featureVectorsFloat [][]float32) (bool, error) {
 			client, conn, err := GetInferenceUnixClient()
 			if err != nil {
 				panic(err.Error())
 			}
 
 			defer conn.Close()
+
+			for _, dnsFeature := range dnsFeatures {
+				if utils.GetKeyPresentInCache(dnsFeature.Tld) {
+					return false, nil
+				}
+			}
 
 			inferRequest := InferenceRequest{
 				// pass all the 8 features which define the input layer for the inference in the onnx model
@@ -85,15 +98,28 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 			log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
 
+			if inferenceResponse.ThreatType {
+				// add in the threat cache map for nested lru
+				// marked all the dns features as malicious
+				for _, dnsFeature := range dnsFeatures {
+					utils.UpdateDomainBlacklistInCache(dnsFeature.Tld, dnsFeature.Fqdn)
+				}
+			}
 			return true, nil
 		}
 
-		eval, err := processRemoteUnixInference()
-		if err != nil {
-			log.Printf("Errpr in processing inference from remote unix socket  %v", err)
-			return false
+		featureVectorsFloat := GenerateFloatVectors(dnsFeatures)
+		if onnx.StaticRuntimeChecks(featureVectorsFloat) == DEEP_LEXICAL_INFERENCING {
+			eval, err := processRemoteUnixInference(featureVectorsFloat)
+			if err != nil {
+				log.Printf("Errpr in processing inference from remote unix socket  %v", err)
+				return false
+			}
+			return eval
+
+		} else {
+			return true
 		}
-		return eval
 	default:
 		log.Println("the protocol not supported or missing the onnx model for evaluation")
 		return false

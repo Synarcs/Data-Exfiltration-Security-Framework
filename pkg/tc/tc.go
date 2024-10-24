@@ -129,9 +129,21 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 	}
 }
 
-func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map) error {
-
-	return nil
+func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
+	var KernelPacketRedirectCount uint16 = 0
+	for {
+		var KernelRedirectPacketCount uint32 = 0
+		if err := ebpfMap.Lookup(KernelPacketRedirectCount, &KernelRedirectPacketCount); err != nil {
+			if errors.Is(err, ebpf.ErrKeyNotExist) {
+				continue
+			} else {
+				log.Println("Error polling metric for redirected kernel count", err)
+				errorEventChannel <- err
+			}
+		}
+		events.ExportPromeEbpfExporterEvents(KernelRedirectPacketCount)
+		time.Sleep(time.Second)
+	}
 }
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
@@ -203,7 +215,9 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		}
 	}
 
+	errMapPollChannel := make(chan error)
 	for _, maps := range spec.Maps {
+		// process all the maps which needs to monitoted or polled from kernel for events without explicity events for ring buffer
 		if strings.Contains(maps.String(), "exfil_security_egress_drop_ring_buff") {
 			// an ring event buffer
 			if utils.DEBUG {
@@ -211,7 +225,25 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			}
 			go tc.PollRingBuffer(ctx, maps)
 		}
+		if strings.Contains(maps.String(), "exfil_security_egress_redirect_count_map") {
+
+			go tc.PollMonitoringMaps(ctx, maps, errMapPollChannel)
+		}
 	}
+
+	go func() {
+		for {
+			select {
+			case pollError, ok := <-errMapPollChannel:
+				if !ok {
+					log.Fatal("Channel closed for polling kernel events")
+				}
+				log.Println("Error polling kernel events", pollError)
+			default:
+				time.Sleep(time.Second)
+			}
+		}
+	}()
 
 	if INIT_KERNEL_SOCKET {
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
