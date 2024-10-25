@@ -657,7 +657,7 @@ int classify(struct __sk_buff *skb){
                     }
                 }
 
-                if (deep_scan_mirror){
+                if (deep_scan_mirror && DEBUG){
                     bpf_printk("Suspicious pacekt found perform DPI in UDP Layer over Ipv4 for action flag %u", parse_flag);
                 } 
 
@@ -907,8 +907,8 @@ int classify(struct __sk_buff *skb){
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
                 if (deep_scan_mirror) {
-                    // __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
-                    __u8 dns_rate_limit_action = 1;
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
+                    // __u8 dns_rate_limit_action = 1;
                     if (dns_rate_limit_action == 0) return TC_DROP;
                 }
 
@@ -944,6 +944,7 @@ int classify(struct __sk_buff *skb){
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
 
+                bpf_printk("the ipv6 packet transaction id is %u", transaction_id);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
@@ -952,11 +953,12 @@ int classify(struct __sk_buff *skb){
                         .checksum =  ipv6_checksum, 
                         .kernel_timets = ipv6_kernel_time, 
                     };
+                    bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
                     // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
                 } else {
                     if (DEBUG){
-                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
+                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed for ipv6");
                     }
 
                     bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
@@ -987,7 +989,6 @@ int classify(struct __sk_buff *skb){
                 }
 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
-                bpf_printk("IPv6 packet received and called and dns 6 and redirect to bridge //////////");
                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, 0);
@@ -1000,7 +1001,16 @@ int classify(struct __sk_buff *skb){
                 return TC_DROP;
             }
             return TC_FORWARD;
-        }else if (ip->protocol == IPPROTO_TCP) return TC_FORWARD;
+        }else if (ip->protocol == IPPROTO_TCP) {
+            
+            void *ethdr = cursor.data + sizeof(struct ethhdr);
+            if ((void *) ethdr + 1 > cursor.data_end) return TC_DROP;
+
+            void *ipv6hdr = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+            if ((void *) ipv6hdr + 1 > cursor.data_end) return TC_DROP;
+
+            return TC_FORWARD;
+        }
     } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 
 
     return TC_ACT_OK;

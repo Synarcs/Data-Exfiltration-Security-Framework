@@ -1,16 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
 import datetime
-from typing import NoReturn
+from typing import Any, Callable, NoReturn, Self
 import os, sys, socket, json 
 import logging, signal
 import socketserver
-import onnxruntime as ort 
+import onnxruntime as ort , onnx 
 import http.server 
 
 ONNX_INFERENCE_UNIX_SOCKET = "/run/onnx-inference.sock"
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
+DEBUG: bool = False 
 
 def killSock(sig, frame) -> None:
     print(f"Received a {sig}, removing the unix socket")
@@ -22,19 +23,28 @@ def killSock(sig, frame) -> None:
         sys.exit(0)
 
 class OnnxInference(object): 
+    model = None 
+    model_path = "../dns_sec.onnx"
     def __init__(self) -> None:
         pass 
 
     def load(self) -> NoReturn: 
         print('[x] Loading the Onnx Inferencing Mode ...')
-        
-        pass 
-    
-class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
+        if os.path.isfile(self.model_path): 
+            self.model = onnx.load(self.model_path) 
 
+        print('The onnx inference Model loaded successfully') 
+
+    def verifyOnnxGraph(self) -> bool:
+        return onnx.checker.check_model(self.model, full_check=True) 
+    
+onnxInferenceServer: OnnxInference = OnnxInference() 
+onnxInferenceServer.load()
+
+class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)
-        self.inference = OnnxInference() 
+        global onnxInferenceServer
         
     def infer(self) -> bool:
         return True 
@@ -92,11 +102,14 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
 class UnixSocketHttpServer(socketserver.UnixStreamServer):
     def get_request(self):
         request, client_address = super(UnixSocketHttpServer, self).get_request()
-        print(f"Request received from {client_address}") 
+        if DEBUG:
+            print(f"Request received from {client_address}") 
         return (request, ["local", 0])
 
 class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
-    pass 
+
+    def __init__(self, server_address: str | Any, RequestHandlerClass: Callable[[Any, Any, Self], Any], bind_and_activate: bool = True) -> None:
+        super(ThreadingUnixSocketHttpServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate)
 
 def run_server() -> None:
     if os.path.exists(ONNX_INFERENCE_UNIX_SOCKET):

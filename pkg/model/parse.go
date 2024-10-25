@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"log"
+	"net"
 	"syscall"
 	"time"
 
@@ -70,7 +71,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
-		ipv6.DstIP = d.IfaceHandler.PhysicalRouterGatewayV6
+		// TODO: Need a fix the router not sending solicitation ra response 
+		ipv6.DstIP = net.ParseIP("fe80::cc08:faff:fe26:a064").To16()
 	}
 
 	var udpPacket *layers.UDP
