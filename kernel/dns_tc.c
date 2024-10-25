@@ -853,7 +853,8 @@ int classify(struct __sk_buff *skb){
 
             return TC_FORWARD;
         }
-	}else if (eth->h_proto == bpf_ntohs(ETH_P_IPV6)) {
+	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
 
@@ -871,6 +872,7 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
        
             if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+
                 if (actions.parse_dns_header_size(&cursor, true, true, udp_payload_exclude_header) == 0)
                     return TC_DROP;
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
@@ -985,6 +987,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
+                bpf_printk("IPv6 packet received and called and dns 6 and redirect to bridge //////////");
                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, 0);

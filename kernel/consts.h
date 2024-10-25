@@ -66,7 +66,7 @@ __u32 redirect_skb_mark = 0xFF;
     #define BRIDGE_REDIRECT_ADDRESS_IPV4_MALICIOUS 0x0AC80002 
 #endif
 
-#ifdef IPV6_ROUTE 1 
+#ifdef IPV6_ROUTE 
     // fe80::d091:3cff:fe25:6d96/64
     struct in6_addr bridge_redirect_addr_ipv6_suspicious = {
         .in6_u.u6_addr16 = {

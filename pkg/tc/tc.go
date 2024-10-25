@@ -302,35 +302,35 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	if eth == nil {
 		return fmt.Errorf("no ethernet layer")
 	}
+
+	var ipPacket *layers.IPv4
+	var ipv6Packet *layers.IPv6
+
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	// ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
-	ipPacket := ipLayer.(*layers.IPv4)
-	if ipPacket != nil {
+	if ipLayer == nil {
+		ipv6Packet = (packet.Layer(layers.LayerTypeIPv6)).(*layers.IPv6)
+		ipLayer = packet.Layer(layers.LayerTypeIPv6)
+		isIpv4 = false
+	} else {
+		ipPacket = (packet.Layer(layers.LayerTypeIPv4)).(*layers.IPv4)
 		isIpv4 = true
 		if utils.DEBUG {
 			fmt.Println("current packet checksum", ipPacket.Checksum)
 		}
-	} else {
-		ipv6Packet := ipLayer.(*layers.IPv6)
-		if ipv6Packet != nil {
-			isIpv4 = false
-		}
 	}
+
 	if utils.DEBUG {
 		log.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
-	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	transportLayer := packet.Layer(layers.LayerTypeUDP)
 
-	udpPacket := udpLayer.(*layers.UDP)
+	udpPacket := transportLayer.(*layers.UDP)
 	if udpPacket != nil {
 		isUdp = true
 	} else {
-		tcpPacket := tcpLayer.(*layers.TCP)
-		if tcpPacket != nil {
-			isUdp = false
-		}
+		transportLayer = (packet.Layer(layers.LayerTypeTCP)).(*layers.TCP)
+		isUdp = false
 	}
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
@@ -346,7 +346,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 	} else if !isIpv4 {
-		ipv6Address := ipPacket.DstIP.To16().String()
+		ipv6Address := ipv6Packet.DstIP.To16().String()
 
 		if len(ipv6Address) > 0 {
 			log.Println("the ipv6 dst address route checking for the packet")
@@ -386,7 +386,20 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			}
 		}
 
-		tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true)
+		if isIpv4 && isUdp {
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			// ipv4 and udp
+		} else if !isIpv4 && isUdp {
+			// ipv6 and udp
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		} else if isIpv4 && !isUdp {
+			// ipv4 and tcp
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		} else if !isIpv4 && !isUdp {
+			// ipv6 and tcp
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		}
+
 	}
 
 	return nil

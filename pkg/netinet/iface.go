@@ -7,11 +7,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
-	"golang.org/x/sys/unix"
+	"golang.org/x/net/icmp"
+	"golang.org/x/net/ipv6"
 )
 
 const (
@@ -33,13 +35,19 @@ var Iface_Bridge_Subnets map[string]string = map[string]string{
 
 // each link has net_device virt / physical socket -> netlink -> netfilter -> contrack -> tc (classful / classless) -> xdp -> net_device
 type NetIface struct {
-	Links                 []netlink.Link // netlink liks for all links on the device
-	PhysicalLinks         []netlink.Link // physical veth links with hardware mac and MTU as (1500)
-	BridgeLinks           []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
-	LoopBackLinks         []netlink.Link // loopback links
-	Routes                map[string][]netlink.Route
-	Addr                  map[string][]netlink.Addr
-	PhysicalRouterGateway net.IP
+	Links         []netlink.Link // netlink liks for all links on the device
+	PhysicalLinks []netlink.Link // physical veth links with hardware mac and MTU as (1500)
+	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
+	LoopBackLinks []netlink.Link // loopback links
+
+	RoutesV4 map[string][]netlink.Route
+	RoutesV6 map[string][]netlink.Route
+
+	AddrV4 map[string][]netlink.Addr
+	AddrV6 map[string][]netlink.Addr
+
+	PhysicalRouterGatewayV4 net.IP
+	PhysicalRouterGatewayV6 net.IP
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -51,8 +59,8 @@ func (nf *NetIface) ReadInterfaces() error {
 	customLinks := make([]netlink.Link, 0)
 
 	for _, link := range links {
-		if link.Attrs().Name == "enp0s1" || strings.Contains(link.Attrs().Name, "eth") || strings.Contains(link.Attrs().Name, "enp") || strings.Contains(link.Attrs().Name, "wla") {
-			log.Println("Physical links on the Node ", link.Attrs().Name)
+		if link.Type() == "device" && !strings.Contains(link.Attrs().Name, "lo") {
+			log.Println("Physical links on the Node ", link.Attrs().Name, link.Type())
 			customLinks = append(customLinks, link)
 		}
 	}
@@ -73,35 +81,92 @@ func (nf *NetIface) ReadInterfaces() error {
 }
 
 func (nf *NetIface) GetRootGateway() error {
-	if len(nf.Routes) == 0 {
+	if len(nf.RoutesV4) == 0 && len(nf.RoutesV6) == 0 {
 		return fmt.Errorf("No routes found")
 	}
 	var gw net.IP
 	physicalLink := nf.PhysicalLinks[0].Attrs().Name
-	for _, val := range nf.Routes[physicalLink] {
-		gw = val.Gw
-		break
+	for _, val := range nf.RoutesV4[physicalLink] {
+		if val.Gw != nil {
+			gw = val.Gw
+			break
+		}
 	}
-	nf.PhysicalRouterGateway = gw
+
+	nf.PhysicalRouterGatewayV4 = gw.To4()
+	nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
+
+	log.Println("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
 	return nil
 }
 
+func getRouterIPv6() string {
+	conn, _ := icmp.ListenPacket("ip6:ipv6-icmp", "::")
+	defer conn.Close()
+
+	// Create Router Solicitation message
+	msg := icmp.Message{
+		Type: ipv6.ICMPTypeRouterSolicitation,
+		Code: 0,
+		Body: &icmp.RawBody{},
+	}
+
+	// multicast broadcast to all router address in the network
+	dst := net.ParseIP("ff02::2")
+	wb, _ := msg.Marshal(nil)
+	conn.WriteTo(wb, &net.IPAddr{IP: dst})
+
+	// read the remote router solicitation requests
+	rb := make([]byte, 1500)
+	n, peer, _ := conn.ReadFrom(rb)
+
+	rm, _ := icmp.ParseMessage(58, rb[:n])
+
+	if rm.Type == ipv6.ICMPTypeRouterAdvertisement || rm.Type == ipv6.ICMPTypeCertificationPathSolicitation && !utils.DEBUG {
+		log.Printf("Router solicitation received from: %v", peer.String())
+	}
+
+	return peer.String()
+}
+
 func (nf *NetIface) ReadRoutes() error {
-	nf.Addr = make(map[string][]netlink.Addr)
-	nf.Routes = make(map[string][]netlink.Route)
+	nf.AddrV4 = make(map[string][]netlink.Addr)
+	nf.RoutesV4 = make(map[string][]netlink.Route)
+
+	nf.AddrV6 = make(map[string][]netlink.Addr)
+	nf.RoutesV6 = make(map[string][]netlink.Route)
+
 	for _, link := range nf.PhysicalLinks {
-		routes, err := netlink.RouteList(link, unix.ETH_P_ALL)
+		routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
 		if err != nil {
 			log.Println(err)
 			return err
 		}
-		addr, err := netlink.AddrList(link, unix.ETH_P_ALL)
+		addr, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
 			log.Println(err)
 			return err
 		}
-		nf.Addr[link.Attrs().Name] = addr
-		nf.Routes[link.Attrs().Name] = routes
+
+		// ipv6
+		// getRouterIPv6()
+		routesv6, err := netlink.RouteList(link, netlink.FAMILY_V6)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		addrv6, err := netlink.AddrList(link, netlink.FAMILY_V6)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		nf.AddrV4[link.Attrs().Name] = addr
+		nf.RoutesV4[link.Attrs().Name] = routes
+
+		nf.AddrV6[link.Attrs().Name] = addrv6
+		nf.RoutesV6[link.Attrs().Name] = routesv6
 	}
 	return nil
 }
@@ -119,7 +184,7 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 			attrs.Flags&net.FlagLoopback != 0
 			// attrs.Name == "lo"
 
-		isLoopBack := attrs.EncapType == "loopback" || attrs.Name == "lo"
+		isLoopBack := (attrs.EncapType == "loopback" || attrs.Name == "lo" || link.Attrs().Flags&net.FlagLoopback != 0) && (link.Type() != "veth" && link.Type() != "device")
 		if isEth && !isVirtual && !isLoopBack {
 			hardwardIntefaces = append(hardwardIntefaces, link)
 		}

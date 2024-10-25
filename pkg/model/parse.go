@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"log"
-	"net"
 	"syscall"
 	"time"
 
@@ -53,8 +52,8 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 }
 
 // only use for l3 -> ipv4 and l4 -> udp
-func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, ipLayer, udpLayer, dnsLayer gopacket.Layer,
-	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool) error {
+func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
+	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -62,23 +61,32 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, ipLayer, udpLayer, dnsLa
 	}
 	ethernet := ethLayer.(*layers.Ethernet)
 
-	ipv4 := ipLayer.(*layers.IPv4)
+	var ipv4 *layers.IPv4
+	var ipv6 *layers.IPv6
 
-	// do feature engineering
+	if isIpv4 {
+		ipv4 = networkLayer.(*layers.IPv4)
+		ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		ipv4.Checksum = l3_bpfMap_checksum
+	} else {
+		ipv6 = networkLayer.(*layers.IPv6)
+		ipv6.DstIP = d.IfaceHandler.PhysicalRouterGatewayV6
+	}
 
-	// gw := net.IP(d.IfaceHandler.PhysicalRouterGateway)
+	var udpPacket *layers.UDP
+	var tcpPacket *layers.TCP
 
-	ipv4.DstIP = net.IP{192, 168, 64, 1}
-	ipv4.Checksum = l3_bpfMap_checksum
+	if isUdp {
+		udpPacket = transportLayer.(*layers.UDP)
+	} else {
+		tcpPacket = transportLayer.(*layers.TCP)
+	}
 
 	dns, ok := dnsLayer.(*layers.DNS)
 	if !ok {
 		log.Println("Error parsing the dns header return")
 		return fmt.Errorf("error parsing DNS layer")
 	}
-
-	udpPacket := udpLayer.(*layers.UDP)
-	udpPacket.SetNetworkLayerForChecksum(ipv4)
 
 	if utils.DEBUG {
 		fmt.Println("src ip is", ipv4.SrcIP.To4(), "dest ip ", ipv4.DstIP.To4())
@@ -113,9 +121,36 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, ipLayer, udpLayer, dnsLa
 		ComputeChecksums: true,
 	}
 
-	if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, udpPacket, &dnsPacket); err != nil {
-		log.Println("Error reconstructing the DNS packet", err)
-		return err
+	if isIpv4 && isUdp {
+		// ipv4 and udp
+		udpPacket.SetNetworkLayerForChecksum(ipv4)
+		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, udpPacket, &dnsPacket); err != nil {
+			log.Println("Error reconstructing the DNS packet", err)
+			return err
+		}
+	} else if !isIpv4 && isUdp {
+		// ipv6 and udp
+		opts.ComputeChecksums = false
+		udpPacket.SetNetworkLayerForChecksum(ipv6)
+		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, udpPacket, &dnsPacket); err != nil {
+			log.Println("Error reconstructing the DNS packet", err)
+			return err
+		}
+	} else if isIpv4 && !isUdp {
+		// ipv4 and tcp
+		tcpPacket.SetNetworkLayerForChecksum(ipv4)
+		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, tcpPacket, &dnsPacket); err != nil {
+			log.Println("Error reconstructing the DNS packet", err)
+			return err
+		}
+	} else if !isIpv4 && !isUdp {
+		// ipv6 and tcp
+		opts.ComputeChecksums = false
+		tcpPacket.SetNetworkLayerForChecksum(ipv6)
+		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, tcpPacket, &dnsPacket); err != nil {
+			log.Println("Error reconstructing the DNS packet", err)
+			return err
+		}
 	}
 
 	if utils.DEBUG {

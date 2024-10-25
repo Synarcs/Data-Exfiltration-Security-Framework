@@ -78,7 +78,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		_, _ = dnsLayer.(*layers.DNS)
 
 		// ing.OnnxModel.Evaluate()
-		ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ipPacket.Checksum, handler, false)
+		ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ipPacket.Checksum, handler, false, isIpv4, isUdp)
 	}
 
 	return nil
