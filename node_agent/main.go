@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -21,6 +22,14 @@ import (
 
 func main() {
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
+	flag.Bool("debug", false, "Run the Node Agent in debug mode")
+
+	flag.Usage = func() {
+		fmt.Println("Usage: node_agent [options]")
+		flag.PrintDefaults()
+	}
+
+	flag.Parse()
 
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)

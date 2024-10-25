@@ -17,6 +17,11 @@ const (
 )
 
 const (
+	SUSPICIOUS_NETNS_IPV6 = "fe80::d091:3cff:fe25:6d96"
+	MALICIOUS_NETNS_IPV6  = "fe80::d091:3cff:fe25:6d97"
+)
+
+const (
 	BRIDGE_IPAM_IPV4_CIDR = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
@@ -77,6 +82,8 @@ func ExtractTldFromDomain(fqdn string) string {
 	}
 	return strings.Join(vv[len(vv)-2:], ".")
 }
+
+
 
 func cpuArch() string {
 	return runtime.GOARCH

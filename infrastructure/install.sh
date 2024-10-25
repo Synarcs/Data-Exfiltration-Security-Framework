@@ -25,7 +25,14 @@ sudo apt update -y && sudo apt install -y \
     libcap-dev \
     vim  \
     curl \ 
-    libpcap-dev
+    libpcap-dev 
+
+if [ $? -eq 0 ]; then 
+    echo "Installed the kernel build librries"
+else
+    echo "Error Installing the kernel build librries"
+    
+fi 
 
 
 wget https://apt.llvm.org/llvm.sh

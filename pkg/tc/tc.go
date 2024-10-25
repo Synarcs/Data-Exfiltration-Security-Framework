@@ -141,6 +141,9 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 				errorEventChannel <- err
 			}
 		}
+		if utils.DEBUG {
+			log.Println("The current Redirected count of packets is ", KernelRedirectPacketCount)
+		}
 		events.ExportPromeEbpfExporterEvents(KernelRedirectPacketCount)
 		time.Sleep(time.Second)
 	}
@@ -344,13 +347,26 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
 		}
 
+		if ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2) {
+			// packet is malicious found from kernel and link redirected and no further DPI should be done on user space
+			events.HandleKernelDroppedPacket(
+				dnsLayer, isIpv4, isUdp, "DNS",
+			)
+			return nil
+		}
+
 		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 	} else if !isIpv4 {
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
-		if len(ipv6Address) > 0 {
-			log.Println("the ipv6 dst address route checking for the packet")
+		if ipv6Address == utils.MALICIOUS_NETNS_IPV6 {
+			events.HandleKernelDroppedPacket(
+				dnsLayer, isIpv4, isUdp, "DNS",
+			)
+
+			return nil
 		}
+
 		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 		// TODO: ipv6 processing for the pacekt capture
 	}

@@ -27,6 +27,19 @@
     default: bpf_printk("the config vvalue stored from map %d", X)
 
 
+#define MAX_DOMAIN_SIZE 255 
+
+struct rootKernelTLDDomain {
+    char rootTld[MAX_DOMAIN_SIZE];
+};
+
+struct exfil_security_detected_c2c_tld  {
+    __uint(type ,BPF_MAP_TYPE_LRU_HASH);
+    __type(key, struct rootKernelTLDDomain);
+    __type(value, __u8);
+    __uint(max_entries, 1 << 12);
+} exfil_security_detected_c2c_tld SEC(".maos");
+
 struct xdp_parse {
     __u8 (*parse_dns_header) (void * ,struct __sk_buff *, bool, bool);
 };
@@ -40,7 +53,6 @@ struct cursosr {
     void *data;
     void *data_end;
 }   __attribute__((packed)) xdp_cursor;
-
 
 
 static 

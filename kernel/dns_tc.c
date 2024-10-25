@@ -934,8 +934,13 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
                 else if (drop) {
-
-
+                    #ifdef DEBUG
+                        if (DEBUG) {
+                            bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
+                        }
+                    #endif
+                    // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
+                    ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, 0);
                 }
 
@@ -1008,6 +1013,7 @@ int classify(struct __sk_buff *skb){
 
             void *ipv6hdr = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
             if ((void *) ipv6hdr + 1 > cursor.data_end) return TC_DROP;
+
 
             return TC_FORWARD;
         }
