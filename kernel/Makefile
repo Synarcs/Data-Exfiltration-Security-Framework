@@ -11,8 +11,8 @@ xdp_kernel_out := xdp.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o  $(tc_kernel_out) -c $(tc_kernel) 
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 
@@ -26,7 +26,7 @@ compile-llvm-arch:
 
 .PHONY: compile-llvm-x86
 compile-llvm-x86:
-	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
+	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm  -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 	sudo llv-objdump -S tc.o 
@@ -34,8 +34,8 @@ compile-llvm-x86:
 # for x86 compilation of cpu 
 .PHONY: compile-x86
 compile-x86:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
-	sudo clang -target bpf -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	cp tc.o ../node_agent/
 	cp bridge.o ../node_agent/
 
@@ -81,7 +81,7 @@ xdp-show:
 
 .PHONY: xdp-compile-x86
 xdp-compile-x86:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
 	sudo mount -t bpf bpf /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 

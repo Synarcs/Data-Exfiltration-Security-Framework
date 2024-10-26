@@ -62,7 +62,11 @@ func main() {
 	var ingress xdp.IngressSniffHandler = xdp.GenerateTcIngressFactory(iface, model)
 
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
-	go rpcServer.Server()
+
+	if !utils.DEBUG {
+		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints 
+		go rpcServer.Server()
+	}
 	go ingress.SniffEgressForC2C()
 
 	if utils.DEBUG {

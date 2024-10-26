@@ -68,7 +68,9 @@ struct packet_actions {
     
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool, __u32 );
-    __u8 (*parse_dns_payload) (struct skb_cursor *, void *, __u32, __u32,  bool, bool, struct dns_header *, __u32);
+    __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32,  struct dns_header *, __u32);
+    __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header *, __u32); 
+
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
@@ -255,20 +257,21 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
 
 static 
-__always_inline __u8 parse_dns_payload(struct skb_cursor *skb, void * dns_payload, 
-            __u32 udp_payload_len, __u32 udp_payload_exclude_header,  bool ispv4, bool isUdp,  struct dns_header * dns_header, __u32 skb_len) {
+__always_inline __u8 parse_dns_payload_udp(struct skb_cursor *skb, void * dns_payload, 
+            __u32 udp_payload_len, __u32 udp_payload_exclude_header, struct dns_header * dns_header, __u32 skb_len) {
         
         // the kernel verifier enforce and need to be strict and assume the buffer is validated before itself 
 
         if (udp_payload_len > skb_len || udp_payload_exclude_header > skb_len) return 0;
 
-        #ifdef DEBUG 
-            if (DEBUG){
-                bpf_printk("The size of the dns payload %u and buffer %u and pyload %u", sizeof(*dns_payload), udp_payload_exclude_header, bpf_htons(dns_header->ans_count));
-            } 
-        #endif
 
         return 1;
+}
+
+static 
+__always_inline __u8 parse_dns_payload_tcp(struct skb_cursor *skb, void *dns_payload, struct dns_header * dns_header, __u32 skb_len) {
+    if ((void *) dns_payload + sizeof(*dns_header) > skb->data_end) return 0;
+    return 1;
 }
 
 static
@@ -457,8 +460,8 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                             (isUdp ? sizeof(struct udphdr) : sizeof(struct tcphdr)) + sizeof(struct dns_header);
         if ((void *) (dns_payload + 1) > cursor.data_end) return TC_FORWARD;
         struct dns_header *dns = (struct dns_header *) (udp_data);
-        if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, isIpv4 ? true : false, isUdp ? true : false
-                         , dns, skb->len) == 0) 
+        if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header,
+                        dns, skb->len) == 0) 
             return 1;
         
         // get the dns flags from the dns header 
@@ -474,6 +477,35 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         // encap packet used and normally this packet are not used for dns query 
         return 1;
         // do deep packet inspection on the packet contett and the associated payload 
+}
+
+
+static 
+__always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 parse_flag) {
+    struct result_parse_dns_labels result = {
+        .deep_scan_mirror = false, 
+        .drop = false, 
+        .isBenign = false,
+    };
+    switch (parse_flag) {
+        case SUSPICIOUS: {
+            result.deep_scan_mirror = true;
+            break;
+        }
+        case MALICIOUS: {
+            result.drop = true;
+            break;
+        }
+        case BENIGN: {
+            result.isBenign = true;
+            break;
+        }
+        default: {
+            result.deep_scan_mirror = true;
+            break;
+        }
+    }
+    return result;
 }
 
 
@@ -535,7 +567,8 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_udp = &parse_udp;
     actions.parse_tcp = &parse_tcp;
     actions.parse_dns_header_size = &parse_dns_header_size;
-    actions.parse_dns_payload = &parse_dns_payload;
+    actions.parse_dns_payload_transport_udp = &parse_dns_payload_udp;
+    actions.parse_dns_payload_transport_tcp = &parse_dns_payload_tcp; 
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
@@ -628,36 +661,16 @@ int classify(struct __sk_buff *skb){
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
-                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, true, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
 
                 __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
         
-                bool deep_scan_mirror = false;
-                bool drop = false;
-                bool isBenign = false;
-                switch (parse_flag) {
-                    case SUSPICIOUS: {
-                        deep_scan_mirror = true;
-                        break;
-                    }
-                    case MALICIOUS: {
-                        drop = true;
-                        break;
-                    }
-                    case BENIGN: {
-                        isBenign = true;
-                        break;
-                    }
-                    default: {
-                        deep_scan_mirror = true;
-                        break;
-                    }
-                }
+                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
 
-                if (deep_scan_mirror && DEBUG){
+                if (result.deep_scan_mirror && DEBUG){
                     bpf_printk("Suspicious pacekt found perform DPI in UDP Layer over Ipv4 for action flag %u", parse_flag);
                 } 
 
@@ -684,7 +697,7 @@ int classify(struct __sk_buff *skb){
 
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
-                if (deep_scan_mirror) {
+                if (result.deep_scan_mirror) {
                     __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
 
                     #ifdef DEBUG
@@ -696,7 +709,7 @@ int classify(struct __sk_buff *skb){
                 }
             
 
-                if (isBenign) {
+                if (result.isBenign) {
                     #ifdef DEBUG
                         if (DEBUG) {
                             bpf_printk("Allowing the packet as benign with no further DPI from kernel"); 
@@ -704,7 +717,7 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                else if (drop){
+                else if (result.drop){
                     #ifdef DEBUG 
                         if (DEBUG) {
                             bpf_printk("Dropping the packet in Kernel Layer");
@@ -879,34 +892,18 @@ int classify(struct __sk_buff *skb){
                 if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP; 
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
-                if (actions.parse_dns_payload(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, true, true, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
                 // reached app layer no offset processing required from kernel 
                 __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
 
-                bool deep_scan_mirror = false;
-                bool drop = false;
-                bool isBenign = false;
-                switch (parse_flag) {
-                    case SUSPICIOUS: {
-                        deep_scan_mirror = true; break;
-                    }
-                    case MALICIOUS: {
-                        drop = true; break;
-                    }
-                    case BENIGN: {
-                        isBenign = true; break;
-                    }
-                    default: {
-                        deep_scan_mirror = true; break;
-                    }
-                }
+                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
 
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
-                if (deep_scan_mirror) {
+                if (result.deep_scan_mirror) {
                     __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
                     // __u8 dns_rate_limit_action = 1;
                     if (dns_rate_limit_action == 0) return TC_DROP;
@@ -925,7 +922,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 // TODO Add event emit for the drop packet processing 
-                if (isBenign) {
+                if (result.isBenign) {
                     #ifdef DEBUG 
                         if (DEBUG) {
                             bpf_printk("Benign packet found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
@@ -933,7 +930,7 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                else if (drop) {
+                else if (result.drop) {
                     #ifdef DEBUG
                         if (DEBUG) {
                             bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
@@ -949,7 +946,6 @@ int classify(struct __sk_buff *skb){
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
 
-                bpf_printk("the ipv6 packet transaction id is %u", transaction_id);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
@@ -975,7 +971,7 @@ int classify(struct __sk_buff *skb){
                         return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
                     }else {
                         #ifdef DEBUG 
-                            if (!DEBUG) {
+                            if (DEBUG) {
                                 bpf_printk("the kernel verified timing attack broke and was not  \
                                                  prevented it with ns timestamp verification after DPI");
                             }
@@ -1006,15 +1002,63 @@ int classify(struct __sk_buff *skb){
                 return TC_DROP;
             }
             return TC_FORWARD;
-        }else if (ip->protocol == IPPROTO_TCP) {
+        }else if (ipv6->nexthdr == IPPROTO_TCP) {
             
-            void *ethdr = cursor.data + sizeof(struct ethhdr);
-            if ((void *) ethdr + 1 > cursor.data_end) return TC_DROP;
+            struct tcphdr *tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+            if ((void *) (tcp + 1) > cursor.data_end) return TC_DROP;
+            
+            __u32 total_offset = nhoff + sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
+            if (total_offset > skb->len) return TC_DROP;
+            
+            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
+                if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP;
 
-            void *ipv6hdr = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-            if ((void *) ipv6hdr + 1 > cursor.data_end) return TC_DROP;
+                struct dns_header *dns = (struct dns_header *) dns_payload; 
+                if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
+                
+                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
+                    return TC_DROP;
+                }
+
+                // reached app layer no offset processing required from kernel 
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
+    
+                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
+
+                __u32 skb_ifIndex = skb->ifindex;
+                
+                if (result.isBenign) 
+                    return TC_FORWARD;
+                else if (result.drop) {
+
+                    __u32 br_index = 4;
+                    struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &skb_ifIndex);
+                    
+                    __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count for any protocol from kernel having the dns payload to be scanned from kernel 
+                    __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
+                    if (ct_val) {
+                        __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count sync locked and spin locked by llvm clang compilers 
+                    }else {
+                        __u32 init_map_redirect_count = 1;
+                        bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+                    }
+                    
+                    if (config) 
+                        return bpf_redirect(config->BridgeIndexId, 0);
+                    else return bpf_redirect(br_index, 0);
 
 
+                    __u32 transaction_id = bpf_ntohs(dns->transaction_id);
+                }
+                
+                if (!DEBUG){
+                    bpf_printk("Tcp packet found for egress DNS Port", bpf_ntohs(tcp->dest));
+                }
+            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
+                return TC_FORWARD;
+            }
+       
             return TC_FORWARD;
         }
     } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 

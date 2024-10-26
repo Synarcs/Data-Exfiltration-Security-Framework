@@ -20,8 +20,10 @@ const (
 /*
 Tells the node agent go routeines to call the remote inference server deep learning model for enhanced scanning
 */
-func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32) int {
-
+func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32, direction bool) int {
+	if features[0][2] == 0 && features[0][3] == 0 {
+		return STATIC_BENIGN_INFERENCING
+	}
 	return DEEP_LEXICAL_INFERENCING
 }
 
@@ -49,24 +51,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 			inferRequest := InferenceRequest{
 				// pass all the 8 features which define the input layer for the inference in the onnx model
-				Features: [][]float32{
-					// questions
-					{
-						1.0, 2.0, 3.0, 4.0,
-					},
-					// answers
-					{
-						2.0, 3.0, 4.0, 5.0,
-					},
-					// additional
-					{
-						2.0, 3.0, 4.0, 5.0,
-					},
-					// auth
-					{
-						1.0, 2.1212,
-					},
-				},
+				Features: featureVectorsFloat,
 			}
 
 			requestPayload, err := json.Marshal(inferRequest)
@@ -109,7 +94,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 		}
 
 		featureVectorsFloat := GenerateFloatVectors(dnsFeatures)
-		if onnx.StaticRuntimeChecks(featureVectorsFloat) == DEEP_LEXICAL_INFERENCING {
+		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING {
 			eval, err := processRemoteUnixInference(featureVectorsFloat)
 			if err != nil {
 				log.Printf("Errpr in processing inference from remote unix socket  %v", err)

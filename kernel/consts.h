@@ -1,5 +1,6 @@
 #include <linux/ipv6.h>
 #include <linux/in6.h>
+#include <stdbool.h>
 
 
 #ifndef DNS_EGRESS_PORT
@@ -96,6 +97,13 @@ __u32 redirect_skb_mark = 0xFF;
     };
 #endif
 // fe80::5c0a:20ff:fe93:9ef1
+
+struct result_parse_dns_labels {
+    bool deep_scan_mirror;
+    bool drop;
+    bool isBenign;
+} __attribute__((packed));
+
 
 
 // RATE LIMITER 

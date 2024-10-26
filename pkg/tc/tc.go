@@ -383,7 +383,9 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		if err != nil {
 			fmt.Println("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
 		} else {
-			log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+			if utils.DEBUG {
+				log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+			}
 
 			if isIpv6 {
 				// support for ipv6

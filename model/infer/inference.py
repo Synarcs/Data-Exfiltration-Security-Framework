@@ -6,6 +6,7 @@ import logging, signal
 import socketserver
 import onnxruntime as ort , onnx 
 import http.server 
+from abc import ABC, abstractmethod 
 
 ONNX_INFERENCE_UNIX_SOCKET = "/run/onnx-inference.sock"
 
@@ -107,10 +108,26 @@ class UnixSocketHttpServer(socketserver.UnixStreamServer):
         return (request, ["local", 0])
 
 class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
+    allow_reuse_address = True
+    daemon_threads = True 
+    request_queue_size = 1 << 10 
 
     def __init__(self, server_address: str | Any, RequestHandlerClass: Callable[[Any, Any, Self], Any], bind_and_activate: bool = True) -> None:
         super(ThreadingUnixSocketHttpServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate)
 
+        self.thread_pool = []
+        self.max_threads = self.request_queue_size
+
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+    def server_bind(self) -> None:
+        try:
+            os.unlink(self.server_address)
+        except Exception as err: 
+            pass 
+
+        return super().server_bind()
 def run_server() -> None:
     if os.path.exists(ONNX_INFERENCE_UNIX_SOCKET):
         os.unlink(ONNX_INFERENCE_UNIX_SOCKET)
