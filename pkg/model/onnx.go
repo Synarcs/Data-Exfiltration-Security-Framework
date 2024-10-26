@@ -27,7 +27,7 @@ func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32, direction bool)
 	return DEEP_LEXICAL_INFERENCING
 }
 
-func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
+func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction bool) bool {
 
 	switch protocol {
 	case "DNS":
@@ -35,8 +35,8 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 		if !ok {
 			log.Panic("The Required features needs to adher to the protocol definition")
 		}
-		processRemoteUnixInference := func(featureVectorsFloat [][]float32) (bool, error) {
-			client, conn, err := GetInferenceUnixClient()
+		processRemoteUnixInference := func(featureVectorsFloat [][]float32, direction bool) (bool, error) {
+			client, conn, err := GetInferenceUnixClient(direction)
 			if err != nil {
 				panic(err.Error())
 			}
@@ -95,7 +95,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string) bool {
 
 		featureVectorsFloat := GenerateFloatVectors(dnsFeatures)
 		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING {
-			eval, err := processRemoteUnixInference(featureVectorsFloat)
+			eval, err := processRemoteUnixInference(featureVectorsFloat, direction)
 			if err != nil {
 				log.Printf("Errpr in processing inference from remote unix socket  %v", err)
 				return false

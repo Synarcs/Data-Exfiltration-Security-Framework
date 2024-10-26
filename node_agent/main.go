@@ -42,6 +42,7 @@ func main() {
 	utils.InitCache()
 
 	// load the model from onnx lib
+	// TODO: fix this remove garbage unwanted memory load for the model
 	model, err := onnx.ConnectRemoteInferenceSocket(".")
 	if err != nil {
 		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
@@ -64,7 +65,7 @@ func main() {
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 
 	if !utils.DEBUG {
-		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints 
+		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
 		go rpcServer.Server()
 	}
 	go ingress.SniffEgressForC2C()
@@ -94,7 +95,7 @@ func main() {
 
 	go func() {
 		for {
-			_, err := os.Stat(onnx.ONNX_INFERENCE_UNIX_SOCKET)
+			_, err := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					log.Println("The Unix Local Unix Inference Socket is not available", err.Error())

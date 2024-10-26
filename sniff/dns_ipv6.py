@@ -4,7 +4,7 @@ from argparse import ArgumentParser
  
 import os, sys 
 
-arg = int(sys.argv[1]) 
+# while true; do time python3 -c "import requests as rq; print(rq.get('https://kv801.prod.do.dsp.mp.microsoft.com/').status_code)";sudo python3 ../sniff/dns_ipv6.py; sleep 1; done;
 
 domains = ["kv801.prod.do.dsp.mp.microsoft.com","google.com", "apple.com", "intel.com"]
 dns = DNS(
@@ -16,7 +16,7 @@ dns.qd = DNSQR(qname=domains[0])
 
 dns_req = (
     IPv6(dst='fe80::cc08:faff:fe26:a064', hlim=64)/ 
-    TCP(dport=53) if arg == 1 else UDP(dport= 53) / 
+    UDP(dport= 53) /
     dns
 )
 

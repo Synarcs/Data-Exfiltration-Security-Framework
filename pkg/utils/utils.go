@@ -26,6 +26,12 @@ const (
 	BRIDGE_IPAM_IPV4_IP   = "10.200.0."
 )
 
+// user space remote inferencing support for unix domain sockets
+const (
+	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/onnx-inference-out.sock"
+	ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/run/onnx-inference-in.sock"
+)
+
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int
 	MAX_DOMAIN_LENGTH              int
@@ -82,8 +88,6 @@ func ExtractTldFromDomain(fqdn string) string {
 	}
 	return strings.Join(vv[len(vv)-2:], ".")
 }
-
-
 
 func cpuArch() string {
 	return runtime.GOARCH

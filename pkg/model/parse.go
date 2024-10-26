@@ -71,7 +71,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
-		// TODO: Need a fix the router not sending solicitation ra response 
+		// TODO: Need a fix the router not sending solicitation ra response
 		ipv6.DstIP = net.ParseIP("fe80::cc08:faff:fe26:a064").To16()
 	}
 
@@ -102,7 +102,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		return err
 	}
 
-	isBenign := d.OnnxModel.Evaluate(features, "DNS")
+	isBenign := d.OnnxModel.Evaluate(features, "DNS", isEgress)
 
 	if !isBenign {
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")

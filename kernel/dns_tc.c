@@ -557,6 +557,53 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     return 1;
 }
 
+static 
+__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
+    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
+    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
+    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
+        .checksum =  ipv6_checksum, 
+        .kernel_timets = ipv6_kernel_time, 
+    };
+    return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
+}
+
+
+static 
+__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id){
+    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
+    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
+    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
+        .checksum =  ipv6_checksum, 
+        .kernel_timets = ipv6_kernel_time, 
+    };
+    return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
+}
+
+
+static 
+__always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, struct checkSum_redirect_struct_value * map_layer3_redirect_value) {
+    if (DEBUG){
+        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed for ipv6");
+    }
+
+    bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
+    __u8 * pres;
+    __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
+    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
+    if (pres) {
+        bpf_map_delete_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
+        return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
+    }else {
+        #ifdef DEBUG 
+            if (DEBUG) {
+                bpf_printk("the kernel verified timing attack broke and was not  \
+                                 prevented it with ns timestamp verification after DPI");
+            }
+        #endif
+        return TC_FORWARD; // need a potential forward timestamp order fix 
+    }
+} 
 
 static 
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
@@ -846,24 +893,7 @@ int classify(struct __sk_buff *skb){
             }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) {
-            if (actions.parse_tcp(&cursor, true) == 0) return TC_DROP;
-            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
-            if ((void *) (tcp + 1) > cursor.data_end) return TC_DROP;
-
-            void *tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
-            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
-
-            // verify for standard or enhanced dpi inspection over the payload header 
-            if (tcp-> dest == bpf_htons(DNS_EGRESS_PORT)) {
-                // a standard port used for tcp data forwarding 
-                void *dns_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header);
-                if ((void *) dns_data + 1 > cursor.data_end) return TC_DROP;
-                return TC_FORWARD;
-            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) return TC_FORWARD;
-            else {
-                // DPI over the non start port used for transfer 
-            }
-
+            
             return TC_FORWARD;
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
@@ -948,36 +978,20 @@ int classify(struct __sk_buff *skb){
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
-                    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
-                    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
-                        .checksum =  ipv6_checksum, 
-                        .kernel_timets = ipv6_kernel_time, 
-                    };
-                    bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
+                                                packet redirect lifecycle");
+                            }
+                        #endif 
+                        return TC_DROP;
+                    }
                     // Key not found, insert new element for the dns query id mapped to layer 3 checksum
                     // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
                 } else {
-                    if (DEBUG){
-                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed for ipv6");
-                    }
-
-                    bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                    __u8 * pres;
-                    __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
-                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
-                    if (pres) {
-                        bpf_map_delete_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
-                        return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
-                    }else {
-                        #ifdef DEBUG 
-                            if (DEBUG) {
-                                bpf_printk("the kernel verified timing attack broke and was not  \
-                                                 prevented it with ns timestamp verification after DPI");
-                            }
-                        #endif
-                        return TC_FORWARD; // need a potential forward timestamp order fix 
-                    }
+                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
+                    return TC_FORWARD;
                 }
 
                 __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 

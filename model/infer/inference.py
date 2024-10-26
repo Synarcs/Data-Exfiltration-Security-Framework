@@ -1,14 +1,14 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import datetime
 from typing import Any, Callable, NoReturn, Self
 import os, sys, socket, json 
-import logging, signal
+import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
 import http.server 
+import consts 
 from abc import ABC, abstractmethod 
 
-ONNX_INFERENCE_UNIX_SOCKET = "/run/onnx-inference.sock"
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -17,9 +17,15 @@ DEBUG: bool = False
 def killSock(sig, frame) -> None:
     print(f"Received a {sig}, removing the unix socket")
     try:
-        os.remove(ONNX_INFERENCE_UNIX_SOCKET)
-    except OSError as err:
-        print(f"Error removing the unix socket: {err}")
+        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
+            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+            os.remove(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS): 
+            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+            os.remove(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+    except OSError as err: pass 
+    except Exception as err:
+        print(f"Error removing the unix socket Runtime Error: {err}")
     finally:
         sys.exit(0)
 
@@ -128,19 +134,37 @@ class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpS
             pass 
 
         return super().server_bind()
-def run_server() -> None:
-    if os.path.exists(ONNX_INFERENCE_UNIX_SOCKET):
-        os.unlink(ONNX_INFERENCE_UNIX_SOCKET)
+
+
+def run_egress_server() -> None:
+    print('[x] Running the Egress Unix socket server on thread ', threading.current_thread().name)
+    if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
+        os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
 
     try:
-        httpd = ThreadingUnixSocketHttpServer(ONNX_INFERENCE_UNIX_SOCKET, HandleInferenceConnHttpLayer7)
-        print(f'HTTP Server over unix socket transport on {ONNX_INFERENCE_UNIX_SOCKET}')
+        httpd = ThreadingUnixSocketHttpServer(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS, HandleInferenceConnHttpLayer7)
+        print(f'HTTP Server over unix socket transport on {consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS}')
         httpd.serve_forever()
     except Exception as err:
         print(f"Runtime exception occurred while starting the inference server over unix sock: {err}")
     finally:
-        if os.path.exists(ONNX_INFERENCE_UNIX_SOCKET):
-            os.unlink(ONNX_INFERENCE_UNIX_SOCKET)
+        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
+            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+
+def run_ingress_server() -> None:
+    print('[x] Running the Ingress Unix socket server on thread ', threading.current_thread().name)
+    if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS):
+        os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+
+    try:
+        httpd = ThreadingUnixSocketHttpServer(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS, HandleInferenceConnHttpLayer7)
+        print(f'HTTP Server over unix socket transport on {consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS}')
+        httpd.serve_forever()
+    except Exception as err:
+        print(f"Runtime exception occurred while starting the inference server over unix sock: {err}")
+    finally:
+        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS):
+            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
 
 
 if __name__ == "__main__":
@@ -148,7 +172,9 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, killSock)
     print('Starting the inference server over unix socket transport with process ', os.getpid())
     try:
-        run_server()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            ingress: Future = executor.submit(run_ingress_server)
+            egress: Future = executor.submit(run_egress_server)
     except KeyboardInterrupt:
         print("Server stopped by user")
     finally:

@@ -1,5 +1,4 @@
 #include <linux/bpf.h>
-
 #include <linux/if_ether.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
@@ -59,10 +58,15 @@ __always_inline __u8 parse_dns_header(void *data, struct __sk_buff *skb, bool is
     return 1;
 }
 
+/*
+    The XDP only porcess over the ingress dns traffic from kernel over rx queue for the device driver inside kernel 
+*/
 SEC("xdp")
 int xdp_process(struct xdp_md *ctx) {
     void *data = (void *)(long *) ctx->data;
     void *data_end = (void *)(long *) ctx->data_end;
+
+    __u32 ifIndex = ctx->ingress_ifindex;
 
     struct ethhdr *eth = data;
     if ((void *) (eth + 1) > data_end) return XDP_DROP;
@@ -70,17 +74,25 @@ int xdp_process(struct xdp_md *ctx) {
     switch (eth->h_proto) {
         case bpf_ntohs(ETH_P_IP): {
 
-            struct iphdr *ip = eth;
+            struct iphdr *ip = (struct iphdr *)(eth + 1);
             if ((void *) (ip + 1) > data_end) return XDP_DROP;
 
             switch (ip->protocol) {
                 case IPPROTO_UDP: {
-                    struct udphdr *udp = ip;
+                    struct udphdr *udp = (struct udphdr *)((void *) ip + sizeof(struct iphdr));
                     if ((void *) (udp + 1) > data_end) return XDP_DROP;
+
+                    if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+                        __u32 payload_len = udp->len;
+                        if (sizeof(struct dns_header) > payload_len) return XDP_DROP;
+                        return XDP_PASS;
+                    }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) return XDP_PASS;
+                    struct dns_header *dns = (struct dns_header *)((void *) udp + sizeof(struct udphdr));
+                    
                     break;
                 }
                 case IPPROTO_TCP: {
-                    struct tcphdr *tcp = ip;
+                    struct tcphdr *tcp = (struct tcphdr *)((void *) ip + sizeof(struct iphdr));
                     if ((void *) (tcp + 1) > data_end) return XDP_DROP;
                     break;
                 }
@@ -89,18 +101,18 @@ int xdp_process(struct xdp_md *ctx) {
             break;
         }
         case bpf_ntohs(ETH_P_IPV6): {
-            struct ipv6hdr *ip = eth;
+            struct ipv6hdr *ip = (struct ipv6hdr *)(eth + 1);
             if ((void *) (ip + 1) > data_end) return XDP_DROP;
 
             switch (ip->nexthdr) {
                 case IPPROTO_UDP: {
-                    struct udphdr *udp = ip;
+                    struct udphdr *udp = (struct udphdr *)(ip + sizeof(struct ipv6hdr));
                     if ((void *) (udp + 1) > data_end) return XDP_DROP;
                     break;
-                } 
+                }
 
                 case IPPROTO_TCP: {
-                    struct tcphdr *tcp = ip; 
+                    struct tcphdr *tcp = (struct udphdr *)(ip + sizeof(struct ipv6hdr));
                     if ((void *) (tcp + 1) > (void *) data_end) return XDP_DROP;
                 }
             }

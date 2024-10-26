@@ -2,23 +2,33 @@ package model
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net"
 	"net/http"
 	"time"
-)
 
-const (
-	ONNX_INFERENCE_UNIX_SOCKET = "/run/onnx-inference.sock"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 // process and start a Unix Domain socket for inference
-func GetInferenceUnixClient() (*http.Client, net.Conn, error) {
+func GetInferenceUnixClient(isEgress bool) (*http.Client, net.Conn, error) {
 
-	conn, err := net.Dial("unix", ONNX_INFERENCE_UNIX_SOCKET)
-	if err != nil {
-		log.Println("Error binding the inferencce unix server socket ", err)
-		return nil, nil, err
+	var conn net.Conn
+	var err error
+
+	if isEgress {
+		conn, err = net.Dial("unix", utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+		if err != nil {
+			log.Println("Error binding the inferencce unix server socket ", err)
+			return nil, nil, err
+		}
+	} else {
+		conn, err = net.Dial("unix", utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+		if err != nil {
+			log.Println("Error binding the inferencce unix server socket ", err)
+			return nil, nil, err
+		}
 	}
 
 	log.Println("Connected to the Inference Unix Sock ", conn.RemoteAddr())
@@ -33,6 +43,9 @@ func GetInferenceUnixClient() (*http.Client, net.Conn, error) {
 				return conn, nil
 			},
 			DisableKeepAlives: true,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
 		},
 	}
 	log.Println("Inference Unix Socket Listenning")
