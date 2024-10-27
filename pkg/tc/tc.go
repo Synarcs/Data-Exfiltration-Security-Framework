@@ -228,7 +228,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			}
 			go tc.PollRingBuffer(ctx, maps)
 		}
-		if strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP) || strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_MAP) {
+		if strings.Contains(maps.String(), events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP) || strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP) {
 			go tc.PollMonitoringMaps(ctx, maps, errMapPollChannel)
 		}
 	}
@@ -329,7 +329,10 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	}
 
 	transportLayer := packet.Layer(layers.LayerTypeUDP)
+	var dnsLengthTcp uint16 = 0
+	var dnsTcpPayload []byte
 
+	var tcpCheck bool = false
 	if transportLayer != nil {
 		udpPacket := transportLayer.(*layers.UDP)
 		if udpPacket != nil {
@@ -340,15 +343,30 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	} else {
 		transportLayer = packet.Layer(layers.LayerTypeTCP)
 		tcpPacket := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
+
 		if tcpPacket != nil {
 			isUdp = false
 		} else {
 			panic(fmt.Errorf("the packet is malformed"))
 		}
-		// fmt.Println("found tcp packet is ", tcpPacket, isUdp, isIpv4)
+		payload := tcpPacket.Payload
+
+		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
+
+		if len(payload) < 2 {
+			log.Println("errror ", len(payload))
+			return fmt.Errorf("TCP payload too short for dns parsing")
+		}
+
+		dnsLengthTcp = binary.BigEndian.Uint16(payload[0:2])
+
+		log.Println("The DNs packet parsdd over tcp transport with length ", dnsLengthTcp)
+		dnsTcpPayload = payload[2:]
+		tcpCheck = true
 	}
 
 	// init conside for pcap over udp dg only for now
+
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
@@ -387,11 +405,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 	isIpv6 := !isIpv4
 
-	if dnsLayer != nil {
-		dns, _ := dnsLayer.(*layers.DNS)
-
-		var dns_packet_id uint16 = uint16(dns.ID)
-		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+	processVeifyKernelDnsTS := func(dns_packet_id uint16, ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap) error {
 
 		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum_kernel_ts)
 		if err != nil {
@@ -417,6 +431,18 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 				return err
 			}
 		}
+		return nil
+	}
+
+	if dnsLayer != nil {
+		dns, _ := dnsLayer.(*layers.DNS)
+
+		var dns_packet_id uint16 = uint16(dns.ID)
+		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+
+		if err := processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts); err != nil {
+			log.Println(err)
+		}
 
 		log.Println("current state for packet forward ", isIpv4, isUdp)
 		if isIpv4 && isUdp {
@@ -427,6 +453,21 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			// ipv6 and udp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
 		}
+
+	} else if tcpCheck {
+		dns := &layers.DNS{}
+
+		err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
+		if err != nil {
+			log.Println("Error decoding the dns packet over the tcp stream", err)
+			return err
+		}
+
+		var dns_packet_id uint16 = uint16(dns.ID)
+		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+
+		processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts)
+
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			fmt.Println("called here for redirect over tcp")
@@ -436,14 +477,13 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			// ipv6 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
 		}
-
 	}
 
 	return nil
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
-	errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
+	errorChannel chan<- error, isStandardPort bool) error {
 
 	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
@@ -452,17 +492,14 @@ func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceH
 	}
 	defer cap.Close()
 
-	if (isUdp || !isUdp) && isStandardPort {
+	if isStandardPort {
 		// runs over br netfilter layer on iptables
-		if isUdp {
-			log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer")
-		} else {
-			log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer")
-		}
+		log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer and TCP Layer for the DNS protocol")
 		if err := cap.SetBPFFilter("udp dst port 53 or tcp dst port 53"); err != nil {
 			log.Fatalf("Error setting BPF filter: %v", err)
 		}
-	} else if !isUdp && !isStandardPort {
+	} else if !isStandardPort {
+
 		err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
 		return fmt.Errorf("err %s", err)
 	}
@@ -483,12 +520,12 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		log.Println("Processing of multiple Physical links")
 
 		for iface := 0; iface < len(ifaceHandler.PhysicalLinks); iface++ {
-			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true, true)
-			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, false, true)
+			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
+			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
 		}
 	} else {
 		// TODO: Need a fix over go routing getting empty or non valid bad fd for the map
-		tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true, true)
+		tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
 		// go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, false, true)
 	}
 

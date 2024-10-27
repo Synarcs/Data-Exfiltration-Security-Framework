@@ -69,9 +69,10 @@ struct packet_actions {
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool, __u32 );
     __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32,  struct dns_header *, __u32);
-    __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header *, __u32); 
+    __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header_tcp *, __u32); 
 
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
+    __u8 (*parse_dns_payload_memsafet_payload_transport_tcp) (struct skb_cursor *, void *, struct dns_header_tcp *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
@@ -277,7 +278,7 @@ __always_inline __u8 parse_dns_payload_udp(struct skb_cursor *skb, void * dns_pa
 }
 
 static 
-__always_inline __u8 parse_dns_payload_tcp(struct skb_cursor *skb, void *dns_payload, struct dns_header * dns_header, __u32 skb_len) {
+__always_inline __u8 parse_dns_payload_tcp(struct skb_cursor *skb, void *dns_payload, struct dns_header_tcp * dns_header, __u32 skb_len) {
     if ((void *) dns_payload + sizeof(*dns_header) > skb->data_end) return 0;
     return 1;
 }
@@ -310,12 +311,134 @@ static
   }
 
 static 
-__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header) {
+__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
     // debug the size and content of questions, answer auth and add count in dns header 
 
-    struct dns_flags  flags = get_dns_flags(dns_header);
+    struct dns_flags flags = get_dns_flags(dns_header);
+    #ifdef DEBUG
+        if (DEBUG) {
+        bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
+        bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
+        bpf_printk("the query opcode %d",  flags.opcode);
+        }
+    #endif
+
+    // qeuries section 
+    __u16 qd_count = bpf_ntohs(dns_header->qd_count);
+    __u16 ans_count = bpf_ntohs(dns_header->ans_count);
+    __u16 auth_count = bpf_ntohs(dns_header->auth_count);
+    __u16 add_count = bpf_ntohs(dns_header->add_count);
+
+    // the size of char containing the dns payload char size 
+    __u8 *dns_payload_buffer = (__u8 *) dns_payload;
+    /*
+        Usually a dns resolvert sends 1 requestt query for a single request to the remote DNS server 
+        The clsact qdisc is only meant for egress traffic and tc control flow system after fa_codel and default tc action from kernel
+        Direct action appled over the egress traffic 
+        DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections, making it more flexible and stealthy
+    */
+
+   if (qd_count == 1) {
+     if (ans_count == 0) {
+        // a questions record and its an benign packet but need DPI and kernel can do DPI for the entire packet frame 
+        qd_count = 1; // let the ebpf verifier proceed during JIT and memory check 
+
+        if (auth_count >= 1) {
+            return SUSPICIOUS;
+        }
+
+        if (add_count > 1) return SUSPICIOUS;
+
+        // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
+        int oc = 0;
+        __u32 label_key_subdomain_per_label_min = 2;  __u32 label_key_subdomain_per_label_max = 3;
+        __u32 label_key_label_count_min = 4; __u32 label_key_label_count_max = 5;
+        
+        __u32 * MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_min);
+        __u32 * MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_max);
+        __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
+        __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
+
+        __u8 total_domain_length_exclude_tld = 0;
+        for (__u8 i=0; i < qd_count; i++){
+            __u16 offset = 0;
+            __u8 label_count = 0; __u8 mx_label_ln = 0;
+
+            __u8 root_domain  = 0;
+
+            for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
+                if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
+
+                __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
+                mx_label_ln = max(mx_label_ln, label_len); 
+                if (label_len == 0x00) break;
+                label_count++;
+
+                if (root_domain > 2)
+                    total_domain_length_exclude_tld += label_len;
+                else 
+                    root_domain++;
+
+                offset += label_len + 1; 
+                if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
+            }
+        
+
+            __u16 query_type; __u16 query_class;
+            if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+            query_type = *(__u16 *) (dns_payload_buffer + offset); 
+            
+            offset += sizeof(__u16);
+            if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+
+
+            query_class = *(__u16 *) (dns_payload_buffer + offset);
+            offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
+
+            __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+
+            if (label_count <= 2) return BENIGN;
+            
+
+            if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
+                    if (mx_label_ln >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && mx_label_ln <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
+            }else if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
+                    return SUSPICIOUS;
+            }
+
+            if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
+                if (label_count >= *MIN_LABEL_COUNT_KERNEL_MAP && label_count <= *MAX_LABEL_COUNT_KERNEL_MAP) return SUSPICIOUS;
+            }else if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
+                // bpf_printk("invoked on  label_count %d", label_count);
+                return SUSPICIOUS;
+            }
+            
+            if (total_domain_length_exclude_tld >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length_exclude_tld <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH){
+                // bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
+                return SUSPICIOUS;
+            }
+
+            return parse_dns_qeury_type_section(skb, query_class, qtypes);
+        }
+     }else return SUSPICIOUS;
+   }else {
+        /// the question is malicious since the malicious client is sending multiple questions a C2C where malware is asking next commands 
+        return SUSPICIOUS;
+   }
+
+   return BENIGN;
+}   
+
+
+static 
+__always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, struct dns_header_tcp *dns_header) {
+    // dns header already validated and payload and header memory safetyy already cosnidered 
+
+    // debug the size and content of questions, answer auth and add count in dns header 
+
+    struct dns_flags flags = get_dns_flags_tcp(dns_header);
     #ifdef DEBUG
         if (DEBUG) {
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
@@ -649,6 +772,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_transport_udp = &parse_dns_payload_udp;
     actions.parse_dns_payload_transport_tcp = &parse_dns_payload_tcp; 
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
+    actions.parse_dns_payload_memsafet_payload_transport_tcp = &parse_dns_payload_memsafet_payload_transport_tcp;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
     actions.__dns_dpi = &__dns_dpi;
@@ -926,15 +1050,17 @@ int classify(struct __sk_buff *skb){
 
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
-                struct dns_header *dns = (struct dns_header *) tcp_data; 
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header_tcp);
+                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
+                struct dns_header_tcp *dns = (struct dns_header_tcp *) (tcp_data);
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
-                
-                if (actions.parse_dns_payload_transport_tcp(&cursor, tcp_data, dns, skb->len) == 0) {
+
+                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
                 // reached app layer no offset processing required from kernel 
-                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, tcp_data, dns);
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload_transport_tcp(&cursor, dns_payload, dns);
     
                 struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
 
@@ -1001,6 +1127,29 @@ int classify(struct __sk_buff *skb){
 
                 }
 
+                __u32 transaction_id = bpf_ntohs(dns->transaction_id);
+
+                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                if (!map_layer3_redirect_value) {
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
+                                                packet redirect lifecycle");
+                            }
+                        #endif 
+                        return TC_DROP;
+                    }
+                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
+                    // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
+                } else {
+                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
+                    return TC_FORWARD;
+                }
+
+                __handle_kernel_map_redirection_count();
+
+
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                     // 4 bytes for the ipv4 address offset 
                     #ifdef DEBUG   
@@ -1030,7 +1179,8 @@ int classify(struct __sk_buff *skb){
                     }
                     skb->mark = redirect_skb_mark;
                 }
-    
+
+                bpf_printk("redirect the tcp packet over tcp");
                 return bpf_redirect(br_index, 0);
                 // if (!DEBUG){
                 //     bpf_printk("Tcp packet found for egress DNS Port", bpf_ntohs(tcp->dest));
@@ -1164,40 +1314,72 @@ int classify(struct __sk_buff *skb){
             
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
-                struct dns_header *dns = (struct dns_header *) tcp_data; 
+                struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
+
+                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct tcphdr)
+                            + sizeof(struct dns_header_tcp); 
                 
-                if (actions.parse_dns_payload_transport_tcp(&cursor, tcp_data, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
                 // reached app layer no offset processing required from kernel 
-                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, tcp_data, dns);
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload_transport_tcp(&cursor, dns_payload, dns);
     
                 struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
 
                 __u32 skb_ifIndex = skb->ifindex;
+
                 
+                __u32 out = skb->ifindex;
+
+                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+                __u32 br_index = 4;  // loa  the redirection from the kernel 
+
+                if (config) {
+                    br_index = config->BridgeIndexId;
+                }else {
+                    bpf_printk("kernel cannot find the requred kernel config redirect map");
+                }
+
                 if (result.isBenign) 
                     return TC_FORWARD;
                 else if (result.drop) {
 
-                    __u32 br_index = 4;
-                    struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &skb_ifIndex);
-                    
                     __handle_kernel_map_redirection_drop_count();
-                    
-                    if (config) 
-                        return bpf_redirect(config->BridgeIndexId, 0);
-                    else return bpf_redirect(br_index, 0);
-
-
-                    __u32 transaction_id = bpf_ntohs(dns->transaction_id);
+                    ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
+                    return bpf_redirect(br_index, 0);
                 }
                 
-                if (!DEBUG){
-                    bpf_printk("Tcp packet found for egress DNS Port", bpf_ntohs(tcp->dest));
+                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+
+                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
+                if (!map_layer3_redirect_value) {
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
+                                                packet redirect lifecycle");
+                            }
+                        #endif 
+                        return TC_DROP;
+                    }
+                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
+                    // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
+                } else {
+                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
+                    return TC_FORWARD;
                 }
+
+                __handle_kernel_map_redirection_count();
+
+                ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
+               
+                // forward the traffic to the brodhe fpr enhanced DPI in userspace 
+                return bpf_redirect(br_index, 0);
+
+                return TC_FORWARD;
             }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
             }
