@@ -27,9 +27,10 @@ type DPIRedirectionTimestampVerify struct {
 }
 
 const (
-	EXFILL_SECURITY_EGRESS_REDIRECT_MAP           = "exfil_security_egress_redirect_map"
-	EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP = "exfil_security_egress_redurect_ts_verify"
-	EXFILL_SECURITY_KERNEL_CONFIG_MAP             = "exfil_security_config_map"
-	EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP         = "exfil_security_egress_dns_limites"
-	EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP     = "exfil_security_egress_redirect_count_map"
+	EXFILL_SECURITY_EGRESS_REDIRECT_MAP             = "exfil_security_egress_redirect_map"
+	EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_MAP = "exfil_security_egress_redirect_drop_count_map"
+	EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP   = "exfil_security_egress_redurect_ts_verify"
+	EXFILL_SECURITY_KERNEL_CONFIG_MAP               = "exfil_security_config_map"
+	EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP           = "exfil_security_egress_dns_limites"
+	EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP       = "exfil_security_egress_redirect_count_map"
 )

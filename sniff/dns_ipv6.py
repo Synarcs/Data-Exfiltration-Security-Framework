@@ -22,8 +22,6 @@ dns_req = (
 
 dns_req.show()
 
-print(os.getpid())
-
 if __name__ == "__main__":
     ans = sr1(dns_req, iface="enp0s1", timeout=2, verbose=True)
     if ans:

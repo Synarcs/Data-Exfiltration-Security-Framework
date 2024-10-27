@@ -125,6 +125,14 @@ struct exfil_security_egress_redirect_count_map {
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_count_map SEC(".maps");
 
+// count the number of packets over reidrect to drop linux ns
+struct exfil_security_egress_redirect_drop_count_map {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(value, __u32);   // count of hte packet for multiple redirection 
+    __uint(max_entries, 1);
+} exfil_security_egress_redirect_drop_count_map SEC(".maps");
+
 
 /* ***************************************** Event maps for Egress Traffiic Rate Limiting ***************************************** */
 struct dns_volume_stats {
@@ -570,14 +578,38 @@ __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_i
 
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id){
-    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
-    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
+__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum){
+    __u64 ipv4_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
-        .checksum =  ipv6_checksum, 
-        .kernel_timets = ipv6_kernel_time, 
+        .checksum =  ipv4_checksum, 
+        .kernel_timets = ipv4_kernel_time,
     };
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
+}
+
+
+static 
+__always_inline void __handle_kernel_map_redirection_count(){
+    __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
+    __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
+    if (ct_val) {
+        __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
+    }else {
+        __u32 init_map_redirect_count = 1;
+        bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+    }
+}
+
+static 
+__always_inline void __handle_kernel_map_redirection_drop_count() {
+     __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
+    __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_drop_count_map, &redirection_count_key);
+    if (ct_val) {
+        __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
+    }else {
+        __u32 init_map_redirect_count = 1;
+        bpf_map_update_elem(&exfil_security_egress_redirect_drop_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+    }   
 }
 
 
@@ -839,14 +871,7 @@ int classify(struct __sk_buff *skb){
                     }
                 }
 
-                __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
-                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
-                if (ct_val) {
-                    __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
-                }else {
-                    __u32 init_map_redirect_count = 1;
-                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
-                }
+                __handle_kernel_map_redirection_count();
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
@@ -880,7 +905,6 @@ int classify(struct __sk_buff *skb){
                     skb->mark = redirect_skb_mark;
                 }
     
-                
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){
@@ -893,7 +917,128 @@ int classify(struct __sk_buff *skb){
             }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) {
-            
+
+            if (actions.parse_tcp(&cursor, true) == 0) return TC_DROP;
+            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+            if ((void *) tcp + 1 > cursor.data_end) return TC_DROP;
+            void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
+            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
+
+            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+
+                struct dns_header *dns = (struct dns_header *) tcp_data; 
+                if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
+                
+                if (actions.parse_dns_payload_transport_tcp(&cursor, tcp_data, dns, skb->len) == 0) {
+                    return TC_DROP;
+                }
+
+                // reached app layer no offset processing required from kernel 
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, tcp_data, dns);
+    
+                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
+
+                // for ipv4 packet process and kernel redirection for a tcp packet running dns on it 
+                __be32 current_dest_addr; 
+                __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4);
+                __be32 dest_addr_route_malicious = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_MALICIOUS);
+
+                __u32 out = skb->ifindex;
+                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+                __u32 br_index = 4; 
+
+                if (config) {
+                    __be32 redirect_address_from_config = config->RedirectIpv4;
+                    dest_addr_route = bpf_htonl(redirect_address_from_config);
+                    br_index = config->BridgeIndexId;
+                }else {
+                    #ifdef DEBUG
+                     if (!DEBUG) {
+                        bpf_printk("kernel cannot find the requred kernel config redirect map for tcp packet processing");
+                     }
+                    #endif
+                }
+                
+                if (result.isBenign) 
+                    return TC_FORWARD;
+                else if (result.drop) {
+
+                    __u32 br_index = 4;
+                    struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
+                    
+                    __handle_kernel_map_redirection_drop_count();
+                    
+                    if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
+                        bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
+                        return TC_DROP;
+                    } 
+                    // change the ipv4 layer 3 for redirect of the entire tcp packet over the other ns bridge 
+                    __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route_malicious, 4, 0);
+
+                    if (IP_DST_OFF > skb->len) {
+                        return TC_DROP;  // Check if offset is within bounds
+                    }
+
+                    if (bpf_l3_csum_replace(skb, IP_CHECK_FF, 0, csum_diff_drop, 0) < 0) {
+                            return TC_FORWARD;
+                    }
+
+
+                    if (bpf_skb_store_bytes(skb, IP_DST_OFF, &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
+                        return TC_FORWARD;
+                    }
+
+                    if (skb->mark != (__u32) redirect_skb_mark) {
+                        if (DEBUG) {
+                            bpf_printk("Marking the packet over kernel redirection for DPI");
+                        }
+                        skb->mark = redirect_skb_mark;
+                    }
+                    
+                    if (config) 
+                        return bpf_redirect(config->BridgeIndexId, 0);
+                    else return bpf_redirect(br_index, 0);
+
+                }
+
+                if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
+                    // 4 bytes for the ipv4 address offset 
+                    #ifdef DEBUG   
+                        if (DEBUG) {
+                            bpf_printk("Error restoring current offset store");
+                        }
+                    #endif
+                } 
+                __u32 csum_diff = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
+
+                if (IP_DST_OFF > skb->len) {
+                    return TC_DROP;  // Check if offset is within bounds for skb len for the payload 
+                }
+
+                if (bpf_l3_csum_replace(skb, ETH_HLEN + offsetof(struct iphdr, check), 0, csum_diff, 0) < 0) {
+                        return TC_FORWARD;
+                }
+
+
+                if (bpf_skb_store_bytes(skb, ETH_HLEN + offsetof(struct iphdr, daddr), &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
+                    return TC_FORWARD;
+                }
+
+                if (skb->mark != (__u32) redirect_skb_mark) {
+                    if (DEBUG) {
+                        bpf_printk("Marking the packet over kernel redirection for DPI");
+                    }
+                    skb->mark = redirect_skb_mark;
+                }
+    
+                return bpf_redirect(br_index, 0);
+                // if (!DEBUG){
+                //     bpf_printk("Tcp packet found for egress DNS Port", bpf_ntohs(tcp->dest));
+                // }
+            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
+                return TC_FORWARD;
+            }
+
             return TC_FORWARD;
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
@@ -994,14 +1139,7 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
 
-                __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
-                __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
-                if (ct_val) {
-                    __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count
-                }else {
-                    __u32 init_map_redirect_count = 1;
-                    bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
-                }
+                __handle_kernel_map_redirection_count();
 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
                
@@ -1017,26 +1155,24 @@ int classify(struct __sk_buff *skb){
             }
             return TC_FORWARD;
         }else if (ipv6->nexthdr == IPPROTO_TCP) {
-            
-            struct tcphdr *tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-            if ((void *) (tcp + 1) > cursor.data_end) return TC_DROP;
-            
-            __u32 total_offset = nhoff + sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
-            if (total_offset > skb->len) return TC_DROP;
+
+            if (actions.parse_tcp(&cursor, false) == 0) return TC_DROP;
+            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
+            if ((void *) tcp + 1 > cursor.data_end) return TC_DROP;
+            void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
+            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
             
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
-                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct tcphdr);
-                if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP;
 
-                struct dns_header *dns = (struct dns_header *) dns_payload; 
+                struct dns_header *dns = (struct dns_header *) tcp_data; 
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
                 
-                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_tcp(&cursor, tcp_data, dns, skb->len) == 0) {
                     return TC_DROP;
                 }
 
                 // reached app layer no offset processing required from kernel 
-                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
+                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, tcp_data, dns);
     
                 struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
 
@@ -1049,14 +1185,7 @@ int classify(struct __sk_buff *skb){
                     __u32 br_index = 4;
                     struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &skb_ifIndex);
                     
-                    __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count for any protocol from kernel having the dns payload to be scanned from kernel 
-                    __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
-                    if (ct_val) {
-                        __sync_fetch_and_add(ct_val, 1); // increase redirection buffer count sync locked and spin locked by llvm clang compilers 
-                    }else {
-                        __u32 init_map_redirect_count = 1;
-                        bpf_map_update_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
-                    }
+                    __handle_kernel_map_redirection_drop_count();
                     
                     if (config) 
                         return bpf_redirect(config->BridgeIndexId, 0);

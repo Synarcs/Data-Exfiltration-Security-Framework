@@ -142,7 +142,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 			}
 		}
 		if utils.DEBUG {
-			log.Println("The current Redirected count of packets is ", KernelRedirectPacketCount)
+			log.Println("The current Redirected count of packets is ", ebpfMap.String(), KernelRedirectPacketCount)
 		}
 		events.ExportPromeEbpfExporterEvents(KernelRedirectPacketCount)
 		time.Sleep(time.Second)
@@ -228,8 +228,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			}
 			go tc.PollRingBuffer(ctx, maps)
 		}
-		if strings.Contains(maps.String(), "exfil_security_egress_redirect_count_map") {
-
+		if strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP) || strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_MAP) {
 			go tc.PollMonitoringMaps(ctx, maps, errMapPollChannel)
 		}
 	}
@@ -273,18 +272,21 @@ func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netine
 	return nil
 }
 
-func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer) {
+func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer, errorEventChannel chan error) {
 	currTime := time.Now().GoString()
 
 	var redirection_count_key uint16 = 0 // redirect count . the count which kernel count in tc layer and redirect for DPI purpose
-	redirectCountMap := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]
+	redirectCountMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 
 	if redirectCountMap != nil {
 		var currRedirectCount uint32 = 0
 		// TODO: call the prometheus client to stream the redrect count metric
 		err := redirectCountMap.Lookup(redirection_count_key, &currRedirectCount)
 		if err != nil {
-			log.Println("Error Fetching the redirect count value from Kernel")
+			if !errors.Is(err, ebpf.ErrKeyNotExist) {
+				log.Println("Error polling metric for redirected kernel count", err)
+				errorEventChannel <- err
+			}
 		}
 
 		events.ExportPromeEbpfExporterEvents(struct {
@@ -328,13 +330,24 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 	transportLayer := packet.Layer(layers.LayerTypeUDP)
 
-	udpPacket := transportLayer.(*layers.UDP)
-	if udpPacket != nil {
-		isUdp = true
+	if transportLayer != nil {
+		udpPacket := transportLayer.(*layers.UDP)
+		if udpPacket != nil {
+			isUdp = true
+		} else {
+			panic(fmt.Errorf("the packet is malformed"))
+		}
 	} else {
-		transportLayer = (packet.Layer(layers.LayerTypeTCP)).(*layers.TCP)
-		isUdp = false
+		transportLayer = packet.Layer(layers.LayerTypeTCP)
+		tcpPacket := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
+		if tcpPacket != nil {
+			isUdp = false
+		} else {
+			panic(fmt.Errorf("the packet is malformed"))
+		}
+		// fmt.Println("found tcp packet is ", tcpPacket, isUdp, isIpv4)
 	}
+
 	// init conside for pcap over udp dg only for now
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
@@ -355,7 +368,8 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			return nil
 		}
 
-		go tc.streamRedirectCountStatusPayload(&dnsLayer)
+		// control plane event streaming via kafka / flink to a message broker
+		go tc.streamRedirectCountStatusPayload(&dnsLayer, make(chan error))
 	} else if !isIpv4 {
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
@@ -367,7 +381,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			return nil
 		}
 
-		go tc.streamRedirectCountStatusPayload(&dnsLayer)
+		go tc.streamRedirectCountStatusPayload(&dnsLayer, make(chan error))
 		// TODO: ipv6 processing for the pacekt capture
 	}
 
@@ -404,16 +418,21 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			}
 		}
 
+		log.Println("current state for packet forward ", isIpv4, isUdp)
 		if isIpv4 && isUdp {
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
 			// ipv4 and udp
-		} else if !isIpv4 && isUdp {
+		}
+		if !isIpv4 && isUdp {
 			// ipv6 and udp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
-		} else if isIpv4 && !isUdp {
+		}
+		if isIpv4 && !isUdp {
 			// ipv4 and tcp
+			fmt.Println("called here for redirect over tcp")
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
-		} else if !isIpv4 && !isUdp {
+		}
+		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
 		}

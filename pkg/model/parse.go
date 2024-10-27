@@ -123,6 +123,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ComputeChecksums: true,
 	}
 
+	fmt.Println("Evaluating the packet for the dns layer", isEgress, isIpv4, isUdp)
+
 	if isIpv4 && isUdp {
 		// ipv4 and udp
 		udpPacket.SetNetworkLayerForChecksum(ipv4)
@@ -141,6 +143,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	} else if isIpv4 && !isUdp {
 		// ipv4 and tcp
 		tcpPacket.SetNetworkLayerForChecksum(ipv4)
+		fmt.Println("tcp packet", tcpPacket)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, tcpPacket, &dnsPacket); err != nil {
 			log.Println("Error reconstructing the DNS packet", err)
 			return err
