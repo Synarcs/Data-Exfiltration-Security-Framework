@@ -80,9 +80,6 @@ struct packet_actions {
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *, bool);
 
-    // final and complete DPI over the dns and events submit 
-    __u8 (*__dns_dpi) (struct skb_cursor , struct __sk_buff *, struct packet_actions , 
-                __u32 , void * , __u32  , bool , bool );
 };
 
 __u32 INSECURE = 0;
@@ -115,7 +112,7 @@ struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u64); // store the timestamp loaded from userspace when pacekt hits 
     __type(value, __u8);   // layer 4 checksum prior redirect non clone skb 
-    __uint(max_entries, 1);
+    __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
 
 // count the number of packets 
@@ -233,14 +230,6 @@ static
 __always_inline __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
     struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
     if ((void *)(tcp+ 1) > skb->data_end) return 0;
-
-    #ifdef DEBUG
-        if (DEBUG) {
-            __u16 dport = bpf_htons(tcp->dest);
-            __u16 sport = bpf_htons(tcp->source);
-            bpf_printk("The Dest and src port for TCP packet are %u %u", dport, sport);
-        }
-    #endif
 
     return 1;
 }
@@ -497,7 +486,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
                 mx_label_ln = max(mx_label_ln, label_len); 
                 if (label_len == 0x00) break;
                 label_count++;
-
+ 
                 if (root_domain > 2)
                     total_domain_length_exclude_tld += label_len;
                 else 
@@ -640,15 +629,9 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
 }
 
 
-static 
-__always_inline __u8 __dns_dpi(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
-                __u32 udp_payload_exclude_header, void * udp_data, __u32 udp_payload_len , bool isIpv4, bool isUdp){
-    return 1;
-}
-
 
 static 
-__always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u16 dns_payload_size){
+__always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u32 dns_payload_size){
     
     __u16 key = 0;
     __u64 ts = bpf_ktime_get_ns();
@@ -690,7 +673,7 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
 
 static 
 __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
-    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(0xff)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
+    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
     __u64 ipv6_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
         .checksum =  ipv6_checksum, 
@@ -775,7 +758,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_memsafet_payload_transport_tcp = &parse_dns_payload_memsafet_payload_transport_tcp;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
-    actions.__dns_dpi = &__dns_dpi;
     return actions;
 }
 
@@ -790,6 +772,7 @@ struct kernel_handler_map {
     __uint(max_entries, 1 << 24);
     __type(key, __u8);
     __type(value, __u16);
+    __uint(map_flags, BPF_F_NO_PREALLOC);
 } maps SEC(".maps");
 
 static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
@@ -898,20 +881,6 @@ int classify(struct __sk_buff *skb){
                     #endif
                 }
 
-                //  layer 7 rate limiting of the packet inside kernel 
-                __u16 dns_payload_size = udp_payload_exclude_header;
-                if (result.deep_scan_mirror) {
-                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
-
-                    #ifdef DEBUG
-                        if (DEBUG) {
-                            bpf_printk("the rate limit action is %u", dns_rate_limit_action);
-                        }
-                    #endif
-                    if (dns_rate_limit_action == 0) return TC_DROP;
-                }
-            
-
                 if (result.isBenign) {
                     #ifdef DEBUG
                         if (DEBUG) {
@@ -961,38 +930,18 @@ int classify(struct __sk_buff *skb){
                 __u16 ip_checksum = bpf_ntohs(ip->check);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    struct checkSum_redirect_struct_value layer3_checksum = {
-                        .checksum =  ip_checksum, 
-                        .kernel_timets = bpf_ktime_get_ns(),
-                    };
-                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
-                    int ret = bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum, BPF_ANY);
-                    if (ret < 0) {
-                        if (DEBUG){
-                            bpf_printk("Error updating the bpf redirect from tc kernel layer");
-                        }
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                        #ifdef DEBUG 
+                            if (!DEBUG) {
+                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
+                                                packet redirect lifecycle");
+                            }
+                        #endif 
+                        return TC_DROP;
                     }
                 } else {
-                    if (DEBUG){
-                        bpf_printk("[x] An Layer 3 Service redirect from the kernel and pakcet fully scanned now can be removed");
-                    }
-
-                    bpf_map_delete_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                    __u8 * pres;
-                    __u64 packet_kernel_ts = map_layer3_redirect_value->kernel_timets;
-                    pres = bpf_map_lookup_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
-                    if (pres) {
-                        bpf_map_delete_elem(&exfil_security_egress_redurect_ts_verify, &packet_kernel_ts);
-                        return TC_FORWARD; // scanned from the kernel bufffer proceeed with forward passing to desired dest;
-                    }else {
-                        #ifdef DEBUG 
-                            if (DEBUG) {
-                                bpf_printk("the kernel verified timing attack broke and was not  \
-                                                 prevented it with ns timestamp verification after DPI");
-                            }
-                        #endif
-                        return TC_FORWARD;
-                    }
+                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
+                    return TC_DROP;
                 }
 
                 __handle_kernel_map_redirection_count();
@@ -1144,11 +1093,17 @@ int classify(struct __sk_buff *skb){
                     // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
                 } else {
                     if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
-                    return TC_FORWARD;
+                    return TC_DROP;
                 }
 
                 __handle_kernel_map_redirection_count();
 
+                __u32 tcp_payload_len = bpf_ntohs(ip->tot_len) - (ip->ihl * 4) - (tcp->doff * 4);
+                if (result.deep_scan_mirror) {
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) tcp_payload_len);
+                    // __u8 dns_rate_limit_action = 1;
+                    if (dns_rate_limit_action == 0) return TC_DROP;
+                }
 
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                     // 4 bytes for the ipv4 address offset 
@@ -1229,7 +1184,7 @@ int classify(struct __sk_buff *skb){
                 //  layer 7 rate limiting of the packet inside kernel 
                 __u16 dns_payload_size = udp_payload_exclude_header;
                 if (result.deep_scan_mirror) {
-                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, dns_payload_size);
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) dns_payload_size);
                     // __u8 dns_rate_limit_action = 1;
                     if (dns_rate_limit_action == 0) return TC_DROP;
                 }
@@ -1373,6 +1328,13 @@ int classify(struct __sk_buff *skb){
                 }
 
                 __handle_kernel_map_redirection_count();
+
+                __u32 tcp_payload_len = bpf_ntohs(ipv6->payload_len) - (tcp->doff * 4);
+                if (result.deep_scan_mirror) {
+                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) tcp_payload_len);
+                    // __u8 dns_rate_limit_action = 1;
+                    if (dns_rate_limit_action == 0) return TC_DROP;
+                }
 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
                

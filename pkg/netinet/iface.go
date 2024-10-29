@@ -256,7 +256,7 @@ func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
 }
 
 func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
-	log.Println("[x] Creating XDP socket fd to send packet")
+	log.Println("Creating XDP socket fd to send packet")
 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")

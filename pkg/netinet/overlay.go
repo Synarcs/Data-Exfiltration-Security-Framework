@@ -34,3 +34,8 @@ func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
 	fmt.Printf("Set %s to namespace %s\n", veth, nsName)
 	return nil
 }
+
+func (nf *NetIface) CreateBridge(bridgeName string) error {
+
+	return nil
+}

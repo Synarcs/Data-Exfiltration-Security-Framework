@@ -81,7 +81,9 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				return false, err
 			}
 
-			log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
+			if utils.DEBUG {
+				log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
+			}
 
 			if inferenceResponse.ThreatType {
 				// add in the threat cache map for nested lru

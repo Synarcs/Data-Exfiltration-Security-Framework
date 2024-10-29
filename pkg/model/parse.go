@@ -123,8 +123,6 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ComputeChecksums: true,
 	}
 
-	fmt.Println("Evaluating the packet for the dns layer", isEgress, isIpv4, isUdp)
-
 	if isIpv4 && isUdp {
 		// ipv4 and udp
 		udpPacket.SetNetworkLayerForChecksum(ipv4)

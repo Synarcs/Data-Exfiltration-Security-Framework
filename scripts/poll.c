@@ -23,6 +23,14 @@ int main(void) {
     int fd = epoll_create1(0);
 
     int val = fcntl(fd, F_GETFL);
+    int dup_val_fd = fcntl(fd, F_DUPFD);
+
+    int sock_fd;
+    if (sock_fd = socket(AF_INET, SOCK_DGRAM, 0 < 0)){
+        perror("Error binding socket");
+    }
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {}
+
     printf("File descriptor open information: %d\n", val);
 
     if (epoll_ctl(fd, EPOLL_CTL_ADD, 0, &event)) {

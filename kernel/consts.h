@@ -104,7 +104,8 @@ struct result_parse_dns_labels {
     bool isBenign;
 } __attribute__((packed));
 
-
+// ipv6 has no checksum but kept this for kernel map verification 
+#define DEFAULT_IPV6_CHECKSUM_MAP 0xff 
 
 // RATE LIMITER 
 #define TIMEWINDOW 10000000000

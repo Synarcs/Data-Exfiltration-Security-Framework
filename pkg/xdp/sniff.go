@@ -2,10 +2,12 @@ package xdp
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -40,47 +42,94 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	if eth == nil {
 		return fmt.Errorf("no ethernet layer")
 	}
+
+	// var ipPacket *layers.IPv4
+	// var ipv6Packet *layers.IPv6
+
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
-	// ipv6Layer := packet.Layer(layers.LayerTypeIPv6)
-	ipPacket := ipLayer.(*layers.IPv4)
-	if ipPacket != nil {
-		isIpv4 = true
-		if utils.DEBUG {
-			fmt.Println("current packet checksum", ipPacket.Checksum)
-		}
+	if ipLayer == nil {
+		isIpv4 = false
 	} else {
-		ipv6Packet := ipLayer.(*layers.IPv6)
-		if ipv6Packet != nil {
-			isIpv4 = false
-		}
+		isIpv4 = true
 	}
+
 	if utils.DEBUG {
 		log.Println("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
-	udpLayer := packet.Layer(layers.LayerTypeUDP)
-	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	transportLayer := packet.Layer(layers.LayerTypeUDP)
+	var dnsLengthTcp uint16 = 0
+	var dnsTcpPayload []byte
 
-	udpPacket := udpLayer.(*layers.UDP)
-	if udpPacket != nil {
-		isUdp = true
+	var tcpCheck bool = false
+	if transportLayer != nil {
+		udpPacket := transportLayer.(*layers.UDP)
+		if udpPacket != nil {
+			isUdp = true
+		} else {
+			panic(fmt.Errorf("the packet is malformed"))
+		}
 	} else {
-		tcpPacket := tcpLayer.(*layers.TCP)
+		transportLayer = packet.Layer(layers.LayerTypeTCP)
+		tcpPacket := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
+
 		if tcpPacket != nil {
 			isUdp = false
+		} else {
+			panic(fmt.Errorf("the packet is malformed"))
 		}
+		payload := tcpPacket.Payload
+
+		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
+
+		if len(payload) < 2 {
+			log.Println("errror ", len(payload))
+			return fmt.Errorf("TCP payload too short for dns parsing")
+		}
+
+		dnsLengthTcp = binary.BigEndian.Uint16(payload[0:2])
+
+		log.Println("The DNs packet parsdd over tcp transport with length ", dnsLengthTcp)
+		dnsTcpPayload = payload[2:]
+		tcpCheck = true
 	}
 
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
 	if dnsLayer != nil {
-		// no struct or further parsing required for ingress traffic
 		_, _ = dnsLayer.(*layers.DNS)
 
-		// ing.OnnxModel.Evaluate()
-		ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, udpLayer, dnsLayer, ipPacket.Checksum, handler, false, isIpv4, isUdp)
-	}
+		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
+		if isIpv4 && isUdp {
+			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			// ipv4 and udp
+		}
+		if !isIpv4 && isUdp {
+			// ipv6 and udp
+			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		}
+
+	} else if tcpCheck {
+		dns := &layers.DNS{}
+
+		err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
+		if err != nil {
+			log.Println("Error decoding the dns packet over the tcp stream", err)
+			return err
+		}
+
+		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+
+		if isIpv4 && !isUdp {
+			// ipv4 and tcp
+			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		}
+		if !isIpv4 && !isUdp {
+			// ipv6 and tcp
+			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+		}
+	}
 	return nil
 }
 

@@ -388,7 +388,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 		// control plane event streaming via kafka / flink to a message broker
 		go tc.streamRedirectCountStatusPayload(&dnsLayer, make(chan error))
-	} else if !isIpv4 {
+	} else {
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
 		if ipv6Address == utils.MALICIOUS_NETNS_IPV6 {
@@ -417,7 +417,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 			if isIpv6 {
 				// support for ipv6
-				if ip_layer3_checksum_kernel_ts.Checksum != uint16(0) {
+				if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
 					log.Println("Error in Ipv6 header checksum verification ipv6 has no default checksum")
 				}
 			}
@@ -441,10 +441,9 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
 		if err := processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts); err != nil {
-			log.Println(err)
+			log.Printf("Error verify the UDP packet time from kernel %+v", err)
 		}
 
-		log.Println("current state for packet forward ", isIpv4, isUdp)
 		if isIpv4 && isUdp {
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
 			// ipv4 and udp
@@ -466,7 +465,9 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		var dns_packet_id uint16 = uint16(dns.ID)
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts)
+		if err := processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts); err != nil {
+			log.Printf("Error processing the dns packet over tcp stream %+v", err)
+		}
 
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp

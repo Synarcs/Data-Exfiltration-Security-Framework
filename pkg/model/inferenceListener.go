@@ -31,7 +31,9 @@ func GetInferenceUnixClient(isEgress bool) (*http.Client, net.Conn, error) {
 		}
 	}
 
-	log.Println("Connected to the Inference Unix Sock ", conn.RemoteAddr())
+	if utils.DEBUG {
+		log.Println("Connected to the Inference Unix Sock ", conn.RemoteAddr())
+	}
 
 	// faster and easier layer 7 parse over unix oscket
 	// the kernel all applies on netfilter conntrack layer for IPC
@@ -48,7 +50,10 @@ func GetInferenceUnixClient(isEgress bool) (*http.Client, net.Conn, error) {
 			},
 		},
 	}
-	log.Println("Inference Unix Socket Listenning")
+
+	if utils.DEBUG {
+		log.Println("Http Client build over unix server transport")
+	}
 
 	return &client, conn, nil
 }

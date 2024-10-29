@@ -44,6 +44,10 @@ const (
 	MAX_NODE_AGENT_CACHE_SIZE = 1000
 )
 
+const (
+	DEFAULT_IPV6_CHECKSUM_MAP = 0xff
+)
+
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
 	var s2 uint8 = (uint8)(saddr>>16) & 0xFF
