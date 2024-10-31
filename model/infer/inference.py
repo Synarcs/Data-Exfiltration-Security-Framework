@@ -117,7 +117,7 @@ class UnixSocketHttpServer(socketserver.UnixStreamServer):
 class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
     allow_reuse_address = True
     daemon_threads = True 
-    request_queue_size = 1 << 10 
+    request_queue_size = 1 << 10
 
     def __init__(self, server_address: str | Any, RequestHandlerClass: Callable[[Any, Any, Self], Any], bind_and_activate: bool = True) -> None:
         super(ThreadingUnixSocketHttpServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate)

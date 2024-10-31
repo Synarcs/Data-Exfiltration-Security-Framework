@@ -24,7 +24,7 @@ import (
 )
 
 type TCHandler struct {
-	Interfaces      []netlink.Link
+	Interfaces      *netinet.NetIface
 	Prog            *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
 	TcCollection    *ebpf.Collection // ebpf tc program collection order spec
 	DnsPacketGen    *model.DnsPacketGen
@@ -44,7 +44,7 @@ var (
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) TCHandler {
 	return TCHandler{
-		Interfaces:      iface.PhysicalLinks,
+		Interfaces:      &iface,
 		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel),
 		OnnxLoadedModel: onnxModel,
 	}
@@ -58,9 +58,20 @@ func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string)
 	return spec, nil
 }
 
-func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
+func (tc *TCHandler) AttachTcHandlerIngressBridge(ctx *context.Context, prog *ebpf.Program) {
 
-	for _, link := range tc.Interfaces {
+	for _, _ = range tc.Interfaces.BridgeLinks {
+	}
+}
+
+func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program,
+	isEgress bool, hostNet bool) error {
+
+	if !hostNet {
+
+		return nil
+	}
+	for _, link := range tc.Interfaces.PhysicalLinks {
 		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
 		if err != nil {
@@ -79,16 +90,32 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 			panic(err.Error())
 		}
 
-		filter := netlink.BpfFilter{
-			FilterAttrs: netlink.FilterAttrs{
-				LinkIndex: link.Attrs().Index,
-				Parent:    netlink.HANDLE_MIN_EGRESS,
-				Handle:    netlink.MakeHandle(1, 0),
-				Protocol:  unix.ETH_P_ALL,
-			},
-			Fd:           prog.FD(),
-			Name:         prog.String(),
-			DirectAction: true,
+		var filter netlink.BpfFilter
+
+		if isEgress {
+			filter = netlink.BpfFilter{
+				FilterAttrs: netlink.FilterAttrs{
+					LinkIndex: link.Attrs().Index,
+					Parent:    netlink.HANDLE_MIN_EGRESS,
+					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+					Protocol:  unix.ETH_P_ALL,
+				},
+				Fd:           prog.FD(),
+				Name:         prog.String(),
+				DirectAction: true,
+			}
+		} else {
+			filter = netlink.BpfFilter{
+				FilterAttrs: netlink.FilterAttrs{
+					LinkIndex: link.Attrs().Index,
+					Parent:    netlink.HANDLE_MIN_INGRESS,
+					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+					Protocol:  unix.ETH_P_ALL,
+				},
+				Fd:           prog.FD(),
+				Name:         prog.String(),
+				DirectAction: true,
+			}
 		}
 
 		if err := netlink.FilterReplace(&filter); err != nil {
@@ -180,7 +207,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	tc.Prog = prog
 	tc.TcCollection = spec
 
-	if err := tc.AttachTcHandler(ctx, prog); err != nil {
+	if err := tc.AttachTcHandler(ctx, prog, true, true); err != nil {
 		log.Println("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
@@ -548,13 +575,30 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 	return nil
 }
 
-func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
-	for _, link := range tc.Interfaces {
+func (tc *TCHandler) DetachHandlerBridge(ctx *context.Context) error {
+	for _, link := range tc.Interfaces.BridgeLinks {
 		err := netlink.QdiscDel(&netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,
 				Parent:    netlink.HANDLE_CLSACT,
-				Handle:    netlink.MakeHandle(0xffff, 0),
+				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+			},
+		})
+		if err != nil {
+			fmt.Println("No Matching clsact desc found to delete")
+		}
+	}
+	return nil
+}
+
+func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
+	// used for removal of tc qdisc and all nested filters to parent qdisc class/ classless filter form all the host interfacee
+	for _, link := range tc.Interfaces.PhysicalLinks {
+		err := netlink.QdiscDel(&netlink.Clsact{
+			QdiscAttrs: netlink.QdiscAttrs{
+				LinkIndex: link.Attrs().Index,
+				Parent:    netlink.HANDLE_CLSACT,
+				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
 			},
 		})
 		if err != nil {

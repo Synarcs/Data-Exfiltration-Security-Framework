@@ -341,7 +341,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         if (add_count > 1) return SUSPICIOUS;
 
         // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
-        int oc = 0;
         __u32 label_key_subdomain_per_label_min = 2;  __u32 label_key_subdomain_per_label_max = 3;
         __u32 label_key_label_count_min = 4; __u32 label_key_label_count_max = 5;
         
@@ -350,6 +349,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
 
+        __u8 lebel_len_per_index = 0;
         __u8 total_domain_length_exclude_tld = 0;
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
@@ -361,7 +361,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
-                mx_label_ln = max(mx_label_ln, label_len); 
+                mx_label_ln = max(mx_label_ln, label_len);
                 if (label_len == 0x00) break;
                 label_count++;
 
@@ -373,7 +373,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 offset += label_len + 1; 
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
-        
+
+            if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
 
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
@@ -390,7 +391,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count <= 2) return BENIGN;
             
-
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
                     if (mx_label_ln >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && mx_label_ln <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
             }else if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
