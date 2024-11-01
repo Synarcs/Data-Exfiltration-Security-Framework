@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "tc",
+    srcs = [
+        "bridge_tc.go",
+        "tc.go",
+    ],
+    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/tc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/events",
+        "//pkg/model",
+        "//pkg/netinet",
+        "//pkg/utils",
+        "@com_github_cilium_ebpf//:ebpf",
+        "@com_github_cilium_ebpf//ringbuf",
+        "@com_github_google_gopacket//:gopacket",
+        "@com_github_google_gopacket//layers",
+        "@com_github_google_gopacket//pcap",
+        "@com_github_vishvananda_netlink//:netlink",
+        "@com_github_vishvananda_netns//:netns",
+        "@org_golang_x_sys//unix",
+    ],
+)

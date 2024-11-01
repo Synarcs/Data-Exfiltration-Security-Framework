@@ -1,0 +1,20 @@
+cc_binary(
+    name = "dns_xdp",
+    srcs = ["dns_xdp.c"],
+    copts = [
+        "-I/usr/include",
+        "-I/usr/include/linux",
+        "-I/usr/include/asm-generic/",
+    ],
+    linkopts = ["-nostdlib"],
+)
+
+cc_binary(
+    name = "dns_tc",
+    srcs = ["dns_tc.c"],
+    copts = [
+        "-I/usr/include",
+        "-I/usr/include/linux",
+        "-I/usr/include/asm-generic/",
+    ],
+)

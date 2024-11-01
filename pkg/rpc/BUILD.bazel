@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rpc_lib",
+    srcs = [
+        "client.go",
+        "server.go",
+    ],
+    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/rpc",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//pkg/rpc/pb",
+        "@org_golang_google_grpc//:grpc",
+        "@org_golang_google_grpc//credentials/insecure",
+    ],
+)

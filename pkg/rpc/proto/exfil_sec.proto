@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package exfil_kernel;
+
+option go_package = "github.com/Data-Exfiltration-Security-Framework";
+
+message ExfilDomains {
+    string domain = 1;
+    string tld = 2;
+    int64 totalLength = 3;
+};
+
+message ExfilDomainsLength {
+    int64 len = 1;
+}
+
+service NodeAgentService {
+    rpc GetExfilDomains(ExfilDomains) returns (ExfilDomains);
+    rpc GenExfilDomainsLength(ExfilDomains) returns (ExfilDomainsLength);
+
+    // returns the count of the stream events 
+    rpc DomainStream(ExfilDomainsLength) returns (stream ExfilDomains);
+};

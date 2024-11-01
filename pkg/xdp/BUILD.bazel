@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "xdp",
+    srcs = ["xdp.go"],
+    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/xdp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/netinet",
+        "//pkg/utils",
+        "@com_github_cilium_ebpf//:ebpf",
+        "@com_github_cilium_ebpf//link",
+        "@com_github_vishvananda_netlink//:netlink",
+    ],
+)
