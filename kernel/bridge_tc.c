@@ -12,9 +12,9 @@
 
 static 
 __always_inline bool __verify_tc_dpi_ingress_process(struct __sk_buff *skb) {
-    if (skb->mark != (__u32) redirect_skb_mark) {
+    if (skb->mark != bpf_ntohs(redirect_skb_mark)) {
         #ifdef DEBUG 
-            if (DEBUG) bpf_printk("dropping the packet the packet is not created by parent host redirect in kernel tc layer");
+            if (!DEBUG) bpf_printk("dropping the packet the packet is not created by parent host redirect in kernel tc layer");
         #endif  
         return false;
     }
@@ -30,6 +30,8 @@ int classify(struct __sk_buff *skb){
     if (!__verify_tc_dpi_ingress_process(skb)) return TC_ACT_SHOT;
     return TC_ACT_OK;
 }
+
+
 
 
 char __license[] SEC("license") = "MIT / GPL";

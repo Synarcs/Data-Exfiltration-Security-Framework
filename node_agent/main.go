@@ -60,15 +60,18 @@ func main() {
 		ConfigChannel: config,
 	}
 
-	var ingress xdp.IngressSniffHandler = xdp.GenerateTcIngressFactory(iface, model)
+	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
+	ingress := xdp.GenerateTcIngressFactory(iface, model)
 
+	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
+	go tc.TcHandlerEbfpProgBridge(&ctx, &iface)
 
 	if !utils.DEBUG {
 		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
 		go rpcServer.Server()
 	}
-	go ingress.SniffEgressForC2C()
+	go ingress.SniffIgressForC2C()
 
 	if utils.DEBUG {
 		for _, val := range iface.Links {
@@ -118,6 +121,7 @@ func main() {
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
+		tc.DetachHandlerBridge(&ctx)
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 }

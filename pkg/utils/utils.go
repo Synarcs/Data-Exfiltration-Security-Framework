@@ -12,8 +12,9 @@ import (
 const DEBUG = false
 
 const (
-	TC_CONTROL_PROG  = "classify" // CLSACT
-	XDP_CONTROL_PROG = "xdp"      // XDP Non Offloaded
+	TC_CONTROL_PROG        = "classify" // CLSACT
+	TC_CONTROL_PROG_BRIDGE = "classify" // CLSACT CLASSLESS QDISC
+	XDP_CONTROL_PROG       = "xdp"      // XDP Non Offloaded
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 )

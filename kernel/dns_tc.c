@@ -744,6 +744,12 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 } 
 
 static 
+__always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb) {
+    skb->mark = bpf_ntohs(redirect_skb_mark);
+}
+
+
+static 
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
     actions.cursor_init = &cursor_init;
     actions.parse_eth = &parse_eth;
@@ -915,12 +921,9 @@ int classify(struct __sk_buff *skb){
                         return TC_FORWARD;
                     }
 
-                    if (skb->mark != (__u32) redirect_skb_mark) {
-                        if (DEBUG) {
-                            bpf_printk("Marking the packet over kernel redirection for DPI");
-                        }
-                        skb->mark = redirect_skb_mark;
-                    }
+                    __handle_kernel_map_redirection_drop_count();
+
+                    __mark_skb_packet_buffer(skb);
 
                     return bpf_redirect(br_index, dest_addr_route);
                 }
@@ -943,8 +946,6 @@ int classify(struct __sk_buff *skb){
                     if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
                     return TC_DROP;
                 }
-
-                __handle_kernel_map_redirection_count();
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
@@ -971,12 +972,9 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
 
-                if (skb->mark != (__u32) redirect_skb_mark) {
-                    if (DEBUG) {
-                        bpf_printk("Marking the packet over kernel redirection for DPI");
-                    }
-                    skb->mark = redirect_skb_mark;
-                }
+                __handle_kernel_map_redirection_count();
+
+                __mark_skb_packet_buffer(skb);
     
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
@@ -1041,7 +1039,6 @@ int classify(struct __sk_buff *skb){
                     __u32 br_index = 4;
                     struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
                     
-                    __handle_kernel_map_redirection_drop_count();
                     
                     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
                         bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
@@ -1063,17 +1060,13 @@ int classify(struct __sk_buff *skb){
                         return TC_FORWARD;
                     }
 
-                    if (skb->mark != (__u32) redirect_skb_mark) {
-                        if (DEBUG) {
-                            bpf_printk("Marking the packet over kernel redirection for DPI");
-                        }
-                        skb->mark = redirect_skb_mark;
-                    }
+                    __handle_kernel_map_redirection_drop_count();
+
+                    __mark_skb_packet_buffer(skb);
                     
                     if (config) 
                         return bpf_redirect(config->BridgeIndexId, 0);
                     else return bpf_redirect(br_index, 0);
-
                 }
 
                 __u32 transaction_id = bpf_ntohs(dns->transaction_id);
@@ -1128,12 +1121,7 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
 
-                if (skb->mark != (__u32) redirect_skb_mark) {
-                    if (DEBUG) {
-                        bpf_printk("Marking the packet over kernel redirection for DPI");
-                    }
-                    skb->mark = redirect_skb_mark;
-                }
+                __mark_skb_packet_buffer(skb);
 
                 bpf_printk("redirect the tcp packet over tcp");
                 return bpf_redirect(br_index, 0);
@@ -1217,6 +1205,9 @@ int classify(struct __sk_buff *skb){
                         }
                     #endif
                     // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
+                    __handle_kernel_map_redirection_drop_count();
+
+                    __mark_skb_packet_buffer(skb);
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, 0);
                 }
@@ -1246,6 +1237,8 @@ int classify(struct __sk_buff *skb){
 
                 __handle_kernel_map_redirection_count();
 
+                __mark_skb_packet_buffer(skb);
+                
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
@@ -1303,6 +1296,8 @@ int classify(struct __sk_buff *skb){
                 else if (result.drop) {
 
                     __handle_kernel_map_redirection_drop_count();
+                    __mark_skb_packet_buffer(skb);
+                    
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, 0);
                 }
@@ -1328,6 +1323,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 __handle_kernel_map_redirection_count();
+                __mark_skb_packet_buffer(skb);
 
                 __u32 tcp_payload_len = bpf_ntohs(ipv6->payload_len) - (tcp->doff * 4);
                 if (result.deep_scan_mirror) {

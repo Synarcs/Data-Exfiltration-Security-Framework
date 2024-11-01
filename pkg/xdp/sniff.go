@@ -133,7 +133,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	return nil
 }
 
-func (ing *IngressSniffHandler) SniffEgressForC2C() error {
+func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 	var errorChannel chan error = make(chan error)
 	log.Println("Sniffing Ingress traffic for potential malicious remote C@C commands")
 

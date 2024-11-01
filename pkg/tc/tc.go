@@ -58,19 +58,8 @@ func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string)
 	return spec, nil
 }
 
-func (tc *TCHandler) AttachTcHandlerIngressBridge(ctx *context.Context, prog *ebpf.Program) {
+func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
 
-	for _, _ = range tc.Interfaces.BridgeLinks {
-	}
-}
-
-func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program,
-	isEgress bool, hostNet bool) error {
-
-	if !hostNet {
-
-		return nil
-	}
 	for _, link := range tc.Interfaces.PhysicalLinks {
 		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
@@ -90,32 +79,16 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program,
 			panic(err.Error())
 		}
 
-		var filter netlink.BpfFilter
-
-		if isEgress {
-			filter = netlink.BpfFilter{
-				FilterAttrs: netlink.FilterAttrs{
-					LinkIndex: link.Attrs().Index,
-					Parent:    netlink.HANDLE_MIN_EGRESS,
-					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
-					Protocol:  unix.ETH_P_ALL,
-				},
-				Fd:           prog.FD(),
-				Name:         prog.String(),
-				DirectAction: true,
-			}
-		} else {
-			filter = netlink.BpfFilter{
-				FilterAttrs: netlink.FilterAttrs{
-					LinkIndex: link.Attrs().Index,
-					Parent:    netlink.HANDLE_MIN_INGRESS,
-					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
-					Protocol:  unix.ETH_P_ALL,
-				},
-				Fd:           prog.FD(),
-				Name:         prog.String(),
-				DirectAction: true,
-			}
+		filter := netlink.BpfFilter{
+			FilterAttrs: netlink.FilterAttrs{
+				LinkIndex: link.Attrs().Index,
+				Parent:    netlink.HANDLE_MIN_EGRESS,
+				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+				Protocol:  unix.ETH_P_ALL,
+			},
+			Fd:           prog.FD(),
+			Name:         prog.String(),
+			DirectAction: true,
 		}
 
 		if err := netlink.FilterReplace(&filter); err != nil {
@@ -207,7 +180,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	tc.Prog = prog
 	tc.TcCollection = spec
 
-	if err := tc.AttachTcHandler(ctx, prog, true, true); err != nil {
+	if err := tc.AttachTcHandler(ctx, prog); err != nil {
 		log.Println("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
@@ -278,25 +251,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}
-}
-
-func (tc *TCHandler) TCHandlerEbpfProgBridge(ctx *context.Context, iface *netinet.NetIface) error {
-	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
-	if err != nil {
-		return err
-	}
-
-	spec, err := ebpf.NewCollection(handler)
-	if err != nil {
-		return err
-	}
-
-	if utils.DEBUG {
-		for _, maps := range spec.Maps {
-			fmt.Println(maps.String())
-		}
-	}
-	return nil
 }
 
 func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer, errorEventChannel chan error) {
@@ -572,22 +526,6 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 			}
 		}
 	}()
-	return nil
-}
-
-func (tc *TCHandler) DetachHandlerBridge(ctx *context.Context) error {
-	for _, link := range tc.Interfaces.BridgeLinks {
-		err := netlink.QdiscDel(&netlink.Clsact{
-			QdiscAttrs: netlink.QdiscAttrs{
-				LinkIndex: link.Attrs().Index,
-				Parent:    netlink.HANDLE_CLSACT,
-				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
-			},
-		})
-		if err != nil {
-			fmt.Println("No Matching clsact desc found to delete")
-		}
-	}
 	return nil
 }
 

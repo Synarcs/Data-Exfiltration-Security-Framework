@@ -51,11 +51,13 @@ tc-remove:
 	sudo tc qdisc del dev enp0s1 clsact
 	sudo tc qdisc del dev lo clsact
 	sudo tc qdisc del dev docker0 clsact
+	sudo tc qdisc del dev br0 clsact
 
 
 .PHONY: tc-filter 
 tc-filter:
 	sudo tc filter add dev enp0s1 egress bpf direct-action obj tc.o sec tc
+	sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
 .PHONY: tc-show 
 tc-show:
