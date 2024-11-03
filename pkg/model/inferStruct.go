@@ -2,6 +2,8 @@ package model
 
 type InferenceRequest struct {
 	Features [][]float32
+	Tld      string
+	Root     string
 }
 
 type InferenceResponse struct {

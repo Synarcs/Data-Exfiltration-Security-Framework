@@ -49,12 +49,17 @@ struct cursosr {
 }   __attribute__((packed)) xdp_cursor;
 
 
+
 static 
-__always_inline __u8 parse_dns_header(void *data, struct __sk_buff *skb, bool isUdp, bool isIpv4) {
-    void *dns_header = data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) 
-            + (isUdp ? sizeof(struct udphdr) : sizeof(struct tcphdr));
-    
-    if (dns_header + 1 > skb->data_end) return 0;
+__always_inline __u8 __parse_dns_header_mme(struct dns_header *data, struct __sk_buff *skb) {
+    if ((void *) (data + 1) > skb->data_end) return 0;
+    return 1;
+}
+
+static 
+__always_inline __u8 __parse_dns_header_content(struct dns_header *dns, struct __sk_buff *skb) {
+
+    struct dns_flags flags =  get_dns_flags(dns);
     return 1;
 }
 
@@ -88,13 +93,17 @@ int xdp_process(struct xdp_md *ctx) {
                         return XDP_PASS;
                     }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) return XDP_PASS;
                     struct dns_header *dns = (struct dns_header *)((void *) udp + sizeof(struct udphdr));
-                    
-                    break;
+
+                    return __parse_dns_header_mme(dns, ctx) ? XDP_PASS : XDP_DROP;
                 }
                 case IPPROTO_TCP: {
                     struct tcphdr *tcp = (struct tcphdr *)((void *) ip + sizeof(struct iphdr));
                     if ((void *) (tcp + 1) > data_end) return XDP_DROP;
-                    break;
+
+                    if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)){
+                        struct dns_header *dns = (struct dns_header *)((void *) tcp + sizeof(struct udphdr));
+                        return __parse_dns_header_mme(dns, ctx) ? XDP_PASS : XDP_DROP;
+                    }
                 }
                 default: { return XDP_PASS; }
             }
@@ -108,11 +117,18 @@ int xdp_process(struct xdp_md *ctx) {
                 case IPPROTO_UDP: {
                     struct udphdr *udp = (struct udphdr *)(ip + sizeof(struct ipv6hdr));
                     if ((void *) (udp + 1) > data_end) return XDP_DROP;
+                    
+                    struct dns_header *dns = (struct dns_header *)((void *) udp + sizeof(struct udphdr));
+
+                    return __parse_dns_header_mme(data, ctx) ? XDP_PASS : XDP_DROP;
+
                     break;
                 }
-
                 case IPPROTO_TCP: {
-                    struct tcphdr *tcp = (struct udphdr *)(ip + sizeof(struct ipv6hdr));
+                    struct tcphdr *tcp = (struct tcphdr *)(ip + sizeof(struct ipv6hdr));
+
+                    struct dns_header *dns = (struct dns_header *)((void *) tcp + sizeof(struct udphdr));
+
                     if ((void *) (tcp + 1) > (void *) data_end) return XDP_DROP;
                 }
             }

@@ -281,7 +281,7 @@ static
             case 0x0002:
             case 0x0005:
             case 0x0006: 
-            case 0x001C: 
+            case 0x001C:
             case 0x0041:
                 return BENIGN;
             case 0x000F:

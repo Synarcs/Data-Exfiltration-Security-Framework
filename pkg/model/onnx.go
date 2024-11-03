@@ -10,18 +10,46 @@ import (
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
-type OnnxModel struct{}
+type OnnxModel struct {
+	TopDomainsDNSServer *utils.TopDomains
+}
 
 const (
 	DEEP_LEXICAL_INFERENCING  = iota
 	STATIC_BENIGN_INFERENCING // node agent found no further deep lexical analysis required its benign and can be procceed to leave the user space
 )
 
+func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
+	floatTensors := make([][]float32, 0)
+	for i := 0; i < len(features); i++ {
+		_, fd := onnx.TopDomainsDNSServer.TopDomains.Load(features[i].Tld)
+		if fd {
+			continue
+		} else {
+			perLabelFeatures := make([]float32, 8)
+			perLabelFeatures[0] = float32(features[i].TotalChars)
+			perLabelFeatures[1] = float32(features[i].TotalCharsInSubdomain)
+			perLabelFeatures[2] = float32(features[i].NumberCount)
+			perLabelFeatures[3] = float32(features[i].UCaseCount)
+			perLabelFeatures[4] = float32(features[i].Entropy)
+			perLabelFeatures[5] = float32(features[i].PeriodsInSubDomain)
+			perLabelFeatures[6] = float32(features[i].LongestLabelDomain)
+			perLabelFeatures[7] = float32(features[i].AveerageLabelLength)
+			floatTensors = append(floatTensors, perLabelFeatures)
+		}
+	}
+
+	return floatTensors
+}
+
 /*
 Tells the node agent go routeines to call the remote inference server deep learning model for enhanced scanning
 */
 func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32, direction bool) int {
-	if features[0][2] == 0 && features[0][3] == 0 {
+
+	// check against the top domains and most safe domains
+
+	if len(features) == 0 {
 		return STATIC_BENIGN_INFERENCING
 	}
 	return DEEP_LEXICAL_INFERENCING
@@ -95,7 +123,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			return true, nil
 		}
 
-		featureVectorsFloat := GenerateFloatVectors(dnsFeatures)
+		featureVectorsFloat := GenerateFloatVectors(dnsFeatures, onnx)
 		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING {
 			eval, err := processRemoteUnixInference(featureVectorsFloat, direction)
 			if err != nil {
@@ -103,8 +131,8 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				return false
 			}
 			return eval
-
 		} else {
+			log.Println("The inference model is not required for the dns features due to the benign tld host domain")
 			return true
 		}
 	default:
@@ -113,6 +141,8 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 	}
 }
 
-func ConnectRemoteInferenceSocket(path string) (*OnnxModel, error) {
-	return nil, nil
+func ConnectRemoteInferenceSocket(t *utils.TopDomains) (*OnnxModel, error) {
+	return &OnnxModel{
+		TopDomainsDNSServer: t,
+	}, nil
 }

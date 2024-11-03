@@ -34,16 +34,24 @@ func main() {
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
 
+	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
 	iface.ReadRoutes()
 	iface.GetRootGateway()
 
+	// io Disk Cache Inodes for Node agent
 	utils.InitCache()
+	topDomains, err := utils.VerifyTopDomainsData()
+
+	if err != nil {
+		log.Println("error loading the top domains", err)
+		panic(err.Error())
+	}
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
-	model, err := onnx.ConnectRemoteInferenceSocket(".")
+	model, err := onnx.ConnectRemoteInferenceSocket(topDomains)
 	if err != nil {
 		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())

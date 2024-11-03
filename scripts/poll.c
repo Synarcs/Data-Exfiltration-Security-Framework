@@ -29,6 +29,12 @@ int main(void) {
     if (sock_fd = socket(AF_INET, SOCK_DGRAM, 0 < 0)){
         perror("Error binding socket");
     }
+
+    uid_t uid = getuid();
+    gid_t gid = getgid();
+    pid_t proc = getpid();
+
+    printf("Process Information %u %u %u \n", uid, gid, proc);
     if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val)) < 0) {}
 
     printf("File descriptor open information: %d\n", val);
@@ -38,7 +44,6 @@ int main(void) {
         return 1;
     }
 
-    pid_t proc = getpid();
     printf("Process ID adding epoll events over POLL STDIN: %d\n", proc); 
     int event_count = 0;
     size_t bytes_read;  char read_buffer[READ_SIZE + 1]; 

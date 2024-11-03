@@ -99,3 +99,7 @@ func ExtractTldFromDomain(fqdn string) string {
 func cpuArch() string {
 	return runtime.GOARCH
 }
+
+func getCPUCores() int {
+	return runtime.NumCPU()
+}

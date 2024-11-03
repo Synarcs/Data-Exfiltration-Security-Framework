@@ -29,24 +29,6 @@ type DNSFeatures struct {
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
 
-func GenerateFloatVectors(features []DNSFeatures) [][]float32 {
-	floatTensors := make([][]float32, 0)
-	for i := 0; i < len(features); i++ {
-		perLabelFeatures := make([]float32, 8)
-		perLabelFeatures[0] = float32(features[i].TotalChars)
-		perLabelFeatures[1] = float32(features[i].TotalCharsInSubdomain)
-		perLabelFeatures[2] = float32(features[i].NumberCount)
-		perLabelFeatures[3] = float32(features[i].UCaseCount)
-		perLabelFeatures[4] = float32(features[i].Entropy)
-		perLabelFeatures[5] = float32(features[i].PeriodsInSubDomain)
-		perLabelFeatures[6] = float32(features[i].LongestLabelDomain)
-		perLabelFeatures[7] = float32(features[i].AveerageLabelLength)
-		floatTensors = append(floatTensors, perLabelFeatures)
-	}
-
-	return floatTensors
-}
-
 func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *OnnxModel) *DnsPacketGen {
 	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
 
@@ -277,7 +259,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	if isEgress {
 		features = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ARCount+dns_packet.NSCount)
 	} else {
-		features = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ARCount+dns_packet.NSCount+dns_packet.ANCount)
+		features = make([]DNSFeatures, dns_packet.NSCount+dns_packet.ANCount)
 	}
 
 	if len(dns_packet.Questions) > 0 && isEgress {
@@ -297,7 +279,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		i += len(features)
 	}
 
-	if len(dns_packet.Authorities) > 0 && (isIngress || isEgress) {
+	if len(dns_packet.Authorities) > 0 && isEgress {
 		features, _ = ParseDnsAuth(dns_packet, features, isEgress, i)
 		i += len(features)
 	}
