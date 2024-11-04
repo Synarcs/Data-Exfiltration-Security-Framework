@@ -60,7 +60,7 @@ struct dns_flags {
 
 struct qtypes {
     __u8 A; __u8 NS; __u8 CNAME;__u8 SOA;__u8 PTR;__u8 MX;__u8 TXT;__u8 AAAA;__u8 SRV;__u8 NAPTR;__u8 OPT;
-    __u8 HTTPS;__u8 ANY;
+    __u8 HTTPS;__u8 ANY; __u8 NULL_TYPE;
 } qtypes = {
     .A =  0x0001,
     .NS = 0x0002,
@@ -75,11 +75,13 @@ struct qtypes {
     .OPT = 0x0029,
     .HTTPS = 0x0041,
     .ANY = 0x00FF,
+    .NULL_TYPE = 0x000A, 
 };
 
 struct dns_header {
     __u16 transaction_id;
     __u16 flags;
+
     __be16 qd_count;    //Number of questions
     __be16 ans_count;  //Number of answer RRs
     __be16 auth_count; //Number of authority RRs
@@ -223,3 +225,11 @@ struct dns_record_limits_malicious {
         125, // (127 - (tld - root) == 125) 
 };
 
+
+struct dns_non_standard_udp_transport_event {
+    __u32 dest_port;
+    __u32 src_port;
+    __u16 dns_transaction_id;
+    __u8 isUdp;
+    __u8 isTcp;
+};

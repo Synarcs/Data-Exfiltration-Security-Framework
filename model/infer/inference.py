@@ -77,7 +77,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                     executor.map(self.infer, request_body["Features"])
 
                 response = {
-                    "threat_type": False
+                    "threat_type": True # for now to drop all the pakcet hitting the remote inference server 
                 }
                 response_body = json.dumps(response).encode('utf-8')
                 log.debug(f"Sending response: {response_body}")

@@ -57,7 +57,7 @@ tc-remove:
 .PHONY: tc-filter 
 tc-filter:
 	sudo tc filter add dev enp0s1 egress bpf direct-action obj tc.o sec tc
-	sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
+	# sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
 .PHONY: tc-show 
 tc-show:

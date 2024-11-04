@@ -78,7 +78,7 @@ struct packet_actions {
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
-    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *, bool);
+    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *, bool, void *);
 
 };
 
@@ -86,12 +86,12 @@ __u32 INSECURE = 0;
 
 /* ***************************************** Event ring buffeers for kernel detected DNS events ***************************************** */
 
-// ring buffer event from kernel storing information for the packet dropped within the kernel 
-struct exfil_security_egress_drop_ring_buff {
+// non standard port DPI for enhanced c2c channels with remote c2c server for malware exfil over udp 
+// an standard kernel ring buffer event for transfer with dns portocol overlay for traffic in c2c case 
+struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
-} exfil_security_egress_drop_ring_buff SEC(".maps");
-
+} exfil_security_egrees_redirect_ring_buff_non_standard_port SEC(".maps");
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -107,6 +107,7 @@ struct exfil_security_egress_redirect_map {
     __type(value, struct checkSum_redirect_struct_value);   // layer 3 checksum prior redirect using a non clone skb redirect 
     __uint(max_entries, 1 << 24);
 } exfil_security_egress_redirect_map SEC(".maps");
+
 
 struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -288,9 +289,10 @@ static
             case 0x0021:
             case 0x0023:
             case 0x0029: 
-                return SUSPICIOUS;
             case 0x0010:
+                return SUSPICIOUS;
             case 0x00FF:
+            case 0x000A:
                 return MALICIOUS;
             default: {
                 return SUSPICIOUS;
@@ -298,6 +300,37 @@ static
         }
         return SUSPICIOUS;
   }
+
+static 
+__always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u16 dns_query_class, struct qtypes qt, 
+                __u8 total_domain_length, __u8 total_domain_length_exclude_tld) {
+        // check for the c2c record types used by remote malware processes 
+        struct result_parse_dns_labels resuult = {
+            .deep_scan_mirror = false, 
+            .drop = false, 
+            .isBenign = false,
+            .isC2c = false,
+        };
+        if (dns_query_class == qt.MX || dns_query_class == qt.TXT || dns_query_class == qt.CNAME){
+            if (dns_query_class == qt.TXT) {
+                if (total_domain_length >= 80) {
+                    resuult.drop = true;
+                }else {
+                    resuult.deep_scan_mirror = true;
+                }
+            }else if (dns_query_class == qt.MX) {
+                if (total_domain_length >= 120) {
+                    resuult.drop = true;
+                }else {
+                    resuult.deep_scan_mirror = true;
+                }
+            }else {
+                resuult.deep_scan_mirror = true;
+            }
+            resuult.isC2c = true; 
+        }
+        return resuult;
+}
 
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header){
@@ -349,7 +382,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
 
-        __u8 lebel_len_per_index = 0;
+        __u8 total_domain_length = 0;
         __u8 total_domain_length_exclude_tld = 0;
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
@@ -370,11 +403,13 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 else 
                     root_domain++;
 
+                total_domain_length += label_len;
                 offset += label_len + 1; 
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
+            
 
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
@@ -389,7 +424,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
-            if (label_count <= 2) return BENIGN;
+            struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
+
+            if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
             
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
                     if (mx_label_ln >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && mx_label_ln <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
@@ -409,6 +446,11 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 return SUSPICIOUS;
             }
 
+            if (c2c_check.isC2c) {
+                if (c2c_check.deep_scan_mirror) return SUSPICIOUS;
+                if (c2c_check.drop) return MALICIOUS;
+                if (!c2c_check.deep_scan_mirror && !c2c_check.drop) return BENIGN;
+            }
             return parse_dns_qeury_type_section(skb, query_class, qtypes);
         }
      }else return SUSPICIOUS;
@@ -546,7 +588,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, void *dns_payload, 
-                struct dns_header *dns_header, bool isUDP) {
+                struct dns_header *dns_header, bool isUDP, void *transport_header) {
     // check whether a non standard port is used for dns query and dns payload 
     
     struct dns_flags  flags = get_dns_flags(dns_header);
@@ -563,8 +605,17 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         return 1;
     }
 
+    // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
+    
+
+    bpf_printk("Non standard transport DPI found for exfil remote c2c server");
     // a malicious encap is used to mask the dns traffPic 
     return 0;
+}
+
+static 
+__always_inline void * __emit_kernel_ringBuff_event() {
+    return NULL;
 }
 
 static 
@@ -592,10 +643,81 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
           }
         #endif
-        __u8 action_non_port = actions.parse_dns_payload_non_standard_port(&cursor, dns_payload, dns, true);
-        // bpf_printk("NON PORT ACTION %u", action_non_port);
-        // encap packet used and normally this packet are not used for dns query 
-        return 1;
+        
+        void *header_payload = cursor.data + sizeof(struct ethhdr) + 
+                            (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
+
+        if ((void *) (dns_payload + 1) > cursor.data_end) return 1;
+
+        // TODO: Fix hte code redundancy 
+        if (isUdp) {
+            struct udphdr *udp = (struct udphdr *) (header_payload);
+            if ((void *) (udp + 1) > cursor.data_end) return 1;
+            __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
+                                dns_payload, dns, true, (void *) udp);
+
+            if (__non_standard_port_dpi == 0) {
+                // emit the ring buff from kernel as a transport event 
+                bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
+                void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
+                                sizeof(struct dns_non_standard_udp_transport_event), 0);
+                if (!res) {
+                    #ifdef DEBUG 
+                        if (DEBUG) {
+                            bpf_printk("Error reserve kernel memroy for the event");
+                        }
+                    #endif
+                    // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
+                    return 1;
+                }
+
+                struct dns_non_standard_udp_transport_event *event = res;
+                event->dest_port = bpf_ntohs(udp->dest);
+                event->src_port = bpf_ntohs(udp->source);
+                event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
+                event->isTcp = (__u8)0;
+                event->isUdp = (__u8)1;
+
+                bpf_ringbuf_submit(event, 0);
+            }
+
+            return __non_standard_port_dpi;
+        }else {
+            struct tcphdr *tcp = (struct tcphdr *) (header_payload);
+            if ((void *) (tcp + 1) > cursor.data_end) return 1;
+
+            __u8 __non_standard_port_dpi =  actions.parse_dns_payload_non_standard_port(&cursor, 
+                                dns_payload, dns, true, (void *) tcp);
+            
+            if (__non_standard_port_dpi == 0){
+
+                // emit the ring buff from kernel as a transport event 
+                void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
+                                sizeof(struct dns_non_standard_udp_transport_event), 0);
+                if (!res) {
+                    #ifdef DEBUG 
+                        if (DEBUG) {
+                            bpf_printk("Error reserve kernel memroy for the event");
+                        }
+                    #endif
+                    // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
+                    return 1;
+                }
+
+                struct dns_non_standard_udp_transport_event *event = res;
+                event->dest_port = bpf_ntohs(tcp->dest);
+                event->src_port = bpf_ntohs(tcp->source);
+                event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
+                event->isTcp = (__u8)0;
+                event->isUdp = (__u8)1;
+
+                bpf_ringbuf_submit(&event, 0);
+            }
+
+
+            return __non_standard_port_dpi;
+        }
+
         // do deep packet inspection on the packet contett and the associated payload 
 }
 
@@ -981,9 +1103,11 @@ int classify(struct __sk_buff *skb){
             }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){
                 return TC_FORWARD;
             }else {
+
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
                                     udp_data, udp_payload_len, true, true) == 1) 
                     return TC_FORWARD;
+                
                 return TC_DROP;
             }
             return TC_FORWARD;

@@ -2,11 +2,11 @@ package events
 
 // lower protocol packet information
 type DnsEvent struct {
-	SrcIP    uint32
-	DstIP    uint32
-	SrcPort  uint16
-	DstPort  uint16
-	Protocol uint8
+	DstPort          uint32
+	SrcPort          uint32
+	DnsTransactionId uint16
+	IsUdp            uint8
+	IsTcp            uint8
 }
 
 type DPIRedirectionKernelMap struct {

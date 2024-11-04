@@ -120,12 +120,24 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 			}
 			panic(err.Error())
 		}
-		var event events.DnsEvent
-		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-		if err != nil {
-			log.Fatalf("Failed to parse event: %v", err)
-		}
 
+		var event events.DnsEvent
+		if utils.CpuArch() == "arm64" {
+			log.Println("Polling the ring buffer for the arm arch")
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+			if err != nil {
+				log.Fatalf("Failed to parse event: %v", err)
+			}
+			log.Println("dns Event polled from kernel non standard port", event)
+		} else {
+			log.Println("Polling the ring buffer for the x86 big endian systems")
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
+			if err != nil {
+				log.Fatalf("Failed to parse event: %v", err)
+			}
+			log.Println("dns Event polled from kernel non standard port", event)
+		}
+		go tc.streamRedirectCountStatusPayload(event)
 	}
 }
 
@@ -221,7 +233,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	errMapPollChannel := make(chan error)
 	for _, maps := range spec.Maps {
 		// process all the maps which needs to monitoted or polled from kernel for events without explicity events for ring buffer
-		if strings.Contains(maps.String(), "exfil_security_egress_drop_ring_buff") {
+		if strings.Contains(maps.String(), "exfil_security_egrees_redirect_ring_buff_non_standard_port") {
 			// an ring event buffer
 			if utils.DEBUG {
 				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
@@ -253,31 +265,18 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}
 }
 
-func (tc *TCHandler) streamRedirectCountStatusPayload(dnsPacket *gopacket.Layer, errorEventChannel chan error) {
+func (tc *TCHandler) streamRedirectCountStatusPayload(payload interface{}) error {
 	currTime := time.Now().GoString()
 
-	var redirection_count_key uint16 = 0 // redirect count . the count which kernel count in tc layer and redirect for DPI purpose
-	redirectCountMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
+	events.ExportPromeEbpfExporterEvents(struct {
+		Time          string
+		redirectCount interface{}
+	}{
+		Time:          currTime,
+		redirectCount: payload,
+	})
 
-	if redirectCountMap != nil {
-		var currRedirectCount uint32 = 0
-		// TODO: call the prometheus client to stream the redrect count metric
-		err := redirectCountMap.Lookup(redirection_count_key, &currRedirectCount)
-		if err != nil {
-			if !errors.Is(err, ebpf.ErrKeyNotExist) {
-				log.Println("Error polling metric for redirected kernel count", err)
-				errorEventChannel <- err
-			}
-		}
-
-		events.ExportPromeEbpfExporterEvents(struct {
-			Time          string
-			redirectCount uint32
-		}{
-			Time:          currTime,
-			redirectCount: uint32(currRedirectCount),
-		})
-	}
+	return nil
 }
 
 func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
@@ -368,7 +367,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		}
 
 		// control plane event streaming via kafka / flink to a message broker
-		go tc.streamRedirectCountStatusPayload(&dnsLayer, make(chan error))
+		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 	} else {
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
@@ -380,7 +379,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			return nil
 		}
 
-		go tc.streamRedirectCountStatusPayload(&dnsLayer, make(chan error))
+		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 		// TODO: ipv6 processing for the pacekt capture
 	}
 

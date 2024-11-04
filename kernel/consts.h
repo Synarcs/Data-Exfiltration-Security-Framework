@@ -102,6 +102,7 @@ struct result_parse_dns_labels {
     bool deep_scan_mirror;
     bool drop;
     bool isBenign;
+    bool isC2c;
 } __attribute__((packed));
 
 // ipv6 has no checksum but kept this for kernel map verification 

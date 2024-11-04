@@ -96,10 +96,10 @@ func ExtractTldFromDomain(fqdn string) string {
 	return strings.Join(vv[len(vv)-2:], ".")
 }
 
-func cpuArch() string {
+func CpuArch() string {
 	return runtime.GOARCH
 }
 
-func getCPUCores() int {
+func GetCPUCores() int {
 	return runtime.NumCPU()
 }

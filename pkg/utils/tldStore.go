@@ -79,7 +79,7 @@ func VerifyTopDomainsData() (*TopDomains, error) {
 	}
 	defer file.Close()
 
-	workers := getCPUCores()
+	workers := GetCPUCores()
 	chunkRanges := getFileChunks(fileSize, workers)
 
 	var wg sync.WaitGroup

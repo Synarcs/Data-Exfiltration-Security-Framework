@@ -146,6 +146,7 @@ func ParseDnsQuestions(dns_packet *layers.DNS, features []DNSFeatures, isEgress 
 
 	singleQuery := len(dns_packet.Questions) == 1
 	for _, payload := range dns_packet.Questions {
+
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		if singleQuery {
 			parseEachQuerySection(exclude_tld, payload)
@@ -158,6 +159,16 @@ func ParseDnsQuestions(dns_packet *layers.DNS, features []DNSFeatures, isEgress 
 		i += 1
 	}
 	return features, nil
+}
+
+// for now verify and drop if its mail or null records
+func CheckMxTxtNullRecordInQuestions(dns_packet *layers.DNS, features []DNSFeatures) bool {
+	for _, payload := range dns_packet.Questions {
+		if payload.Type == layers.DNSTypeMX || payload.Type == layers.DNSTypeTXT || payload.Type == layers.DNSTypeNULL {
+			return true
+		}
+	}
+	return false
 }
 
 func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
