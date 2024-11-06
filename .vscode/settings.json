@@ -29,6 +29,9 @@
         "stdbool.h": "c",
         "stdlib.h": "c",
         "signal.h": "c",
-        "epoll.h": "c"
+        "epoll.h": "c",
+        "netlink.h": "c",
+        "socket.h": "c",
+        "consts.h": "c"
     }
 }

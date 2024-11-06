@@ -7,14 +7,17 @@ bridge_tc_kernel_out := bridge.o
 xdp_kernel := dns_xdp.c 
 xdp_kernel_out := xdp.o 
 
+netlink_kernel := nf_sock.c
+netlink_kernel_out := netlink.o
+
 
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
-	cp tc.o ../node_agent/
-	cp bridge.o ../node_agent/
+	cp $(tc_kernel_out)../node_agent/
+	cp $(bridge_tc_kernel_out) ../node_agent/
 
 
 .PHONY: compile-llvm-arch 
@@ -36,8 +39,8 @@ compile-llvm-x86:
 compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
-	cp tc.o ../node_agent/
-	cp bridge.o ../node_agent/
+	cp $(tc_kernel_out)../node_agent/
+	cp $(bridge_tc_kernel_out) ../node_agent/
 
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
@@ -93,3 +96,13 @@ xdp-umount:
 	sudo ip link set dev enp0s1 xdp off 
 	sudo xdp-loader unload enp0s1 --all 
 
+
+.PHONY: netlink
+netlink: 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	cp $(netlink_kernel_out) ../node_agent/
+
+.PHONY: netlink-x86 
+netlink-x86: 
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	cp $(netlink_kernel_out) ../node_agent/

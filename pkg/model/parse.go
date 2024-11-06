@@ -47,7 +47,7 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 		ARCount:      dns.ARCount,
 		Questions:    dns.Questions,
 		Answers:      dns.Answers,
-		Authorities:  dns.Additionals,
+		Authorities:  dns.Authorities,
 		Additionals:  dns.Additionals,
 	}
 }

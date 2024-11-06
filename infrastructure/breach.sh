@@ -2,6 +2,19 @@
 arch=$(arch)
 kernel=$(uname -r) 
 
+installDep() {
+    wget https://www.python.org/ftp/python/2.7.9/Python-2.7.9.tgz
+    sudo tar xzf Python-2.7.9.tgz
+    cd Python-2.7.9
+    sudo ./configure --enable-optimizations
+    sudo make altinstall
+    export PATH=$PATH:/usr/local/bin
+
+    echo "Installing pip"
+    wget https://bootstrap.pypa.io/pip/2.7/get-pip.py
+    sudo python2.7 get-pip.py
+}
+
 
 release=$(cat /etc/os-release)
 

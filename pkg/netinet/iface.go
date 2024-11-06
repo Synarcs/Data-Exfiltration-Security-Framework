@@ -40,6 +40,10 @@ type NetIface struct {
 	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
 	LoopBackLinks []netlink.Link // loopback links
 
+	// all the encapsulated packet links for tunnelling using packet encapsulation
+	// most tunnelling link use kernel router netfilter forwarding via non control host for detection prevention
+	PointPointTunVxLinks []netlink.Link
+
 	RoutesV4 map[string][]netlink.Route
 	RoutesV6 map[string][]netlink.Route
 
@@ -171,6 +175,9 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
+
+
+
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {
 	hardwardIntefaces := make([]netlink.Link, 0)
 	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
@@ -179,21 +186,27 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 		_, isEth := link.(*netlink.Device)
 		attrs := link.Attrs()
 
-		// Exclude virtual interfaces (e.g., loopback, bridge, vlan, etc.)
-		isVirtual := attrs.OperState == netlink.OperNotPresent ||
-			attrs.Flags&net.FlagLoopback != 0
-			// attrs.Name == "lo"
+		if link.Attrs().Flags == net.FlagPointToPoint {
+			// an possible tunnelling interface for packet processing
+			continue
+		} else {
+			// Exclude virtual interfaces (e.g., loopback, bridge, vlan, etc.)
+			isVirtual := attrs.OperState == netlink.OperNotPresent ||
+				attrs.Flags&net.FlagLoopback != 0
+				// attrs.Name == "lo"
 
-		isLoopBack := (attrs.EncapType == "loopback" || attrs.Name == "lo" || link.Attrs().Flags&net.FlagLoopback != 0) && (link.Type() != "veth" && link.Type() != "device")
-		if isEth && !isVirtual && !isLoopBack {
-			hardwardIntefaces = append(hardwardIntefaces, link)
+			isLoopBack := (attrs.EncapType == "loopback" || attrs.Name == "lo" || link.Attrs().Flags&net.FlagLoopback != 0) && (link.Type() != "veth" && link.Type() != "device")
+			if isEth && !isVirtual && !isLoopBack {
+				hardwardIntefaces = append(hardwardIntefaces, link)
+			}
+			if isLoopBack {
+				loopBackInterface = append(loopBackInterface, link)
+			}
+			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
+				bridgeInterfaces = append(bridgeInterfaces, link)
+			}
 		}
-		if isLoopBack {
-			loopBackInterface = append(loopBackInterface, link)
-		}
-		if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
-			bridgeInterfaces = append(bridgeInterfaces, link)
-		}
+
 	}
 	return hardwardIntefaces, loopBackInterface, bridgeInterfaces
 }

@@ -119,6 +119,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				for _, dnsFeature := range dnsFeatures {
 					utils.UpdateDomainBlacklistInCache(dnsFeature.Tld, dnsFeature.Fqdn)
 				}
+				return false, nil
 			}
 			return true, nil
 		}

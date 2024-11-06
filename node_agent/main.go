@@ -15,7 +15,8 @@ import (
 	onnx "github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
-	tc "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
+	"github.com/Data-Exfiltration-Security-Framework/pkg/tc"
+	tcl "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
@@ -75,6 +76,10 @@ func main() {
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 	go tc.TcHandlerEbfpProgBridge(&ctx, &iface)
 
+	// add the kernel sock map
+
+	go tcl.AttachNetlinkSockHandler()
+
 	if !utils.DEBUG {
 		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
 		go rpcServer.Server()
@@ -130,6 +135,8 @@ func main() {
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
 		tc.DetachHandlerBridge(&ctx)
+
+		tcl.DetachSockHandler()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 }

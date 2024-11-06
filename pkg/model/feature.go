@@ -201,25 +201,31 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 
 func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Authorities {
+		if payload.Type == layers.DNSTypeSOA || payload.Type == layers.DNSTypeOPT {
+			continue
+		}
+		var feature DNSFeatures
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		if len(exclude_tld) > 2 {
 			features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-			features[i].LongestLabelDomain = mx_len
-			features[i].TotalCharsInSubdomain = totalLen
+			feature.LongestLabelDomain = mx_len
+			
+			feature.TotalCharsInSubdomain = totalLen
 
 			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
-			features[i].UCaseCount = ucount
-			features[i].NumberCount = ncount
-			features[i].LCaseCount = lcount
-			features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
+			feature.UCaseCount = ucount
+			feature.NumberCount = ncount
+			feature.LCaseCount = lcount
+			feature.Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 
-			features[i].IsEgress = isEgress
+			feature.IsEgress = isEgress
 
-			features[i].Fqdn = string(payload.Name)
+			feature.Fqdn = string(payload.Name)
 
-			features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+			feature.Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+			features = append(features, feature)
 			mrsh, _ := json.Marshal(features[i])
 			fmt.Println(string(mrsh))
 		}
@@ -229,25 +235,31 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool,
 
 func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Additionals {
+		// TODOD: An additional record with non standard OPT type or EDNS
+		var feature DNSFeatures
+		if payload.Type == layers.DNSTypeOPT || payload.Type == layers.DNSTypeSOA {
+			continue
+		}
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		if len(exclude_tld) > 2 {
-			features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
+			feature.PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-			features[i].LongestLabelDomain = mx_len
-			features[i].TotalCharsInSubdomain = totalLen
+			feature.LongestLabelDomain = mx_len
+			feature.TotalCharsInSubdomain = totalLen
 
 			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
-			features[i].UCaseCount = ucount
-			features[i].NumberCount = ncount
-			features[i].LCaseCount = lcount
-			features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
+			feature.UCaseCount = ucount
+			feature.NumberCount = ncount
+			feature.LCaseCount = lcount
+			feature.Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 
-			features[i].IsEgress = isEgress
+			feature.IsEgress = isEgress
 
-			features[i].Fqdn = string(payload.Name)
+			feature.Fqdn = string(payload.Name)
 
-			features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+			feature.Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+			features = append(features, feature)
 			mrsh, _ := json.Marshal(features[i])
 			fmt.Println(string(mrsh))
 		}
@@ -268,9 +280,9 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	isIngress := !isEgress
 
 	if isEgress {
-		features = make([]DNSFeatures, dns_packet.QDCount+dns_packet.ARCount+dns_packet.NSCount)
+		features = make([]DNSFeatures, dns_packet.QDCount)
 	} else {
-		features = make([]DNSFeatures, dns_packet.NSCount+dns_packet.ANCount)
+		features = make([]DNSFeatures, dns_packet.ANCount)
 	}
 
 	if len(dns_packet.Questions) > 0 && isEgress {

@@ -28,6 +28,12 @@ sudo apt update -y && sudo apt install -y \
     curl \ 
     libpcap-dev 
 
+
+sudo apt-get install libffi-dev \
+    libncursesw5-dev libssl-dev \
+    libsqlite3-dev tk-dev libgdbm-dev \
+    libc6-dev libbz2-dev
+
 if [ $? -eq 0 ]; then 
     echo "Installed the kernel build librries"
 else

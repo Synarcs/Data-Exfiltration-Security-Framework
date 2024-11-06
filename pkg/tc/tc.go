@@ -144,8 +144,8 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
 	var KernelPacketRedirectCount uint16 = 0
 	for {
-		var KernelRedirectPacketCount uint32 = 0
-		if err := ebpfMap.Lookup(KernelPacketRedirectCount, &KernelRedirectPacketCount); err != nil {
+		var PacketCountKernel uint32 = 0
+		if err := ebpfMap.Lookup(KernelPacketRedirectCount, &PacketCountKernel); err != nil {
 			if errors.Is(err, ebpf.ErrKeyNotExist) {
 				continue
 			} else {
@@ -154,9 +154,32 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 			}
 		}
 		if utils.DEBUG {
-			log.Println("The current Redirected count of packets is ", ebpfMap.String(), KernelRedirectPacketCount)
+			log.Println("The current Redirected count of packets is ", ebpfMap.String(), PacketCountKernel)
 		}
-		events.ExportPromeEbpfExporterEvents(KernelRedirectPacketCount)
+		switch ebpfMap.String() {
+		case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
+			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
+				KernelRedirectPacketCount: PacketCountKernel,
+				EvenTime:                  time.Now().Format(time.RFC3339),
+			}); err != nil {
+				if utils.DEBUG {
+					log.Println("Error Streaming the prometheus metrics", err)
+				}
+			}
+		case events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP:
+			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCount](events.PacketDPIKernelDropCount{
+				KernelRedirectPacketCount: PacketCountKernel,
+				EvenTime:                  time.Now().Format(time.RFC3339),
+			}); err != nil {
+				if utils.DEBUG {
+					log.Println("Error Streaming the prometheus metrics", err)
+				}
+			}
+		default:
+			{
+			}
+		}
+
 		time.Sleep(time.Second)
 	}
 }
@@ -266,16 +289,14 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 }
 
 func (tc *TCHandler) streamRedirectCountStatusPayload(payload interface{}) error {
-	currTime := time.Now().GoString()
 
-	events.ExportPromeEbpfExporterEvents(struct {
-		Time          string
-		redirectCount interface{}
+	events.StreamThreadEvents(struct {
+		Time    string
+		Payload interface{}
 	}{
-		Time:          currTime,
-		redirectCount: payload,
+		Time:    time.Now().GoString(),
+		Payload: payload,
 	})
-
 	return nil
 }
 
