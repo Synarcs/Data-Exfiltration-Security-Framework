@@ -26,7 +26,13 @@ sudo apt update -y && sudo apt install -y \
     libcap-dev \
     vim  \
     curl \ 
-    libpcap-dev 
+    libpcap-dev \
+    libdebuginfod-dev \
+    bison \
+    flex \
+    curl \
+    libcurl4-openssl-dev \
+    libedit-dev 
 
 
 sudo apt-get install libffi-dev \

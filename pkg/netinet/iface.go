@@ -40,6 +40,7 @@ type NetIface struct {
 	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
 	LoopBackLinks []netlink.Link // loopback links
 
+	LinkMap map[string]bool
 	// all the encapsulated packet links for tunnelling using packet encapsulation
 	// most tunnelling link use kernel router netfilter forwarding via non control host for detection prevention
 	PointPointTunVxLinks []netlink.Link
@@ -175,15 +176,33 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
-
-
+func (iface *NetIface) VerifyNewNetlinkPppSockets() {
+	links, _ := netlink.LinkList()
+	for _, link := range links {
+		_, fd := iface.LinkMap[link.Attrs().Name]
+		if !fd {
+			log.Println("New Link added via a netlink kernel socket traceppoint kernel detected")
+			flags := link.Attrs().Flags
+			if flags == net.FlagPointToPoint {
+				// attach the ppp socket tc hooks inside kernel
+				log.Println("ppp socket detected attaching tc hooks")
+				iface.LinkMap[link.Attrs().Name] = true
+				break
+			}
+		}
+	}
+}
 
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {
 	hardwardIntefaces := make([]netlink.Link, 0)
 	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
 	bridgeInterfaces := make([]netlink.Link, 0)
+
+	nf.LinkMap = make(map[string]bool)
 	for _, link := range nf.Links {
 		_, isEth := link.(*netlink.Device)
+
+		nf.LinkMap[link.Attrs().Name] = true
 		attrs := link.Attrs()
 
 		if link.Attrs().Flags == net.FlagPointToPoint {

@@ -8,6 +8,7 @@ import (
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -77,6 +78,11 @@ func (tc *TCHandler) AttachTcHandlerIngressBridge(ctx *context.Context, prog *eb
 }
 
 func (tc *TCHandler) TcHandlerEbfpProgBridge(ctx *context.Context, iface *netinet.NetIface) error {
+
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Printf("The ebpf node agent cannot reserve memory to load the ebpf program in kernel %+v", err)
+	}
+
 	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_BRIDGE_NETIFACE_INT)
 
 	if err != nil {

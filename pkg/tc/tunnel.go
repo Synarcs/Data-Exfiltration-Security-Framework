@@ -1,17 +1,27 @@
 package tc
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"log"
+	"strings"
+	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
 )
 
-func PollNetlinkKernelHandlerMap() {
-
+type KernelNetlinkSocket struct {
+	ProcessId   uint32
+	Uid         uint32
+	ProcessInfo [200]byte
 }
 
-func AttachNetlinkSockHandler() error {
+func AttachNetlinkSockHandler(iface *netinet.NetIface) error {
 	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
 
@@ -20,22 +30,73 @@ func AttachNetlinkSockHandler() error {
 		return err
 	}
 
-	spec, err := ebpf.NewCollection(handler)
+	var objs struct {
+		NetlinkSocket                                     *ebpf.Program `ebpf:"netlink_socket"`
+		ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent *ebpf.Map     `ebpf:"exfil_security_detected_c2c_tunneling_netlink_sock_event"`
+	}
+
+	if err := handler.LoadAndAssign(&objs, nil); err != nil {
+		panic(err.Error())
+	}
+
+	// "tracepoint/syscalls/sys_enter_socket"
+	//  Kernel Tracepoint for socket syscall for an open socket fd inside kernel of AF_FAMILY AF_NETLINK
+	sockettp, err := link.Tracepoint("syscalls", "sys_enter_socket", objs.NetlinkSocket, nil)
 	if err != nil {
-		log.Fatal("error loading the xdp program over interface")
+		log.Fatal("error loading the kprobe program over sys_enter sock")
 		return err
 	}
 
-	defer spec.Close()
-	prog := spec.Programs[utils.SOCK_TUNNEL_CODE]
-	defer prog.Close()
+	defer objs.NetlinkSocket.Close()
+	defer objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent.Close()
 
-	for _, name := range spec.Maps {
-		log.Println("maps used are ", name.String())
+	defer sockettp.Close()
+
+	var netlinkEvent KernelNetlinkSocket
+
+	ringBuff, err := ringbuf.NewReader(objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent)
+
+	if err != nil {
+		log.Fatal("Error in creating the ring buffer reader")
+		return err
 	}
+	defer ringBuff.Close()
 
-	log.Println("Done attaching the Netlink Tunnel Tap Socket Handler Scanner")
-	return nil
+	for {
+		if err != nil {
+			log.Fatal("Error in creating the ring buffer reader")
+			return err
+		}
+
+		record, err := ringBuff.Read()
+		if err != nil {
+			if errors.Is(err, ringbuf.ErrClosed) {
+				return nil
+			}
+			log.Fatal("Error in reading the ring buffer reader")
+			return err
+		}
+
+		if utils.CpuArch() == "arm64" {
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &netlinkEvent)
+			if err != nil {
+				log.Fatalf("Failed to parse event: %v", err)
+			}
+		} else {
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &netlinkEvent)
+			if err != nil {
+				log.Fatalf("Failed to parse event: %v", err)
+			}
+		}
+
+		iface.VerifyNewNetlinkPppSockets()
+		if utils.DEBUG {
+			log.Println("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent)
+			log.Println("Process Name using Rf Netlink socket", strings.Trim(string(netlinkEvent.ProcessInfo[:]), ""))
+		}
+
+		time.Sleep(time.Second)
+	}
 }
 
 func DetachSockHandler() error {

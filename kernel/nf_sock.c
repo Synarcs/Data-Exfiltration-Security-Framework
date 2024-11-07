@@ -13,48 +13,58 @@
 // monitor all netlink events from kernel for AF_NETLINK 
 struct exfil_security_detected_c2c_tunneling_netlink_sock_event {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 10);
-} exfil_security_detected_c2c_tunneling_netlink_sock_event SEC(".maos");
+    __uint(max_entries, 1 << 12);
+} exfil_security_detected_c2c_tunneling_netlink_sock_event SEC(".maps");
 
 struct event_setSockEvent {
-    char processInfo[255];
     __u32 process_id;
     __u32 uid;
+    char prog[200];
 };
 
 struct socket_args {
-    __u64 pad;
-    __s32 domain;
-    __s32 type;
-    __s32 protocol;
+    unsigned long  pad;
+    unsigned int __syscall_nr;
+    unsigned int family;
+    unsigned int type;
+    unsigned int protocol;
 };
 
 SEC("tracepoint/syscalls/sys_enter_socket")
 int netlink_socket(struct socket_args *ctx) {
 
+    if (ctx->type == AF_NETLINK) {
 
-    if (ctx->domain == AF_NETLINK && ctx->type == (SOCK_RAW | SOCK_CLOEXEC) &&
-            ctx->protocol == NETLINK_ROUTE) {
+        void *res = bpf_ringbuf_reserve(&exfil_security_detected_c2c_tunneling_netlink_sock_event, 
+                        sizeof(struct event_setSockEvent), 0);
+        if (!res) {
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("socket info %u %u %u", ctx->family, ctx->type, ctx->protocol);
+                }
+            #endif
+            // bpf_ringbuf_discard(&exfil_security_detected_c2c_tunneling_netlink_sock_event, 0);
+            return 0;
+        }
+        struct event_setSockEvent *event = res;
 
-        #ifdef DEBUG
-            if (DEBUG) {
-
-            }
-        #endif
         __u32 pid = bpf_get_current_pid_tgid() >> 32;
         __u32 uid = bpf_get_current_uid_gid() >> 32;
-        
-        struct event_setSockEvent *event;
+
+        if (
+            bpf_get_current_comm(&event->prog, sizeof(event->prog)) == 0
+        ) {
+            if (DEBUG)
+                bpf_printk("netlink socket detected %s", event->prog);
+        }
+
         event->process_id = pid; 
         event->uid = uid;
 
-        bpf_get_current_comm(event->processInfo, sizeof(event->processInfo));
-
-        bpf_ringbuf_output(&exfil_security_detected_c2c_tunneling_netlink_sock_event, 
-                    event, sizeof(struct event_setSockEvent), 0);
+        bpf_ringbuf_submit(event,0);
     }
 
     return 0;
 }
 
-char LICENSE[] SEC("license") = "GPL";
+char __license[] SEC("license") = "Dual MIT/GPL";

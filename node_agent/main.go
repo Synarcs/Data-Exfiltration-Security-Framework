@@ -78,7 +78,7 @@ func main() {
 
 	// add the kernel sock map
 
-	go tcl.AttachNetlinkSockHandler()
+	go tcl.AttachNetlinkSockHandler(&iface)
 
 	if !utils.DEBUG {
 		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
