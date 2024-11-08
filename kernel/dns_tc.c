@@ -112,7 +112,7 @@ struct exfil_security_egress_redirect_map {
 struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u64); // store the timestamp loaded from userspace when pacekt hits 
-    __type(value, __u8);   // layer 4 checksum prior redirect non clone skb 
+    __type(value, __u8);   // layer 3 checksum prior redirect non clone skb 
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
 

@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"log"
-	"strings"
+	"os"
 	"time"
 
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -21,7 +21,21 @@ type KernelNetlinkSocket struct {
 	ProcessInfo [200]byte
 }
 
-func AttachNetlinkSockHandler(iface *netinet.NetIface) error {
+func ProcessTunnelEvent(iface *netinet.NetIface, eventChannel chan bool) {
+	for {
+		select {
+		case <-eventChannel:
+			if utils.DEBUG {
+				log.Println("Tunnel interface received command from channel")
+			}
+			iface.VerifyNewNetlinkPppSockets()
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+}
+
+func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool) error {
 	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
 
@@ -62,6 +76,8 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface) error {
 	}
 	defer ringBuff.Close()
 
+	var netlinkKernelProcMap map[int]bool = make(map[int]bool)
+
 	for {
 		if err != nil {
 			log.Fatal("Error in creating the ring buffer reader")
@@ -89,10 +105,16 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface) error {
 			}
 		}
 
-		iface.VerifyNewNetlinkPppSockets()
-		if utils.DEBUG {
-			log.Println("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent)
-			log.Println("Process Name using Rf Netlink socket", strings.Trim(string(netlinkEvent.ProcessInfo[:]), ""))
+		if netlinkEvent.ProcessId != uint32(os.Getpid()) {
+			// dont monitor the node agent inteself
+			_, ok := netlinkKernelProcMap[int(netlinkEvent.ProcessId)]
+			if !ok {
+				produceChannel <- true
+				netlinkKernelProcMap[int(netlinkEvent.ProcessId)] = true
+				if utils.DEBUG {
+					log.Println("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent.ProcessId, netlinkEvent.ProcessInfo)
+				}
+			}
 		}
 
 		time.Sleep(time.Second)

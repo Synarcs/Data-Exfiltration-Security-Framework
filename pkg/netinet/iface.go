@@ -181,14 +181,13 @@ func (iface *NetIface) VerifyNewNetlinkPppSockets() {
 	for _, link := range links {
 		_, fd := iface.LinkMap[link.Attrs().Name]
 		if !fd {
-			log.Println("New Link added via a netlink kernel socket traceppoint kernel detected")
 			flags := link.Attrs().Flags
-			if flags == net.FlagPointToPoint {
+			fmt.Println("the kernel link flags are ", flags)
+			if strings.Contains(flags.String(), "pointtopoint") {
 				// attach the ppp socket tc hooks inside kernel
-				log.Println("ppp socket detected attaching tc hooks")
-				iface.LinkMap[link.Attrs().Name] = true
-				break
+				log.Println("ppp socket detected attaching tc hooks", link.Attrs().Name)
 			}
+			iface.LinkMap[link.Attrs().Name] = true
 		}
 	}
 }
@@ -207,6 +206,7 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 
 		if link.Attrs().Flags == net.FlagPointToPoint {
 			// an possible tunnelling interface for packet processing
+			log.Println("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
 			continue
 		} else {
 			// Exclude virtual interfaces (e.g., loopback, bridge, vlan, etc.)

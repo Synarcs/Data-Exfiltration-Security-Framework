@@ -16,7 +16,7 @@ installDep() {
 }
 
 
-release=$(cat /etc/os-release)
+release=$(cat /etc/os-release
 
 installExfTools() {
     echo "installing exf tools"

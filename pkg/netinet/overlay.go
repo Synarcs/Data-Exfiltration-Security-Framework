@@ -17,7 +17,6 @@ func (nf *NetIface) CreateNamespace(nsName string) {
 }
 
 func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
-
 	nsHandle, _ := netns.GetFromName(nsName)
 
 	defer nsHandle.Close()

@@ -4,9 +4,20 @@ node_agent := main.go
 output := node_agent 
 debug ?= false 
 
+.PHONY: compile 
+compile:
+	@echo "Compiling the Ebpf Node Agent" 
+	go build $(node_agent) 
+
+.PHONY: compile-kernel
+compile-kernel:
+	@echo "Compiling all kernel ebpf programs"
+	cd ../kernel && make && make netlink 
+
 .PHONY: build
 build:
 	@echo "Building and compiling the Ebpf Node Agent"
+	make compile-kernel
 	go build $(node_agent) 
 
 .PHONY: run-inference
@@ -14,17 +25,17 @@ run-inference:
 	@echo "Running the Remote unix socket inference server" 
 	sudo python3 ../model/infer/inference.py
 
-.PHONY: start 
+.PHONY: run
 start: 
 	sudo ./main 
 
 .PHONY: build-run 
 build-run:
-	@echo "running the node_agent"
-	go build $(node_agent) 
+	@echo "building and running the node_agent"
+	make build
 	sudo ./main 
 
 .PHONY: disas 
 disas:
-	if [ "$(debug)" = "true" ]; then objdump -d "main"; fi
+	if [ "$(debug)" = "true" ]; then llvm-objdump -d $(node_agent); fi
 	gdb main 

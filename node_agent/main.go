@@ -78,12 +78,15 @@ func main() {
 
 	// add the kernel sock map
 
-	go tcl.AttachNetlinkSockHandler(&iface)
+	tunnelSocketEventHandler := make(chan bool)
+	go tcl.ProcessTunnelEvent(&iface, tunnelSocketEventHandler)
+	go tcl.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
 	if !utils.DEBUG {
 		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
 		go rpcServer.Server()
 	}
+
 	go ingress.SniffIgressForC2C()
 
 	if utils.DEBUG {
@@ -139,4 +142,5 @@ func main() {
 		tcl.DetachSockHandler()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
+
 }
