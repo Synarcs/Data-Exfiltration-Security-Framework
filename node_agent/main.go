@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	onnx "github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
@@ -81,6 +82,8 @@ func main() {
 	tunnelSocketEventHandler := make(chan bool)
 	go tcl.ProcessTunnelEvent(&iface, tunnelSocketEventHandler)
 	go tcl.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
+
+	go events.StartPrometheusMetricExporterServer()
 
 	if !utils.DEBUG {
 		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints

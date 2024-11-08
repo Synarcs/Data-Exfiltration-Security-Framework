@@ -57,6 +57,10 @@ const (
 	DEFAULT_IPV6_CHECKSUM_MAP = 0xff
 )
 
+const (
+	PROMETHEUS_METRICS_PORT = 3232
+)
+
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
 	var s2 uint8 = (uint8)(saddr>>16) & 0xFF

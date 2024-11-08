@@ -162,16 +162,16 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 				KernelRedirectPacketCount: PacketCountKernel,
 				EvenTime:                  time.Now().Format(time.RFC3339),
 			}); err != nil {
-				if utils.DEBUG {
+				if !utils.DEBUG {
 					log.Println("Error Streaming the prometheus metrics", err)
 				}
 			}
 		case events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP:
-			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCount](events.PacketDPIKernelDropCount{
-				KernelRedirectPacketCount: PacketCountKernel,
-				EvenTime:                  time.Now().Format(time.RFC3339),
+			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCountEvent](events.PacketDPIKernelDropCountEvent{
+				KernelDropPacketCount: PacketCountKernel,
+				EvenTime:              time.Now().Format(time.RFC3339),
 			}); err != nil {
-				if utils.DEBUG {
+				if !utils.DEBUG {
 					log.Println("Error Streaming the prometheus metrics", err)
 				}
 			}
