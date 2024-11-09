@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,8 +25,26 @@ type PacketDPIKernelDropCountEvent struct {
 	EvenTime              string
 }
 
+type DNSFeatures struct {
+	Fqdn                  string
+	Tld                   string
+	TotalChars            int
+	TotalCharsInSubdomain int // holds the chars which are unicode encodable and can be stored
+	NumberCount           int
+	UCaseCount            int
+	LCaseCount            int
+	Entropy               float32
+	PeriodsInSubDomain    int
+	LongestLabelDomain    int
+	AveerageLabelLength   float32
+	IsEgress              bool
+	AuthZoneSoaservers    map[string]string // zone master --> mx record type
+}
+
+type MaliciousDetectedUserSpaceCount int
+
 type KernelPacketDropRedirectInterface interface {
-	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent | model.DNSFeatures
+	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent | MaliciousDetectedUserSpaceCount
 }
 
 type RawDnsEvent struct {
@@ -39,9 +56,16 @@ var (
 	drop_event_metric = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "kernel_packet_drop_event",
-			Help: "The kernel packet drop  event",
+			Help: "The kernel packet drop event",
 		},
 		[]string{"drop_count", "time"},
+	)
+	drop_event_metric_count = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kernel_packet_drop_event_count",
+			Help: "The kernel packet drop event",
+		},
+		// []string{"drop_count", "time"},
 	)
 	redirect_event_metric = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -49,6 +73,20 @@ var (
 			Help: "The kernel packet  redirect event",
 		},
 		[]string{"redirect_count", "time"},
+	)
+
+	redirect_event_metric_count = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kernel_packet_redirect_event_count",
+			Help: "The kernel packet  redirect event",
+		},
+	)
+
+	malicious_detected_event_userspace = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "malicious_detected_event_userspace",
+			Help: "The malicious detected event count",
+		},
 	)
 
 	maliciousdetectedDnsPacket = prometheus.NewGaugeVec(
@@ -74,9 +112,14 @@ var (
 	)
 )
 
+const (
+	exportCount bool = true
+)
+
 func init() {
-	prometheus.MustRegister(drop_event_metric,
-		redirect_event_metric, maliciousdetectedDnsPacket,
+	prometheus.MustRegister(drop_event_metric, drop_event_metric_count,
+		redirect_event_metric, redirect_event_metric_count,
+		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent)
 }
 
@@ -102,10 +145,12 @@ func StartPrometheusMetricExporterServer() error {
 }
 
 func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T) error {
-	log.Println("debug callued for string prom metrics")
 	switch e := any(event).(type) {
 	case PacketDPIKernelDropCountEvent:
 		// Handle drop count event
+		if exportCount {
+			drop_event_metric_count.Inc()
+		}
 		drop_event_metric.With(
 			prometheus.Labels{
 				"drop_count": fmt.Sprintf("%d", e.KernelDropPacketCount),
@@ -114,29 +159,16 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 		).Set(float64(e.KernelDropPacketCount))
 	case PacketDPIRedirectionCountEvent:
 		// Handle redirection event
+		if exportCount {
+			redirect_event_metric_count.Inc()
+		}
 		redirect_event_metric.With(
 			prometheus.Labels{
 				"redirect_count": fmt.Sprintf("%d", e.KernelRedirectPacketCount),
 				"time":           e.EvenTime,
 			},
 		).Set(float64(e.KernelRedirectPacketCount))
-	case model.DNSFeatures:
-		maliciousdetectedDnsPacket.With(
-			prometheus.Labels{
-				"Fqdn":                  e.Fqdn,
-				"Tld":                   e.Tld,
-				"TotalChars":            strconv.Itoa(e.TotalChars),
-				"TotalCharsInSubdomain": strconv.Itoa(e.TotalCharsInSubdomain),
-				"NumberCount":           strconv.Itoa(e.NumberCount),
-				"UCaseCount":            strconv.Itoa(e.UCaseCount),
-				"LCaseCount":            strconv.Itoa(e.LCaseCount),
-				"Entropy":               strconv.Itoa(0),
-				"PeriodsInSubDomain":    strconv.Itoa(e.PeriodsInSubDomain),
-				"LongestLabelDomain":    strconv.Itoa(e.LongestLabelDomain),
-				"AveerageLabelLength":   strconv.FormatFloat(float64(e.AveerageLabelLength), 'f', -1, 64),
-				"IsEgress":              strconv.FormatBool(e.IsEgress),
-			},
-		).Set(float64(e.TotalChars))
+
 	case RawDnsEvent:
 		sniffedDnsEvent.With(prometheus.Labels{
 			"fqdn": e.Fqdn,
@@ -150,8 +182,25 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 	return nil
 }
 
-func ExportPromeEbpfExporterEventsDnsmaliciousEvent(maliciousEvent model.DNSFeatures) error {
-	// log.Println("Exporting the metric to prometheus ebpf exporter")
-
+func ExportMaliciousEvents(feature DNSFeatures) error {
+	if exportCount {
+		malicious_detected_event_userspace.Inc()
+	}
+	maliciousdetectedDnsPacket.With(
+		prometheus.Labels{
+			"Fqdn":                  feature.Fqdn,
+			"Tld":                   feature.Tld,
+			"TotalChars":            strconv.Itoa(feature.TotalChars),
+			"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),
+			"NumberCount":           strconv.Itoa(feature.NumberCount),
+			"UCaseCount":            strconv.Itoa(feature.UCaseCount),
+			"LCaseCount":            strconv.Itoa(feature.LCaseCount),
+			"Entropy":               strconv.FormatFloat(float64(feature.Entropy), 'f', -1, 64),
+			"PeriodsInSubDomain":    strconv.Itoa(feature.PeriodsInSubDomain),
+			"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
+			"AveerageLabelLength":   strconv.FormatFloat(float64(feature.AveerageLabelLength), 'f', -1, 64),
+			"IsEgress":              strconv.FormatBool(feature.IsEgress),
+		},
+	).Set(float64(feature.TotalChars))
 	return nil
 }

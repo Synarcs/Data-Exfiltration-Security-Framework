@@ -697,6 +697,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                 // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
                 return 1;
             }
+            
             struct dns_non_standard_udp_transport_event *event = res;
             event->dest_port = bpf_ntohs(udp->dest);
             event->src_port = bpf_ntohs(udp->source);

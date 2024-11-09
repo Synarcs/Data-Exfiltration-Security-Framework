@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -143,6 +145,17 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 
 func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
 	var KernelPacketRedirectCount uint16 = 0
+
+	runtime.LockOSThread()
+
+	defer runtime.UnlockOSThread()
+	localCache, err := lru.New[uint32, bool](5)
+
+	if err != nil {
+		log.Println("Error allocating local packet count kernel cache", err)
+		return err
+	}
+
 	for {
 		var PacketCountKernel uint32 = 0
 		if err := ebpfMap.Lookup(KernelPacketRedirectCount, &PacketCountKernel); err != nil {
@@ -153,10 +166,26 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 				errorEventChannel <- err
 			}
 		}
-		if utils.DEBUG {
-			log.Println("The current Redirected count of packets is ", ebpfMap.String(), PacketCountKernel)
+		_, ok := localCache.Get(PacketCountKernel)
+		if ok {
+			continue
 		}
-		switch ebpfMap.String() {
+		info, err := ebpfMap.Info()
+
+		if err != nil {
+			log.Printf("error getting the kernel ebpf map info %+v", err)
+			return err
+		}
+
+		mapName := strings.Replace((strings.Replace(strings.Replace(ebpfMap.String(), info.Type.String(), "", -1), "(", "", -1)), ")", "", -1)
+		mapName = strings.TrimSpace(mapName)
+		mapName = strings.Split(mapName, "#")[0]
+		if utils.DEBUG {
+			log.Println("The current Redirected count of packets is ", mapName, PacketCountKernel)
+		}
+		localCache.Add(PacketCountKernel, true)
+
+		switch mapName {
 		case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
 			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
 				KernelRedirectPacketCount: PacketCountKernel,

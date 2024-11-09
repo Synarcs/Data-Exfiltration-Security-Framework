@@ -1,4 +1,5 @@
 #include <linux/bpf.h>
+#include <linux/fs.h>
 
 #include <sys/socket.h>
 #include <linux/netlink.h>
@@ -35,33 +36,29 @@ int netlink_socket(struct socket_args *ctx) {
 
     if (ctx->type == AF_NETLINK) {
 
-        void *res = bpf_ringbuf_reserve(&exfil_security_detected_c2c_tunneling_netlink_sock_event, 
-                        sizeof(struct event_setSockEvent), 0);
-        if (!res) {
-            #ifdef DEBUG
-                if (DEBUG) {
-                    bpf_printk("socket info %u %u %u", ctx->family, ctx->type, ctx->protocol);
-                }
-            #endif
-            // bpf_ringbuf_discard(&exfil_security_detected_c2c_tunneling_netlink_sock_event, 0);
-            return 0;
-        }
-        struct event_setSockEvent *event = res;
+        struct bpf_dynptr dptr;
 
-        __u32 pid = bpf_get_current_pid_tgid() >> 32;
-        __u32 uid = bpf_get_current_uid_gid() >> 32;
+        if (bpf_ringbuf_reserve_dynptr(&exfil_security_detected_c2c_tunneling_netlink_sock_event, sizeof(struct event_setSockEvent), 0, &dptr) < 0){
+            if (DEBUG) {
+                bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
+            }
+        }
+
+        struct event_setSockEvent event = (struct event_setSockEvent) {
+            .process_id = bpf_get_current_pid_tgid() >> 32,
+            .uid = bpf_get_current_uid_gid() >> 32,
+        };
 
         if (
-            bpf_get_current_comm(&event->prog, sizeof(event->prog)) == 0
+            bpf_get_current_comm(&event.prog, sizeof(event.prog)) == 0
         ) {
             if (DEBUG)
-                bpf_printk("netlink socket detected %s", event->prog);
+                bpf_printk("netlink socket detected %s", event.prog);
         }
 
-        event->process_id = pid; 
-        event->uid = uid;
+        long res = bpf_dynptr_write(&dptr, 0, &event, sizeof(struct event_setSockEvent), 0);
 
-        bpf_ringbuf_submit(event,0);
+        bpf_ringbuf_submit_dynptr(&dptr, 0);
     }
 
     return 0;

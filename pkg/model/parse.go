@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
@@ -28,6 +29,8 @@ type DnsPacketGen struct {
 	XdpSocketSendFd     *xdp.Socket
 	OnnxModel           *OnnxModel
 }
+
+type CombinedFeatures []DNSFeatures
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 	return layers.DNS{
@@ -107,6 +110,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if !isBenign {
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
 		// add the tld and domain information in packet malicious map for local cache
+		var castFeature events.DNSFeatures = events.DNSFeatures(features[0])
+		events.ExportMaliciousEvents(castFeature)
 		return nil
 	}
 
