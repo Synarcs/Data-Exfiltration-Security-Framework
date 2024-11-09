@@ -21,7 +21,7 @@ sudo apt update -y && sudo apt install -y \
     strace \
     git \
     autoconf \
-    libz-dev \
+    # libz-dev \
     libdw-dev \
     libcap-dev \
     vim  \
@@ -30,15 +30,18 @@ sudo apt update -y && sudo apt install -y \
     libdebuginfod-dev \
     bison \
     flex \
-    curl \
     libcurl4-openssl-dev \
-    libedit-dev 
+    libedit-dev \
+    
 
 
 sudo apt-get install libffi-dev \
     libncursesw5-dev libssl-dev \
     libsqlite3-dev tk-dev libgdbm-dev \
     libc6-dev libbz2-dev
+
+# x86_x64 cpu arch libc 
+sudo apt-get install libc6-dev-i386
 
 if [ $? -eq 0 ]; then 
     echo "Installed the kernel build librries"

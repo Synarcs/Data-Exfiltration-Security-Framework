@@ -67,7 +67,7 @@ struct packet_actions {
     */
     
     // app layer 
-    __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool, __u32 );
+    __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool);
     __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32,  struct dns_header *, __u32);
     __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header_tcp *, __u32); 
 
@@ -78,8 +78,8 @@ struct packet_actions {
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
-    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *, bool, void *);
-
+    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *);
+    __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , void *, struct dns_header_tcp *);
 };
 
 __u32 INSECURE = 0;
@@ -236,7 +236,7 @@ __always_inline __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
 }
 
 static 
-__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp, __u32 udp_payload_exclude_header) {
+__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp) {
     // verify the dns header payload from root of the skbuff 
 
 
@@ -586,13 +586,16 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
 
 
+// TODO: Process generics with macros for runtime optimiaztion via kernel process func 
+
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, void *dns_payload, 
-                struct dns_header *dns_header, bool isUDP, void *transport_header) {
+                struct dns_header *dns_header) {
     // check whether a non standard port is used for dns query and dns payload 
     
-    struct dns_flags  flags = get_dns_flags(dns_header);
-
+    struct dns_flags  flags;
+    flags = get_dns_flags(dns_header);
+    
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
     __u16 ans_count = bpf_ntohs(dns_header->ans_count);
@@ -606,12 +609,39 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     }
 
     // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
-    
-
-    bpf_printk("Non standard transport DPI found for exfil remote c2c server");
+    if (DEBUG)
+        bpf_printk("Non standard transport DPI found for exfil remote c2c server");
     // a malicious encap is used to mask the dns traffPic 
     return 0;
 }
+
+
+
+static 
+__always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, void * dns_payload, 
+                struct dns_header_tcp *dns_header) {
+    
+    struct dns_flags flags = get_dns_flags_tcp(dns_header);
+    // qeuries section 
+    __u16 qd_count = bpf_ntohs(dns_header->qd_count);
+    __u16 ans_count = bpf_ntohs(dns_header->ans_count);
+    __u16 auth_count = bpf_ntohs(dns_header->auth_count);   
+    __u16 add_count = bpf_ntohs(dns_header->add_count);
+
+    //bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
+    if (qd_count >= (1 << 8) - 1 || ans_count >= (1 << 8) - 1 || auth_count >= (1 << 8) - 1 || add_count >= (1 << 8) - 1) {
+        // the dns payload is non standard port and the protcol encapsulated used is not dns 
+        return 1;
+    }
+
+    // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
+    if (DEBUG)
+        bpf_printk("Non standard transport DPI found for exfil remote c2c server");
+    // a malicious encap is used to mask the dns traffPic 
+    return 0;
+}
+
+
 
 static 
 __always_inline void * __emit_kernel_ringBuff_event() {
@@ -620,17 +650,18 @@ __always_inline void * __emit_kernel_ringBuff_event() {
 
 static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
-                    __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, bool isIpv4, bool isUdp) {
-      // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
-        if (actions.parse_dns_header_size(&cursor, isIpv4 ? true : false, isUdp ? true : false ,udp_payload_exclude_header) == 0)
+                    __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, bool isIpv4) {
+        // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
+        if (actions.parse_dns_header_size(&cursor, isIpv4 ? true : false, true) == 0)
             // an non dns protocol based udp packet (no dns header found) 
-            return 1;
-        
-        
+             return 1;
+            
         void *dns_payload = cursor.data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + 
-                            (isUdp ? sizeof(struct udphdr) : sizeof(struct tcphdr)) + sizeof(struct dns_header);
-        if ((void *) (dns_payload + 1) > cursor.data_end) return TC_FORWARD;
+                                sizeof(struct udphdr) + sizeof(struct dns_header);
+
+        if ((void *) (dns_payload + 1) > cursor.data_end) return 1;
         struct dns_header *dns = (struct dns_header *) (udp_data);
+        
         if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header,
                         dns, skb->len) == 0) 
             return 1;
@@ -639,87 +670,88 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         struct dns_flags flags = get_dns_flags(dns);
         
         #ifdef DEBUG 
-          if (DEBUG) {
+        if (DEBUG) {
             bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
-          }
+        }
         #endif
         
         void *header_payload = cursor.data + sizeof(struct ethhdr) + 
-                            (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
-
-        if ((void *) (dns_payload + 1) > cursor.data_end) return 1;
+                        (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
+        struct udphdr *udp = (struct udphdr *) (header_payload);
+        if ((void *) (udp + 1) > cursor.data_end) return 1;
 
         // TODO: Fix hte code redundancy 
-        if (isUdp) {
-            struct udphdr *udp = (struct udphdr *) (header_payload);
-            if ((void *) (udp + 1) > cursor.data_end) return 1;
-            __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
-                                dns_payload, dns, true, (void *) udp);
-
-            if (__non_standard_port_dpi == 0) {
-                // emit the ring buff from kernel as a transport event 
-                bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
-                void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
-                                sizeof(struct dns_non_standard_udp_transport_event), 0);
-                if (!res) {
-                    #ifdef DEBUG 
-                        if (DEBUG) {
-                            bpf_printk("Error reserve kernel memroy for the event");
-                        }
-                    #endif
-                    // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
-                    return 1;
-                }
-
-                struct dns_non_standard_udp_transport_event *event = res;
-                event->dest_port = bpf_ntohs(udp->dest);
-                event->src_port = bpf_ntohs(udp->source);
-                event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
-                event->isTcp = (__u8)0;
-                event->isUdp = (__u8)1;
-
-                bpf_ringbuf_submit(event, 0);
+        __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
+                            dns_payload, dns);
+        if (__non_standard_port_dpi == 0) {
+            // emit the ring buff from kernel as a transport event 
+            bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
+            void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
+                            sizeof(struct dns_non_standard_udp_transport_event), 0);
+            if (!res) {
+                #ifdef DEBUG 
+                    if (DEBUG) {
+                        bpf_printk("Error reserve kernel memroy for the event");
+                    }
+                #endif
+                // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
+                return 1;
             }
-
-            return __non_standard_port_dpi;
-        }else {
-            struct tcphdr *tcp = (struct tcphdr *) (header_payload);
-            if ((void *) (tcp + 1) > cursor.data_end) return 1;
-
-            __u8 __non_standard_port_dpi =  actions.parse_dns_payload_non_standard_port(&cursor, 
-                                dns_payload, dns, true, (void *) tcp);
-            
-            if (__non_standard_port_dpi == 0){
-
-                // emit the ring buff from kernel as a transport event 
-                void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
-                                sizeof(struct dns_non_standard_udp_transport_event), 0);
-                if (!res) {
-                    #ifdef DEBUG 
-                        if (DEBUG) {
-                            bpf_printk("Error reserve kernel memroy for the event");
-                        }
-                    #endif
-                    // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
-                    return 1;
-                }
-
-                struct dns_non_standard_udp_transport_event *event = res;
-                event->dest_port = bpf_ntohs(tcp->dest);
-                event->src_port = bpf_ntohs(tcp->source);
-                event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
-                event->isTcp = (__u8)0;
-                event->isUdp = (__u8)1;
-
-                bpf_ringbuf_submit(&event, 0);
-            }
-
-
-            return __non_standard_port_dpi;
+            struct dns_non_standard_udp_transport_event *event = res;
+            event->dest_port = bpf_ntohs(udp->dest);
+            event->src_port = bpf_ntohs(udp->source);
+            event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
+            event->isTcp = (__u8)0;
+            event->isUdp = (__u8)1;
+            bpf_ringbuf_submit(event, 0);
         }
+        return __non_standard_port_dpi;
 
         // do deep packet inspection on the packet contett and the associated payload 
 }
+
+
+static 
+__always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions,
+                                                 void *tcp_data, bool isIpv4) {
+    if ((void *)(tcp_data + sizeof(struct dns_header_tcp)) > cursor.data_end)
+        return 1;
+
+    struct dns_header_tcp *dns = (struct dns_header_tcp *)tcp_data;
+    if ((void *)(dns + 1) > cursor.data_end)
+        return 1;
+
+    void *dns_payload = tcp_data + sizeof(struct dns_header_tcp);
+    if ((void *)dns_payload + 1 > cursor.data_end)
+        return 1;
+
+    void *tcp_header = cursor.data + sizeof(struct ethhdr) + 
+        (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
+    struct tcphdr *tcp = (struct tcphdr *)tcp_header;
+    if ((void *)(tcp + 1) > cursor.data_end)
+        return 1;
+
+    __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port_tcp(&cursor, 
+                                                                                  dns_payload, dns);
+
+    if (__non_standard_port_dpi == 0) {
+        void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port,
+                                      sizeof(struct dns_non_standard_udp_transport_event), 0);
+        if (!res)
+            return 1;
+
+        struct dns_non_standard_udp_transport_event *event = res;
+        event->dest_port = bpf_ntohs(tcp->dest);
+        event->src_port = bpf_ntohs(tcp->source); 
+        event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
+        event->isTcp = (__u8)1;
+        event->isUdp = (__u8)0;
+        bpf_ringbuf_submit(res, 0);
+    }
+
+    return __non_standard_port_dpi;
+}
+
 
 
 static 
@@ -885,6 +917,7 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
     actions.parse_dns_payload_memsafet_payload_transport_tcp = &parse_dns_payload_memsafet_payload_transport_tcp;
     actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
+    actions.parse_dns_payload_non_standard_port_tcp = &parse_dns_payload_non_standard_port_tcp;
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
     return actions;
 }
@@ -968,7 +1001,7 @@ int classify(struct __sk_buff *skb){
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
 
-                if (actions.parse_dns_header_size(&cursor, true, true, udp_payload_exclude_header) == 0)
+                if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
@@ -1105,7 +1138,7 @@ int classify(struct __sk_buff *skb){
             }else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
-                                    udp_data, udp_payload_len, true, true) == 1) 
+                                    udp_data, udp_payload_len, true) == 1) 
                     return TC_FORWARD;
                 
                 return TC_DROP;
@@ -1249,14 +1282,15 @@ int classify(struct __sk_buff *skb){
 
                 bpf_printk("redirect the tcp packet over tcp");
                 return bpf_redirect(br_index, 0);
-                // if (!DEBUG){
-                //     bpf_printk("Tcp packet found for egress DNS Port", bpf_ntohs(tcp->dest));
-                // }
             }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
-            }
+            }else {
 
-            return TC_FORWARD;
+                if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
+                    return TC_FORWARD;
+                
+                return TC_FORWARD;
+            }
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
 
@@ -1278,7 +1312,7 @@ int classify(struct __sk_buff *skb){
        
             if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
-                if (actions.parse_dns_header_size(&cursor, true, true, udp_payload_exclude_header) == 0)
+                if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
                 if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP; 
@@ -1371,7 +1405,7 @@ int classify(struct __sk_buff *skb){
             } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
             }else {
-                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, false, true) == 1)
+                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, false) == 1)
                     return TC_FORWARD;
                 return TC_DROP;
             }
@@ -1464,9 +1498,12 @@ int classify(struct __sk_buff *skb){
                 return TC_FORWARD;
             }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
+            }else {
+                if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, false) == 1) 
+                    return TC_FORWARD;
+                
+                return TC_FORWARD;
             }
-       
-            return TC_FORWARD;
         }
     } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 
 

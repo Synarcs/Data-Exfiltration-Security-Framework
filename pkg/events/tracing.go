@@ -102,6 +102,7 @@ func StartPrometheusMetricExporterServer() error {
 }
 
 func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T) error {
+	log.Println("debug callued for string prom metrics")
 	switch e := any(event).(type) {
 	case PacketDPIKernelDropCountEvent:
 		// Handle drop count event
