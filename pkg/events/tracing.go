@@ -55,6 +55,15 @@ type RawDnsEvent struct {
 }
 
 var (
+	// round trip latency effect for benigh traffic interaction from kernel to user space
+	dnsRoundTripTime_metric = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "dns_round_trip_seconds",
+			Help:    "DNS query round-trip time in seconds",
+			Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+		},
+	)
+
 	drop_event_metric = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "kernel_packet_drop_event",
@@ -122,7 +131,7 @@ func init() {
 	prometheus.MustRegister(drop_event_metric, drop_event_metric_count,
 		redirect_event_metric, redirect_event_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
-		sniffedDnsEvent)
+		sniffedDnsEvent, dnsRoundTripTime_metric)
 }
 
 func StartPrometheusMetricExporterServer() error {
@@ -208,4 +217,8 @@ func ExportMaliciousEvents(feature DNSFeatures) error {
 		},
 	).Set(float64(feature.TotalChars))
 	return nil
+}
+
+func UpdateLatencyMetricEvents(roundProcessTime float64) {
+	dnsRoundTripTime_metric.Observe(roundProcessTime / 1000.0)
 }

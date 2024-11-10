@@ -55,7 +55,7 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool)
 
 	// "tracepoint/syscalls/sys_enter_socket"
 	//  Kernel Tracepoint for socket syscall for an open socket fd inside kernel of AF_FAMILY AF_NETLINK
-	sockettp, err := link.Tracepoint("syscalls", "sys_enter_socket", objs.NetlinkSocket, nil)
+	sockettp, err := link.Kprobe("tun_chr_open", objs.NetlinkSocket, nil)
 	if err != nil {
 		log.Fatal("error loading the kprobe program over sys_enter sock")
 		return err
@@ -103,6 +103,11 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
 			}
+		}
+
+		if !utils.DEBUG {
+			log.Println("EBPF node agent detected new kernel tun tap link setup for tunnelling interface link via ioctl call")
+			log.Println(netlinkEvent)
 		}
 
 		if netlinkEvent.ProcessId != uint32(os.Getpid()) {

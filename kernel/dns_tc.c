@@ -1,6 +1,9 @@
 #include <linux/bpf.h>
 
 #include <linux/if_ether.h>
+#include <linux/if_vlan.h>
+#include <linux/if_packet.h>
+#include <linux/if_tun.h> // for TUN_TAP tunnel packet link 
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
@@ -46,9 +49,9 @@ struct skb_cursor {
     void *data_end;
 };
 
-struct vlanhdr {
-	__u16 tci;
-	__u16 encap_proto;
+struct vlan_hdr {
+	__be16	h_vlan_TCI;
+	__be16	h_vlan_encapsulated_proto;
 };
 
 struct packet_actions {
@@ -219,6 +222,7 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
 
 static 
 __always_inline __u8 parse_udp(struct  skb_cursor *skb, bool isIpv4) {
+
     struct udphdr *udp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
     if ((void *)(udp + 1) > skb->data_end) return 0;
 
@@ -975,7 +979,8 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 }
 
 
-static long callback_fn(struct bpf_map *map, const void *key, void *value, void *ctx) {
+static 
+__always_inline long callback_fn(struct bpf_map *map, const void *key, void *value, void *ctx) {
     bpf_printk("[x] // looping over the  map for kernel exfil config ");
 
     bpf_printk("the key is ", *(__u32 *) key);
@@ -1006,6 +1011,22 @@ int classify(struct __sk_buff *skb){
 	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 
     struct udphdr *udp; struct tcphdr *tcp;
+
+    __be16 hproto;
+    // check for vxland or vlan packet virtualization or tunneling to packet scan over intern packet data 
+    if (eth->h_proto == bpf_htons(ETH_P_8021Q) || eth->h_proto == bpf_htons(ETH_P_8021AD)) {
+        struct vlan_hdr *vlan;
+        
+        vlan = cursor.data + sizeof(struct ethhdr);
+        if ((void *) vlan + 1 > cursor.data_end) return TC_DROP;
+
+        if ((void *) cursor.data + sizeof(struct ethhdr) + sizeof(struct vlan_hdr) > cursor.data_end) return TC_DROP;
+
+        hproto = vlan->h_vlan_encapsulated_proto;
+    }else if (eth->h_proto == bpf_htons(ETH_P_IPV6) || eth->h_proto == bpf_htons(ETH_P_IP)) {
+        hproto = eth->h_proto;
+    }
+
 
     // Parse IPv4 or IPv6 based on Ethernet protocol type
     if (eth->h_proto == bpf_htons(ETH_P_IP)) {

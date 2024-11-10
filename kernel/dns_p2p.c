@@ -22,6 +22,6 @@ int classify(struct __sk_buff *skb){
 
     // do packet parsing only for encapsulation header vxlan and bridges 
     struct ethhdr *eth = (struct ethhdr *) data;
-
+    
     return TC_DROP;
 }

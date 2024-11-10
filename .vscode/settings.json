@@ -34,6 +34,9 @@
         "socket.h": "c",
         "consts.h": "c",
         "udp.h": "c",
-        "sched.h": "c"
+        "sched.h": "c",
+        "if_vlan.h": "c",
+        "if_packet.h": "c",
+        "if_tun.h": "c"
     }
 }
