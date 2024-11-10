@@ -10,6 +10,7 @@
 #include "consts.h"
 #include "dns.h"
 
+// __update_kernel_packet_redirection_time
 static 
 __always_inline bool __verify_tc_dpi_ingress_process(struct __sk_buff *skb) {
     if (skb->mark != bpf_ntohs(redirect_skb_mark)) {
@@ -21,9 +22,9 @@ __always_inline bool __verify_tc_dpi_ingress_process(struct __sk_buff *skb) {
     return true;
 }
 
-// only for egress traffic attachement 
+// only for ingress  process traffic attachement 
 SEC("tc") 
-int classify(struct __sk_buff *skb){
+int bridge_classify(struct __sk_buff *skb){
     void *data = (void *)(ll)(skb->data);
     void *data_end = (void *)(ll)(skb->data_end);
 

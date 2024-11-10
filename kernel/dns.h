@@ -121,7 +121,7 @@ static
 __always_inline struct dns_flags get_dns_flags_tcp (struct dns_header_tcp *dns_header) {
     #ifdef DEBUG 
         __u16 packet_tcp_length = bpf_ntohs(dns_header->length);
-        if (!DEBUG) {
+        if (DEBUG) {
             bpf_printk("found a dns packet framed over tcp %u", packet_tcp_length);
         }
     #endif
@@ -226,7 +226,7 @@ struct dns_record_limits_malicious {
 };
 
 
-struct dns_non_standard_udp_transport_event {
+struct dns_non_standard_transport_event {
     __u32 dest_port;
     __u32 src_port;
     __u16 dns_transaction_id;

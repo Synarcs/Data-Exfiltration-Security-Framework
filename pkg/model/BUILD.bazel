@@ -8,7 +8,7 @@ go_library(
         "parse.go",
         "vlan.go",
     ],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/model",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/netinet",

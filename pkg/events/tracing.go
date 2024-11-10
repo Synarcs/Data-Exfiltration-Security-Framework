@@ -1,14 +1,16 @@
 package events
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -135,6 +137,9 @@ func StartPrometheusMetricExporterServer() error {
 		Handler: metricMux,
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,
+		},
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, "metrics_time", time.Now().GoString())
 		},
 	}
 	if err := server.ListenAndServe(); err != nil {

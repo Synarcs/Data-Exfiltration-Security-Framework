@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 // process and start a Unix Domain socket for inference

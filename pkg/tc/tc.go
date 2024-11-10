@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/model"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
@@ -475,12 +475,14 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		}
 
 		if isIpv4 && isUdp {
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+				handler, true, isIpv4, isUdp, tc.TcCollection)
 			// ipv4 and udp
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+				handler, true, isIpv4, isUdp, tc.TcCollection)
 		}
 
 	} else if tcpCheck {
@@ -502,11 +504,13 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			fmt.Println("called here for redirect over tcp")
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+				handler, true, isIpv4, isUdp, tc.TcCollection)
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4, isUdp)
+			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+				handler, true, isIpv4, isUdp, tc.TcCollection)
 		}
 	}
 

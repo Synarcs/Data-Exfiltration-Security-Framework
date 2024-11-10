@@ -8,7 +8,11 @@
 #include "dns.h"
 
 
-
+#ifndef tc
+    #define TC_FORWARD TC_ACT_OK
+    #define TC_DEFAULT TC_ACT_UNSPEC
+    #define TC_DROP TC_ACT_SHOT
+#endif
 
 SEC("tc")
 int classify(struct __sk_buff *skb){    
@@ -18,6 +22,6 @@ int classify(struct __sk_buff *skb){
 
     // do packet parsing only for encapsulation header vxlan and bridges 
     struct ethhdr *eth = (struct ethhdr *) data;
-    if (eth->h_proto == ETH_P_EDSA)
-        return TC_ACT_OK;
+
+    return TC_DROP;
 }

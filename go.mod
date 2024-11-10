@@ -1,4 +1,4 @@
-module github.com/Data-Exfiltration-Security-Framework
+module github.com/Synarcs/Data-Exfiltration-Security-Framework
 
 go 1.22.0
 

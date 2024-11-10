@@ -7,10 +7,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
+	"github.com/cilium/ebpf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -55,9 +56,24 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 	}
 }
 
+func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.Collection) {
+
+	redirectTimeMap := spec.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME]
+	if redirectTimeMap != nil {
+		query_id := dns.ID
+		var KernelPacketRedirectTimeEgress uint64
+		redirectTimeMap.LookupAndDelete(&query_id, &KernelPacketRedirectTimeEgress)
+
+		currProcessTime := time.Now().Nanosecond()
+
+		roundProcessTime := float64(currProcessTime-int(KernelPacketRedirectTimeEgress)) / 1000000.0
+		log.Printf("The round trip time for the dns packet %fms", roundProcessTime)
+	}
+}
+
 // only use for l3 -> ipv4 and l4 -> udp
 func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
-	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool) error {
+	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -120,6 +136,10 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	}
 
 	dnsPacket := d.GenerateDnsPacket(*dns)
+
+	if isEgress && isBenign {
+		d.EvalOverallPacketProcessTime(*dns, spec)
+	}
 
 	buffer := gopacket.NewSerializeBuffer()
 

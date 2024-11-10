@@ -16,6 +16,7 @@ netlink_kernel_out := netlink.o
 compile:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	make netlink 
 	cp $(tc_kernel_out)../node_agent/
 	cp $(bridge_tc_kernel_out) ../node_agent/
 
@@ -39,6 +40,7 @@ compile-llvm-x86:
 compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	make netlink-x86  
 	cp $(tc_kernel_out)../node_agent/
 	cp $(bridge_tc_kernel_out) ../node_agent/
 
@@ -95,7 +97,6 @@ xdp-umount:
 	sudo umount /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp off 
 	sudo xdp-loader unload enp0s1 --all 
-
 
 .PHONY: netlink
 netlink: 

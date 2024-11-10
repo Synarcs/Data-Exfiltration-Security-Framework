@@ -6,6 +6,6 @@ go_library(
         "events.go",
         "tracing.go",
     ],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/events",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events",
     visibility = ["//visibility:public"],
 )

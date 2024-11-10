@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/events"
-	onnx "github.com/Data-Exfiltration-Security-Framework/pkg/model"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/rpc"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/tc"
-	tcl "github.com/Data-Exfiltration-Security-Framework/pkg/tc"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/xdp"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
+	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
 
 func main() {

@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 go_library(
     name = "node_agent_lib",
     srcs = ["main.go"],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/node_agent",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/node_agent",
     visibility = ["//visibility:private"],
     deps = [
         "//pkg/netinet",

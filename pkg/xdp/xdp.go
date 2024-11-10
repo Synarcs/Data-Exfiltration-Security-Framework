@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/vishvananda/netlink"

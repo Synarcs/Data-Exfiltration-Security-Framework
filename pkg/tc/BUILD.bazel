@@ -6,7 +6,7 @@ go_library(
         "bridge_tc.go",
         "tc.go",
     ],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/tc",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/events",

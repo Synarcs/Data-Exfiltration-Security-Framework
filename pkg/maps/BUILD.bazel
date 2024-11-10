@@ -3,6 +3,6 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "maps",
     srcs = ["exfil.go"],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/maps",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/maps",
     visibility = ["//visibility:public"],
 )

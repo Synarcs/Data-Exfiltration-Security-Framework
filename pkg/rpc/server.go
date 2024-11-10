@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
 	"google.golang.org/grpc"
 )
 

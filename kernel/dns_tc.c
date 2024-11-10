@@ -116,6 +116,16 @@ struct exfil_security_egress_redurect_ts_verify {
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
 
+// useful to determine the loop back time from kernel packet redirection to user space enhanced scanning 
+// the totola kernel packet redirection time - userspace post DPI time
+// this is only used to find the effect of DPI scanning in userspace post redirect and then resend from user space.
+struct exfil_security_egress_redirect_loop_time {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u32); // dns query transaction id 
+    __type(value, __u64); // kernel packet redirection ns 
+    __uint(max_entries, 1 << 15);
+} exfil_security_egress_redirect_loop_time  SEC(".maps");
+
 // count the number of packets 
 struct exfil_security_egress_redirect_count_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -687,7 +697,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             // emit the ring buff from kernel as a transport event 
             bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
             void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
-                            sizeof(struct dns_non_standard_udp_transport_event), 0);
+                            sizeof(struct dns_non_standard_transport_event), 0);
             if (!res) {
                 #ifdef DEBUG 
                     if (DEBUG) {
@@ -698,7 +708,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                 return 1;
             }
             
-            struct dns_non_standard_udp_transport_event *event = res;
+            struct dns_non_standard_transport_event *event = res;
             event->dest_port = bpf_ntohs(udp->dest);
             event->src_port = bpf_ntohs(udp->source);
             event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
@@ -737,11 +747,11 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
 
     if (__non_standard_port_dpi == 0) {
         void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port,
-                                      sizeof(struct dns_non_standard_udp_transport_event), 0);
+                                      sizeof(struct dns_non_standard_transport_event), 0);
         if (!res)
             return 1;
 
-        struct dns_non_standard_udp_transport_event *event = res;
+        struct dns_non_standard_transport_event *event = res;
         event->dest_port = bpf_ntohs(tcp->dest);
         event->src_port = bpf_ntohs(tcp->source); 
         event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
@@ -847,6 +857,24 @@ __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_i
     };
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }
+
+
+/*
+    The usual overall kernel packet redirection flow 
+        userspace --> host_physical_device_link (tc) -> bridge_veth_link (tc) --> linux_ns_veth_link (netfilter) --> userspace 
+                                                                                                    |
+                                                                                                 phycial_device_link (tc)
+*/
+static 
+__always_inline void __update_kernel_packet_redirection_time(__u32 dns_query_id) {
+    
+    __u64 kernel_redirection_process_time = bpf_ktime_get_ns();
+    if (bpf_map_update_elem(&exfil_security_egress_redirect_loop_time, &dns_query_id, &kernel_redirection_process_time, 0) < 0) {
+        if (DEBUG) {
+            bpf_printk("the kernel monitor redirect map is full and exceed the possible kernel heap time");
+        }
+    }
+}  
 
 
 static 
@@ -1131,7 +1159,8 @@ int classify(struct __sk_buff *skb){
                 __handle_kernel_map_redirection_count();
 
                 __mark_skb_packet_buffer(skb);
-    
+
+                __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){
@@ -1281,7 +1310,7 @@ int classify(struct __sk_buff *skb){
 
                 __mark_skb_packet_buffer(skb);
 
-                bpf_printk("redirect the tcp packet over tcp");
+                __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, 0);
             }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
@@ -1399,7 +1428,8 @@ int classify(struct __sk_buff *skb){
                 __mark_skb_packet_buffer(skb);
                 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
-               
+
+                __update_kernel_packet_redirection_time(transaction_id);
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, 0);
 
@@ -1494,9 +1524,8 @@ int classify(struct __sk_buff *skb){
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
+                __update_kernel_packet_redirection_time(dns->transaction_id);
                 return bpf_redirect(br_index, 0);
-
-                return TC_FORWARD;
             }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
                 return TC_FORWARD;
             }else {

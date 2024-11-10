@@ -7,7 +7,7 @@ go_library(
         "iface.go",
         "overlay.go",
     ],
-    importpath = "github.com/Data-Exfiltration-Security-Framework/pkg/netinet",
+    importpath = "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/utils",

@@ -8,8 +8,8 @@ import (
 	"log"
 	"os"
 
-	pb "github.com/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

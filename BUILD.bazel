@@ -1,6 +1,6 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
 
-#gazelle:prefix github.com/Data-Exfiltration-Security-Framework
+#gazelle:prefix github.com/Synarcs/Data-Exfiltration-Security-Framework
 gazelle(name = "gazelle")
 
 gazelle(

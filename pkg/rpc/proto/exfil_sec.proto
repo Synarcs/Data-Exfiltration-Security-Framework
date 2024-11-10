@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package exfil_kernel;
 
-option go_package = "github.com/Data-Exfiltration-Security-Framework";
+option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework";
 
 message ExfilDomains {
     string domain = 1;

@@ -32,6 +32,8 @@
         "epoll.h": "c",
         "netlink.h": "c",
         "socket.h": "c",
-        "consts.h": "c"
+        "consts.h": "c",
+        "udp.h": "c",
+        "sched.h": "c"
     }
 }

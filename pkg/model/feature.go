@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/layers"
 )
 
@@ -210,7 +210,7 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool,
 			features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
 			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 			feature.LongestLabelDomain = mx_len
-			
+
 			feature.TotalCharsInSubdomain = totalLen
 
 			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))

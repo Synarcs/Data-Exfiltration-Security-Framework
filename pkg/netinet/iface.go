@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"

@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 type OnnxModel struct {

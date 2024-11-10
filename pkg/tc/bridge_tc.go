@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
@@ -25,7 +25,7 @@ func (tc *TCHandler) AttachTcHandlerIngressBridge(ctx *context.Context, prog *eb
 			panic(err.Error())
 		}
 
-		log.Println("Attaching a qdisc handler")
+		log.Println("Attaching a qdisc handler for bridge interface")
 		qdisc_clsact := &netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,

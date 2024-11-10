@@ -29,6 +29,14 @@ typedef struct handler {
     };
 } List;
 
+int * processMap (int *arr, int (*map) (int ), void *end, int size) {
+    for (int i=0; i < size; i++) {
+        if ((void *) arr + i < end) 
+            arr[i] = map(arr[i]); 
+    }
+    return arr;
+}
+
 void * handler (void *start, void *end, int size) {
 
     for (int i = 0; i < size; i++){
@@ -56,11 +64,6 @@ int main(void){
 
     int ** mem  = (int **) malloc (sizeof(int *) * 10);
     const int sz = 1 << 2;
-    int ** onD =  calloc(sizeof(int *), NULL);
-    for (int i=0; i < sz; i++) {
-        *(onD + i) = (int *)malloc(sizeof(int) * (int) (sz - 1));
-        printf("size of the nested memory is %d \n", sizeof(*(onD + i)));
-    }
 
     for (int i=0; i < 10; i++){
         mem[i] = (int *) malloc(sizeof(int) * 10);
