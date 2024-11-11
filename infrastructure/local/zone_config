@@ -9,6 +9,6 @@ $ORIGIN bleed.io.
                              )
 ;
 @       IN      NS      ns.bleed.io.
-@       IN      A       192.168.64.26
-ns      IN      A       192.168.64.26
+@       IN      A       10.0.0.124
+ns      IN      A       10.0.0.124
 t       IN      NS      ns.bleed.io.

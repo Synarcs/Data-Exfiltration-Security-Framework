@@ -1,0 +1,3 @@
+dns_resolver: 
+  ipv4: 192.168.64.24
+  ipv6: ::1

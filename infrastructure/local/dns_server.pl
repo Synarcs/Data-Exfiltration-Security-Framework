@@ -1,5 +1,14 @@
+//
+// named.conf
+//
+// Provided by Red Hat bind package to configure the ISC BIND named(8) DNS
+// server as a caching only nameserver (as a localhost DNS resolver only).
+//
+// See /usr/share/doc/bind*/sample/ for example named configuration files.
+//
+
 options {
-	listen-on port 53 { 127.0.0.1; 192.168.64.26; }; # dns serveer local nat IP for link lan broadcast
+	listen-on port 53 { 127.0.0.1; 192.168.64.26; };
 	listen-on-v6 port 53 { ::1; };
 	directory 	"/var/named";
 	dump-file 	"/var/named/data/cache_dump.db";
@@ -7,8 +16,7 @@ options {
 	memstatistics-file "/var/named/data/named_mem_stats.txt";
 	secroots-file	"/var/named/data/named.secroots";
 	recursing-file	"/var/named/data/named.recursing";
-	allow-query     { localhost; 192.168.64.0/24; };
-
+	allow-query     { any; };
 	/* 
 	 - If you are building an AUTHORITATIVE DNS server, do NOT enable recursion.
 	 - If you are building a RECURSIVE (caching) DNS server, you need to enable 
@@ -19,16 +27,11 @@ options {
 	   attacks. Implementing BCP38 within your network would greatly
 	   reduce such attack surface 
 	*/
-
-	# dns resolvers forward for forward zones 
-    forwarders {
-	  8.8.8.8;
-	  8.8.4.4;
-    };
+	forwarders         { 8.8.8.8; 8.8.4.4; };
 
 	recursion yes;
+    dnssec-validation yes;
 
-	# dnssec-validation yes;
 	managed-keys-directory "/var/named/dynamic";
 	geoip-directory "/usr/share/GeoIP";
 
@@ -40,10 +43,19 @@ options {
 };
 
 logging {
-        channel default_debug {
-                file "/tmp/named.log" versions 3 size 250k;
-                severity dynamic;
-        };
+    channel query_logging {
+        file "/var/log/named/query.log" versions 3 size 10m;  # Log queries to a file
+        severity debug 10;        # Set a higher debug level for more details
+        print-time yes;          # Add timestamps to log entries
+        print-category yes;      # Show the log category in each log line
+        print-severity yes;      # Show severity level
+    };
+
+    category queries { query_logging; };   # Log query details
+    category resolver { query_logging; };  # Log resolver actions
+    category client { query_logging; };    # Log client interactions
+    category cname { query_logging; };     # Log CNAME processing details
+    category edns-disabled { query_logging; };  # Log EDNS issues, if any
 };
 
 zone "." IN {

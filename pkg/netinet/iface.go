@@ -98,8 +98,14 @@ func (nf *NetIface) GetRootGateway() error {
 		}
 	}
 
-	nf.PhysicalRouterGatewayV4 = gw.To4()
-	nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
+	dnsResolver, err := ReadPackageConfig()
+	if err != nil {
+		nf.PhysicalRouterGatewayV4 = gw.To4()
+		nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
+	} else {
+		nf.PhysicalRouterGatewayV4 = dnsResolver.Ipv4
+		nf.PhysicalRouterGatewayV6 = dnsResolver.Ipv6
+	}
 
 	log.Println("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
 	return nil

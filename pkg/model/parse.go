@@ -35,7 +35,6 @@ type CombinedFeatures []DNSFeatures
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
 	return layers.DNS{
-		BaseLayer:    layers.BaseLayer{},
 		ID:           dns.ID,
 		QR:           dns.QR,
 		OpCode:       dns.OpCode,

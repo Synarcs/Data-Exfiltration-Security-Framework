@@ -60,7 +60,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "dns_round_trip_seconds",
 			Help:    "DNS query round-trip time in seconds",
-			Buckets: []float64{.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5},
+			Buckets: []float64{.1, .2, .4, .6, .8, 1, 2},
 		},
 	)
 
