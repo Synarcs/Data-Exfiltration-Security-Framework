@@ -185,7 +185,7 @@ func (iface *NetIface) VerifyNewNetlinkPppSockets() {
 			fmt.Println("the kernel link flags are ", flags)
 			if strings.Contains(flags.String(), "pointtopoint") {
 				// attach the ppp socket tc hooks inside kernel
-				log.Println("ppp socket detected attaching tc hooks", link.Attrs().Name)
+				log.Println("ppp socket detected attaching tc hooks", link.Attrs().Name, link.Attrs().Index)
 			}
 			iface.LinkMap[link.Attrs().Name] = true
 		}

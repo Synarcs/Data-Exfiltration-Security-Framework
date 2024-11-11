@@ -1,0 +1,14 @@
+$TTL 2d
+$ORIGIN bleed.io.
+@         IN      SOA   bleed.io. hostmaster.bleed.io. (
+                             2 ; serial number
+                             12h        ; refresh
+                             15m        ; update retry
+                             3w         ; expiry
+                             2h         ; minimum
+                             )
+;
+@       IN      NS      ns.bleed.io.
+@       IN      A       192.168.64.26
+ns      IN      A       192.168.64.26
+t       IN      NS      ns.bleed.io.

@@ -28,14 +28,11 @@
 
 #define MAX_DOMAIN_SIZE 255 
 
-struct rootKernelTLDDomain {
-    char rootTld[MAX_DOMAIN_SIZE];
-};
 
-struct exfil_security_detected_c2c_tld  {
+struct exfill_ingress_security_layer7_tld  {
     __uint(type ,BPF_MAP_TYPE_LRU_HASH);
-    __type(key, struct rootKernelTLDDomain);
-    __type(value, __u8);
+    __type(key, __u32); // dns query
+    __type(value, __u8); // boolean flag for user space to understand if the id is in map it need ingress DPI based on tld or other factor 
     __uint(max_entries, 1 << 12);
 } exfil_security_detected_c2c_tld SEC(".maos");
 

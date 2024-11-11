@@ -141,6 +141,7 @@ func main() {
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
 		tc.DetachHandlerBridge(&ctx)
+		tc.DetachHandlerTunTap(&ctx)
 
 		tcl.DetachSockHandler()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks

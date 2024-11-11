@@ -10,6 +10,8 @@ xdp_kernel_out := xdp.o
 netlink_kernel := nf_sock.c
 netlink_kernel_out := netlink.o
 
+p2p_kernel := dns_tun.c
+p2p_kernel_out := tun.o
 
 # for arm compilation of cpu 
 .PHONY: compile
@@ -17,6 +19,7 @@ compile:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
+	make tc_tun 
 	cp $(tc_kernel_out)../node_agent/
 	cp $(bridge_tc_kernel_out) ../node_agent/
 
@@ -41,6 +44,7 @@ compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
+	make tc_tun-x86
 	cp $(tc_kernel_out)../node_agent/
 	cp $(bridge_tc_kernel_out) ../node_agent/
 
@@ -107,3 +111,13 @@ netlink:
 netlink-x86: 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/
+
+
+.PHONY: tc_tun 
+tc_tun:
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	cp $(p2p_kernel_out) ../node_agent/
+
+.PHONY: tc-tun-x86 
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	cp $(p2p_kernel_out) ../node_agent/

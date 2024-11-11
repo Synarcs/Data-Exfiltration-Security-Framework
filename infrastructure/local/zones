@@ -1,0 +1,39 @@
+
+zone "localhost.localdomain" IN {
+	type primary;
+	file "named.localhost";
+	allow-update { none; };
+};
+
+zone "localhost" IN {
+	type primary;
+	file "named.localhost";
+	allow-update { none; };
+};
+
+
+zone "bleed.io" IN {
+       type master;
+       file "/etc/fw.bleed.local";
+       allow-update { none; };
+       notify no;
+};
+
+
+zone "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa" IN {
+	type primary;
+	file "named.loopback";
+	allow-update { none; };
+};
+
+zone "1.0.0.127.in-addr.arpa" IN {
+	type primary;
+	file "named.loopback";
+	allow-update { none; };
+};
+
+zone "0.in-addr.arpa" IN {
+	type primary;
+	file "named.empty";
+	allow-update { none; };
+};
