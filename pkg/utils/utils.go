@@ -13,16 +13,15 @@ const DEBUG = false
 
 // kernel network traffic control and xdp ingress layer
 const (
-	TC_CONTROL_PROG        = "classify" // CLSACT
+	TC_CONTROL_PROG        = "classify"        // CLSACT
 	TC_CONTROL_PROG_BRIDGE = "bridge_classify" // CLSACT CLASSLESS QDISC
-	XDP_CONTROL_PROG       = "xdp"      // XDP Non Offloaded
+	XDP_CONTROL_PROG       = "xdp"             // XDP Non Offloaded
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 )
 
 const (
-	SOCK_TUNNEL_CODE      = "netlink_socket"
-	SOCK_TUNNEL_CODE_EBPF = "netlink.o"
+	SOCK_TUNNEL_CODE = "netlink_socket"
 )
 
 const (

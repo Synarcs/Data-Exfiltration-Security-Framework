@@ -103,8 +103,16 @@ func (nf *NetIface) GetRootGateway() error {
 		nf.PhysicalRouterGatewayV4 = gw.To4()
 		nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
 	} else {
-		nf.PhysicalRouterGatewayV4 = dnsResolver.Ipv4
-		nf.PhysicalRouterGatewayV6 = dnsResolver.Ipv6
+		if dnsResolver.Ipv4 != nil {
+			nf.PhysicalRouterGatewayV4 = dnsResolver.Ipv4
+		} else {
+			nf.PhysicalRouterGatewayV4 = gw.To4()
+		}
+		if dnsResolver.Ipv6 != nil {
+			nf.PhysicalRouterGatewayV6 = dnsResolver.Ipv6
+		} else {
+			nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
+		}
 	}
 
 	log.Println("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
@@ -294,7 +302,7 @@ func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
 }
 
 func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
-	log.Println("Creating XDP socket fd to send packet")
+	log.Println("Creating AF_PACKET socket fd to send packet")
 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
 		log.Println("Error in opening a raw socket fd to the bridge socket")

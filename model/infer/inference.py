@@ -7,7 +7,7 @@ import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
 import http.server 
-import consts 
+import consts, infer
 from abc import ABC, abstractmethod 
 
 
@@ -53,9 +53,10 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)
         global onnxInferenceServer
+        self.ifServer = infer.Inference() 
         
-    def infer(self) -> bool:
-        return True 
+    def infer(self, feature) -> bool:
+        return self.ifServer.predict(input_features=feature)
 
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
@@ -74,7 +75,8 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
 
                 evalFeatureCount = len(request_body['Features']) 
                 with ThreadPoolExecutor(max_workers=evalFeatureCount) as executor:
-                    executor.map(self.infer, request_body["Features"])
+                    col = executor.map(self.infer, request_body["Features"])
+                    print('remote inference is : ', col)
 
                 response = {
                     "threat_type": True # for now to drop all the pakcet hitting the remote inference server 

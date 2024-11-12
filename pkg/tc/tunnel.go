@@ -37,7 +37,7 @@ func ProcessTunnelEvent(iface *netinet.NetIface, eventChannel chan bool) {
 
 func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool) error {
 	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
-	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
+	handler, err := ebpf.LoadCollectionSpec(SOCK_TUNNEL_CODE_EBPF)
 
 	if err != nil {
 		log.Fatal("error loading the xdp program over interface")

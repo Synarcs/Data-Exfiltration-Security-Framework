@@ -20,22 +20,22 @@ compile:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
-	cp $(tc_kernel_out)../node_agent/
-	cp $(bridge_tc_kernel_out) ../node_agent/
+	cp $(tc_kernel_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
 	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
 	cp tc.o ../node_agent/
-	cp bridge.o ../node_agent/
+	cp bridge.o ../node_agent/ebpf/ 
 	sudo llv-objdump -S tc.o 
 
 .PHONY: compile-llvm-x86
 compile-llvm-x86:
 	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm  -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
 	cp tc.o ../node_agent
-	cp bridge.o ../node_agent/
+	cp bridge.o ../node_agent/ebpf/ 
 	sudo llv-objdump -S tc.o 
 
 # for x86 compilation of cpu 
@@ -45,8 +45,8 @@ compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
 	make tc_tun-x86
-	cp $(tc_kernel_out)../node_agent/
-	cp $(bridge_tc_kernel_out) ../node_agent/
+	cp $(tc_kernel_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
@@ -105,19 +105,19 @@ xdp-umount:
 .PHONY: netlink
 netlink: 
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
-	cp $(netlink_kernel_out) ../node_agent/
+	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: netlink-x86 
 netlink-x86: 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
-	cp $(netlink_kernel_out) ../node_agent/
+	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 
 .PHONY: tc_tun 
 tc_tun:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	cp $(p2p_kernel_out) ../node_agent/
+	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc-tun-x86 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	cp $(p2p_kernel_out) ../node_agent/
+	cp $(p2p_kernel_out) ../node_agent/ebpf/ 

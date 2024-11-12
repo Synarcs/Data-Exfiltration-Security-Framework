@@ -30,12 +30,14 @@ type PacketDPIKernelDropCountEvent struct {
 type DNSFeatures struct {
 	Fqdn                  string
 	Tld                   string
+	Subdomain             string
 	TotalChars            int
 	TotalCharsInSubdomain int // holds the chars which are unicode encodable and can be stored
 	NumberCount           int
 	UCaseCount            int
 	LCaseCount            int
 	Entropy               float32
+	Periods               int
 	PeriodsInSubDomain    int
 	LongestLabelDomain    int
 	AveerageLabelLength   float32

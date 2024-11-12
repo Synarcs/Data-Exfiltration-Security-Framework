@@ -34,9 +34,10 @@ type TCHandler struct {
 }
 
 const (
-	TC_EGRESS_ROOT_NETIFACE_INT   = "tc.o"
-	TC_EGRESS_BRIDGE_NETIFACE_INT = "bridge.o"
-	TC_EGRESS_TUNNEL_NETIFACE_INT = "tun.o"
+	TC_EGRESS_ROOT_NETIFACE_INT   = "ebpf/tc.o"
+	TC_EGRESS_BRIDGE_NETIFACE_INT = "ebpf/bridge.o"
+	TC_EGRESS_TUNNEL_NETIFACE_INT = "ebpf/tun.o"
+	SOCK_TUNNEL_CODE_EBPF         = "ebpf/netlink.o"
 )
 
 // init AF_PACKET, AF_XDP socket for the kernel
