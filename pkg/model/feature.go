@@ -131,11 +131,10 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 func ParseDnsQuestions(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
 	parseEachQuerySection := func(exclude_tld []string, payload layers.DNSQuestion) {
 		features[i].Periods = strings.Count(string(payload.Name), ".")
-		if features[i].Periods > 2 {
-			features[i].PeriodsInSubDomain = features[i].Periods - 2 // the kernel wount allow non tld to be redirected to user space
-		}
+		features[i].PeriodsInSubDomain = features[i].Periods - 2 // the kernel wount allow non tld to be redirected to user space
 		features[i].TotalChars = len(payload.Name) - features[i].Periods
 
+		features[i].Subdomain = strings.Join(exclude_tld[:len(exclude_tld)-2], ".")
 		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
 		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 		features[i].LongestLabelDomain = mx_len

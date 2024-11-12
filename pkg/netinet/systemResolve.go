@@ -30,7 +30,9 @@ func ReadPackageConfig() (*DnsResolverServer, error) {
 			dnsServer := strings.Split(info, " ")
 			isIpv4 := net.ParseIP(dnsServer[1]).To4()
 			if isIpv4 != nil {
-				dnsResolver.Ipv4 = isIpv4
+				if dnsResolver.Ipv4 == nil {
+					dnsResolver.Ipv4 = isIpv4 // only take the ipv4 dns address with highest priority in systemd resolved
+				}
 			} else {
 				dnsResolver.Ipv6 = net.ParseIP(dnsServer[1]).To16()
 			}
