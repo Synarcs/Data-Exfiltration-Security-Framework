@@ -13,7 +13,7 @@ output_name = session.get_outputs()[0].name
 
 class Inference:
     def __init__(self) -> None: 
-        pass 
+        super().__init__()
 
     def raw_inference(self, domain: str) -> bool:
         def getFeatureDomain(vec: str):

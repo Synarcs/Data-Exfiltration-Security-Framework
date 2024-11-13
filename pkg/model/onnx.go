@@ -34,7 +34,7 @@ func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
 			perLabelFeatures[4] = float32(features[i].Entropy)
 			perLabelFeatures[5] = float32(features[i].PeriodsInSubDomain)
 			perLabelFeatures[6] = float32(features[i].LongestLabelDomain)
-			perLabelFeatures[7] = float32(features[i].AveerageLabelLength)
+			perLabelFeatures[7] = float32(features[i].AverageLabelLength)
 			floatTensors = append(floatTensors, perLabelFeatures)
 		}
 	}

@@ -129,8 +129,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if !isBenign {
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
 		// add the tld and domain information in packet malicious map for local cache
-		var castFeature events.DNSFeatures = events.DNSFeatures(features[0])
-		events.ExportMaliciousEvents(castFeature)
+		// var castFeature events.DNSFeatures = events.DNSFeatures(features[0])
+		// events.ExportMaliciousEvents(castFeature)
 		return nil
 	}
 

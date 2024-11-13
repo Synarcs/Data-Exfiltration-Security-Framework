@@ -35,12 +35,11 @@ type DNSFeatures struct {
 	TotalCharsInSubdomain int // holds the chars which are unicode encodable and can be stored
 	NumberCount           int
 	UCaseCount            int
-	LCaseCount            int
 	Entropy               float32
 	Periods               int
 	PeriodsInSubDomain    int
 	LongestLabelDomain    int
-	AveerageLabelLength   float32
+	AverageLabelLength    float32
 	IsEgress              bool
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
@@ -111,7 +110,7 @@ var (
 			"Fqdn", "Tld", "TotalChars", "TotalCharsInSubdomain",
 			"NumberCount", "UCaseCount", "LCaseCount", "Entropy",
 			"PeriodsInSubDomain", "LongestLabelDomain",
-			"AveerageLabelLength", "IsEgress",
+			"AverageLabelLength", "IsEgress",
 		},
 	)
 	sniffedDnsEvent = prometheus.NewGaugeVec(
@@ -210,11 +209,10 @@ func ExportMaliciousEvents(feature DNSFeatures) error {
 			"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),
 			"NumberCount":           strconv.Itoa(feature.NumberCount),
 			"UCaseCount":            strconv.Itoa(feature.UCaseCount),
-			"LCaseCount":            strconv.Itoa(feature.LCaseCount),
 			"Entropy":               strconv.FormatFloat(float64(feature.Entropy), 'f', -1, 64),
 			"PeriodsInSubDomain":    strconv.Itoa(feature.PeriodsInSubDomain),
 			"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
-			"AveerageLabelLength":   strconv.FormatFloat(float64(feature.AveerageLabelLength), 'f', -1, 64),
+			"AverageLabelLength":    strconv.FormatFloat(float64(feature.AverageLabelLength), 'f', -1, 64),
 			"IsEgress":              strconv.FormatBool(feature.IsEgress),
 		},
 	).Set(float64(feature.TotalChars))

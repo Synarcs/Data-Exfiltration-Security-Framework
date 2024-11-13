@@ -1,6 +1,6 @@
 from concurrent.futures import Future, ThreadPoolExecutor
-import datetime
 from io import StringIO
+import numpy as np 
 from typing import Any, Callable, NoReturn, Self
 import os, sys, socket, json 
 import logging, signal, threading
@@ -8,6 +8,7 @@ import socketserver
 import onnxruntime as ort , onnx 
 import http.server 
 import consts, infer
+import datetime
 from abc import ABC, abstractmethod 
 
 
@@ -49,14 +50,15 @@ class OnnxInference(object):
 onnxInferenceServer: OnnxInference = OnnxInference() 
 onnxInferenceServer.load()
 
+ifServer = infer.Inference() 
+
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)
         global onnxInferenceServer
-        self.ifServer = infer.Inference() 
         
     def infer(self, feature) -> bool:
-        return self.ifServer.predict(input_features=feature)
+        return ifServer.predict(input_features=np.array(feature, dtype=np.float32).reshape(1, -1)) 
 
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
@@ -74,12 +76,13 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 # TODO: Run onnx evaluation for the model to process the data against trained deep learning model 
 
                 evalFeatureCount = len(request_body['Features']) 
-                with ThreadPoolExecutor(max_workers=evalFeatureCount) as executor:
-                    col = executor.map(self.infer, request_body["Features"])
-                    print('remote inference is : ', col)
+                evalPrediction = []
+
+                for feature in request_body['Features']:
+                    evalPrediction.append(self.infer(feature))
 
                 response = {
-                    "threat_type": True # for now to drop all the pakcet hitting the remote inference server 
+                    "threat_type": True if any(evalPrediction) else False # for now to drop all the pakcet hitting the remote inference server 
                 }
                 response_body = json.dumps(response).encode('utf-8')
                 log.debug(f"Sending response: {response_body}")
@@ -119,7 +122,7 @@ class UnixSocketHttpServer(socketserver.UnixStreamServer):
 class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
     allow_reuse_address = True
     daemon_threads = True 
-    request_queue_size = 1 << 10
+    request_queue_size = 1 << 10 
 
     def __init__(self, server_address: str | Any, RequestHandlerClass: Callable[[Any, Any, Self], Any], bind_and_activate: bool = True) -> None:
         super(ThreadingUnixSocketHttpServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate)

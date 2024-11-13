@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -21,12 +22,11 @@ type DNSFeatures struct {
 	TotalCharsInSubdomain int // holds the chars which are unicode encodable and can be stored
 	NumberCount           int
 	UCaseCount            int
-	LCaseCount            int
 	Entropy               float32
 	Periods               int
 	PeriodsInSubDomain    int
 	LongestLabelDomain    int
-	AveerageLabelLength   float32
+	AverageLabelLength    float32
 	IsEgress              bool
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
@@ -99,20 +99,27 @@ func max(a, b int) int {
 	return b
 }
 
-func LongestandTotoalLenSubdomains(dns_label []string) (int, int) {
+func LongestandTotoalLenSubdomains(dns_label []string) (int, int, float32) {
 	mxLen := 0
 	totalLen := 0
+	var avglen float32
 
 	for _, label := range dns_label {
 		totalLen += len(label)
 		mxLen = max(mxLen, len(label))
 	}
 
-	return mxLen, totalLen
+	avglen = float32(totalLen / len(dns_label))
+	return mxLen, totalLen, avglen
 }
 
 func DomainVarsCount(dns_label string) (int, int, int) {
 	ucount, lcount, ncount := 0, 0, 0
+
+	special := regexp.MustCompile("[!@#$%^&*]")
+	if len(special.Find([]byte(dns_label))) > 0 {
+
+	}
 
 	for _, val := range dns_label {
 		if unicode.IsNumber(val) {
@@ -129,38 +136,50 @@ func DomainVarsCount(dns_label string) (int, int, int) {
 }
 
 func ParseDnsQuestions(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
-	parseEachQuerySection := func(exclude_tld []string, payload layers.DNSQuestion) {
-		features[i].Periods = strings.Count(string(payload.Name), ".")
-		features[i].PeriodsInSubDomain = features[i].Periods - 2 // the kernel wount allow non tld to be redirected to user space
+	parseEachQuerySection := func(dns_query_labels []string, payload layers.DNSQuestion) {
+		features[i].Periods = len(dns_query_labels) - 1                                      // total dots
+		features[i].PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
 		features[i].TotalChars = len(payload.Name) - features[i].Periods
+		features[i].TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
-		features[i].Subdomain = strings.Join(exclude_tld[:len(exclude_tld)-2], ".")
-		features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
-		mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-		features[i].LongestLabelDomain = mx_len
-		features[i].TotalCharsInSubdomain = totalLen
+		ucount, _, ncount := DomainVarsCount(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
-		ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
-
-		features[i].UCaseCount = ucount
 		features[i].NumberCount = ncount
-		features[i].LCaseCount = lcount
-		features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
+		features[i].UCaseCount = ucount
+		features[i].Entropy = Entropy(dns_query_labels)
+
+		features[i].Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
+		features[i].PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+		mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
+		features[i].LongestLabelDomain = mx_len
+		features[i].AverageLabelLength = avgLen
+
+		features[i].Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
 		features[i].Fqdn = string(payload.Name)
-		features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 		features[i].IsEgress = isEgress
 	}
 
 	singleQuery := len(dns_packet.Questions) == 1
-	for _, payload := range dns_packet.Questions {
-
-		exclude_tld := strings.Split(string(payload.Name), ".")
-		if singleQuery {
-			parseEachQuerySection(exclude_tld, payload)
+	var recordTypes map[string]int = make(map[string]int)
+	payload := dns_packet.Questions[0]
+	dns_query_labels := strings.Split(string(payload.Name), ".")
+	if singleQuery {
+		_, ok := recordTypes[payload.Type.String()]
+		if !ok {
+			recordTypes[payload.Type.String()] = 1
 		} else {
-			if len(exclude_tld) > 2 {
-				parseEachQuerySection(exclude_tld, payload)
+			recordTypes[payload.Type.String()] += 1
+		}
+		parseEachQuerySection(dns_query_labels, payload)
+	} else {
+		for _, payload := range dns_packet.Questions {
+			_, ok := recordTypes[payload.Type.String()]
+			if !ok {
+				recordTypes[payload.Type.String()] = 1
+			} else {
+				recordTypes[payload.Type.String()] += 1
 			}
+			parseEachQuerySection(dns_query_labels, payload)
 		}
 
 		i += 1
@@ -180,27 +199,31 @@ func CheckMxTxtNullRecordInQuestions(dns_packet *layers.DNS, features []DNSFeatu
 
 func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Answers {
-		exclude_tld := strings.Split(string(payload.Name), ".")
-		if len(exclude_tld) > 2 {
-			features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-			features[i].LongestLabelDomain = mx_len
-			features[i].TotalCharsInSubdomain = totalLen
+		dns_query_labels := strings.Split(string(payload.Name), ".")
+		if len(dns_query_labels) > 2 {
+			features[i].Periods = len(dns_query_labels) - 1                                      // total dots
+			features[i].PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
+			features[i].TotalChars = len(payload.Name) - features[i].Periods
+			features[i].TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
-			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
-
-			features[i].UCaseCount = ucount
+			ucount, _, ncount := DomainVarsCount(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 			features[i].NumberCount = ncount
-			features[i].LCaseCount = lcount
-			features[i].Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
+			features[i].UCaseCount = ucount
+			features[i].Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
 
-			features[i].IsEgress = isEgress
+			features[i].Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
+			features[i].PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+			mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
+			features[i].LongestLabelDomain = mx_len
+			features[i].AverageLabelLength = avgLen
+			features[i].IsEgress = false
 
 			features[i].Fqdn = string(payload.Name)
-
-			features[i].Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 			mrsh, _ := json.Marshal(features[i])
-			fmt.Println(string(mrsh))
+
+			if utils.DEBUG {
+				log.Println(mrsh)
+			}
 		}
 	}
 	return features, nil
@@ -212,26 +235,29 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool,
 			continue
 		}
 		var feature DNSFeatures
-		exclude_tld := strings.Split(string(payload.Name), ".")
-		if len(exclude_tld) > 2 {
-			features[i].PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
-			feature.LongestLabelDomain = mx_len
+		dns_query_labels := strings.Split(string(payload.Name), ".")
+		if len(dns_query_labels) > 2 {
+			feature.Periods = len(dns_query_labels) - 1                                      // total dots
+			feature.PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
+			feature.TotalChars = len(payload.Name) - features[i].Periods
+			feature.TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
-			feature.TotalCharsInSubdomain = totalLen
+			ucount, _, ncount := DomainVarsCount(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
-			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
-
-			feature.UCaseCount = ucount
 			feature.NumberCount = ncount
-			feature.LCaseCount = lcount
-			feature.Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
+			feature.UCaseCount = ucount
+			feature.Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
 
+			feature.Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
+			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+			mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
+			feature.LongestLabelDomain = mx_len
+			feature.AverageLabelLength = avgLen
+
+			feature.Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
+			feature.Fqdn = string(payload.Name)
 			feature.IsEgress = isEgress
 
-			feature.Fqdn = string(payload.Name)
-
-			feature.Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 			features = append(features, feature)
 			mrsh, _ := json.Marshal(features[i])
 			fmt.Println(string(mrsh))
@@ -250,15 +276,14 @@ func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress
 		exclude_tld := strings.Split(string(payload.Name), ".")
 		if len(exclude_tld) > 2 {
 			feature.PeriodsInSubDomain = len(exclude_tld) - 2 // the kernel wount allow tld to be redirected to user space
-			mx_len, totalLen := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
+			mx_len, totalLen, _ := LongestandTotoalLenSubdomains(exclude_tld[:len(exclude_tld)-2])
 			feature.LongestLabelDomain = mx_len
 			feature.TotalCharsInSubdomain = totalLen
 
-			ucount, lcount, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
+			ucount, _, ncount := DomainVarsCount(strings.Join(exclude_tld[:len(exclude_tld)-2], ""))
 
 			feature.UCaseCount = ucount
 			feature.NumberCount = ncount
-			feature.LCaseCount = lcount
 			feature.Tld = strings.Join(exclude_tld[len(exclude_tld)-2:], ".")
 
 			feature.IsEgress = isEgress
