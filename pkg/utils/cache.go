@@ -63,7 +63,7 @@ func UpdateDomainBlacklistInCache(tld, fqdn string) {
 }
 
 // add support for generics with go base type inferences
-func IngUpdateDomainBlacklistInCache(tld, fqdn string) {
+func IngUpdateDomainBlacklistInCache(tld string) {
 	isEvict := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Add(tld, true)
 	if isEvict && DEBUG {
 		log.Println("The Node cache for ingress becaome almost full evict cache process ...")

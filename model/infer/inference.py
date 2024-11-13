@@ -62,7 +62,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
-        if self.path == "/onnx/dns":
+        if self.path == "/onnx/dns" or self.path == "/onnx/dns/ing": 
             try:
                 content_length = int(self.headers['Content-Length'])
                 post_data = self.rfile.read(content_length)
@@ -75,19 +75,31 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 # True if benign else False 
                 # TODO: Run onnx evaluation for the model to process the data against trained deep learning model 
 
-                evalFeatureCount = len(request_body['Features']) 
-                evalPrediction = []
+                if self.path == "/onnx/dns":
+                    evalPrediction = []
 
-                for feature in request_body['Features']:
-                    evalPrediction.append(self.infer(feature))
+                    for feature in request_body['Features']:
+                        evalPrediction.append(self.infer(feature))
 
-                response = {
-                    "threat_type": True if any(evalPrediction) else False # for now to drop all the pakcet hitting the remote inference server 
-                }
-                response_body = json.dumps(response).encode('utf-8')
-                log.debug(f"Sending response: {response_body}")
-                self.wfile.write(response_body)
-                return
+                    response = {
+                        "threat_type": True if any(evalPrediction) else False # for now to drop all the pakcet hitting the remote inference server 
+                    }
+                    response_body = json.dumps(response).encode('utf-8')
+                    log.debug(f"Sending response: {response_body}")
+                    self.wfile.write(response_body)
+                    return 
+                elif self.path == "/onnx/dns/ing":
+                    evalPrediction = []
+                    for feature in request_body['Features']:
+                        evalPrediction.append(self.infer(feature))
+                    
+                    response = {
+                        "threat_type": evalPrediction
+                    }
+                    response_body = json.dumps(response).encode('utf-8')
+                    log.debug(f"Sending response: {response_body}")
+                    self.wfile.write(response_body) 
+                    
             except Exception as e:
                 log.error(f"Error in do_POST: {str(e)}")
 

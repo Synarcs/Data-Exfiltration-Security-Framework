@@ -41,7 +41,8 @@ func GenerateTcIngressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel
 	}
 }
 
-func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32) error {
+func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
+	rawFeatures []model.DNSFeatures) error {
 
 	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING {
 		// process deep lexical analysis from remote unix transport inference server
@@ -54,7 +55,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32) err
 		if err != nil {
 			log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
 		}
-		resp, err := ing.InferenceHttpClient.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
+		resp, err := ing.InferenceHttpClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
 		if err != nil {
 			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
 			return err
@@ -65,7 +66,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32) err
 			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
 			return err
 		}
-		var inferenceResponse model.InferenceResponse
+		var inferenceResponse model.InferenceResponseIngress
 		err = json.Unmarshal(payload, &inferenceResponse)
 
 		if err != nil {
@@ -77,8 +78,10 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32) err
 			log.Println("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
 		}
 
-		if inferenceResponse.ThreatType {
-
+		for index, resp := range inferenceResponse.ThreatType {
+			if resp {
+				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
+			}
 		}
 	}
 	return nil
@@ -158,7 +161,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 			}
 
 			vectors := model.GenerateFloatVectors(features, ing.OnnxModel)
-			ing.RemoteIngressInference(vectors)
+			ing.RemoteIngressInference(vectors, features)
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp

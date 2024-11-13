@@ -9,3 +9,7 @@ type InferenceRequest struct {
 type InferenceResponse struct {
 	ThreatType bool `json:"threat_type"`
 }
+
+type InferenceResponseIngress struct {
+	ThreatType []bool `json:"threat_type"`
+}
