@@ -1,10 +1,15 @@
 package xdp
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -18,20 +23,65 @@ import (
 )
 
 type IngressSniffHandler struct {
-	IfaceHandler    *netinet.NetIface
-	Ctx             context.Context
-	OnnxLoadedModel *model.OnnxModel
-	DnsFeatures     *model.DNSFeatures
-	DnsPacketGen    *model.DnsPacketGen
+	IfaceHandler             *netinet.NetIface
+	Ctx                      context.Context
+	OnnxModel                *model.OnnxModel
+	DnsFeatures              *model.DNSFeatures
+	DnsPacketGen             *model.DnsPacketGen
+	InferenceHttpClient      *http.Client
+	InferenceTransportSocket net.Conn
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcIngressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) IngressSniffHandler {
 	return IngressSniffHandler{
-		IfaceHandler:    &iface,
-		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel),
-		OnnxLoadedModel: onnxModel,
+		IfaceHandler: &iface,
+		DnsPacketGen: model.GenerateDnsParserModelUtils(&iface, onnxModel),
+		OnnxModel:    onnxModel,
 	}
+}
+
+func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32) error {
+
+	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING {
+		// process deep lexical analysis from remote unix transport inference server
+		inferRequest := model.InferenceRequest{
+			// pass all the 8 features which define the input layer for the inference in the onnx model
+			Features: features,
+		}
+		// need this over multiplex transport layer 7 transport
+		requestPayload, err := json.Marshal(inferRequest)
+		if err != nil {
+			log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
+		}
+		resp, err := ing.InferenceHttpClient.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
+		if err != nil {
+			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+			return err
+		}
+		defer resp.Body.Close()
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+			return err
+		}
+		var inferenceResponse model.InferenceResponse
+		err = json.Unmarshal(payload, &inferenceResponse)
+
+		if err != nil {
+			log.Printf("Error while unmarshalling the onnx inference response %v", err)
+			return err
+		}
+
+		if utils.DEBUG {
+			log.Println("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
+		}
+
+		if inferenceResponse.ThreatType {
+
+		}
+	}
+	return nil
 }
 
 func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
@@ -97,19 +147,22 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
 
 	if dnsLayer != nil {
-		_, _ = dnsLayer.(*layers.DNS)
-
-		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+		dns := dnsLayer.(*layers.DNS)
 
 		if isIpv4 && isUdp {
-			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, nil)
 			// ipv4 and udp
+			features, err := model.ProcessDnsFeatures(dns, false)
+			if err != nil {
+				log.Println(err)
+				return err
+			}
+
+			vectors := model.GenerateFloatVectors(features, ing.OnnxModel)
+			ing.RemoteIngressInference(vectors)
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp
-			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler,
-				true, isIpv4, isUdp, nil)
+			log.Println("the dns packet is ", dns)
 		}
 
 	} else if tcpCheck {
@@ -126,11 +179,11 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, nil)
+				handler, false, isIpv4, isUdp, nil)
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
-			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, true, isIpv4,
+			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, false, isIpv4,
 				isUdp, nil)
 		}
 	}
@@ -141,10 +194,21 @@ func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 	var errorChannel chan error = make(chan error)
 	log.Println("Sniffing Ingress traffic for potential malicious remote C@C commands")
 
+	// layer 7 markup over layer 4 unix transport
+	ingressClient, ingressConn, err := model.GetInferenceUnixClient(false)
+
+	ing.InferenceHttpClient = ingressClient
+	ing.InferenceTransportSocket = ingressConn
+
+	if err != nil {
+		log.Println("the remote ingress socket for inference is not available")
+		panic(err.Error())
+	}
+
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
 		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
-		cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+		cap, err := pcap.OpenLive(linkInterface.Attrs().Name, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
 			errorChannel <- err
@@ -158,7 +222,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 			} else {
 				log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the TCP Layer")
 			}
-			if err := cap.SetBPFFilter("udp dst port 53 or tcp dst port 53"); err != nil {
+			if err := cap.SetBPFFilter("udp src port 53 or tcp src port 53"); err != nil {
 				log.Fatalf("Error setting BPF filter: %v", err)
 			}
 		} else if !isUdp && !isStandardPort {
@@ -167,14 +231,14 @@ func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
-		for _ = range packets.Packets() {
-			// go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
+		for pack := range packets.Packets() {
+			go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
 		}
 		return nil
 	}
 
-	for _, val := range ing.IfaceHandler.PhysicalLinks {
-		go processPcapFilterHandlerIngress(val, errorChannel, true, true)
+	for _, link := range ing.IfaceHandler.PhysicalLinks {
+		go processPcapFilterHandlerIngress(link, errorChannel, true, true)
 	}
 
 	go func() {

@@ -38,17 +38,15 @@ func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
 			floatTensors = append(floatTensors, perLabelFeatures)
 		}
 	}
-
 	return floatTensors
 }
 
 /*
 Tells the node agent go routeines to call the remote inference server deep learning model for enhanced scanning
 */
-func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32, direction bool) int {
+func (onnx *OnnxModel) StaticRuntimeChecks(features [][]float32, isEgress bool) int {
 
 	// check against the top domains and most safe domains
-
 	if len(features) == 0 {
 		return STATIC_BENIGN_INFERENCING
 	}
@@ -133,7 +131,9 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			}
 			return eval
 		} else {
-			log.Println("The inference model is not required for the dns features due to the benign tld host domain")
+			if direction {
+				log.Println("The inference model is not required for the dns features due to the benign tld host domain")
+			}
 			return true
 		}
 	default:

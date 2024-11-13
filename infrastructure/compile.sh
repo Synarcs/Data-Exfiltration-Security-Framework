@@ -30,6 +30,8 @@ sudo apt update -y && sudo apt install -y \
     libdebuginfod-dev \
     bison \
     flex \
+    libtool \
+    protobuf-compiler \
     libcurl4-openssl-dev \
     libedit-dev \
     

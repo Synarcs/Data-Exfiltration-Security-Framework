@@ -197,29 +197,32 @@ func CheckMxTxtNullRecordInQuestions(dns_packet *layers.DNS, features []DNSFeatu
 	return false
 }
 
-func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
+func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Answers {
 		dns_query_labels := strings.Split(string(payload.Name), ".")
+		feature := DNSFeatures{}
 		if len(dns_query_labels) > 2 {
-			features[i].Periods = len(dns_query_labels) - 1                                      // total dots
-			features[i].PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
-			features[i].TotalChars = len(payload.Name) - features[i].Periods
-			features[i].TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
+			feature.Periods = len(dns_query_labels) - 1                                      // total dots
+			feature.PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
+			feature.TotalChars = len(payload.Name) - feature.Periods
+			feature.TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
 			ucount, _, ncount := DomainVarsCount(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
-			features[i].NumberCount = ncount
-			features[i].UCaseCount = ucount
-			features[i].Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
+			feature.NumberCount = ncount
+			feature.UCaseCount = ucount
+			feature.Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
 
-			features[i].Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
-			features[i].PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+			feature.Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
+			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
 			mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
-			features[i].LongestLabelDomain = mx_len
-			features[i].AverageLabelLength = avgLen
-			features[i].IsEgress = false
+			feature.LongestLabelDomain = mx_len
+			feature.AverageLabelLength = avgLen
+			feature.IsEgress = false
 
-			features[i].Fqdn = string(payload.Name)
-			mrsh, _ := json.Marshal(features[i])
+			feature.Fqdn = string(payload.Name)
+			feature.Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
+			features = append(features, feature)
+			mrsh, _ := json.Marshal(features)
 
 			if utils.DEBUG {
 				log.Println(mrsh)
@@ -229,7 +232,7 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 	return features, nil
 }
 
-func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
+func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Authorities {
 		if payload.Type == layers.DNSTypeSOA || payload.Type == layers.DNSTypeOPT {
 			continue
@@ -239,7 +242,7 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool,
 		if len(dns_query_labels) > 2 {
 			feature.Periods = len(dns_query_labels) - 1                                      // total dots
 			feature.PeriodsInSubDomain = len(dns_query_labels[:len(dns_query_labels)-2]) - 1 // the kernel wount allow non tld to be redirected to user space
-			feature.TotalChars = len(payload.Name) - features[i].Periods
+			feature.TotalChars = len(payload.Name) - feature.Periods
 			feature.TotalCharsInSubdomain = len(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
 
 			ucount, _, ncount := DomainVarsCount(strings.Join(dns_query_labels[:len(dns_query_labels)-2], ""))
@@ -259,14 +262,16 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool,
 			feature.IsEgress = isEgress
 
 			features = append(features, feature)
-			mrsh, _ := json.Marshal(features[i])
-			fmt.Println(string(mrsh))
+			mrsh, _ := json.Marshal(feature)
+			if utils.DEBUG {
+				fmt.Println(string(mrsh))
+			}
 		}
 	}
 	return features, nil
 }
 
-func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool, i int) ([]DNSFeatures, error) {
+func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Additionals {
 		// TODOD: An additional record with non standard OPT type or EDNS
 		var feature DNSFeatures
@@ -292,8 +297,11 @@ func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress
 
 			feature.Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
 			features = append(features, feature)
-			mrsh, _ := json.Marshal(features[i])
-			fmt.Println(string(mrsh))
+			mrsh, _ := json.Marshal(feature)
+
+			if utils.DEBUG {
+				fmt.Println(string(mrsh))
+			}
 		}
 	}
 	return features, nil
@@ -314,7 +322,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	if isEgress {
 		features = make([]DNSFeatures, dns_packet.QDCount)
 	} else {
-		features = make([]DNSFeatures, dns_packet.ANCount)
+		features = make([]DNSFeatures, 0)
 	}
 
 	if len(dns_packet.Questions) > 0 && isEgress {
@@ -323,23 +331,20 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	}
 
 	if len(dns_packet.Answers) > 0 && isIngress {
-		features, _ = ParseDnsAnswers(dns_packet, features, isEgress, i)
-		i += len(features)
+		features, _ = ParseDnsAnswers(dns_packet, features, isEgress)
 	}
 
 	// used for mdns and edns based parsing when addon dns querstios are passed
 	//  the malware can send more malicious information in the addon section to bypass detection
-	if len(dns_packet.Additionals) > 0 && (isIngress || isEgress) {
-		features, _ = ParseDnsAdditional(dns_packet, features, isEgress, i)
-		i += len(features)
+	if len(dns_packet.Additionals) > 0 && (isIngress || isEgress) && false {
+		features, _ = ParseDnsAdditional(dns_packet, features, isEgress)
 	}
 
-	if len(dns_packet.Authorities) > 0 && isEgress {
-		features, _ = ParseDnsAuth(dns_packet, features, isEgress, i)
-		i += len(features)
+	if len(dns_packet.Authorities) > 0 && isEgress && false {
+		features, _ = ParseDnsAuth(dns_packet, features, isEgress)
 	}
 
-	if !utils.DEBUG {
+	if !utils.DEBUG && isEgress {
 		log.Println("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
 		for _, feature := range features {
 			mrsh, _ := json.Marshal(feature)
