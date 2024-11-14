@@ -3,6 +3,7 @@
 
 # In[1]:
 
+
 from typing import Any
 import pandas as pd 
 import os, time 
@@ -16,12 +17,12 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc, classification_report, precision_recall_curve, confusion_matrix
 from keras import Sequential, layers
-from keras.optimizers import Adam
 import tf2onnx, onnx, keras 
-import math, re , requests as rq 
 
 
 # In[2]:
+
+
 GPU: Any = tf.config.list_logical_devices("GPU")
 if len(GPU) > 0:
     print(f'training the model on GPU {GPU} {tf.config.list_logical_devices("GPU")}')
@@ -31,6 +32,8 @@ else:
 
 
 # In[3]:
+
+
 def calculate_entropy(domain: str) -> float:
     prob = pd.Series(list(domain)).value_counts(normalize=True)
     entropy = -np.sum(prob * np.log2(prob))
@@ -62,6 +65,13 @@ combined_columns = [
     "domain", "subdomain", "total_dots", "total_dots_subdomain", "total_chars", "total_chars_subdomain", "number", 
     "upper", "lower", "special", "labels", "max_label_length", "labels_average", "entropy", "attack"
 ]
+
+
+# ### Benign dataset feature extract 
+# 
+
+# In[55]:
+
 
 def process(data, id):
     chunk = data[data['attack'] == False]
@@ -97,8 +107,21 @@ def process(data, id):
         
     id += 1
     chunk.to_csv(out, mode='a', header=False, index=False)
+            # table = plt.table(cellText=desc.values, 
+            #                  colLabels=desc.columns, 
+            #                  rowLabels=desc.index, 
+            #                  cellLoc='center', 
+            #                  loc='center')
+        
+            # table.scale(2.5, 2.5) 
+            # table.auto_set_font_size(True)
+            # table.set_fontsize(30)
+        
+
 
 # In[25]:
+
+
 def process_mal(data, id):
     chunk = data[data['attack'] == True]
 
@@ -176,8 +199,25 @@ def process_mal_sync(chunk):
         
     # print(chunk.head())
     chunk.to_csv(out, mode='a', header=False, index=False)
+            # table = plt.table(cellText=desc.values, 
+            #                  colLabels=desc.columns, 
+            #                  rowLabels=desc.index, 
+            #                  cellLoc='center', 
+            #                  loc='center')
+        
+            # table.scale(2.5, 2.5) 
+            # table.auto_set_font_size(True)
+            # table.set_fontsize(30)
+        
+
+
+# ### Cisco Top 1 million dataset
+
+# In[41]:
+
 
 ### only keep this for vis the node agent in user space in go has parallel I/O over this we dont need this in ds 
+
 path = os.path.join(os.getcwd(),'datasets', 'top-1m.csv')
 data = pd.read_csv(path, chunksize= 10_000, names=column_names,delimiter=",")
 
@@ -340,6 +380,7 @@ test_data = train_dataset.skip(train_batches)
 # In[7]:
 
 
+from keras.optimizers import Adam
 
 strategy = tf.distribute.MirroredStrategy()
 
@@ -382,6 +423,10 @@ print(f"Test Recall: {recall:.4f}")
 
 
 # In[32]:
+
+
+import math
+import re
 
 def getFeatureDomain(vec: str):
     total_dots = vec.count('.')
