@@ -55,6 +55,14 @@ type RawDnsEvent struct {
 	Tld  string
 }
 
+type TunnelSocketEvent struct {
+	ProcessId     uint32
+	Userid        uint32
+	GroupId       uint32
+	ThreadGroupId uint32
+	ProcessName   string
+}
+
 var (
 	// round trip latency effect for benigh traffic interaction from kernel to user space
 	dnsRoundTripTime_metric = prometheus.NewHistogram(
@@ -107,10 +115,10 @@ var (
 			Help: "The malicious detected dns packet",
 		},
 		[]string{
-			"Fqdn", "Tld", "TotalChars", "TotalCharsInSubdomain",
-			"NumberCount", "UCaseCount", "LCaseCount", "Entropy",
+			"Fqdn", "Tld", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
+			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
-			"AverageLabelLength", "IsEgress",
+			"AverageLabelLength", "IsEgress", "AuthZoneSoaservers",
 		},
 	)
 	sniffedDnsEvent = prometheus.NewGaugeVec(
@@ -120,6 +128,19 @@ var (
 		},
 		[]string{
 			"fqdn", "tld", "time",
+		},
+	)
+
+	maliciosu_tunnel_socket = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "malicious_tunnel_socket_net_device",
+			Help: "the malicious tunnel socket net device",
+		}, []string{
+			"process_id",
+			"user_id",
+			"group_id",
+			"threat_group_id",
+			"prog_name",
 		},
 	)
 )
@@ -190,6 +211,8 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"tld":  e.Tld,
 			"time": time.Now().GoString(),
 		}).Set(1.21)
+	case TunnelSocketEvent:
+		return nil
 	default:
 		return fmt.Errorf("unsupported event type: %T", e)
 	}
@@ -201,21 +224,29 @@ func ExportMaliciousEvents(feature DNSFeatures) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
 	}
+	labels := prometheus.Labels{
+		"Fqdn":                  feature.Fqdn,
+		"Tld":                   feature.Tld,
+		"Subdomain":             feature.Subdomain,
+		"TotalChars":            strconv.Itoa(feature.TotalChars),
+		"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),
+		"NumberCount":           strconv.Itoa(feature.NumberCount),
+		"UCaseCount":            strconv.Itoa(feature.UCaseCount),
+		"Entropy":               strconv.FormatFloat(float64(feature.Entropy), 'f', -1, 64),
+		"Periods":               strconv.Itoa(feature.Periods),
+		"PeriodsInSubDomain":    strconv.Itoa(feature.PeriodsInSubDomain),
+		"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
+		"AverageLabelLength":    strconv.FormatFloat(float64(feature.AverageLabelLength), 'f', -1, 64),
+		"IsEgress":              strconv.FormatBool(feature.IsEgress),
+	}
+	if feature.AuthZoneSoaservers == nil {
+		labels["AuthZoneSoaservers"] = ""
+	} else {
+		labels["AuthZoneSoaservers"] = fmt.Sprintf("%s", feature.AuthZoneSoaservers)
+	}
 	maliciousdetectedDnsPacket.With(
-		prometheus.Labels{
-			"Fqdn":                  feature.Fqdn,
-			"Tld":                   feature.Tld,
-			"TotalChars":            strconv.Itoa(feature.TotalChars),
-			"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),
-			"NumberCount":           strconv.Itoa(feature.NumberCount),
-			"UCaseCount":            strconv.Itoa(feature.UCaseCount),
-			"Entropy":               strconv.FormatFloat(float64(feature.Entropy), 'f', -1, 64),
-			"PeriodsInSubDomain":    strconv.Itoa(feature.PeriodsInSubDomain),
-			"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
-			"AverageLabelLength":    strconv.FormatFloat(float64(feature.AverageLabelLength), 'f', -1, 64),
-			"IsEgress":              strconv.FormatBool(feature.IsEgress),
-		},
-	).Set(float64(feature.TotalChars))
+		labels,
+	).Set(float64(feature.Entropy))
 	return nil
 }
 

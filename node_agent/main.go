@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
-	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
@@ -25,6 +25,7 @@ import (
 func main() {
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
 	flag.Bool("debug", false, "Run the Node Agent in debug mode")
+	flag.Bool("streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
@@ -71,7 +72,10 @@ func main() {
 	}
 
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
-	ingress := xdp.GenerateTcIngressFactory(iface, model)
+	ingress := xdp.GenerateXDPIngressFactory(iface, model)
+
+	// all factory maps for the loaded kprobes by the ebpf Node Agent
+	kprobe := kprobe.GenerateKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
@@ -80,8 +84,8 @@ func main() {
 	// add the kernel sock map
 
 	tunnelSocketEventHandler := make(chan bool)
-	go tcl.ProcessTunnelEvent(&iface, tunnelSocketEventHandler)
-	go tcl.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
+	go kprobe.ProcessTunnelEvent(&ctx, &iface, tunnelSocketEventHandler, &tc)
+	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer()
 
@@ -140,10 +144,10 @@ func main() {
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
-		tc.DetachHandlerBridge(&ctx)
-		tc.DetachHandlerTunTap(&ctx)
+		tc.DetachHandlerBridge(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
+		tc.IsLinkPppLinkAttached(&ctx)
 
-		tcl.DetachSockHandler()
+		kprobe.DetachSockHandler()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 

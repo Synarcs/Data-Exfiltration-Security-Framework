@@ -35,7 +35,8 @@ sudo apt update -y && sudo apt install -y \
     libcurl4-openssl-dev \
     libedit-dev \
     
-
+sudo apt install -y \
+    libssl-dev libncurses5-dev libsqlite3-dev libreadline-dev libtk8.6 libgdm-dev libpcap-dev
 
 sudo apt-get install libffi-dev \
     libncursesw5-dev libssl-dev \

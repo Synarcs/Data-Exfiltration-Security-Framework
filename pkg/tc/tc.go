@@ -54,7 +54,7 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel)
 	}
 }
 
-func (tc *TCHandler) ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
+func ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
 	spec, err := ebpf.LoadCollectionSpec(ebpfProgCode)
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+	handler, err := ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
 		panic(err.Error())

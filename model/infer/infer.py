@@ -1,5 +1,6 @@
 #/usr/bin/python3
 
+import signal
 import onnxruntime as ort
 import numpy as np
 import os , asyncio 
@@ -7,6 +8,10 @@ import math
 
 model = '../model/dns_sec.onnx'
 session = ort.InferenceSession(model) 
+
+if not os.path.exists(model):
+    print('the required trained onnx model not found')
+    os.exit(signal.SIGKILL) 
 
 input_name = session.get_inputs()[0].name
 output_name = session.get_outputs()[0].name

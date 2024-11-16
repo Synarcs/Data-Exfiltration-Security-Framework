@@ -190,20 +190,24 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
-func (iface *NetIface) VerifyNewNetlinkPppSockets() {
+func (iface *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
 	links, _ := netlink.LinkList()
 	for _, link := range links {
 		_, fd := iface.LinkMap[link.Attrs().Name]
 		if !fd {
 			flags := link.Attrs().Flags
-			fmt.Println("the kernel link flags are ", flags)
+			if utils.DEBUG {
+				fmt.Println("the kernel link flags are ", flags)
+			}
 			if strings.Contains(flags.String(), "pointtopoint") {
 				// attach the ppp socket tc hooks inside kernel
 				log.Println("ppp socket detected attaching tc hooks", link.Attrs().Name, link.Attrs().Index)
+				return link
 			}
 			iface.LinkMap[link.Attrs().Name] = true
 		}
 	}
+	return nil
 }
 
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {

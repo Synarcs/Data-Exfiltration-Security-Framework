@@ -18,11 +18,15 @@ struct exfil_security_detected_c2c_tunneling_netlink_sock_event {
     __uint(max_entries, 1 << 12);
 } exfil_security_detected_c2c_tunneling_netlink_sock_event SEC(".maps");
 
+static const __u8 MAX_PROC_COMM_SIZE = 200;
+
 struct event_setSockEvent {
     __u32 process_id;
     __u32 uid;
-    char prog[200];
-};
+    __u32 gid;
+    __u32 tgid;
+    char prog[MAX_PROC_COMM_SIZE];
+} __attribute__((packed));
 
 struct socket_args {
     unsigned long  pad;
@@ -30,7 +34,7 @@ struct socket_args {
     unsigned int family;
     unsigned int type;
     unsigned int protocol;
-};
+} __attribute__((packed));;
 
 // replace raw af_netlink socket with custom tun/tap ioctl fd tracking in the kernel 
 // tracepoint/syscalls/sys_enter_socket
@@ -45,7 +49,9 @@ int netlink_socket() {
     }
     struct event_setSockEvent event = (struct event_setSockEvent) {
         .process_id = bpf_get_current_pid_tgid() >> 32,
+        .tgid = bpf_get_current_pid_tgid() & 0xFFFFFFFF,
         .uid = bpf_get_current_uid_gid() >> 32,
+        .gid = bpf_get_current_uid_gid() & 0xFFFFFFFF, 
     };
     if (
         bpf_get_current_comm(&event.prog, sizeof(event.prog)) == 0

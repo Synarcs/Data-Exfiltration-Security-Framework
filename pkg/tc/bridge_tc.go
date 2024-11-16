@@ -2,7 +2,6 @@ package tc
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -83,7 +82,7 @@ func (tc *TCHandler) TcHandlerEbfpProgBridge(ctx *context.Context, iface *netine
 		log.Printf("The ebpf node agent cannot reserve memory to load the ebpf program in kernel %+v", err)
 	}
 
-	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_BRIDGE_NETIFACE_INT)
+	handler, err := ReadEbpfFromSpec(ctx, TC_EGRESS_BRIDGE_NETIFACE_INT)
 
 	if err != nil {
 		log.Printf("Error loading the ebpf program for tc ingress bridge %+v", err)
@@ -121,7 +120,7 @@ func (tc *TCHandler) DetachHandlerBridge(ctx *context.Context) error {
 			},
 		})
 		if err != nil {
-			fmt.Println("No Matching clsact desc found to delete")
+			log.Println("No Matching Br  CLSACT Qdisc found the bridge program is not loaded possibly ... ")
 		}
 	}
 	return nil

@@ -1,18 +1,22 @@
-package tc
+package kprobe
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/cilium/ebpf/rlimit"
 )
 
 type KernelNetlinkSocket struct {
@@ -21,23 +25,49 @@ type KernelNetlinkSocket struct {
 	ProcessInfo [200]byte
 }
 
-func ProcessTunnelEvent(iface *netinet.NetIface, eventChannel chan bool) {
+type NetKProbes struct {
+	NetlinkSocket     *ebpf.Program
+	NetlinkSupportMap *ebpf.Map
+	KprobelLink       link.Link
+}
+
+func GenerateKprobeEventFactory() *NetKProbes {
+	return &NetKProbes{}
+}
+
+func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
+	iface *netinet.NetIface, eventChannel chan bool, tc *tc.TCHandler) {
 	for {
 		select {
 		case <-eventChannel:
 			if utils.DEBUG {
 				log.Println("Tunnel interface received command from channel")
 			}
-			iface.VerifyNewNetlinkPppSockets()
+			if tunnelInterface := iface.FetchNewNetlinkPppSocket(); tunnelInterface == nil {
+				// attach the kernel hook over encap tuntap interface for DPI in kernel
+			} else {
+				if err := tc.AttachTcProgramTunTap(
+					ctx,
+					tunnelInterface.Attrs().Name,
+				); err != nil {
+					log.Println("error attaching the kernel dynamic tunneling ebpf for tunnel interface")
+				}
+			}
 		default:
 			time.Sleep(time.Millisecond)
 		}
 	}
+
 }
 
-func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool) error {
+func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool) error {
 	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
-	handler, err := ebpf.LoadCollectionSpec(SOCK_TUNNEL_CODE_EBPF)
+
+	if err := rlimit.RemoveMemlock(); err != nil {
+		panic(err.Error())
+	}
+
+	handler, err := ebpf.LoadCollectionSpec(tc.SOCK_TUNNEL_CODE_EBPF)
 
 	if err != nil {
 		log.Fatal("error loading the xdp program over interface")
@@ -53,6 +83,9 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool)
 		panic(err.Error())
 	}
 
+	k.NetlinkSocket = objs.NetlinkSocket
+	k.NetlinkSupportMap = objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent
+
 	// "tracepoint/syscalls/sys_enter_socket"
 	//  Kernel Tracepoint for socket syscall for an open socket fd inside kernel of AF_FAMILY AF_NETLINK
 	sockettp, err := link.Kprobe("tun_chr_open", objs.NetlinkSocket, nil)
@@ -60,6 +93,8 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool)
 		log.Fatal("error loading the kprobe program over sys_enter sock")
 		return err
 	}
+
+	k.KprobelLink = sockettp
 
 	defer objs.NetlinkSocket.Close()
 	defer objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent.Close()
@@ -126,6 +161,16 @@ func AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool)
 	}
 }
 
-func DetachSockHandler() error {
+func (k *NetKProbes) DetachSockHandler() error {
+	if k.NetlinkSocket == nil {
+		log.Println("Cannot call raw detach before the required kprobe is first attached in kernel")
+		return fmt.Errorf("Delete of Kprobe from a non attached Kprobe Object over Tunner / io Driver")
+	}
+
+	if err := k.KprobelLink.Close(); err != nil {
+		log.Printf("Error detaching the Kprobe for Kernel hooks over netfilter %+v", err)
+		return err
+
+	}
 	return nil
 }

@@ -16,7 +16,7 @@ func (tc *TCHandler) AttachTcProgramTunTap(ctx *context.Context, interfaceName s
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
 	}
-	handler, err := tc.ReadEbpfFromSpec(ctx, TC_EGRESS_TUNNEL_NETIFACE_INT) // the tuntap handler interface
+	handler, err := ReadEbpfFromSpec(ctx, TC_EGRESS_TUNNEL_NETIFACE_INT) // the tuntap handler interface
 
 	if err != nil {
 		return err
@@ -49,25 +49,28 @@ func (tc *TCHandler) AttachTcProgramTunTap(ctx *context.Context, interfaceName s
 	return nil
 }
 
-func (tc *TCHandler) DetachHandlerTunTap(ctx *context.Context) error {
-
+func (tc *TCHandler) IsLinkPppLinkAttached(ctx *context.Context) {
 	for _, link := range tc.Interfaces.Links {
-		flags := link.Attrs().Flags
-		if strings.Contains(flags.String(), "pointtopoint") {
-			// attach the ppp socket tc hooks inside kernel
-
-			err := netlink.QdiscDel(&netlink.Clsact{
-				QdiscAttrs: netlink.QdiscAttrs{
-					LinkIndex: link.Attrs().Index,
-					Parent:    netlink.HANDLE_CLSACT,
-					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
-				},
-			})
-			if err != nil {
-				fmt.Println("No Matching clsact desc found to delete")
+		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
+			// deteach the present added kernel tuntap interface
+			if err := tc.DetachHandlerTunTap(ctx, link); err != nil {
+				log.Printf("Error detaching the Netlink Attached Socket event %+v", err)
 			}
-			log.Println("Successfully Removed the Traffic control from the interface ", link.Attrs().Name)
 		}
+	}
+}
+
+func (tc *TCHandler) DetachHandlerTunTap(ctx *context.Context, link netlink.Link) error {
+	log.Println("Detaching the Attached PPP links found and their dynamically loaded eBPF program in kernel for DPI")
+	err := netlink.QdiscDel(&netlink.Clsact{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: link.Attrs().Index,
+			Parent:    netlink.HANDLE_CLSACT,
+			Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+		},
+	})
+	if err != nil {
+		fmt.Println("No Matching clsact desc found to delete")
 	}
 
 	return nil

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -23,17 +21,15 @@ import (
 )
 
 type IngressSniffHandler struct {
-	IfaceHandler             *netinet.NetIface
-	Ctx                      context.Context
-	OnnxModel                *model.OnnxModel
-	DnsFeatures              *model.DNSFeatures
-	DnsPacketGen             *model.DnsPacketGen
-	InferenceHttpClient      *http.Client
-	InferenceTransportSocket net.Conn
+	IfaceHandler *netinet.NetIface
+	Ctx          context.Context
+	OnnxModel    *model.OnnxModel
+	DnsFeatures  *model.DNSFeatures
+	DnsPacketGen *model.DnsPacketGen
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcIngressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) IngressSniffHandler {
+func GenerateXDPIngressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) IngressSniffHandler {
 	return IngressSniffHandler{
 		IfaceHandler: &iface,
 		DnsPacketGen: model.GenerateDnsParserModelUtils(&iface, onnxModel),
@@ -50,12 +46,20 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 			// pass all the 8 features which define the input layer for the inference in the onnx model
 			Features: features,
 		}
+		// layer 7 markup over layer 4 unix transport
+		ingressClient, _, err := model.GetInferenceUnixClient(false)
+
+		if err != nil {
+			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+			return err
+		}
+
 		// need this over multiplex transport layer 7 transport
 		requestPayload, err := json.Marshal(inferRequest)
 		if err != nil {
 			log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
 		}
-		resp, err := ing.InferenceHttpClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
+		resp, err := ingressClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
 		if err != nil {
 			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
 			return err
@@ -81,6 +85,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 		for index, resp := range inferenceResponse.ThreatType {
 			if resp {
 				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
+				go events.ExportMaliciousEvents(events.DNSFeatures(rawFeatures[index]))
 			}
 		}
 	}
@@ -196,17 +201,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 	var errorChannel chan error = make(chan error)
 	log.Println("Sniffing Ingress traffic for potential malicious remote C@C commands")
-
-	// layer 7 markup over layer 4 unix transport
-	ingressClient, ingressConn, err := model.GetInferenceUnixClient(false)
-
-	ing.InferenceHttpClient = ingressClient
-	ing.InferenceTransportSocket = ingressConn
-
-	if err != nil {
-		log.Println("the remote ingress socket for inference is not available")
-		panic(err.Error())
-	}
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
