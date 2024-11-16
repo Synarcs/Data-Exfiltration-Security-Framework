@@ -85,7 +85,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 		for index, resp := range inferenceResponse.ThreatType {
 			if resp {
 				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
-				go events.ExportMaliciousEvents(events.DNSFeatures(rawFeatures[index]))
+				go events.ExportMaliciousEvents(events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4)
 			}
 		}
 	}

@@ -37,6 +37,7 @@
         "sched.h": "c",
         "if_vlan.h": "c",
         "if_packet.h": "c",
-        "if_tun.h": "c"
+        "if_tun.h": "c",
+        "icmp.h": "c"
     }
 }

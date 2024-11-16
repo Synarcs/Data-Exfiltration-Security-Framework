@@ -53,6 +53,9 @@ type NetIface struct {
 
 	PhysicalRouterGatewayV4 net.IP
 	PhysicalRouterGatewayV6 net.IP
+
+	PhysicalNodeBridgeIpv4 net.IP
+	PhysicalNodeBridgeIpv6 net.IP
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -184,8 +187,16 @@ func (nf *NetIface) ReadRoutes() error {
 		nf.AddrV4[link.Attrs().Name] = addr
 		nf.RoutesV4[link.Attrs().Name] = routes
 
+		if len(addr) > 0 {
+			nf.PhysicalNodeBridgeIpv4 = addr[0].IP
+		}
+
 		nf.AddrV6[link.Attrs().Name] = addrv6
 		nf.RoutesV6[link.Attrs().Name] = routesv6
+
+		if len(addrv6) > 0 {
+			nf.PhysicalNodeBridgeIpv6 = addrv6[0].IP
+		}
 	}
 	return nil
 }
@@ -208,6 +219,21 @@ func (iface *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
 		}
 	}
 	return nil
+}
+
+// in case if node agent crash and hte tunnel iface tuntap point to point is loaded in kernel
+func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
+	links, _ := netlink.LinkList()
+	var tunnelLinks []netlink.Link = make([]netlink.Link, 0)
+
+	for _, link := range links {
+		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
+			log.Println("Found a tunnel link ", link.Attrs().Name, "  ", link.Attrs().MTU)
+			tunnelLinks = append(tunnelLinks, link)
+		}
+	}
+
+	return tunnelLinks
 }
 
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {

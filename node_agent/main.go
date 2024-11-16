@@ -17,7 +17,7 @@ import (
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
+	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
@@ -64,7 +64,7 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc := tc.GenerateTcEgressFactory(iface, model)
+	tc := tcl.GenerateTcEgressFactory(iface, model)
 
 	config := make(chan interface{})
 	rpcServer := rpc.NodeAgentService{
@@ -81,8 +81,10 @@ func main() {
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
 	go tc.TcHandlerEbfpProgBridge(&ctx, &iface)
 
-	// add the kernel sock map
+	// process pre default boot interfaces of type tunnels loaded pre in kernel
+	go tcl.VerifyTunnelNetDevicesOnBoot(&ctx, &tc, &iface)
 
+	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan bool)
 	go kprobe.ProcessTunnelEvent(&ctx, &iface, tunnelSocketEventHandler, &tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)

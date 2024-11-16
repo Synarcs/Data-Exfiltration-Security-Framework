@@ -6,11 +6,25 @@ import (
 	"log"
 	"strings"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
 )
+
+func VerifyTunnelNetDevicesOnBoot(ctx *context.Context, tc *TCHandler, iface *netinet.NetIface) error {
+
+	tunnelNetDev := iface.FindTunnelLinksOnBootUp()
+	if len(tunnelNetDev) > 1 {
+		for _, tunn := range tunnelNetDev {
+			go tc.AttachTcProgramTunTap(ctx, tunn.Attrs().Name)
+		}
+	} else if len(tunnelNetDev) == 1 {
+		tc.AttachTcProgramTunTap(ctx, tunnelNetDev[0].Attrs().Name)
+	}
+	return nil
+}
 
 func (tc *TCHandler) AttachTcProgramTunTap(ctx *context.Context, interfaceName string) error {
 	if err := rlimit.RemoveMemlock(); err != nil {

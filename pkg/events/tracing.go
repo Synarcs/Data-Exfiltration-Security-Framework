@@ -1,6 +1,7 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
@@ -118,7 +120,8 @@ var (
 			"Fqdn", "Tld", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
-			"AverageLabelLength", "IsEgress", "AuthZoneSoaservers",
+			"AverageLabelLength", "IsEgress", "AuthZoneSoaservers", "PhysicalNodeIpv4",
+			"Protocol",
 		},
 	)
 	sniffedDnsEvent = prometheus.NewGaugeVec(
@@ -220,14 +223,33 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 	return nil
 }
 
-func ExportMaliciousEvents(feature DNSFeatures) error {
+func SanatizeRune(value []byte) string {
+	if utf8.Valid(value) {
+		return string(value)
+	}
+	var buffer bytes.Buffer
+	for len(value) > 0 {
+		r, size := utf8.DecodeRune(value)
+		if r == utf8.RuneError && size == 1 {
+			buffer.WriteString(fmt.Sprintf("\\x%02x", value[0]))
+			value = value[1:]
+		} else {
+			buffer.WriteRune(r)
+			value = value[size:]
+		}
+	}
+	return buffer.String()
+}
+
+func ExportMaliciousEvents(feature DNSFeatures, nodeIp *net.IP) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
 	}
+
 	labels := prometheus.Labels{
-		"Fqdn":                  feature.Fqdn,
-		"Tld":                   feature.Tld,
-		"Subdomain":             feature.Subdomain,
+		"Fqdn":                  SanatizeRune([]byte(feature.Fqdn)),
+		"Tld":                   SanatizeRune([]byte(feature.Tld)),
+		"Subdomain":             SanatizeRune([]byte(feature.Subdomain)),
 		"TotalChars":            strconv.Itoa(feature.TotalChars),
 		"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),
 		"NumberCount":           strconv.Itoa(feature.NumberCount),
@@ -238,11 +260,18 @@ func ExportMaliciousEvents(feature DNSFeatures) error {
 		"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
 		"AverageLabelLength":    strconv.FormatFloat(float64(feature.AverageLabelLength), 'f', -1, 64),
 		"IsEgress":              strconv.FormatBool(feature.IsEgress),
+		"Protocol":              "DNS",
 	}
 	if feature.AuthZoneSoaservers == nil {
 		labels["AuthZoneSoaservers"] = ""
 	} else {
 		labels["AuthZoneSoaservers"] = fmt.Sprintf("%s", feature.AuthZoneSoaservers)
+	}
+
+	if nodeIp != nil {
+		labels["PhysicalNodeIpv4"] = nodeIp.String()
+	} else {
+		labels["PhysicalNodeIpv4"] = "" // error in local service lookup for ipv4 vnet lookup
 	}
 	maliciousdetectedDnsPacket.With(
 		labels,

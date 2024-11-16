@@ -8,6 +8,7 @@
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/udp.h>
+#include <linux/icmp.h>
 #include <linux/tcp.h>
 #include <linux/netfilter/nfnetlink.h>
 #include <linux/bpf.h>
@@ -465,6 +466,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (c2c_check.drop) return MALICIOUS;
                 if (!c2c_check.deep_scan_mirror && !c2c_check.drop) return BENIGN;
             }
+
             return parse_dns_qeury_type_section(skb, query_class, qtypes);
         }
      }else return SUSPICIOUS;

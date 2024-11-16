@@ -89,7 +89,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
-		ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
@@ -129,14 +129,12 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if !isBenign {
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
 		// add the tld and domain information in packet malicious map for local cache
-		if isEgress {
-			if len(features) > 1 {
-				for _, feature := range features {
-					go events.ExportMaliciousEvents(events.DNSFeatures(feature))
-				}
-			} else if len(features) == 1 {
-				events.ExportMaliciousEvents(events.DNSFeatures(features[0]))
+		if len(features) > 1 {
+			for _, feature := range features {
+				go events.ExportMaliciousEvents(events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
 			}
+		} else if len(features) == 1 {
+			events.ExportMaliciousEvents(events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
 		}
 		return nil
 	}
