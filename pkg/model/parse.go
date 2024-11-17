@@ -29,6 +29,7 @@ type DnsPacketGen struct {
 	SocketSendFd        *int
 	XdpSocketSendFd     *xdp.Socket
 	OnnxModel           *OnnxModel
+	StreamClient        *events.StreamProducer
 }
 
 type CombinedFeatures []DNSFeatures
@@ -90,6 +91,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
 		ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
+		// ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
@@ -132,9 +134,11 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		if len(features) > 1 {
 			for _, feature := range features {
 				go events.ExportMaliciousEvents(events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
+				go d.StreamClient.MarshallThreadEvent(feature)
 			}
 		} else if len(features) == 1 {
 			events.ExportMaliciousEvents(events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
+			d.StreamClient.MarshallThreadEvent(features[0])
 		}
 		return nil
 	}

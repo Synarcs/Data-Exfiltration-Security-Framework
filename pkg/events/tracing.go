@@ -43,13 +43,15 @@ type DNSFeatures struct {
 	LongestLabelDomain    int
 	AverageLabelLength    float32
 	IsEgress              bool
+	RecordType            string
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
 
 type MaliciousDetectedUserSpaceCount int
 
 type KernelPacketDropRedirectInterface interface {
-	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent | MaliciousDetectedUserSpaceCount
+	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
+		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket
 }
 
 type RawDnsEvent struct {
@@ -57,12 +59,12 @@ type RawDnsEvent struct {
 	Tld  string
 }
 
-type TunnelSocketEvent struct {
+type KernelNetlinkSocket struct {
 	ProcessId     uint32
-	Userid        uint32
+	Uid           uint32
 	GroupId       uint32
 	ThreadGroupId uint32
-	ProcessName   string
+	ProcessInfo   [200]byte
 }
 
 var (
@@ -120,7 +122,7 @@ var (
 			"Fqdn", "Tld", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
-			"AverageLabelLength", "IsEgress", "AuthZoneSoaservers", "PhysicalNodeIpv4",
+			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers", "PhysicalNodeIpv4",
 			"Protocol",
 		},
 	)
@@ -214,7 +216,7 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"tld":  e.Tld,
 			"time": time.Now().GoString(),
 		}).Set(1.21)
-	case TunnelSocketEvent:
+	case KernelNetlinkSocket:
 		return nil
 	default:
 		return fmt.Errorf("unsupported event type: %T", e)
@@ -260,6 +262,7 @@ func ExportMaliciousEvents(feature DNSFeatures, nodeIp *net.IP) error {
 		"LongestLabelDomain":    strconv.Itoa(feature.LongestLabelDomain),
 		"AverageLabelLength":    strconv.FormatFloat(float64(feature.AverageLabelLength), 'f', -1, 64),
 		"IsEgress":              strconv.FormatBool(feature.IsEgress),
+		"RecordType":            feature.RecordType,
 		"Protocol":              "DNS",
 	}
 	if feature.AuthZoneSoaservers == nil {

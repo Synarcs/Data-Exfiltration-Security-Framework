@@ -46,10 +46,10 @@ var (
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) TCHandler {
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreamProducer) TCHandler {
 	return TCHandler{
 		Interfaces:      &iface,
-		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel),
+		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
 		OnnxLoadedModel: onnxModel,
 	}
 }
@@ -141,7 +141,6 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 			}
 			log.Println("dns Event polled from kernel non standard port", event)
 		}
-		go tc.streamRedirectCountStatusPayload(event)
 	}
 }
 
@@ -319,18 +318,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}
 }
 
-func (tc *TCHandler) streamRedirectCountStatusPayload(payload interface{}) error {
-
-	events.StreamThreadEvents(struct {
-		Time    string
-		Payload interface{}
-	}{
-		Time:    time.Now().GoString(),
-		Payload: payload,
-	})
-	return nil
-}
-
 func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
@@ -418,8 +405,6 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 			return nil
 		}
 
-		// control plane event streaming via kafka / flink to a message broker
-		go tc.streamRedirectCountStatusPayload(&dnsLayer)
 	} else {
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
@@ -430,9 +415,6 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 
 			return nil
 		}
-
-		go tc.streamRedirectCountStatusPayload(&dnsLayer)
-		// TODO: ipv6 processing for the pacekt capture
 	}
 
 	isIpv6 := !isIpv4

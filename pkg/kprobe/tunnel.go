@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -20,9 +21,11 @@ import (
 )
 
 type KernelNetlinkSocket struct {
-	ProcessId   uint32
-	Uid         uint32
-	ProcessInfo [200]byte
+	ProcessId     uint32
+	Uid           uint32
+	GroupId       uint32
+	ThreadGroupId uint32
+	ProcessInfo   [200]byte
 }
 
 type NetKProbes struct {
@@ -139,6 +142,8 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 		}
+
+		go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](events.KernelNetlinkSocket(netlinkEvent))
 
 		if !utils.DEBUG {
 			log.Println("EBPF node agent detected new kernel tun tap link setup for tunnelling interface link via ioctl call")

@@ -34,7 +34,9 @@ sudo apt update -y && sudo apt install -y \
     protobuf-compiler \
     libcurl4-openssl-dev \
     libedit-dev \
-    
+    libsasl2-dev  \
+    librdkafka-dev
+
 sudo apt install -y \
     libssl-dev libncurses5-dev libsqlite3-dev libreadline-dev libtk8.6 libgdm-dev libpcap-dev
 

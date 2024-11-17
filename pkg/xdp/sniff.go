@@ -26,14 +26,18 @@ type IngressSniffHandler struct {
 	OnnxModel    *model.OnnxModel
 	DnsFeatures  *model.DNSFeatures
 	DnsPacketGen *model.DnsPacketGen
+	StreamClient *events.StreamProducer
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateXDPIngressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel) IngressSniffHandler {
+// TODO: Fix all the code redundancies
+func GenerateXDPIngressFactory(iface netinet.NetIface,
+	onnxModel *model.OnnxModel, streamClient *events.StreamProducer) IngressSniffHandler {
 	return IngressSniffHandler{
 		IfaceHandler: &iface,
-		DnsPacketGen: model.GenerateDnsParserModelUtils(&iface, onnxModel),
+		DnsPacketGen: model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
 		OnnxModel:    onnxModel,
+		StreamClient: streamClient,
 	}
 }
 
@@ -86,6 +90,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 			if resp {
 				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
 				go events.ExportMaliciousEvents(events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4)
+				go ing.StreamClient.MarshallThreadEvent(rawFeatures[index])
 			}
 		}
 	}

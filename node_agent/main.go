@@ -37,6 +37,8 @@ func main() {
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
 
+	ctx := context.Background()
+
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces()
@@ -52,6 +54,12 @@ func main() {
 		panic(err.Error())
 	}
 
+	streamProducer := &events.StreamProducer{}
+
+	if err := streamProducer.GenerateStreamKafkaProducer(&ctx); err != nil {
+		log.Println("The Remote Kafka stream broken not found for threat stream analytics continue...", err)
+	}
+
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
 	model, err := onnx.ConnectRemoteInferenceSocket(topDomains)
@@ -60,11 +68,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	ctx := context.Background()
-
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc := tcl.GenerateTcEgressFactory(iface, model)
+	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer)
 
 	config := make(chan interface{})
 	rpcServer := rpc.NodeAgentService{
@@ -72,7 +78,7 @@ func main() {
 	}
 
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
-	ingress := xdp.GenerateXDPIngressFactory(iface, model)
+	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer)
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
 	kprobe := kprobe.GenerateKprobeEventFactory()
@@ -150,6 +156,7 @@ func main() {
 		tc.IsLinkPppLinkAttached(&ctx)
 
 		kprobe.DetachSockHandler()
+		streamProducer.CloseStreamClient()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 

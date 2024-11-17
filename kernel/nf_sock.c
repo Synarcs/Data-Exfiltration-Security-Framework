@@ -18,7 +18,9 @@ struct exfil_security_detected_c2c_tunneling_netlink_sock_event {
     __uint(max_entries, 1 << 12);
 } exfil_security_detected_c2c_tunneling_netlink_sock_event SEC(".maps");
 
-static const __u8 MAX_PROC_COMM_SIZE = 200;
+#ifndef MAX_PROC_COMM_SIZE
+    #define MAX_PROC_COMM_SIZE 200 
+#endif 
 
 struct event_setSockEvent {
     __u32 process_id;

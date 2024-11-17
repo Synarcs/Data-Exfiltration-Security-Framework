@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/layers"
@@ -28,10 +29,12 @@ type DNSFeatures struct {
 	LongestLabelDomain    int
 	AverageLabelLength    float32
 	IsEgress              bool
+	RecordType            string
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
 
-func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *OnnxModel) *DnsPacketGen {
+func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface,
+	onnxModel *OnnxModel, streamClient *events.StreamProducer) *DnsPacketGen {
 	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
 
 	if err == nil {
@@ -43,6 +46,7 @@ func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *Onnx
 			XdpSocketSendFd:     xdpSocketFd,
 			SocketSendFd:        nil,
 			OnnxModel:           onnxModel,
+			StreamClient:        streamClient,
 		}
 	} else {
 		log.Println("Error Binding the XDP Socket Physical driver lacking support")
@@ -59,6 +63,7 @@ func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface, onnxModel *Onnx
 			SocketSendFd:        fd,
 			XdpSocketSendFd:     nil,
 			OnnxModel:           onnxModel,
+			StreamClient:        streamClient,
 		}
 	}
 }
@@ -157,6 +162,7 @@ func ParseDnsQuestions(dns_packet *layers.DNS, features []DNSFeatures, isEgress 
 		features[i].Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
 		features[i].Fqdn = string(payload.Name)
 		features[i].IsEgress = isEgress
+		features[i].RecordType = payload.Type.String()
 	}
 
 	singleQuery := len(dns_packet.Questions) == 1
@@ -221,6 +227,7 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 
 			feature.Fqdn = string(payload.Name)
 			feature.Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
+			feature.RecordType = payload.Type.String()
 			features = append(features, feature)
 			mrsh, _ := json.Marshal(features)
 
@@ -260,6 +267,7 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool)
 			feature.Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
 			feature.Fqdn = string(payload.Name)
 			feature.IsEgress = isEgress
+			feature.RecordType = payload.Type.String()
 
 			features = append(features, feature)
 			mrsh, _ := json.Marshal(feature)
@@ -296,6 +304,8 @@ func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress
 			feature.Fqdn = string(payload.Name)
 
 			feature.Entropy = Entropy(exclude_tld[:len(exclude_tld)-2])
+			feature.RecordType = payload.Type.String()
+
 			features = append(features, feature)
 			mrsh, _ := json.Marshal(feature)
 
