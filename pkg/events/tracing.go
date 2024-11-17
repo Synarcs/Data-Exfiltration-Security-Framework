@@ -51,12 +51,13 @@ type MaliciousDetectedUserSpaceCount int
 
 type KernelPacketDropRedirectInterface interface {
 	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
-		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket
+		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent
 }
 
 type RawDnsEvent struct {
-	Fqdn string
-	Tld  string
+	Fqdn     string
+	Tld      string
+	IsEgress bool
 }
 
 type KernelNetlinkSocket struct {
@@ -126,17 +127,18 @@ var (
 			"Protocol",
 		},
 	)
+	// dns event for bengin traffic transfer
 	sniffedDnsEvent = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "fqdn",
+			Name: "dns_traffic_metric_event",
 			Help: "the fqdns and tld information for dns event",
 		},
 		[]string{
-			"fqdn", "tld", "time",
+			"fqdn", "tld", "time", "isEgress",
 		},
 	)
 
-	maliciosu_tunnel_socket = prometheus.NewGaugeVec(
+	malicious_tunnel_socket = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "malicious_tunnel_socket_net_device",
 			Help: "the malicious tunnel socket net device",
@@ -212,10 +214,11 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 
 	case RawDnsEvent:
 		sniffedDnsEvent.With(prometheus.Labels{
-			"fqdn": e.Fqdn,
-			"tld":  e.Tld,
-			"time": time.Now().GoString(),
-		}).Set(1.21)
+			"fqdn":     e.Fqdn,
+			"tld":      e.Tld,
+			"time":     time.Now().GoString(),
+			"isEgress": strconv.FormatBool(e.IsEgress),
+		}).Set(float64(time.Now().Unix()))
 	case KernelNetlinkSocket:
 		return nil
 	default:

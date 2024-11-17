@@ -90,8 +90,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
-		ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
-		// ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		// ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
+		ipv4.DstIP = d.IfaceHandler.PhysicalNodeBridgeIpv4
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
@@ -141,6 +141,22 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			d.StreamClient.MarshallThreadEvent(features[0])
 		}
 		return nil
+	} else {
+		if len(features) > 1 {
+			for _, feature := range features {
+				go events.ExportPromeEbpfExporterEvents[events.RawDnsEvent](events.RawDnsEvent{
+					Fqdn:     feature.Fqdn,
+					Tld:      feature.Tld,
+					IsEgress: isEgress,
+				})
+			}
+		} else {
+			events.ExportPromeEbpfExporterEvents[events.RawDnsEvent](events.RawDnsEvent{
+				Fqdn:     features[0].Fqdn,
+				Tld:      features[0].Tld,
+				IsEgress: isEgress,
+			})
+		}
 	}
 
 	if utils.DEBUG {
