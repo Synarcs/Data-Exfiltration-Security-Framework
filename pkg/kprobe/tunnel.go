@@ -39,10 +39,14 @@ func GenerateKprobeEventFactory() *NetKProbes {
 }
 
 func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
-	iface *netinet.NetIface, eventChannel chan bool, tc *tc.TCHandler) {
+	iface *netinet.NetIface, eventChannel chan events.KernelNetlinkSocket, tc *tc.TCHandler) {
 	for {
 		select {
-		case <-eventChannel:
+		case netlinkEvent, ok := <-eventChannel:
+			if !ok {
+				log.Println("the tuntap receive event channle is closed ")
+				return
+			}
 			if utils.DEBUG {
 				log.Println("Tunnel interface received command from channel")
 			}
@@ -55,6 +59,8 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
 				); err != nil {
 					log.Println("error attaching the kernel dynamic tunneling ebpf for tunnel interface")
 				}
+
+				go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](netlinkEvent)
 			}
 		default:
 			time.Sleep(time.Millisecond)
@@ -63,7 +69,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
 
 }
 
-func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan bool) error {
+func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) error {
 	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -154,7 +160,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 			// dont monitor the node agent inteself
 			_, ok := netlinkKernelProcMap[int(netlinkEvent.ProcessId)]
 			if !ok {
-				produceChannel <- true
+				produceChannel <- events.KernelNetlinkSocket(netlinkEvent)
 				netlinkKernelProcMap[int(netlinkEvent.ProcessId)] = true
 				if utils.DEBUG {
 					log.Println("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent.ProcessId, netlinkEvent.ProcessInfo)

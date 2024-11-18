@@ -91,7 +91,7 @@ func main() {
 	go tcl.VerifyTunnelNetDevicesOnBoot(&ctx, &tc, &iface)
 
 	// add the kernel sock map
-	tunnelSocketEventHandler := make(chan bool)
+	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
 	go kprobe.ProcessTunnelEvent(&ctx, &iface, tunnelSocketEventHandler, &tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 

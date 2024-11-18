@@ -531,7 +531,7 @@ func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceH
 }
 
 func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
-	log.Println("Loading the Packet Capture over Socket DD")
+	log.Println("Loading the Egress Packet Capture over Custom Linux iface in network namespace")
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
 

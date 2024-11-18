@@ -91,7 +91,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
 		// ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
-		ipv4.DstIP = d.IfaceHandler.PhysicalNodeBridgeIpv4
+		ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
@@ -133,11 +133,11 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		// add the tld and domain information in packet malicious map for local cache
 		if len(features) > 1 {
 			for _, feature := range features {
-				go events.ExportMaliciousEvents(events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
+				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS)
 				go d.StreamClient.MarshallThreadEvent(feature)
 			}
 		} else if len(features) == 1 {
-			events.ExportMaliciousEvents(events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4)
+			events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS)
 			d.StreamClient.MarshallThreadEvent(features[0])
 		}
 		return nil
@@ -148,6 +148,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 					Fqdn:     feature.Fqdn,
 					Tld:      feature.Tld,
 					IsEgress: isEgress,
+					Protocol: events.Protocol(events.DNS),
 				})
 			}
 		} else {
@@ -155,6 +156,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				Fqdn:     features[0].Fqdn,
 				Tld:      features[0].Tld,
 				IsEgress: isEgress,
+				Protocol: events.Protocol(events.DNS),
 			})
 		}
 	}

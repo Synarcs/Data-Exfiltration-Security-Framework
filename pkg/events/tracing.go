@@ -48,6 +48,14 @@ type DNSFeatures struct {
 }
 
 type MaliciousDetectedUserSpaceCount int
+type Protocol string
+
+const (
+	DNS  Protocol = "DNS"
+	ICMP Protocol = "ICMP"
+	HTTP Protocol = "HTTP"
+	SMTP Protocol = "SMTP"
+)
 
 type KernelPacketDropRedirectInterface interface {
 	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
@@ -58,6 +66,7 @@ type RawDnsEvent struct {
 	Fqdn     string
 	Tld      string
 	IsEgress bool
+	Protocol Protocol
 }
 
 type KernelNetlinkSocket struct {
@@ -134,7 +143,7 @@ var (
 			Help: "the fqdns and tld information for dns event",
 		},
 		[]string{
-			"fqdn", "tld", "time", "isEgress",
+			"fqdn", "tld", "time", "isEgress", "protocol",
 		},
 	)
 
@@ -160,7 +169,8 @@ func init() {
 	prometheus.MustRegister(drop_event_metric, drop_event_metric_count,
 		redirect_event_metric, redirect_event_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
-		sniffedDnsEvent, dnsRoundTripTime_metric)
+		sniffedDnsEvent, dnsRoundTripTime_metric,
+		malicious_tunnel_socket)
 }
 
 func StartPrometheusMetricExporterServer() error {
@@ -218,6 +228,7 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"tld":      e.Tld,
 			"time":     time.Now().GoString(),
 			"isEgress": strconv.FormatBool(e.IsEgress),
+			"protocol": string(e.Protocol),
 		}).Set(float64(time.Now().Unix()))
 	case KernelNetlinkSocket:
 		return nil
@@ -246,7 +257,7 @@ func SanatizeRune(value []byte) string {
 	return buffer.String()
 }
 
-func ExportMaliciousEvents(feature DNSFeatures, nodeIp *net.IP) error {
+func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
 	}
@@ -279,6 +290,20 @@ func ExportMaliciousEvents(feature DNSFeatures, nodeIp *net.IP) error {
 	} else {
 		labels["PhysicalNodeIpv4"] = "" // error in local service lookup for ipv4 vnet lookup
 	}
+
+	switch protocol {
+	case T(DNS):
+		labels["Protocol"] = string(DNS)
+	case T(ICMP):
+		labels["Protocol"] = string(ICMP)
+	case T(SMTP):
+		labels["Protocol"] = string(SMTP)
+	case T(HTTP):
+		labels["Protocol"] = string(HTTP)
+	default:
+		labels["Protocol"] = string("")
+	}
+
 	maliciousdetectedDnsPacket.With(
 		labels,
 	).Set(float64(feature.Entropy))

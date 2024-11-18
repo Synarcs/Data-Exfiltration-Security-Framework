@@ -701,7 +701,8 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                             dns_payload, dns);
         if (__non_standard_port_dpi == 0) {
             // emit the ring buff from kernel as a transport event 
-            bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
+            if (DEBUG)
+                bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
             void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
                             sizeof(struct dns_non_standard_transport_event), 0);
             if (!res) {

@@ -16,8 +16,8 @@ p2p_kernel_out := tun.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
@@ -100,24 +100,28 @@ xdp-compile-x86:
 xdp-umount:
 	sudo umount /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp off 
-	sudo xdp-loader unload enp0s1 --all 
+	sudo xdp-loader unload enp0s1 -all 
 
 .PHONY: netlink
 netlink: 
+	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: netlink-x86 
 netlink-x86: 
+	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for amd64"
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 
 .PHONY: tc_tun 
 tc_tun:
+	@echo "Compiling the tunnel tc egress filter"
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc-tun-x86 
+	@echo "Compiling the tunnel tc egress filter for x86"
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
