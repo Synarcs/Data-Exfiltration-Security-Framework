@@ -15,6 +15,12 @@ type DPIRedirectionKernelMap struct {
 	Kernel_timets uint64
 }
 
+type RemoteStreamInferenceAnalyzed struct {
+	Fqdn        string
+	Tld         string
+	IsMalicious bool
+}
+
 // load the kernel config inside the kernel
 type ExfilKernelConfig struct {
 	BridgeIndexId uint32
@@ -34,4 +40,7 @@ const (
 	EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP             = "exfil_security_egress_redirect_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP = "exfil_security_egress_redirect_drop_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME             = "exfil_security_egress_redirect_loop_time"
+
+	// tunnel map
+	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
 )

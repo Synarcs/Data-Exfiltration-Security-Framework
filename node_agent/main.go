@@ -54,7 +54,7 @@ func main() {
 		panic(err.Error())
 	}
 
-	streamProducer := &events.StreamProducer{}
+	streamProducer := &events.StreaClient{}
 
 	if err := streamProducer.GenerateStreamKafkaProducer(&ctx); err != nil {
 		log.Println("The Remote Kafka stream broken not found for threat stream analytics continue...", err)

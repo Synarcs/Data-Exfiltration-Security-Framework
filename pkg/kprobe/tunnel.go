@@ -57,7 +57,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
 					ctx,
 					tunnelInterface.Attrs().Name,
 				); err != nil {
-					log.Println("error attaching the kernel dynamic tunneling ebpf for tunnel interface")
+					log.Println("error attaching the kernel dynamic tunneling ebpf for tunnel interface", err)
 				}
 
 				go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](netlinkEvent)
@@ -153,7 +153,6 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 		if !utils.DEBUG {
 			log.Println("EBPF node agent detected new kernel tun tap link setup for tunnelling interface link via ioctl call")
-			log.Println(netlinkEvent)
 		}
 
 		if netlinkEvent.ProcessId != uint32(os.Getpid()) {

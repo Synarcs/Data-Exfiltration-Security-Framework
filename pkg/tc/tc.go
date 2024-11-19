@@ -46,7 +46,7 @@ var (
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreamProducer) TCHandler {
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreaClient) TCHandler {
 	return TCHandler{
 		Interfaces:      &iface,
 		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),

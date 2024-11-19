@@ -26,13 +26,13 @@ type IngressSniffHandler struct {
 	OnnxModel    *model.OnnxModel
 	DnsFeatures  *model.DNSFeatures
 	DnsPacketGen *model.DnsPacketGen
-	StreamClient *events.StreamProducer
+	StreamClient *events.StreaClient
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
 func GenerateXDPIngressFactory(iface netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *events.StreamProducer) IngressSniffHandler {
+	onnxModel *model.OnnxModel, streamClient *events.StreaClient) IngressSniffHandler {
 	return IngressSniffHandler{
 		IfaceHandler: &iface,
 		DnsPacketGen: model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),

@@ -231,6 +231,13 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"protocol": string(e.Protocol),
 		}).Set(float64(time.Now().Unix()))
 	case KernelNetlinkSocket:
+		malicious_tunnel_socket.With(prometheus.Labels{
+			"process_id":      strconv.Itoa(int(e.ProcessId)),
+			"user_id":         strconv.Itoa(int(e.Uid)),
+			"group_id":        strconv.Itoa(int(e.GroupId)),
+			"threat_group_id": strconv.Itoa(int(e.ThreadGroupId)),
+			"prog_name":       string(e.ProcessInfo[:]),
+		}).Set(float64(time.Now().Unix()))
 		return nil
 	default:
 		return fmt.Errorf("unsupported event type: %T", e)
