@@ -20,6 +20,7 @@ compile:
 	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
+	make xdp
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 
@@ -45,6 +46,7 @@ compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
 	make tc_tun-x86
+	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 
@@ -78,8 +80,18 @@ tc-tracing:
 	sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 
-.PHONY: xdp-compile
-xdp-compile:
+.PHONY: xdp
+xdp: 
+	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
+
+
+.PHONY: xdp-x86
+xdp-x86:
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
+
+
+.PHONY: xdp-mount
+xdp-mount:
 	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
 	sudo mount -t bpf bpf /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
@@ -90,8 +102,8 @@ xdp-show:
 	sudo ip link show dev enp0s1 
 	sudo xdp-loader status 
 
-.PHONY: xdp-compile-x86
-xdp-compile-x86:
+.PHONY: xdp-mount-x86
+xdp-mount-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
 	sudo mount -t bpf bpf /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp

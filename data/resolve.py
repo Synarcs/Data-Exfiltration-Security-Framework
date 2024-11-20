@@ -21,6 +21,22 @@ def get_mx_records(domain) -> List[str]:
         return mx 
     except Exception as err: pass 
 
+txt_null_domains: List = []
+
+def get_txt_records(domain) -> List[str]:
+    global txt_null_domains 
+    try:
+        txt_records = dns.resolver.resolve(domain, 'TXT')
+        txt_null_domains.append(**([x for x in txt_records.response.answer]))
+        txt_null_domains.append(**([x for x in txt_records.response.additional]))
+
+
+        null_records = dns.resolver.resolve(domain, 'NULL')
+        txt_null_domains.append(**([x for x in null_records.response.answer]))
+
+    except Exception as err: pass 
+
+
 with open('top-host.csv', mode ='r')as file:
     csvFile = csv.reader(file)
     for file in csvFile: 

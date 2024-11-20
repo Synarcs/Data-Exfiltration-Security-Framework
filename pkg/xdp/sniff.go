@@ -205,7 +205,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 
 func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 	var errorChannel chan error = make(chan error)
-	log.Println("Sniffing Ingress traffic for potential malicious remote C@C commands")
+	log.Println("Sniffing Ingress traffic for potential malicious remote C2C commands")
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,

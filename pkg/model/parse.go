@@ -87,8 +87,8 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
-		ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
-		// ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		// ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
+		ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
