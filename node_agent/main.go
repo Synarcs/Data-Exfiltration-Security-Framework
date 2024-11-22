@@ -15,6 +15,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netfilter"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
@@ -85,7 +86,12 @@ func main() {
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(&ctx, &iface)
-	go tc.TcHandlerEbfpProgBridge(&ctx, &iface)
+
+	// kernel netfilter process post routing hooks
+	netfilter := netfilter.NetFilter{
+		Interfaces: &iface,
+	}
+	go netfilter.AttachTcHandlerIngressBridge(&ctx, false)
 
 	// process pre default boot interfaces of type tunnels loaded pre in kernel
 	go tcl.VerifyTunnelNetDevicesOnBoot(&ctx, &tc, &iface)
@@ -152,7 +158,7 @@ func main() {
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		tc.DetachHandler(&ctx)
-		tc.DetachHandlerBridge(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
+		netfilter.DetachKernelBridgeNetfilterHook(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
 		tc.IsLinkPppLinkAttached(&ctx)
 
 		kprobe.DetachSockHandler()

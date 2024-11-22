@@ -17,13 +17,19 @@ p2p_kernel_out := tun.o
 .PHONY: compile
 compile:
 	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	make vmlinux-btf
 	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
 	make xdp
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
+	make clean-bpf 
 
+# kernel vmlinux compile for root struct header 
+.PHONY: vmlinux-btf 
+vmlinux-bpf: 
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > vmlinux.h	
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
@@ -43,12 +49,14 @@ compile-llvm-x86:
 .PHONY: compile-x86
 compile-x86:
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
+	make vmlinux-btf
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
 	make tc_tun-x86
 	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
+	make clean-bpf 
 
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
@@ -137,3 +145,8 @@ tc_tun:
 	@echo "Compiling the tunnel tc egress filter for x86"
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
+
+
+.PHONY: clean-bpf 
+clean-bpf: 
+	rm -rf *.o 

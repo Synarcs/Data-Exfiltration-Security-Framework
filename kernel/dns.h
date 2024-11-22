@@ -1,3 +1,7 @@
+#ifndef __DNS_H__ 
+    #define __DNS_H__ 
+#endif 
+
 #include <linux/in.h>
 #include <linux/in.h>
 #include <linux/types.h>

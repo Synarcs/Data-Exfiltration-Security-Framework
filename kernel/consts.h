@@ -1,3 +1,7 @@
+#ifndef __CONST_H_ 
+    #define __CONST_H_ 
+#endif 
+
 #include <linux/ipv6.h>
 #include <linux/in6.h>
 #include <stdbool.h>

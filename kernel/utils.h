@@ -1,4 +1,6 @@
-
+#ifndef __UTILS_H_ 
+    #define __UTILS_H_ 
+#endif
 
 
 #define max(a, b) ((a) > (b) ? (a) : (b))

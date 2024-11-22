@@ -35,7 +35,7 @@ type TCHandler struct {
 
 const (
 	TC_EGRESS_ROOT_NETIFACE_INT   = "ebpf/tc.o"
-	TC_EGRESS_BRIDGE_NETIFACE_INT = "ebpf/bridge.o"
+	NF_EGRESS_BRIDGE_NETIFACE_INT = "ebpf/bridge.o"
 	TC_EGRESS_TUNNEL_NETIFACE_INT = "ebpf/tun.o"
 	SOCK_TUNNEL_CODE_EBPF         = "ebpf/netlink.o"
 )
@@ -52,14 +52,6 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
 		OnnxLoadedModel: onnxModel,
 	}
-}
-
-func ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
-	spec, err := ebpf.LoadCollectionSpec(ebpfProgCode)
-	if err != nil {
-		return nil, err
-	}
-	return spec, nil
 }
 
 func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
@@ -216,7 +208,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+	handler, err := utils.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
 		panic(err.Error())

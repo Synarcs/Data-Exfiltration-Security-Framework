@@ -1,12 +1,15 @@
 package utils
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"net"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/cilium/ebpf"
 )
 
 const DEBUG = false
@@ -82,6 +85,14 @@ func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	ip := net.ParseIP(ipv4).To4()
 	// convert to big endian for the kernel to store dest address
 	return binary.BigEndian.Uint32(ip)
+}
+
+func ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
+	spec, err := ebpf.LoadCollectionSpec(ebpfProgCode)
+	if err != nil {
+		return nil, err
+	}
+	return spec, nil
 }
 
 func GenerateBigEndianIpv6(ipv6 string) (uint64, uint64) {

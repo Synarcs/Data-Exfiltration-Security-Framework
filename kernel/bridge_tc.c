@@ -1,38 +1,55 @@
-#include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/if_packet.h>
-#include <linux/pkt_cls.h>
+#include "vmlinux.h"
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#include <stdbool.h>
-#include "consts.h"
-#include "dns.h"
+#include <stdbool.h> 
 
-// __update_kernel_packet_redirection_time
-static 
-__always_inline bool __verify_tc_dpi_ingress_process(struct __sk_buff *skb) {
-    if (skb->mark != bpf_ntohs(redirect_skb_mark)) {
-        #ifdef DEBUG 
-            if (!DEBUG) bpf_printk("dropping the packet the packet is not created by parent host redirect in kernel tc layer");
-        #endif  
-        return false;
+#define NF_DROP 0
+#define NF_ACCEPT 1
+#define NF_STOLEN 2
+#define NF_QUEUE 3
+#define NF_REPEAT 4
+
+#define ETH_P_IP        0x0800
+#define ETH_P_IPV6      0x86DD
+
+#define NF_MAX_VERDICT NF_STOP
+
+__u32 redirect_skb_mark = 0xFF;
+#define DEBUG true
+
+struct exfil_nf_bridge_config_map {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u32); // constant kernel key 
+    __type(value, __u32);   // layer ifindex for the kenrle bridge route;
+    __uint(max_entries, 1);
+} exfil_nf_bridge_config_map SEC(".maps");
+
+// only for ingress  process netfilter hooks over pre routing for ingress routing
+// kernel for virtualized bridges dont have default qdisc and kernel queue classes to classify the packet in kernel
+SEC("netfilter") 
+int bridge_classify(struct bpf_nf_ctx *ctx){
+    struct __sk_buff *skb = (struct  __sk_buff *)ctx->skb;
+
+    __u32 mark = skb->ifindex;
+
+    __u32 br_index = 4;
+
+    __u32 br_index_config_map_key = 0;
+
+    __u32 * br_index_config_map_value = bpf_map_lookup_elem(&exfil_nf_bridge_config_map, &br_index_config_map_key); 
+    if (br_index_config_map_value) {
+        br_index = *br_index_config_map_value; 
     }
-    return true;
+    
+    if (ctx->skb->skb_iif == br_index){
+        if (ctx->skb->mark == redirect_skb_mark) return NF_ACCEPT;
+        else return NF_DROP;
+    } 
+
+    return NF_ACCEPT;
 }
 
-// only for ingress  process traffic attachement 
-SEC("tc") 
-int bridge_classify(struct __sk_buff *skb){
-    void *data = (void *)(ll)(skb->data);
-    void *data_end = (void *)(ll)(skb->data_end);
+char __license[] SEC("license") = "GPL";
 
-    if (!__verify_tc_dpi_ingress_process(skb)) return TC_ACT_SHOT;
-    return TC_ACT_OK;
-}
-
-
-
-
-char __license[] SEC("license") = "MIT / GPL";

@@ -38,6 +38,10 @@
         "if_vlan.h": "c",
         "if_packet.h": "c",
         "if_tun.h": "c",
-        "icmp.h": "c"
+        "icmp.h": "c",
+        "nfnetlink_log.h": "c",
+        "string": "c",
+        "span": "c",
+        "bridge_nf.h": "c"
     }
 }
