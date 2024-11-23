@@ -54,9 +54,9 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx *context.Context, isEgress
 		hookPoint = unix.NF_INET_POST_ROUTING
 	}
 
-	if len(nf.Interfaces.BridgeLinks) > 1 || len(nf.Interfaces.BridgeLinks) == 1 {
+	if len(nf.Interfaces.BridgeLinks) >= 1  {
 		var nf_filter_const_val uint32 = 0
-		var nf_bridgr_interface_if_index = nf.Interfaces.BridgeLinks[0].Attrs().Index
+		var nf_bridgr_interface_if_index uint32 = uint32(nf.Interfaces.BridgeLinks[0].Attrs().Index)
 		if err := nf.NetfilterBridgeSocketMap.Put(nf_filter_const_val, nf_bridgr_interface_if_index); err != nil {
 			log.Printf("error inserting the netfilter bridge map: %v", err)
 			return err

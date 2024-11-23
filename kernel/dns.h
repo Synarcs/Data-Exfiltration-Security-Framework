@@ -1,6 +1,5 @@
 #ifndef __DNS_H__ 
-    #define __DNS_H__ 
-#endif 
+#define __DNS_H__ 
 
 #include <linux/in.h>
 #include <linux/in.h>
@@ -237,3 +236,5 @@ struct dns_non_standard_transport_event {
     __u8 isUdp;
     __u8 isTcp;
 };
+
+#endif

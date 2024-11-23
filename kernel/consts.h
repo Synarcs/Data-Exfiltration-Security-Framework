@@ -1,6 +1,5 @@
 #ifndef __CONST_H_ 
-    #define __CONST_H_ 
-#endif 
+#define __CONST_H_ 
 
 #include <linux/ipv6.h>
 #include <linux/in6.h>
@@ -117,3 +116,6 @@ struct result_parse_dns_labels {
 #define MAX_VOLUME_THRESHOLD 600000 
 
 #define MAX_FREQUENCY_PER_SEC 100
+
+
+#endif

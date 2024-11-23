@@ -1,6 +1,5 @@
 #ifndef __UTILS_H_ 
-    #define __UTILS_H_ 
-#endif
+#define __UTILS_H_ 
 
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -30,7 +29,6 @@
 #define __GENERIC_PRINT(x, ...) __GENERIC_TYPE(x, __VA_ARGS__) 
 
 
-
 #define CHECK_BOUNDS(ptr, offset, end, ct) \
     if ((void *)((ptr) + (offset) + 1) > (end)) \
         return (ct);
@@ -38,3 +36,6 @@
 #define CHECK_BOUNDS_OFFSET(ptr, offset, end, ct)  \
     if ((void *)((ptr) + (offset)) > (end)) \
         return (ct);
+
+
+#endif 

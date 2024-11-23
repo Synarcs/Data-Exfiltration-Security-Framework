@@ -123,6 +123,14 @@ func main() {
 		term <- sig
 	}(term, tst)
 
+	kernelHooksCleanUp := func() {
+		tc.DetachHandler(&ctx)
+		netfilter.DetachKernelBridgeNetfilterHook(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
+		tc.IsLinkPppLinkAttached(&ctx)
+
+		kprobe.DetachSockHandler()
+	}
+
 	go func() {
 		for {
 			goRoutinesCount := runtime.NumGoroutine()
@@ -143,7 +151,7 @@ func main() {
 				} else {
 					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
 				}
-				tc.DetachHandler(&ctx)
+				kernelHooksCleanUp()
 				os.Exit(1)
 			}
 			time.Sleep(time.Second)
@@ -157,11 +165,7 @@ func main() {
 			log.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
-		tc.DetachHandler(&ctx)
-		netfilter.DetachKernelBridgeNetfilterHook(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
-		tc.IsLinkPppLinkAttached(&ctx)
-
-		kprobe.DetachSockHandler()
+		kernelHooksCleanUp()
 		streamProducer.CloseStreamClient()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}

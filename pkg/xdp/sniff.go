@@ -162,8 +162,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	if dnsLayer != nil {
 		dns := dnsLayer.(*layers.DNS)
 
-		if isIpv4 && isUdp {
-			// ipv4 and udp
+		processFeaturesInference := func() error {
 			features, err := model.ProcessDnsFeatures(dns, false)
 			if err != nil {
 				log.Println(err)
@@ -172,10 +171,21 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 
 			vectors := model.GenerateFloatVectors(features, ing.OnnxModel)
 			ing.RemoteIngressInference(vectors, features)
+
+			return nil
+		}
+
+		if isIpv4 && isUdp {
+			// ipv4 and udp
+			if err := processFeaturesInference(); err != nil {
+				return err
+			}
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp
-			log.Println("the dns packet is ", dns)
+			if err := processFeaturesInference(); err != nil {
+				return err
+			}
 		}
 
 	} else if tcpCheck {

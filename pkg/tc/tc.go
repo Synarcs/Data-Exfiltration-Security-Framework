@@ -569,7 +569,7 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 			},
 		})
 		if err != nil {
-			fmt.Println("No Matching clsact desc found to delete")
+			log.Println("No Matching clsact desc found to delete")
 		}
 	}
 	return nil
