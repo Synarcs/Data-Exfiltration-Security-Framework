@@ -33,7 +33,7 @@ func (k *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 		// the remote kafka stream analytics will always use kafka streams for extreme enhanced streme analytics
 		var statefulAnalyzedStreeamEvent RemoteStreamInferenceAnalyzed
 
-		if err := json.Unmarshal(msg.Value, statefulAnalyzedStreeamEvent); err != nil {
+		if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
 			log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
 			return err
 		}
