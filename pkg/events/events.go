@@ -23,8 +23,9 @@ type RemoteStreamInferenceAnalyzed struct {
 
 // load the kernel config inside the kernel
 type ExfilKernelConfig struct {
-	BridgeIndexId uint32
-	RedirectIpv4  uint32 // redirect to the linux network namesapce
+	BridgeIndexId      uint32
+	NfNdpBridgeIndexId uint32
+	RedirectIpv4       uint32 // redirect to the linux network namesapce
 }
 
 type DPIRedirectionTimestampVerify struct {

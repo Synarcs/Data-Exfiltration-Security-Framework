@@ -42,6 +42,8 @@
         "nfnetlink_log.h": "c",
         "string": "c",
         "span": "c",
-        "bridge_nf.h": "c"
+        "bridge_nf.h": "c",
+        "charconv": "c",
+        "variant": "c"
     }
 }

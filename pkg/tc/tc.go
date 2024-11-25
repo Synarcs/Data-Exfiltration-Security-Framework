@@ -31,6 +31,8 @@ type TCHandler struct {
 	TcCollection    *ebpf.Collection // ebpf tc program collection order spec
 	DnsPacketGen    *model.DnsPacketGen
 	OnnxLoadedModel *model.OnnxModel
+
+	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
 }
 
 const (
@@ -46,11 +48,13 @@ var (
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreaClient) TCHandler {
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreaClient,
+	globalErrorKernelHandlerChannel chan bool) TCHandler {
 	return TCHandler{
-		Interfaces:      &iface,
-		DnsPacketGen:    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
-		OnnxLoadedModel: onnxModel,
+		Interfaces:                      &iface,
+		DnsPacketGen:                    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
+		OnnxLoadedModel:                 onnxModel,
+		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
 	}
 }
 
@@ -242,13 +246,21 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		panic(err.Error())
 	}
 
+	if len(iface.BridgeLinks) != 2 {
+		log.Fatalf("The Node agen cannot be botted unless all the DPI bridger veth are added using netlink before exiting ....")
+		// TODO: Add a process global error channel for detach if any of the tc panic
+		tc.GlobalErrorKernelHandlerChannel <- true
+		return
+	}
+	
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 
 			var redirectIpv4 events.ExfilKernelConfig = events.ExfilKernelConfig{
-				BridgeIndexId: uint32(iface.BridgeLinks[0].Attrs().Index),
-				RedirectIpv4:  utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
+				BridgeIndexId:      uint32(iface.BridgeLinks[0].Attrs().Index),
+				NfNdpBridgeIndexId: uint32(iface.BridgeLinks[1].Attrs().Index),
+				RedirectIpv4:       utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {

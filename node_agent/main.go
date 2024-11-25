@@ -69,9 +69,11 @@ func main() {
 		panic(err.Error())
 	}
 
+	globalErrorKernelHandlerChannel := make(chan bool)
+
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer)
+	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
 	config := make(chan interface{})
 	rpcServer := rpc.NodeAgentService{
@@ -79,7 +81,7 @@ func main() {
 	}
 
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
-	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer)
+	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
 	kprobe := kprobe.GenerateKprobeEventFactory()
@@ -138,6 +140,18 @@ func main() {
 				log.Println("Number of goroutines running", goRoutinesCount)
 			}
 			time.Sleep(time.Second)
+		}
+	}()
+
+	// global error channel for the kernel hooks
+	go func() {
+		for {
+			select {
+			case <-globalErrorKernelHandlerChannel:
+				kernelHooksCleanUp()
+			default:
+				time.Sleep(time.Second)
+			}
 		}
 	}()
 

@@ -20,7 +20,8 @@ const (
 	NETNS_RNETLINK_EGREESS_DPI = "sx1"
 	NETNS_RNETLINK_INGRESS_DPI = "sx2"
 
-	NETNS_NETLINK_BRIDGE_DPI = "br0"
+	NETNS_NETLINK_BRIDGE_DPI     = "br0"
+	NETNS_RAW_NETLINK_BRIDGE_DPI = "nx-br0"
 )
 
 const (
@@ -266,8 +267,11 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 				loopBackInterface = append(loopBackInterface, link)
 			}
 			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
-				bridgeInterfaces = append(bridgeInterfaces, link)
+				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
+			} else if link.Attrs().Name == NETNS_RAW_NETLINK_BRIDGE_DPI {
+				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
 			}
+
 		}
 
 	}

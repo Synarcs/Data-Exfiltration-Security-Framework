@@ -111,6 +111,7 @@ struct exfil_raw_packet_mirror {
     __u32 dst_port;
     __u32 src_port;
     __u8 isUdp;
+    __u8 isPacketRescaned;
 };
 
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
@@ -121,16 +122,6 @@ struct exfil_security_egress_reconnisance_map_scan {
     __type(value, struct exfil_raw_packet_mirror);
     __uint(max_entries, 1 << 16);
 } exfil_security_egress_reconnisance_map_scan SEC(".maps");
-
-
-// process the status for detected dns tunnel over the non standard transfer of dns protocol 
-struct exfil_security_egress_reconnisance_rescanned_map_handler {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u32);
-    __type(value, __u8);
-    __uint(max_entries, 1 << 16);
-} exfil_security_egress_reconnisance_rescanned_map_handler SEC(".maps");
-
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -742,6 +733,47 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
 
 static 
+__always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u32 __transport_dest_port, __u32 __transport_src_port) {
+    // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
+
+    __u32 br_index = 5;
+    __u32 out = skb->ifindex;
+    // populate the br_index handler clone for skb from kernel over the packet bridge 
+    struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+    if (config) {
+         br_index = config->NfNdpBridgeIndexId;
+     }else {
+         #ifdef DEBUG
+          if (!DEBUG) {
+             bpf_printk("kernel cannot find the requred kernel config redirect map");
+          }
+         #endif
+    }
+
+    __u32 udp_dst_transfer_key = __transport_dest_port;
+    struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
+    if (!raw_pack){
+        struct exfil_raw_packet_mirror pack;
+        pack.dst_port = __transport_dest_port;
+        pack.src_port = __transport_src_port;
+        pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
+        pack.isPacketRescaned = (__u8)0;
+    }else {
+        // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
+        __u8 re_scanned_packed = raw_pack->isPacketRescaned;
+        if (bpf_clone_redirect(skb, br_index, 0) < 0){
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("Error in redirect post clone for the packet from kernel to user space for rescanned port and status %u, %u", re_scanned_packed, udp_dst_transfer_key);
+                } 
+            #endif 
+        }
+    }
+    return 0;
+}   
+
+
+static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
                     __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, bool isIpv4) {
         // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
@@ -800,43 +832,9 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             bpf_ringbuf_submit(event, 0);
 
             // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
-            
-            __u32 br_index = 5;
-            __u32 out = skb->ifindex;
-            // populate the br_index handler clone for skb from kernel over the packet bridge 
-            struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-            if (config) {
-                 br_index = config->BridgeIndexId;
-             }else {
-                 #ifdef DEBUG
-                  if (!DEBUG) {
-                     bpf_printk("kernel cannot find the requred kernel config redirect map");
-                  }
-                 #endif
-             }
-
-
-            __u32 udp_dst_transfer_key = bpf_ntohs(udp->dest);
-
-            struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
-            if (!raw_pack){
-                struct exfil_raw_packet_mirror pack;
-                pack.dst_port = bpf_ntohs(udp->dest);
-                pack.src_port = bpf_ntohs(udp->source);
-                pack.isUdp = true;
-
-            }else {
-                __u32 dst_port = raw_pack->dst_port;
-                __u8 * is_mal = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_rescanned_map_handler, &dst_port);
-                if (!is_mal) {
-                    if (DEBUG) {
-                        bpf_printk("the kernel didd not process the egress redirect correctly causing the rescann mirror map for dst port to be corrup and malformed");
-                    }
-                }else {
-                    if (*is_mal == 1) return 0;
-                    return 1;
-                }
-            }
+           __process_packet_clone_redirection_non_standard_port(
+                    skb, true, bpf_ntohs(udp->dest), bpf_ntohs(udp->source)
+           );
         }   
         return __non_standard_port_dpi;
 
@@ -880,6 +878,10 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
         event->isTcp = (__u8)1;
         event->isUdp = (__u8)0;
         bpf_ringbuf_submit(res, 0);
+
+        __process_packet_clone_redirection_non_standard_port(
+                    skb, true, bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source)
+        );
     }
 
     return __non_standard_port_dpi;

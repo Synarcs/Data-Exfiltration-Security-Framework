@@ -24,6 +24,7 @@
 
 struct exfil_kernel_config  {
     __u32 BridgeIndexId;
+    __u32 NfNdpBridgeIndexId;
     __be32 RedirectIpv4;
 };
 
