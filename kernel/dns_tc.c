@@ -1,3 +1,11 @@
+// <!---------------------------
+// Name: Data Exfiltration Security Framework
+// File: dns_tc.c
+// -----------------------------
+// Author: Synarcs
+// Data:   09/25/2024, 2:59:15 AM
+// ---------------------------->
+
 #include <linux/bpf.h>
 
 #include <linux/if_ether.h>
@@ -98,13 +106,31 @@ struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
 } exfil_security_egrees_redirect_ring_buff_non_standard_port SEC(".maps");
 
 
+// 
+struct exfil_raw_packet_mirror {
+    __u32 dst_port;
+    __u32 src_port;
+    __u8 isUdp;
+};
+
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
+// use the kernel bpf_clone for packet clone to an non host bridge for enhanced deep packet scan since the kernel cannot process the raw packet 
 struct exfil_security_egress_reconnisance_map_scan {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u32);
-    __type(value, __u32);
-    __uint(max_entries, 1 << 2);
+    __type(value, struct exfil_raw_packet_mirror);
+    __uint(max_entries, 1 << 16);
 } exfil_security_egress_reconnisance_map_scan SEC(".maps");
+
+
+// process the status for detected dns tunnel over the non standard transfer of dns protocol 
+struct exfil_security_egress_reconnisance_rescanned_map_handler {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u32);
+    __type(value, __u8);
+    __uint(max_entries, 1 << 16);
+} exfil_security_egress_reconnisance_rescanned_map_handler SEC(".maps");
+
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -733,9 +759,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                         dns, skb->len) == 0) 
             return 1;
         
-        // get the dns flags from the dns header 
-        struct dns_flags flags = get_dns_flags(dns);
-        
+
         #ifdef DEBUG 
         if (DEBUG) {
             bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
@@ -775,7 +799,45 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             event->isUdp = (__u8)1;
             bpf_ringbuf_submit(event, 0);
 
-        }
+            // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
+            
+            __u32 br_index = 5;
+            __u32 out = skb->ifindex;
+            // populate the br_index handler clone for skb from kernel over the packet bridge 
+            struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+            if (config) {
+                 br_index = config->BridgeIndexId;
+             }else {
+                 #ifdef DEBUG
+                  if (!DEBUG) {
+                     bpf_printk("kernel cannot find the requred kernel config redirect map");
+                  }
+                 #endif
+             }
+
+
+            __u32 udp_dst_transfer_key = bpf_ntohs(udp->dest);
+
+            struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
+            if (!raw_pack){
+                struct exfil_raw_packet_mirror pack;
+                pack.dst_port = bpf_ntohs(udp->dest);
+                pack.src_port = bpf_ntohs(udp->source);
+                pack.isUdp = true;
+
+            }else {
+                __u32 dst_port = raw_pack->dst_port;
+                __u8 * is_mal = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_rescanned_map_handler, &dst_port);
+                if (!is_mal) {
+                    if (DEBUG) {
+                        bpf_printk("the kernel didd not process the egress redirect correctly causing the rescann mirror map for dst port to be corrup and malformed");
+                    }
+                }else {
+                    if (*is_mal == 1) return 0;
+                    return 1;
+                }
+            }
+        }   
         return __non_standard_port_dpi;
 
         // do deep packet inspection on the packet contett and the associated payload 

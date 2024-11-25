@@ -20,9 +20,15 @@ sudo ip netns exec sx2 sysctl -w net.ipv6.conf.all.forwarding=1
 # create a bridge
 sudo ip link add br0 type bridge
 
+# create a bridge for non root protocol packet dpi as host bridge packet transfer to host inet 
+sudo ip link add nx-br1 type bridge
+sudo ip link set dev nx-br1 up 
+sudo ip addr add 10.210.0.0/24 dev nx-br1
+sudo sysctl -w net.ipv6.conf.nx-br1.proxy_ndp=1
+
 sudo sysctl -w net.ipv6.conf.br0.proxy_ndp=1
 sudo ip -6 neigh add proxy fe80::d091:3cff:fe25:6d96 dev br0
-sudo ip -6 neigh add proxy fe80::d091:3cff:fe25:6d97 dev br0
+sudo ip -6 neigh add proxy fe80::d091:3cff:fe25:6d97 dev br0    
 
 sudo ip link add sx1-eth0 type veth peer name sx1-eth0-br
 sudo ip link add sx2-eth0 type veth peer name sx2-eth0-br

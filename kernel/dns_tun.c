@@ -1,3 +1,11 @@
+// <!---------------------------
+// Name: Data Exfiltration Security Framework
+// File: dns_tc.c
+// -----------------------------
+// Author: Synarcs
+// Data:   10/25/2024, 2:59:15 AM
+// ---------------------------->
+
 #include <linux/bpf.h>
 
 #include <linux/pkt_cls.h>
