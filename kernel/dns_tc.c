@@ -97,6 +97,15 @@ struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
     __uint(max_entries, 1 << 24);
 } exfil_security_egrees_redirect_ring_buff_non_standard_port SEC(".maps");
 
+
+// kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
+struct exfil_security_egress_reconnisance_map_scan {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u32);
+    __type(value, __u32);
+    __uint(max_entries, 1 << 2);
+} exfil_security_egress_reconnisance_map_scan SEC(".maps");
+
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
 struct checkSum_redirect_struct_value {
@@ -347,11 +356,13 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
         return resuult;
 }
 
+
+
 static 
-__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, struct dns_header *dns_header){
+__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
+                struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
-    // debug the size and content of questions, answer auth and add count in dns header 
 
     struct dns_flags flags = get_dns_flags(dns_header);
     #ifdef DEBUG
@@ -480,7 +491,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
 
 static 
-__always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, struct dns_header_tcp *dns_header) {
+__always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, 
+            struct dns_header_tcp *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
     // debug the size and content of questions, answer auth and add count in dns header 
@@ -619,11 +631,33 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     __u16 add_count = bpf_ntohs(dns_header->add_count);
 
     //bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
-    if (qd_count >= (1 << 8) - 1 || ans_count >= (1 << 8) - 1 || auth_count >= (1 << 8) - 1 || add_count >= (1 << 8) - 1) {
+    if (qd_count > (1 << 8) - 1 || ans_count > (1 << 8) - 1 || auth_count > (1 << 8) - 1 || add_count >  (1 << 8) - 1) {
         // the dns payload is non standard port and the protcol encapsulated used is not dns 
         return 1;
     }
 
+    if (ans_count == 0) {
+        // a potential question section embed inside deep for the __sk_buff processing;
+        // if (parse_dns_payload_memsafet_payload() == SUSPICIOUS) {
+        
+        // verify header opcodes and return types 
+
+        __u16 raw_dns_flags = dns_header->flags;
+        #ifdef DEBUG
+            if (DEBUG) {
+                bpf_printk("the raw kernel parsed flags are %u", raw_dns_flags);
+            }
+        #endif
+
+        struct dns_flags dns_header_flags = get_dns_flags(dns_header);
+        
+        // 1, verify the opcodes, and rcode raw parse from the header 
+        if (dns_header_flags.opcode > valid_opcodes[1]) return 1;
+        if (dns_header_flags.rcode >= 24) return 1;
+
+        return 0;
+    }else if (ans_count > 0 && ans_count <= (1 << 8) - 1)
+        return 1; // the tc egress is a egress control traffic filter hte node does not belong to a dns server to have answer at egress 
     // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
     if (DEBUG)
         bpf_printk("Non standard transport DPI found for exfil remote c2c server");
@@ -650,6 +684,29 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
         return 1;
     }
 
+    if (ans_count == 0) {
+        // a potential question section embed inside deep for the __sk_buff processing;
+        // if (parse_dns_payload_memsafet_payload() == SUSPICIOUS) {
+        
+        // verify header opcodes and return types 
+
+        __u16 raw_dns_flags = dns_header->flags;
+        #ifdef DEBUG
+            if (DEBUG) {
+                bpf_printk("the raw kernel parsed flags are %u", raw_dns_flags);
+            }
+        #endif
+
+        struct dns_flags dns_header_flags = get_dns_flags(dns_header);
+        
+        // 1, verify the opcodes, and rcode raw parse from the header 
+        if (dns_header_flags.opcode > valid_opcodes[1]) return 1;
+        if (dns_header_flags.rcode >= 24) return 1;
+
+        return 0;
+    }else if (ans_count > 0 && ans_count <= (1 << 8) - 1)
+        return 1; 
+
     // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
     if (DEBUG)
         bpf_printk("Non standard transport DPI found for exfil remote c2c server");
@@ -657,12 +714,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
     return 0;
 }
 
-
-
-static 
-__always_inline void * __emit_kernel_ringBuff_event() {
-    return NULL;
-}
 
 static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
@@ -696,6 +747,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         struct udphdr *udp = (struct udphdr *) (header_payload);
         if ((void *) (udp + 1) > cursor.data_end) return 1;
 
+
         // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
                             dns_payload, dns);
@@ -722,6 +774,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             event->isTcp = (__u8)0;
             event->isUdp = (__u8)1;
             bpf_ringbuf_submit(event, 0);
+
         }
         return __non_standard_port_dpi;
 
@@ -769,7 +822,6 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
 
     return __non_standard_port_dpi;
 }
-
 
 
 static 

@@ -15,10 +15,12 @@
 #define DEBUG false 
 
 enum MALICIOUS_FLAGS {
-        BENIGN = 0,
-        SUSPICIOUS,
-        MALICIOUS
+    BENIGN = 0,
+    SUSPICIOUS,
+    MALICIOUS
 } flags;
+
+
 
 //   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
 // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -59,7 +61,7 @@ struct dns_flags {
     __u8 ad;
     __u8 cd;
     __u8 rcode;
-};
+};  
 
 struct qtypes {
     __u8 A; __u8 NS; __u8 CNAME;__u8 SOA;__u8 PTR;__u8 MX;__u8 TXT;__u8 AAAA;__u8 SRV;__u8 NAPTR;__u8 OPT;
@@ -100,6 +102,12 @@ struct dns_header_tcp {
     __be16 auth_count; //Number of authority RRs
     __be16 add_count;  //Number of resource RRs
 } __attribute__((packed));
+
+
+const int valid_opcodes[2] = {
+    0x0, 0x6
+};
+
 
 static 
 __always_inline struct dns_flags  get_dns_flags (struct dns_header * dns_header) {
