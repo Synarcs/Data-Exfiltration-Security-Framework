@@ -21,11 +21,20 @@ type RemoteStreamInferenceAnalyzed struct {
 	IsMalicious bool
 }
 
+type ExfilRawPacketMirror struct {
+    DstPort                    uint32
+    SrcPort                    uint32
+    IsUdp                      uint8
+    IsPacketRescanedAndMalicious uint8
+}
+
+
 // load the kernel config inside the kernel
 type ExfilKernelConfig struct {
-	BridgeIndexId      uint32
-	NfNdpBridgeIndexId uint32
-	RedirectIpv4       uint32 // redirect to the linux network namesapce
+	BridgeIndexId           uint32
+	NfNdpBridgeIndexId      uint32
+	RedirectIpv4            uint32 // redirect to the linux network namesapce
+	NfNdpBridgeRedirectIpv4 uint32
 }
 
 type DPIRedirectionTimestampVerify struct {
@@ -44,4 +53,6 @@ const (
 
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
+
+	EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN = "exfil_security_egress_reconnisance_map_scan"
 )

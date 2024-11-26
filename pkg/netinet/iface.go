@@ -350,3 +350,8 @@ func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	return cap, err
 }
+
+func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {
+	cap, err := pcap.OpenLive(NETNS_RAW_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	return cap, err
+}

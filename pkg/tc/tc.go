@@ -252,15 +252,16 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		tc.GlobalErrorKernelHandlerChannel <- true
 		return
 	}
-	
+
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 
 			var redirectIpv4 events.ExfilKernelConfig = events.ExfilKernelConfig{
-				BridgeIndexId:      uint32(iface.BridgeLinks[0].Attrs().Index),
-				NfNdpBridgeIndexId: uint32(iface.BridgeLinks[1].Attrs().Index),
-				RedirectIpv4:       utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
+				BridgeIndexId:           uint32(iface.BridgeLinks[0].Attrs().Index),
+				NfNdpBridgeIndexId:      uint32(iface.BridgeLinks[1].Attrs().Index),
+				RedirectIpv4:            utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
+				NfNdpBridgeRedirectIpv4: utils.GenerateBigEndianIpv4(utils.BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP),
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {
@@ -317,6 +318,11 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}()
 
 	if INIT_KERNEL_SOCKET {
+
+		tc_tunnel := GenerateTcTunnelFactory(tc, iface, tc.GlobalErrorKernelHandlerChannel)
+		go tc_tunnel.SniffPacketsForTunnelDPI()
+
+		go tc_tunnel.SniffPacketsForTunnelDPI()
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}

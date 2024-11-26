@@ -30,6 +30,7 @@
 #include "dns.h"
 #include "consts.h"
 #include "utils.h" 
+#include "raw_proc.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
@@ -111,7 +112,7 @@ struct exfil_raw_packet_mirror {
     __u32 dst_port;
     __u32 src_port;
     __u8 isUdp;
-    __u8 isPacketRescaned;
+    __u8 isPacketRescanedAndMalicious;
 };
 
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
@@ -733,15 +734,53 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
 
 static 
+__always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
+
+    bpf_printk("called packet for clone redirection over bridge %u %u", br_index, dest_addr_route);
+    __be32 current_dest_addr; 
+
+    if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
+        bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
+        return TC_DROP;
+    } 
+    // change the ipv4 layer 3 for redirect of the entire tcp packet over the other ns bridge 
+    __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
+
+
+    if (IP_DST_OFF > skb->len) {
+        return TC_DROP;  // Check if offset is within bounds
+    }
+
+    if (bpf_l3_csum_replace(skb, IP_CHECK_FF, 0, csum_diff_drop, 0) < 0) {
+            return TC_FORWARD;
+    }
+    
+    if (bpf_skb_store_bytes(skb, IP_DST_OFF, &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
+        return TC_FORWARD;
+    }
+
+    if (bpf_clone_redirect(skb, br_index, BPF_F_INGRESS) < 0){
+        bpf_printk("error  packet for clone redirection over bridge %u %u", br_index, dest_addr_route);
+        return -1;
+    }        
+
+    return 0;
+}
+
+
+static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u32 __transport_dest_port, __u32 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
 
     __u32 br_index = 5;
     __u32 out = skb->ifindex;
+    __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+
     // populate the br_index handler clone for skb from kernel over the packet bridge 
     struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
     if (config) {
-         br_index = config->NfNdpBridgeIndexId;
+        br_index = config->NfNdpBridgeIndexId;
+        dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
      }else {
          #ifdef DEBUG
           if (!DEBUG) {
@@ -757,19 +796,34 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.dst_port = __transport_dest_port;
         pack.src_port = __transport_src_port;
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
-        pack.isPacketRescaned = (__u8)0;
+        pack.isPacketRescanedAndMalicious = (__u8)0;
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+            if (DEBUG) {
+                bpf_printk("kernel cannot clone the packet for the redirect"); 
+            }
+            // only work for clone on ipv4 for now 
+        }
     }else {
         // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
-        __u8 re_scanned_packed = raw_pack->isPacketRescaned;
-        if (bpf_clone_redirect(skb, br_index, 0) < 0){
-            #ifdef DEBUG
+        __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
+        if (re_scanned_packed_and_malicious) {
+            // no need to clone the packet has to be dropped now;
+            // continuosly monitor with the clone of the packet from the kernel to DPI in userspace to make sure the port is safe sanatized and no malicious DPI tunnel traffic 
+            // transfer on this port 
+            if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
                 if (DEBUG) {
-                    bpf_printk("Error in redirect post clone for the packet from kernel to user space for rescanned port and status %u, %u", re_scanned_packed, udp_dst_transfer_key);
-                } 
-            #endif 
+                    bpf_printk("kernel cannot clone the packet for the redirect"); 
+                }
+            }
+            return 0;
+        }
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+            if (DEBUG) {
+                bpf_printk("kernel cannot clone the packet for the redirect"); 
+            }
         }
     }
-    return 0;
+    return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
 }   
 
 
@@ -804,6 +858,12 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         if ((void *) (udp + 1) > cursor.data_end) return 1;
 
 
+        __u32 dest_port = bpf_ntohs(udp->dest);
+        int MAX_PROTOCOL_SIZE = 22;
+
+        for (int i=0; i < MAX_PROTOCOL_SIZE; i++) 
+            if (dest_port == UDP_PROTOCOLS[i].port) return 1; // no further scan from kernel is required to process the packet 
+
         // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
                             dns_payload, dns);
@@ -831,10 +891,11 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             event->isUdp = (__u8)1;
             bpf_ringbuf_submit(event, 0);
 
+
             // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
-           __process_packet_clone_redirection_non_standard_port(
+           return __process_packet_clone_redirection_non_standard_port(
                     skb, true, bpf_ntohs(udp->dest), bpf_ntohs(udp->source)
-           );
+           ); // should forward the packet since the packet is cloned and deep scanned in user space 
         }   
         return __non_standard_port_dpi;
 

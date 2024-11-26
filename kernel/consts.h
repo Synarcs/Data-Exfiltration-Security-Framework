@@ -26,6 +26,7 @@ struct exfil_kernel_config  {
     __u32 BridgeIndexId;
     __u32 NfNdpBridgeIndexId;
     __be32 RedirectIpv4;
+    __be32 NfNdpBridgeRedirectIpv4;
 };
 
 struct exfil_security_config_map {
@@ -68,6 +69,7 @@ __u32 redirect_skb_mark = 0xFF;
 // 10.200.0.1 this is only for testing in kernel while parsing the process 
 #ifndef BRIDGE_REDIRECT_ADDRESS_IPV4
     #define BRIDGE_REDIRECT_ADDRESS_IPV4 0x0AC80001 
+    #define BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL 0x0AD20002
     #define BRIDGE_REDIRECT_ADDRESS_IPV4_MALICIOUS 0x0AC80002 
 #endif
 
