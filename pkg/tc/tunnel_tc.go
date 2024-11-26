@@ -94,6 +94,11 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					Err: "The kernel has not cloned the packet from tc layer",
 				}
 			}
+			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
+				Src_port:       int(event.SrcPort),
+				Dest_port:      int(event.DstPort),
+				IsUDPTransport: true,
+			})
 		} else {
 			tcpPack := packet.Layer(layers.LayerTypeTCP)
 			destPort := tcpPack.(*layers.TCP).DstPort
@@ -119,6 +124,11 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					Err: "The kernel has not cloned the packet from tc layer",
 				}
 			}
+			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
+				Src_port:       int(event.SrcPort),
+				Dest_port:      int(event.DstPort),
+				IsUDPTransport: false,
+			})
 		}
 		fmt.Printf("Found DNS packet - ID: %d\n", dns.ID)
 		return

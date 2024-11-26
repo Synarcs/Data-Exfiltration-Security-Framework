@@ -47,6 +47,13 @@ type DNSFeatures struct {
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
 }
 
+// malicious_non_stanard_socket_port_transfer
+type Malicious_Non_Stanard_Transfer struct {
+	Src_port       int
+	Dest_port      int
+	IsUDPTransport bool
+}
+
 type MaliciousDetectedUserSpaceCount int
 type Protocol string
 
@@ -59,7 +66,7 @@ const (
 
 type KernelPacketDropRedirectInterface interface {
 	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
-		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent
+		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer
 }
 
 type RawDnsEvent struct {
@@ -159,6 +166,17 @@ var (
 			"prog_name",
 		},
 	)
+
+	malicious_non_stanard_socket_port_transfer = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "malicious_non_stanard_socket_port_transfer",
+			Help: "Detected packet transfer over a non standard DNS port overlay over UDP / TCP",
+		}, []string{
+			"src_port",
+			"dest_port",
+			"isUDPTransport",
+		},
+	)
 )
 
 const (
@@ -230,6 +248,7 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"isEgress": strconv.FormatBool(e.IsEgress),
 			"protocol": string(e.Protocol),
 		}).Set(float64(time.Now().Unix()))
+
 	case KernelNetlinkSocket:
 		malicious_tunnel_socket.With(prometheus.Labels{
 			"process_id":      strconv.Itoa(int(e.ProcessId)),
@@ -238,6 +257,14 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"threat_group_id": strconv.Itoa(int(e.ThreadGroupId)),
 			"prog_name":       string(e.ProcessInfo[:]),
 		}).Set(float64(time.Now().Unix()))
+		return nil
+
+	case Malicious_Non_Stanard_Transfer:
+		malicious_non_stanard_socket_port_transfer.With(prometheus.Labels{
+			"src_port":       strconv.Itoa(e.Src_port),
+			"dest_port":      strconv.Itoa(e.Dest_port),
+			"isUDPTransport": strconv.FormatBool(e.IsUDPTransport),
+		}).Set(float64(e.Dest_port))
 		return nil
 	default:
 		return fmt.Errorf("unsupported event type: %T", e)
