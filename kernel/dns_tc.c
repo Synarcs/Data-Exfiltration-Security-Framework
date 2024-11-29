@@ -140,6 +140,16 @@ struct exfil_security_egress_redirect_map {
 } exfil_security_egress_redirect_map SEC(".maps");
 
 
+// map used which let kernel perform DPI over different protocols with deep scan for both l4, l7 protocols to ensure data breach prvention 
+// for l7 protocols like ftp, dns, smtp the kernel does packet redirection ensure map safety time attack prevention and brute force attack from user space malware 
+struct exfil_security_protocols_identifier_maps {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, __u16); // protocol identifier
+    __type(value, __u16);   // protocol identifier populated by userspace node agent to run dpi and enhanced DPI in kernel  for both l4, l7 protocols.
+    __uint(max_entries, 5); //  kernel DPI support for FTP, SMTP, (DNS done), HTTP, ICMP, IGMP 
+} exfil_security_protocols_identifier_maps SEC(".maps"); 
+
+
 struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u64); // store the timestamp loaded from userspace when pacekt hits 
@@ -789,6 +799,19 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
          #endif
     }
 
+    int MAX_PROTOCOL_SIZE = 22;
+
+    bool isTunnelC2CStandardUdpTransport = false;
+    if (isUdp) {
+
+        for (int i=0; i < MAX_PROTOCOL_SIZE; i++) {
+            if (__transport_dest_port == UDP_PROTOCOLS[i].port) {
+                isTunnelC2CStandardUdpTransport = true;
+                break;
+            } // no further scan from kernel is required to process the packet 
+        }
+    }
+   
     __u16 udp_dst_transfer_key = __transport_dest_port;
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
@@ -837,6 +860,11 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             if (DEBUG) {
                 bpf_printk("the kernel dected a malicious tunnel traffic for dns over the non standard port for kernel traffic transfer, kernel start dropping ......"); 
             }
+            if (isTunnelC2CStandardUdpTransport) {
+                #ifdef DEBUG 
+                    if(DEBUG) bpf_printk("Tunnelled c2c dns traffic over other standard port for dns transfer ... ");
+                #endif 
+            }
             return 0;
         }else {
             raw_pack->isPacketRescanedAndMalicious = (__u8)0;
@@ -857,6 +885,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
     return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
 }   
+
 
 
 static 
@@ -891,11 +920,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
 
         __u32 dest_port = bpf_ntohs(udp->dest);
-        int MAX_PROTOCOL_SIZE = 22;
-
-        for (int i=0; i < MAX_PROTOCOL_SIZE; i++) 
-            if (dest_port == UDP_PROTOCOLS[i].port) return 1; // no further scan from kernel is required to process the packet 
-
+     
         // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
                             dns_payload, dns);

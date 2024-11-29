@@ -24,8 +24,21 @@ sudo ip link add br0 type bridge
 sudo ip link add nx-br0 type bridge
 sudo ip link set dev nx-br0 up 
 sudo ip addr add 10.210.0.0/24 dev nx-br0
+
 sudo sysctl -w net.ipv6.conf.nx-br0.proxy_ndp=1
+sudo sysctl -w net.ipv6.conf.nx-br0.disable_ipv6=0
+sudo sysctl -w net.ipv4.conf.all.forwarding=1
 sudo ip -6 addr add fe80::c641:065a:7a1a:642d/64 dev nx-br0
+
+sudo ip netns add sx3 
+sudo ip netns exec sx3 sysctl -w net.ipv6.conf.all.forwarding=1 
+sudo ip link add nx-br0-eth0 type veth peer name nx-br0-eth0-br 
+
+sudo ip link set nx-br0-eth0 netns sx3  
+sudo ip link set nx-br0-eth0-br master nx-br0 
+sudo ip link set dev nx-br0-eth0-br up 
+
+
 
 
 sudo sysctl -w net.ipv6.conf.br0.proxy_ndp=1

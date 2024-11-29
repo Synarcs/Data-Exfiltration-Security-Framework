@@ -188,7 +188,7 @@ func init() {
 		redirect_event_metric, redirect_event_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
-		malicious_tunnel_socket)
+		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer)
 }
 
 func StartPrometheusMetricExporterServer() error {
