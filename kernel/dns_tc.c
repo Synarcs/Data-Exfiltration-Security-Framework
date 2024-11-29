@@ -144,7 +144,7 @@ struct exfil_security_egress_redirect_map {
 // for l7 protocols like ftp, dns, smtp the kernel does packet redirection ensure map safety time attack prevention and brute force attack from user space malware 
 struct exfil_security_protocols_identifier_maps {
     __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u16); // protocol identifier
+    __type(key, __u32); // protocol identifier
     __type(value, __u16);   // protocol identifier populated by userspace node agent to run dpi and enhanced DPI in kernel  for both l4, l7 protocols.
     __uint(max_entries, 5); //  kernel DPI support for FTP, SMTP, (DNS done), HTTP, ICMP, IGMP 
 } exfil_security_protocols_identifier_maps SEC(".maps"); 
@@ -694,11 +694,20 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
 }
 
 
+static 
+__always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, void * transport_payload) {
+
+    return 1;
+}
+
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, void * dns_payload, 
                 struct dns_header_tcp *dns_header) {
+                    
     
+    if (__parse_encap_vxlan_tunnel_header(skb, dns_payload) == 0) return 0;
+
     struct dns_flags flags = get_dns_flags_tcp(dns_header);
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
@@ -885,7 +894,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
     return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
 }   
-
 
 
 static 
@@ -1791,6 +1799,7 @@ int classify(struct __sk_buff *skb){
                 
                 return TC_FORWARD;
             }
+            
         }
     } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 
 
