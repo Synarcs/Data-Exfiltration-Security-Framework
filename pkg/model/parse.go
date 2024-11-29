@@ -130,11 +130,21 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		// add the tld and domain information in packet malicious map for local cache
 		if len(features) > 1 {
 			for _, feature := range features {
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS)
+				if isUdp {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+						events.DNS, int(udpPacket.DstPort))
+				} else {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+						events.DNS, int(tcpPacket.DstPort))
+				}
 				go d.StreamClient.MarshallThreadEvent(feature)
 			}
 		} else if len(features) == 1 {
-			events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS)
+			if isUdp {
+				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(udpPacket.DstPort))
+			} else {
+				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(tcpPacket.DstPort))
+			}
 			d.StreamClient.MarshallThreadEvent(features[0])
 		}
 		return nil

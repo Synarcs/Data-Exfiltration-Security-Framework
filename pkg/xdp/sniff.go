@@ -92,7 +92,9 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 		for index, resp := range inferenceResponse.ThreatType {
 			if resp {
 				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS)
+				// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
+				// the same port as used for egrres will be used as src port for response from remote c2c malware
+				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT)
 				go ing.StreamClient.MarshallThreadEvent(rawFeatures[index])
 			}
 		}
@@ -174,7 +176,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 
 			vectors := model.GenerateFloatVectors(features, ing.OnnxModel)
 			ing.RemoteIngressInference(vectors, features)
-
 			return nil
 		}
 

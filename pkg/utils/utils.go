@@ -38,6 +38,12 @@ const (
 	BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP = "10.210.0.0"
 )
 
+const (
+	DNS_EGRESS_PORT           = 53
+	DOT_EGRESS_PORT           = 853
+	DNS_EGRESS_MULTICAST_PORT = 5353
+)
+
 // user space remote inferencing support for unix domain sockets
 const (
 	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/onnx-inference-out.sock"

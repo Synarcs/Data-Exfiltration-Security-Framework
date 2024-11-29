@@ -140,7 +140,7 @@ var (
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
 			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers", "PhysicalNodeIpv4",
-			"Protocol",
+			"Protocol", "ExfilPort",
 		},
 	)
 	// dns event for bengin traffic transfer
@@ -291,7 +291,8 @@ func SanatizeRune(value []byte) string {
 	return buffer.String()
 }
 
-func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T) error {
+func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T,
+	exfilPort int) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
 	}
@@ -324,6 +325,8 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 	} else {
 		labels["PhysicalNodeIpv4"] = "" // error in local service lookup for ipv4 vnet lookup
 	}
+
+	labels["ExfilPort"] = strconv.Itoa(exfilPort)
 
 	switch protocol {
 	case T(DNS):

@@ -99,7 +99,6 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 }
 
 func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) {
-	log.Println("Go Routine polling the kernel map ", ebpfEvents)
 
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
@@ -319,7 +318,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 
 	if INIT_KERNEL_SOCKET {
 
-		tc_tunnel := GenerateTcTunnelFactory(tc, iface, tc.GlobalErrorKernelHandlerChannel)
+		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
+			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient)
 		go tc_tunnel.SniffPacketsForTunnelDPI()
 
 		go tc_tunnel.SniffPacketsForTunnelDPI()

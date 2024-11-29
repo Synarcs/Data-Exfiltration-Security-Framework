@@ -21,7 +21,7 @@ compile:
 	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
-	make xdp
+	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 	make clean-bpf 

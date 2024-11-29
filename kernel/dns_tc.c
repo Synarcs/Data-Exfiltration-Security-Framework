@@ -109,8 +109,8 @@ struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
 
 // 
 struct exfil_raw_packet_mirror {
-    __u32 dst_port;
-    __u32 src_port;
+    __u16 dst_port;
+    __u16 src_port;
     __u8 isUdp;
     __u8 isPacketRescanedAndMalicious;
 };
@@ -119,7 +119,7 @@ struct exfil_raw_packet_mirror {
 // use the kernel bpf_clone for packet clone to an non host bridge for enhanced deep packet scan since the kernel cannot process the raw packet 
 struct exfil_security_egress_reconnisance_map_scan {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u32);
+    __type(key, __u16);
     __type(value, struct exfil_raw_packet_mirror);
     __uint(max_entries, 1 << 16);
 } exfil_security_egress_reconnisance_map_scan SEC(".maps");
@@ -769,7 +769,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
 
 
 static 
-__always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u32 __transport_dest_port, __u32 __transport_src_port) {
+__always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
 
     __u32 br_index = 5;
@@ -789,7 +789,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
          #endif
     }
 
-    __u32 udp_dst_transfer_key = __transport_dest_port;
+    __u16 udp_dst_transfer_key = __transport_dest_port;
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
         struct exfil_raw_packet_mirror pack;
@@ -797,26 +797,58 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.src_port = __transport_src_port;
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
         pack.isPacketRescanedAndMalicious = (__u8)0;
+        if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
+            #ifdef DEBUG 
+                if (!DEBUG) {
+                    bpf_printk("Kernel cannot add the required pacekt mirro to the egress ebpf map ....");
+                }
+            #endif 
+        }
+
         if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
-            if (DEBUG) {
-                bpf_printk("kernel cannot clone the packet for the redirect"); 
-            }
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("kernel cannot clone the packet for the redirect"); 
+                }
+            #endif
             // only work for clone on ipv4 for now 
         }
     }else {
         // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
         __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
-        if (re_scanned_packed_and_malicious) {
+        if (re_scanned_packed_and_malicious == 1) {
             // no need to clone the packet has to be dropped now;
             // continuosly monitor with the clone of the packet from the kernel to DPI in userspace to make sure the port is safe sanatized and no malicious DPI tunnel traffic 
             // transfer on this port 
             if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
-                if (DEBUG) {
-                    bpf_printk("kernel cannot clone the packet for the redirect"); 
-                }
+                #ifdef DEBUG
+                    if (DEBUG) {
+                        bpf_printk("kernel cannot clone the packet for the redirect"); 
+                    }
+                #endif 
+            }
+            if (bpf_map_delete_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key) < 0) {
+                #ifdef DEBUG
+                    if (DEBUG) {
+                        bpf_printk("Error the kernel cannot update the malicious found packet");
+                    }
+                #endif 
+            }
+            if (DEBUG) {
+                bpf_printk("the kernel dected a malicious tunnel traffic for dns over the non standard port for kernel traffic transfer, kernel start dropping ......"); 
             }
             return 0;
+        }else {
+            raw_pack->isPacketRescanedAndMalicious = (__u8)0;
+            if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, raw_pack, 0) < 0){
+                #ifdef DEBUG
+                   if (DEBUG) {
+                       bpf_printk("Kernel cannot update and make sure the packed scanned is always bengin .....");
+                   }            
+                #endif 
+            }
         }
+   
         if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
             if (DEBUG) {
                 bpf_printk("kernel cannot clone the packet for the redirect"); 
@@ -1369,9 +1401,8 @@ int classify(struct __sk_buff *skb){
             }else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
-                                    udp_data, udp_payload_len, true) == 1) 
+                                    udp_data, udp_payload_len, true) == 1)
                     return TC_FORWARD;
-                
                 return TC_DROP;
             }
             return TC_FORWARD;

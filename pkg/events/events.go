@@ -22,12 +22,11 @@ type RemoteStreamInferenceAnalyzed struct {
 }
 
 type ExfilRawPacketMirror struct {
-    DstPort                    uint32
-    SrcPort                    uint32
-    IsUdp                      uint8
-    IsPacketRescanedAndMalicious uint8
+	DstPort                      uint16
+	SrcPort                      uint16
+	IsUdp                        uint8
+	IsPacketRescanedAndMalicious uint8
 }
-
 
 // load the kernel config inside the kernel
 type ExfilKernelConfig struct {
