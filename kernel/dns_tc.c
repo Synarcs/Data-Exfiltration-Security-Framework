@@ -59,6 +59,11 @@ struct skb_cursor {
     void *data_end;
 };
 
+struct vxlanhdr {
+	__be32 vx_flags;
+	__be32 vx_vni;
+};
+
 struct vlan_hdr {
 	__be16	h_vlan_TCI;
 	__be16	h_vlan_encapsulated_proto;
@@ -91,8 +96,8 @@ struct packet_actions {
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
-    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , void *, struct dns_header *);
-    __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , void *, struct dns_header_tcp *);
+    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *);
+    __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , struct __sk_buff *, void *, struct dns_header_tcp *);
 };
 
 __u32 INSECURE = 0;
@@ -149,13 +154,13 @@ struct exfil_security_protocols_identifier_maps {
     __uint(max_entries, 5); //  kernel DPI support for FTP, SMTP, (DNS done), HTTP, ICMP, IGMP 
 } exfil_security_protocols_identifier_maps SEC(".maps"); 
 
-
 struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u64); // store the timestamp loaded from userspace when pacekt hits 
     __type(value, __u8);   // layer 3 checksum prior redirect non clone skb 
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
+
 
 // useful to determine the loop back time from kernel packet redirection to user space enhanced scanning 
 // the totola kernel packet redirection time - userspace post DPI time
@@ -182,6 +187,13 @@ struct exfil_security_egress_redirect_drop_count_map {
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_drop_count_map SEC(".maps");
+
+struct exfil_security_egress_vxlan_dns_transport {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u8);  // the vxlan port dest gateway id for packet redirection from kernel 
+    __type(value, __u32);   // count of the tunnel dns packet clone skb redirect from skb for DPI in userspace over vxlan
+    __uint(max_entries, 1);
+} exfil_security_egress_vxlan_dns_transport SEC(".maps");
 
 
 /* ***************************************** Event maps for Egress Traffiic Rate Limiting ***************************************** */
@@ -641,14 +653,78 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 }   
 
 
+/*
+    The kernel does a packet tunneling usually over the epheral udp port (4379) and not a standard dns tunnel for packet forward
+        kernel neverl allows the packet to pass over standard dns udp l4 to be encapsulated as a vxlan inside the main packet. 
+*/
+static 
+__always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, void * transport_payload) {
+    /*
+        vxland is tunnel traffic for all upto layer 7 inside layer 4 with a valid vni header at start 
+    */
 
-// TODO: Process generics with macros for runtime optimiaztion via kernel process func 
+    struct vxlanhdr *vxlan = (struct vxlanhdr *)transport_payload;
+    if ((void *)vxlan + sizeof(struct vxlanhdr) > skb->data_end)  return BENIGN;
+
+    struct ethhdr *eth = (struct ethhdr *)((void *)vxlan + sizeof(struct vxlanhdr));
+    if ((void *)eth + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
+
+   switch bpf_ntohs(eth->h_proto) {
+     case ETH_P_IP: {
+        struct iphdr *ip = (struct iphdr *) ((void *)eth + sizeof(struct ethhdr));
+        if ((void *) (ip + sizeof(struct iphdr)) > skb->data_end) return BENIGN;
+
+        switch (ip->protocol) {
+            case IPPROTO_UDP: {
+                struct udphdr *udp = (struct udphdr *) ((void *)ip + sizeof(struct iphdr));
+                if ((void *) udp + 1 > skb->data_end) return BENIGN;
+                if (bpf_ntohs(udp->dest) == DNS_EGRESS_PORT) {
+                    struct dns_header *dns = (struct dns_header *) ((void *)udp + sizeof(struct udphdr));
+                    if ((void *) dns + 1 > skb->data_end) return BENIGN;
+
+                    void *dns_vxlan_encap_payload = dns + sizeof(struct dns_header);
+                    if ((void *) dns_vxlan_encap_payload + 1 > skb->data_end) return BENIGN;
+                    
+                    return SUSPICIOUS;
+                }else if (bpf_ntohs(udp->dest) == DNS_EGRESS_MULTICAST_PORT) return BENIGN;
+                else return BENIGN;
+            }
+            case IPPROTO_TCP: return BENIGN;
+            default: return BENIGN;
+        }
+     }
+     case ETH_P_IPV6:  return BENIGN;
+     default: return BENIGN;
+   }
+
+}
 
 static 
-__always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, void *dns_payload, 
+__always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, struct __sk_buff *raw_skb,void *dns_payload, 
                 struct dns_header *dns_header) {
     // check whether a non standard port is used for dns query and dns payload 
     
+    // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
+    if (__parse_encap_vxlan_tunnel_header(skb, dns_payload) == SUSPICIOUS) {
+        __u32 br_index = 5;
+        __u32 out = raw_skb->ifindex;
+        __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+
+        // populate the br_index handler clone for skb from kernel over the packet bridge 
+        struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+        if (config) {
+            br_index = config->NfNdpBridgeIndexId;
+            dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
+        }else {
+            #ifdef DEBUG
+            if (!DEBUG) {
+                bpf_printk("kernel cannot find the requred kernel config redirect map");
+            }
+            #endif
+        }
+        return 1;
+    }
+
     struct dns_flags  flags;
     flags = get_dns_flags(dns_header);
     
@@ -695,18 +771,9 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
 
 
 static 
-__always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, void * transport_payload) {
-
-    return 1;
-}
-
-
-static 
-__always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, void * dns_payload, 
+__always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, struct __sk_buff *raw_skb, void * dns_payload, 
                 struct dns_header_tcp *dns_header) {
                     
-    
-    if (__parse_encap_vxlan_tunnel_header(skb, dns_payload) == 0) return 0;
 
     struct dns_flags flags = get_dns_flags_tcp(dns_header);
     // qeuries section 
@@ -734,7 +801,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
             }
         #endif
 
-        struct dns_flags dns_header_flags = get_dns_flags(dns_header);
+        struct dns_flags dns_header_flags = get_dns_flags_tcp (dns_header); // padding length in raw skb added for parsing 
         
         // 1, verify the opcodes, and rcode raw parse from the header 
         if (dns_header_flags.opcode > valid_opcodes[1]) return 1;
@@ -785,6 +852,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
 
     return 0;
 }
+
 
 
 static 
@@ -930,7 +998,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         __u32 dest_port = bpf_ntohs(udp->dest);
      
         // TODO: Fix hte code redundancy 
-        __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, 
+        __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, skb,
                             dns_payload, dns);
         if (__non_standard_port_dpi == 0) {
             // emit the ring buff from kernel as a transport event 
@@ -988,7 +1056,7 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
     if ((void *)(tcp + 1) > cursor.data_end)
         return 1;
 
-    __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port_tcp(&cursor, 
+    __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port_tcp(&cursor, skb,
                                                                                   dns_payload, dns);
 
     if (__non_standard_port_dpi == 0) {
@@ -1258,7 +1326,7 @@ int classify(struct __sk_buff *skb){
     struct udphdr *udp; struct tcphdr *tcp;
 
     __be16 hproto;
-    // check for vxland or vlan packet virtualization or tunneling to packet scan over intern packet data 
+    // check for vland-ieee encap for layer 2 or vlan packet virtualization or tunneling to packet scan over intern packet data 
     if (eth->h_proto == bpf_htons(ETH_P_8021Q) || eth->h_proto == bpf_htons(ETH_P_8021AD)) {
         struct vlan_hdr *vlan;
         

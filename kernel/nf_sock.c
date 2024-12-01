@@ -48,6 +48,8 @@ int netlink_socket() {
         if (DEBUG) {
             bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
         }
+        bpf_ringbuf_discard_dynptr(&dptr, 0);
+        return 0;
     }
     struct event_setSockEvent event = (struct event_setSockEvent) {
         .process_id = bpf_get_current_pid_tgid() >> 32,
