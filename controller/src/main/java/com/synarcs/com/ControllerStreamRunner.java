@@ -2,17 +2,14 @@ package com.synarcs.com;
 
 import java.io.Serializable;
 
-public class ControllerStreamRunner extends Thread implements Serializable, IController {
+public class ControllerStreamRunner implements Serializable, IController, Runnable {
     
     public ControllerStreamRunner() {
         super();
     }
 
     @Override 
-    public void run() {
-    }
-
-
+    public void run() {}
     /**
      * Configure the remote kafka broker for stream analytics over the trheat events streamed by each node agent 
      */
