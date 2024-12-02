@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
@@ -80,6 +81,9 @@ func main() {
 		ConfigChannel: config,
 	}
 
+	cliSock := cli.GenerateRemoteCliSocketServer()
+	go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
+
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
 	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
@@ -131,6 +135,7 @@ func main() {
 		tc.IsLinkPppLinkAttached(&ctx)
 
 		kprobe.DetachSockHandler()
+		cliSock.CleanRemoteSock()
 	}
 
 	go func() {

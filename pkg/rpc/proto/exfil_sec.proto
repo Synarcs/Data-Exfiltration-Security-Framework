@@ -10,6 +10,10 @@ message ExfilDomains {
     int64 totalLength = 3;
 };
 
+message ExfillSecurityLengthLimits { 
+    map<int32, int32> domainrangeExfilLimits = 1;
+}
+
 message ExfilDomainsLength {
     int64 len = 1;
 }

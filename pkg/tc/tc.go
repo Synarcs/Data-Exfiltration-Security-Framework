@@ -44,7 +44,8 @@ const (
 
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
-	INIT_KERNEL_SOCKET = true
+	INIT_KERNEL_SOCKET        = true
+	INIT_LIMITS_KERNEL_CONFIG = false
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
@@ -270,6 +271,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}
 
 	// populate the limit map from the kernel
+	// makes the kernel packet redirection re-programmable to kernel process the packet redirection based on the limit configured
+	// usually kernel process each packet via default bpf_spinlocks to ensure each map is memory safe in kernel heap and consistent
 	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
 	if dnsLimitsMap != nil {
 		// grab the fd from the kernel process to load the egress filter map limit
@@ -282,6 +285,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 			}
 		}
 
+		INIT_LIMITS_KERNEL_CONFIG = true
 		if utils.DEBUG {
 			log.Println("The Node Agent loaded the dns limits in Kernel successfully")
 		}
@@ -326,6 +330,26 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		tc.ProcessSniffDPIPacketCapture(iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}
+}
+
+func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfig map[uint32]uint32) error {
+	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
+	if dnsLimitsMap != nil {
+		// grab the fd from the kernel process to load the egress filter map limit
+		
+		for index, limit := range cliProcessedDnsConfig {
+			err := dnsLimitsMap.Put(
+				index, limit)
+			if err != nil {
+				log.Println("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+			}
+		}
+
+		if utils.DEBUG {
+			log.Println("The Node Agent loaded the dns limits in Kernel successfully")
+		}
+	}
+	return nil
 }
 
 func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {

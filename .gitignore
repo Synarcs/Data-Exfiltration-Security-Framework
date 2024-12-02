@@ -2,3 +2,4 @@
 /bin/* 
 deps.bzl
 kernel/vmlinux.h
+controller/target/* 
