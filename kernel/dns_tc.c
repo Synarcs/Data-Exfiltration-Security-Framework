@@ -670,12 +670,12 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
     if ((void *)eth + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
 
    switch bpf_ntohs(eth->h_proto) {
-     case ETH_P_IP: {
+     case ETH_P_IP: 
         struct iphdr *ip = (struct iphdr *) ((void *)eth + sizeof(struct ethhdr));
         if ((void *) (ip + sizeof(struct iphdr)) > skb->data_end) return BENIGN;
 
         switch (ip->protocol) {
-            case IPPROTO_UDP: {
+            case IPPROTO_UDP: 
                 struct udphdr *udp = (struct udphdr *) ((void *)ip + sizeof(struct iphdr));
                 if ((void *) udp + 1 > skb->data_end) return BENIGN;
                 if (bpf_ntohs(udp->dest) == DNS_EGRESS_PORT) {
@@ -688,11 +688,9 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
                     return SUSPICIOUS;
                 }else if (bpf_ntohs(udp->dest) == DNS_EGRESS_MULTICAST_PORT) return BENIGN;
                 else return BENIGN;
-            }
             case IPPROTO_TCP: return BENIGN;
             default: return BENIGN;
         }
-     }
      case ETH_P_IPV6:  return BENIGN;
      default: return BENIGN;
    }
@@ -1320,6 +1318,13 @@ int classify(struct __sk_buff *skb){
     if (actions.parse_eth(&cursor) == 0) return TC_DROP;
     eth = cursor.data;
     __u32 nhoff = ETH_HLEN;
+
+    #ifdef DEBUG 
+      if (DEBUG) {
+        long (*callback_debug_func) (struct bpf_map *, const void *, void *, void *);
+      }
+    #endif 
+
 
 	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 

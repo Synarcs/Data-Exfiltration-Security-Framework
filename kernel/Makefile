@@ -24,6 +24,7 @@ compile:
 	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
+	make clean-bpf 
 
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
@@ -56,7 +57,7 @@ compile-x86:
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 	make clean-bpf 
-
+	make clean-
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc
@@ -129,7 +130,7 @@ netlink:
 
 .PHONY: netlink-x86 
 netlink-x86: 
-	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for amd64"
+	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for x86" 
 	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 

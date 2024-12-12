@@ -9,12 +9,11 @@ import java.util.concurrent.Future;
  * Main Kafka Stream Controller 
  *
  */
-public class App  implements Serializable {
+public class App implements Serializable {
     public static void main( String[] args ){
 
-        ExecutorService service = Executors.newFixedThreadPool(1 << 2);
-        service.submit(new ControllerStreamRunner());
-
+        ExecutorService service = Executors.newFixedThreadPool(1 << 5);
+        for (int i=0; i < (1 << 5); i++) service.submit(new ControllerStreamRunner());
 
         Runtime.getRuntime().addShutdownHook(
             new Thread(() -> {

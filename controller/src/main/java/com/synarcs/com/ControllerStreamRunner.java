@@ -1,15 +1,30 @@
 package com.synarcs.com;
 
 import java.io.Serializable;
+import java.util.Properties;
+import org.apache.kafka.streams.kstream.*;
 
 public class ControllerStreamRunner implements Serializable, IController, Runnable {
-    
+    private KafkaConfig config;
+
     public ControllerStreamRunner() {
         super();
     }
 
+    public ControllerStreamRunner(KafkaConfig config) {
+        super();
+        this.config = config;
+    }
+
+    public Properties ConfigureBroker() {
+        Properties props = new Properties();
+        return props;
+    }
+
     @Override 
-    public void run() {}
+    public void run() {
+        ProcessStreamAnalyticsDSl();
+    }
     /**
      * Configure the remote kafka broker for stream analytics over the trheat events streamed by each node agent 
      */
@@ -20,7 +35,6 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
      * Defines the complete Kafka streams DSL to process Kstream and Ktable for threat stream analytics.
      */
     public void ProcessStreamAnalyticsDSl(){
-        
         Thread current = Thread.currentThread();
         System.out.println("processing the broker stream analytics for the thread " + current.getId() + 
                         current.getName());

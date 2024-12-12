@@ -136,7 +136,7 @@ var (
 			Help: "The malicious detected dns packet",
 		},
 		[]string{
-			"Fqdn", "Tld", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
+			"Fqdn", "SLD", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
 			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers", "PhysicalNodeIpv4",
@@ -299,7 +299,7 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 
 	labels := prometheus.Labels{
 		"Fqdn":                  SanatizeRune([]byte(feature.Fqdn)),
-		"Tld":                   SanatizeRune([]byte(feature.Tld)),
+		"SLD":                   SanatizeRune([]byte(feature.Tld)),
 		"Subdomain":             SanatizeRune([]byte(feature.Subdomain)),
 		"TotalChars":            strconv.Itoa(feature.TotalChars),
 		"TotalCharsInSubdomain": strconv.Itoa(feature.TotalCharsInSubdomain),

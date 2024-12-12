@@ -12,7 +12,7 @@ compile:
 .PHONY: compile-kernel
 compile-kernel:
 	@echo "Compiling all kernel ebpf programs"
-	cd ../kernel && make && make netlink 
+	cd ../kernel && make
 
 .PHONY: build
 build:
