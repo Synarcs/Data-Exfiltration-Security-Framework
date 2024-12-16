@@ -1,0 +1,21 @@
+[Unit]
+Description=EBPF Data Exfiltration Security Framework
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/brctl.sh
+ExecStart=/usr/bin/infer
+ExecStart=/usr/bin/main
+RemainAfterExit=yes
+PrivateDevices=yes
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target
+

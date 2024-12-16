@@ -2,7 +2,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
 import numpy as np 
 from typing import Any, Callable, NoReturn, Self
-import os, sys, socket, json 
+import os, sys, socket, json, subprocess
 import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
@@ -10,7 +10,6 @@ import http.server
 import consts, infer
 import datetime
 from abc import ABC, abstractmethod 
-
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)

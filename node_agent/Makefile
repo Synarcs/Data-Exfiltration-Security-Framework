@@ -25,6 +25,17 @@ run-inference:
 	@echo "Running the Remote unix socket inference server" 
 	sudo python3 ../model/infer/inference.py
 
+.PHONY: infer-build
+infer-build:
+	@echo "Building the python compiled binary"
+	pyinstaller -n infer --onefile  ../model/infer/inference.py ../model/infer/infer.py ../model/infer/consts.py 
+	rm -rf build
+
+.PHONY: infer-run 
+infer-run:
+	@echo "Running the compiled Python Binary"
+	sudo ./dist/infer
+
 .PHONY: run
 start: 
 	sudo ./main 

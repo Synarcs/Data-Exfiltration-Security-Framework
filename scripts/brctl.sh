@@ -1,5 +1,6 @@
-sudo ip netns 
+#!/bin/sh
 
+sudo ip netns 
 
 # sx1 used for egress redirection done via same bridge 
 

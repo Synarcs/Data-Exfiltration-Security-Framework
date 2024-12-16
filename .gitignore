@@ -3,3 +3,15 @@
 deps.bzl
 kernel/vmlinux.h
 controller/target/* 
+
+
+node_agent/dist/
+
+build/*
+package/*
+
+*.deb
+*.rpm 
+*.osx 
+
+
