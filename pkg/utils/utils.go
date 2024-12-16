@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-const DEBUG = false
+var DEBUG = false
 
 // kernel network traffic control and xdp ingress layer
 const (
