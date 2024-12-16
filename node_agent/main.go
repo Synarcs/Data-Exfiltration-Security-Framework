@@ -24,10 +24,18 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
 
+func initGlobalErrorControlChannel() chan bool {
+	return make(chan bool)
+}
+
 func main() {
+	var cliFlag bool
+	var debug bool
+	var streamClient bool
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
-	flag.Bool("debug", false, "Run the Node Agent in debug mode")
-	flag.Bool("streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
+	flag.BoolVar(&debug, "debug", false, "Run the Node Agent in debug mode")
+	flag.BoolVar(&streamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
+	flag.BoolVar(&cliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
 
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
@@ -35,6 +43,30 @@ func main() {
 	}
 
 	flag.Parse()
+
+	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
+
+	cliSock := cli.GenerateRemoteCliSocketServer()
+	if cliFlag {
+		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
+		go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
+	}
+
+	if debug {
+		utils.DEBUG = debug
+	}
+
+	if streamClient {
+		config := make(chan interface{})
+		rpcServer := rpc.NodeAgentService{
+			ConfigChannel: config,
+		}
+
+		if !utils.DEBUG {
+			// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
+			go rpcServer.Server()
+		}
+	}
 
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
@@ -70,19 +102,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	globalErrorKernelHandlerChannel := make(chan bool)
-
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
 	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
-
-	config := make(chan interface{})
-	rpcServer := rpc.NodeAgentService{
-		ConfigChannel: config,
-	}
-
-	cliSock := cli.GenerateRemoteCliSocketServer()
-	go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
 
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
 	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
@@ -109,11 +131,6 @@ func main() {
 
 	go events.StartPrometheusMetricExporterServer()
 
-	if !utils.DEBUG {
-		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
-		go rpcServer.Server()
-	}
-
 	go ingress.SniffIgressForC2C()
 
 	if utils.DEBUG {
@@ -135,7 +152,10 @@ func main() {
 		tc.IsLinkPppLinkAttached(&ctx)
 
 		kprobe.DetachSockHandler()
-		cliSock.CleanRemoteSock()
+
+		if cliFlag {
+			cliSock.CleanRemoteSock()
+		}
 	}
 
 	go func() {

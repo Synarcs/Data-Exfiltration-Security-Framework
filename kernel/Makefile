@@ -33,10 +33,10 @@ vmlinux-btf:
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
-	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
-	cp tc.o ../node_agent/
-	cp bridge.o ../node_agent/ebpf/ 
-	sudo llv-objdump -S tc.o 
+	@echo "emit llvm compile ir for the ebpf bytecode"
+	sudo clang -target bpf -S -emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o ir/tc_ir -c $(tc_kernel)
+	sudo clang -target bpf -S -I/usr/include/aarch64-linux-gnu -g -O2 -o ir/netlink_ir -c $(netlink_kernel) 
+
 
 .PHONY: compile-llvm-x86
 compile-llvm-x86:
