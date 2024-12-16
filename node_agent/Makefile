@@ -25,6 +25,11 @@ run-inference:
 	@echo "Running the Remote unix socket inference server" 
 	sudo python3 ../model/infer/inference.py
 
+.PHONY: netinet
+netinet:
+	@echo "Creating Network Overlay topology for eBPF Node agent via kernel veth brdiges and linux namespaces"
+	bash ../scripts/brctl.sh
+
 .PHONY: infer-build
 infer-build:
 	@echo "Building the python compiled binary"
