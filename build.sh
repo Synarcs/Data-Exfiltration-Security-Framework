@@ -1,5 +1,7 @@
 #!/bin/sh 
 
+build_controller=$1 
+
 dir=$(pwd)
 
 echo "[x] Building Kernel eBPF code, eBPF node agent Go Binary Cilium, and inference socket"
@@ -41,6 +43,10 @@ buildpackage() {
 loadbinaries
 buildpackage
 
+
+if [ $build_controller ]; then 
+  bash controller.sh 
+fi 
 
 
 

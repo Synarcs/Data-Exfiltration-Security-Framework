@@ -116,6 +116,58 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		return
 	}
 
+	processRemoteInferTunnel := func() (bool, error) {
+		return false, nil
+	}
+
+	parseUdpEncap := func(l3ip *layers.IPv4, l3ipv6 *layers.IPv6) bool {
+		if l3ip != nil {
+			status, err := processRemoteInferTunnel()
+			if err != nil {
+				errorChannel <- struct {
+					Err string
+				}{
+					Err: "The kernel has not cloned the packet from tc layer",
+				}
+			}
+			return status
+		} else {
+			udp := layers.UDP{}
+			if err := udp.DecodeFromBytes(l3ip.Payload, gopacket.NilDecodeFeedback); err != nil {
+				return false
+			}
+		}
+		return false
+	}
+
+	isPackEncapsulated := func(dnsPacket *layers.DNS, transportPayload []byte) bool {
+		if dnsPacket == nil {
+			return false
+		}
+
+		// vxland tunnel encap is always over udp vlan id based port whole packet encap
+
+		eth := layers.EtherIP{}
+
+		if err := eth.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback); err != nil {
+			return false
+		}
+
+		l3Payload := eth.Payload
+
+		ipv4 := layers.IPv4{}
+		ipv6 := layers.IPv6{}
+
+		if err := ipv4.DecodeFromBytes(l3Payload, gopacket.NilDecodeFeedback); err != nil {
+			// no t a ipv4 encap vxlan packet
+			return false
+		}
+		if err := ipv6.DecodeFromBytes(l3Payload, gopacket.NilDecodeFeedback); err != nil {
+			return false
+		}
+		return parseUdpEncap(nil, &ipv6)
+	}
+
 	// this will always exist since the kenrel will only allow a l4 packet to reach to this bridge in user space via netfilter
 	packetTransportLayer := packet.TransportLayer()
 	if packetTransportLayer == nil {
@@ -171,6 +223,10 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					Err: "The kernel has not cloned the packet from tc layer",
 				}
 			}
+			return
+		}
+
+		if isPackEncapsulated(dns, transportPayload) {
 			return
 		}
 		event.IsPacketRescanedAndMalicious = uint8(1)

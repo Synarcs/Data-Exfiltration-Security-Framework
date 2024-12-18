@@ -9,7 +9,6 @@ sudo ip addr add 192.120.0.1/24 dev vxlan0
 
 sudo ip link set vxlan0 up
 
-
 sudo ip link add vxlan0 type vxlan id 100 remote 192.168.64.25 dstport 4789 dev enp0s1
 sudo ip addr add 192.120.0.2/24 dev vxlan0
 

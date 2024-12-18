@@ -21,12 +21,9 @@ sudo apt update -y && sudo apt install -y \
     strace \
     git \
     autoconf \
-    # libz-dev \
-    libdw-dev \
     libcap-dev \
     vim  \
     curl \ 
-    libpcap-dev \
     libdebuginfod-dev \
     bison \
     flex \
@@ -35,7 +32,9 @@ sudo apt update -y && sudo apt install -y \
     libcurl4-openssl-dev \
     libedit-dev \
     libsasl2-dev  \
-    librdkafka-dev
+    librdkafka-dev \
+    inetutils-ping \
+    bsdmainutils
 
 sudo apt install -y \
     libssl-dev libncurses5-dev libsqlite3-dev libreadline-dev libtk8.6 libgdm-dev libpcap-dev

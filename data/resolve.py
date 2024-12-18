@@ -1,5 +1,4 @@
 import os
-from xml import dom
 import dns.resolver
 from typing import List
 import pandas as pd 
@@ -37,7 +36,7 @@ def get_txt_records(domain) -> List[str]:
     except Exception as err: pass 
 
 
-with open('top-host.csv', mode ='r')as file:
+with open('top-host.csv', mode ='r', encoding='utf-8')as file:
     csvFile = csv.reader(file)
     for file in csvFile: 
         domains = get_mx_records(file[-1])

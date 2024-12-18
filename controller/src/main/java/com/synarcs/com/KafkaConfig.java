@@ -1,6 +1,8 @@
 package com.synarcs.com;
 
-public class KafkaConfig {
+import java.io.Serializable;
+
+public class KafkaConfig implements Serializable {
 
     private String BrokerUrlIpv4;
 

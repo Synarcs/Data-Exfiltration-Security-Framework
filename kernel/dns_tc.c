@@ -684,7 +684,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
 
                     void *dns_vxlan_encap_payload = dns + sizeof(struct dns_header);
                     if ((void *) dns_vxlan_encap_payload + 1 > skb->data_end) return BENIGN;
-                    
+
                     return SUSPICIOUS;
                 }else if (bpf_ntohs(udp->dest) == DNS_EGRESS_MULTICAST_PORT) return BENIGN;
                 else return BENIGN;
