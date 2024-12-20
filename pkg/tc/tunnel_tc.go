@@ -33,6 +33,15 @@ func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalError
 	}
 }
 
+func isNetBiosTunnelNSLookUp(dnsPacket *layers.DNS) bool {
+	for _, question := range dnsPacket.Questions {
+		if question.Type == layers.DNSType(32) { // a NETBIOS record dns quert
+			return true
+		}
+	}
+	return false
+}
+
 func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	handler, err := tun.IfaceHandler.GetBridgePcapHandleClone()
 
@@ -116,56 +125,61 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		return
 	}
 
-	processRemoteInferTunnel := func() (bool, error) {
-		return false, nil
-	}
-
-	parseUdpEncap := func(l3ip *layers.IPv4, l3ipv6 *layers.IPv6) bool {
-		if l3ip != nil {
-			status, err := processRemoteInferTunnel()
-			if err != nil {
-				errorChannel <- struct {
-					Err string
-				}{
-					Err: "The kernel has not cloned the packet from tc layer",
-				}
-			}
-			return status
-		} else {
-			udp := layers.UDP{}
-			if err := udp.DecodeFromBytes(l3ip.Payload, gopacket.NilDecodeFeedback); err != nil {
-				return false
-			}
-		}
-		return false
-	}
-
 	isPackEncapsulated := func(dnsPacket *layers.DNS, transportPayload []byte) bool {
 		if dnsPacket == nil {
 			return false
 		}
 
+		vxlanHeader := layers.VXLAN{}
+
+		if err := vxlanHeader.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback); err != nil {
+			return false
+		}
 		// vxland tunnel encap is always over udp vlan id based port whole packet encap
 
-		eth := layers.EtherIP{}
+		remoteDestVniTransportID := vxlanHeader.VNI
+		remoteDestVxlanPayload := vxlanHeader.Payload
 
-		if err := eth.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback); err != nil {
+		etherPayload := layers.Ethernet{}
+
+		if err := etherPayload.DecodeFromBytes(remoteDestVxlanPayload, gopacket.NilDecodeFeedback); err != nil {
 			return false
 		}
 
-		l3Payload := eth.Payload
-
-		ipv4 := layers.IPv4{}
-		ipv6 := layers.IPv6{}
-
-		if err := ipv4.DecodeFromBytes(l3Payload, gopacket.NilDecodeFeedback); err != nil {
-			// no t a ipv4 encap vxlan packet
+		// only parsing ipv4 l3 as encap for vxlan
+		ipv4Header := layers.IPv4{}
+		if err := ipv4Header.DecodeFromBytes(etherPayload.Payload, gopacket.NilDecodeFeedback); err != nil {
 			return false
 		}
-		if err := ipv6.DecodeFromBytes(l3Payload, gopacket.NilDecodeFeedback); err != nil {
-			return false
+
+		udp := layers.UDP{}
+		if err := udp.DecodeFromBytes(ipv4Header.Payload, gopacket.NilDecodeFeedback); err != nil {
+			tcp := layers.TCP{}
+			if err := tcp.DecodeFromBytes(tcp.Payload, gopacket.NilDecodeFeedback); err != nil {
+				return false
+			}
+
+			dns := layers.DNS{}
+			if err := dns.DecodeFromBytes(tcp.Payload, gopacket.NilDecodeFeedback); err != nil {
+				return false
+			}
+
+			if utils.DEBUG {
+				log.Println("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
+			}
+			return true
+		} else {
+			dns := layers.DNS{}
+			if err := dns.DecodeFromBytes(udp.Payload, gopacket.NilDecodeFeedback); err != nil {
+				return false
+			}
+
+			if utils.DEBUG {
+				log.Println("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
+			}
+			return true
 		}
-		return parseUdpEncap(nil, &ipv6)
+
 	}
 
 	// this will always exist since the kenrel will only allow a l4 packet to reach to this bridge in user space via netfilter
@@ -227,8 +241,13 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		}
 
 		if isPackEncapsulated(dns, transportPayload) {
+			if utils.DEBUG {
+				log.Println("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
+			}
+			tun.EnsureTransportTunnelPortMapUpdate(ebpfMap, destPortGenType, &event, errorChannel, true) // send true for now need DPI for deep scan over hte packet structure
 			return
 		}
+
 		event.IsPacketRescanedAndMalicious = uint8(1)
 		features, err := model.ProcessDnsFeatures(dns, true)
 
@@ -244,17 +263,23 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 
 		tun.EnsureTransportTunnelPortMapUpdate(ebpfMap, destPortGenType, &event, errorChannel, false)
 
-		for _, feature := range features {
-			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
-			go tun.StreamClient.MarshallThreadEvent(feature)
+		// check for the neybios local samba lookup for ns resoultion with NB reocrd for queries
+		if !isNetBiosTunnelNSLookUp(dns) {
+			for _, feature := range features {
+				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
+				go tun.StreamClient.MarshallThreadEvent(feature)
+			}
+			// the tunnel metric event for other non stanard port monitor from kernel
+			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
+				Src_port:       int(event.SrcPort),
+				Dest_port:      int(event.DstPort),
+				IsUDPTransport: true,
+			})
+		} else {
+			// process nothing in userspace
+			// just cehck and deep parse the questions of the record for netbios kernel query
+			// standard go packet does not parse any NB query records
 		}
-
-		// the tunnel metric event for other non stanard port monitor from kernel
-		go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
-			Src_port:       int(event.SrcPort),
-			Dest_port:      int(event.DstPort),
-			IsUDPTransport: true,
-		})
 
 	} else {
 		destPort := tcpPack.(*layers.TCP).DstPort

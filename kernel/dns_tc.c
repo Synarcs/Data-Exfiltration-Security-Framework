@@ -1502,8 +1502,13 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
-            }else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)){
+            }else if (udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) || \
+                      udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
+                if (DEBUG) {
+                    bpf_printk("Detected a possible multicast local link NS resolution request");
+                }
                 return TC_FORWARD;
+                
             }else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
@@ -1771,8 +1776,12 @@ int classify(struct __sk_buff *skb){
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, 0);
 
-            } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
-                return TC_FORWARD;
+            } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT) || \
+                      udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
+                if (DEBUG) {
+                    bpf_printk("Detected a possible multicast local link NS resolution request");
+                }
+                return TC_FORWARD; 
             }else {
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, false) == 1)
                     return TC_FORWARD;
