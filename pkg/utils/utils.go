@@ -35,7 +35,7 @@ const (
 const (
 	BRIDGE_IPAM_IPV4_CIDR          = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP            = "10.200.0."
-	BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP = "10.210.0.0"
+	BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP = "10.210.0.0" // send to the router bridge gateway for now 
 )
 
 const (

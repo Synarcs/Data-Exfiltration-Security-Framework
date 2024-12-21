@@ -5,6 +5,7 @@ package tc
 import (
 	"errors"
 	"log"
+	"runtime"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -43,6 +44,8 @@ func isNetBiosTunnelNSLookUp(dnsPacket *layers.DNS) bool {
 }
 
 func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
+	runtime.LockOSThread()
+
 	handler, err := tun.IfaceHandler.GetBridgePcapHandleClone()
 
 	if err != nil {

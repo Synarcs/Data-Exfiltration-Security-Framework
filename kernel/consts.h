@@ -103,6 +103,20 @@ __u32 redirect_skb_mark = 0xFF;
            bpf_ntohs(0x6d97), 
         }
     };
+
+    // // fe80::d091:3cff:fe25:6d98/64 (ipv6 route for malicious) 
+    struct in6_addr bridge_redirect_addr_ipv6_malicious_tunnel = {
+        .in6_u.u6_addr16 = {
+           bpf_ntohs(0xfe80), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0xd091), 
+           bpf_ntohs(0x3cff), 
+           bpf_ntohs(0xfe25), 
+           bpf_ntohs(0x6d98), 
+        }
+    };
 #endif
 // fe80::5c0a:20ff:fe93:9ef1
 
@@ -122,5 +136,9 @@ struct result_parse_dns_labels {
 
 #define MAX_FREQUENCY_PER_SEC 100
 
+
+#ifndef WIN_PHYSICAL_HYPERVISOR
+    #define WIN_PHYSICAL_HYPERVISOR 0 
+#endif 
 
 #endif

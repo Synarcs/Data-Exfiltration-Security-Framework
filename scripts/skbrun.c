@@ -10,12 +10,16 @@
 
 enum ProcHandler { MEMFLOW = 1 };
 
+typedef __uint8_t __u8;
+typedef __uint16_t __u16;
+
 typedef struct Proc {
     int processId;
     struct Proc *next;
     void * (*handler) (void *, void *, int);
     void * (*handler_status) (void *, enum ProcessHandler);
-} procMap;
+    __u8 *  (*resp_handler) (void *, void *, __u16 *);
+} procMap, threadParentMaps;
 
 typedef struct actions {
     union  {
