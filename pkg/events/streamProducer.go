@@ -3,12 +3,13 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -17,39 +18,56 @@ type StreamBrokerConfig struct {
 	Topic   string
 }
 
-type StreaClient struct {
+type StreamClient struct {
 	StreamBrokerConfig
-	conn *kafka.Conn
+	conn         *kafka.Conn
+	GlobalConfig *utils.NodeAgentConfig
 }
 
 const (
 	STREAM_THREAT_TOPIC = "exfil-sec"
 )
 
-func (stream *StreaClient) GenerateStreamKafkaProducer(ctx *context.Context) error {
+func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) error {
 
-	conn, err := kafka.Dial("tcp", "10.0.0.175:9092")
+	conn, err := kafka.Dial("tcp", fmt.Sprintf("%s:%s", stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port))
 
+	log.Println("Connecting to Remote Message Broker", conn.RemoteAddr())
 	if err != nil {
 		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)
 		return err
 	}
 
-	controller, err := conn.Controller()
 	if err != nil {
 		panic(err.Error())
 	}
 
-	connLeader, err := kafka.DialLeader(*ctx, "tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)), STREAM_THREAT_TOPIC, 0)
+	// dial to kraft enbaled leader kafka broker
+	connLeader, err := kafka.Dial("tcp", net.JoinHostPort(stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port))
 
 	if err != nil {
 		panic(err.Error())
 	}
 	stream.conn = connLeader
+
+	topic := []kafka.TopicConfig{
+		{
+			Topic:             STREAM_THREAT_TOPIC,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		},
+	}
+
+	if err := connLeader.CreateTopics(topic...); err != nil {
+		if errors.Is(err, kafka.TopicAlreadyExists) {
+			log.Printf("Topic already exists %+v", err)
+		}
+		panic(err.Error())
+	}
 	return nil
 }
 
-func (stream *StreaClient) StreamThreadEvent(event []byte) error {
+func (stream *StreamClient) StreamThreadEvent(event []byte) error {
 	if stream.conn == nil {
 		return nil
 	}
@@ -66,7 +84,7 @@ func (stream *StreaClient) StreamThreadEvent(event []byte) error {
 	return nil
 }
 
-func (stream *StreaClient) MarshallThreadEvent(event interface{}) error {
+func (stream *StreamClient) MarshallThreadEvent(event interface{}) error {
 	marshalledEvent, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -79,7 +97,7 @@ func (stream *StreaClient) MarshallThreadEvent(event interface{}) error {
 	return nil
 }
 
-func (stream *StreaClient) CloseStreamClient() error {
+func (stream *StreamClient) CloseStreamClient() error {
 	if stream.conn == nil {
 		return fmt.Errorf("The remote kafka broker conn is %+v", stream.conn)
 	}

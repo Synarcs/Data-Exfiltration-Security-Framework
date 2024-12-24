@@ -1,12 +1,19 @@
-#!/bin/sh 
+#!/bin/bash 
 
-set -e 
+sudo apt-get -y update 
 
-# install pdns
-sudo dnf install -y pdns pdns-backend-postgresql -y
+sudo apt-get install -y pdns-server pdns-backend-pgsql pdns-recursor postgresql
 
-# start postgresql
-docker run pdns -p 5432:5432  -e POSTGRES_PASSWORD=postgres -d postgres
+sudo -u postgres createuser pdns
+
+sudo -u postgres createdb pdns
+
+sudo -u postgres psql -c "ALTER USER pdns WITH PASSWORD 'pdns_exfil'"
+
+psql -d pdns -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO pdns;"
+psql -d pdns -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO pdns;"
 
 
-sudo apt-get install -y pdns-server pdns-backend-pgsql
+echo "[x] Veridy the pdns process permission"
+psql -d pdns -c "\dp"
+

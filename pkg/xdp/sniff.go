@@ -26,7 +26,7 @@ type IngressSniffHandler struct {
 	OnnxModel    *model.OnnxModel
 	DnsFeatures  *model.DNSFeatures
 	DnsPacketGen *model.DnsPacketGen
-	StreamClient *events.StreaClient
+	StreamClient *events.StreamClient
 
 	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
 }
@@ -34,7 +34,7 @@ type IngressSniffHandler struct {
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
 func GenerateXDPIngressFactory(iface netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *events.StreaClient, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
+	onnxModel *model.OnnxModel, streamClient *events.StreamClient, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
 	return IngressSniffHandler{
 		IfaceHandler:                    &iface,
 		DnsPacketGen:                    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),

@@ -1,3 +1,21 @@
-dns_resolver: 
-  ipv4: 192.168.64.24
-  ipv6: ::1
+# store the stream client lb ipv4 and ipv6 for message broker (kafka)
+streamServer:
+  host: cssvlab01.uwb.edu
+  port: 9092
+
+# store the enterprise powerdns server 
+# uses internally the pdns recursor for fast concurrent query processing 
+dnsServer:
+  host: cssvlab08.uwb.edu
+  port: 8082
+
+
+# store the metric server (prmetheus exporters running to scrape info) ipv4 and ipv6 
+metricServer:
+  host: cssvlab01.uwb.edu
+  port: 9090
+
+grafanaServer: 
+  host: cssvlab01.uwb.edu
+  port: 3000
+  

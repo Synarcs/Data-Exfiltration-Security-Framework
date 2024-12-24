@@ -34,7 +34,7 @@ type DNSFeatures struct {
 }
 
 func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface,
-	onnxModel *OnnxModel, streamClient *events.StreaClient) *DnsPacketGen {
+	onnxModel *OnnxModel, streamClient *events.StreamClient) *DnsPacketGen {
 	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
 
 	if err == nil {

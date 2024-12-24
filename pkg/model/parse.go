@@ -26,7 +26,7 @@ type DnsPacketGen struct {
 	SocketSendFd        *int
 	XdpSocketSendFd     *xdp.Socket
 	OnnxModel           *OnnxModel
-	StreamClient        *events.StreaClient
+	StreamClient        *events.StreamClient
 }
 
 type CombinedFeatures []DNSFeatures

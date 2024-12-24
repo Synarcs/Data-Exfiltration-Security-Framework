@@ -37,7 +37,7 @@ func processChunk(file *os.File, chunk ChunkRange, t *TopDomains, wg *sync.WaitG
 	defer wg.Done()
 
 	buffer := make([]byte, chunk.End-chunk.Start)
-	_, err := file.ReadAt(buffer, chunk.Start)
+	_, err := file.ReadAt(buffer, chunk.Start) // lseef over the fptr for the opened fd
 	if err != nil {
 		return
 	}

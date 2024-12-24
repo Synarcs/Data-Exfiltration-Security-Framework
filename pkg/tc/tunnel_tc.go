@@ -21,11 +21,11 @@ type TCCloneTunnel struct {
 	IfaceHandler             *netinet.NetIface
 	GlobalKernelErrorChannel chan bool
 	PhysicalTcInterface      *TCHandler
-	StreamClient             *events.StreaClient
+	StreamClient             *events.StreamClient
 }
 
 func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan bool,
-	streamClient *events.StreaClient) *TCCloneTunnel {
+	streamClient *events.StreamClient) *TCCloneTunnel {
 	return &TCCloneTunnel{
 		IfaceHandler:             iface,
 		GlobalKernelErrorChannel: globalErrorChannel,

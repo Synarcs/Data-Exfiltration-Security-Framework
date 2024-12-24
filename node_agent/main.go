@@ -22,10 +22,32 @@ import (
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
+	"gopkg.in/yaml.v2"
 )
 
 func initGlobalErrorControlChannel() chan bool {
 	return make(chan bool)
+}
+
+func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
+	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
+			return nil, err
+		}
+		log.Printf("Erorr the config file exists but cannot be read %+v", err)
+		return nil, err
+	}
+
+	var config *utils.NodeAgentConfig = &utils.NodeAgentConfig{}
+
+	ff, _ := os.ReadFile(utils.NODE_CONFIG_FILE)
+
+	if err := yaml.Unmarshal(ff, &config); err != nil {
+		log.Printf("Error unmarshalling the config file %+v", err)
+	}
+
+	return config, nil
 }
 
 func main() {
@@ -45,6 +67,13 @@ func main() {
 	flag.Parse()
 
 	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
+
+	globalConfig, err := ReadGlobalNodeAgentConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	log.Println("The Node Agent booted with global config", globalConfig)
 
 	cliSock := cli.GenerateRemoteCliSocketServer()
 	if cliFlag {
@@ -88,7 +117,9 @@ func main() {
 		panic(err.Error())
 	}
 
-	streamProducer := &events.StreaClient{}
+	streamProducer := &events.StreamClient{
+		GlobalConfig: globalConfig,
+	}
 
 	if err := streamProducer.GenerateStreamKafkaProducer(&ctx); err != nil {
 		log.Println("The Remote Kafka stream broken not found for threat stream analytics continue...", err)

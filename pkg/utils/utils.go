@@ -35,7 +35,7 @@ const (
 const (
 	BRIDGE_IPAM_IPV4_CIDR          = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP            = "10.200.0."
-	BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP = "10.210.0.0" // send to the router bridge gateway for now 
+	BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP = "10.210.0.0" // send to the router bridge gateway for now
 )
 
 const (
@@ -49,6 +49,27 @@ const (
 	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/onnx-inference-out.sock"
 	ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/run/onnx-inference-in.sock"
 )
+
+const (
+	NODE_CONFIG_FILE = "config.yaml"
+)
+
+type NodeAgentConfig struct {
+	StreamServer struct {
+		Host string `yaml:"host" reflect:"host"`
+		Port string `yaml:"port" reflect:"port"`
+	} `yaml:"streamServer" reflect:"streamServer"`
+
+	DNSServer struct {
+		Host string `yaml:"host" reflect:"host"`
+		Port string `yaml:"port" reflect:"port"`
+	} `yaml:"dnsServer" reflect:"dnsServer"`
+
+	MetricServer struct {
+		Host string `yaml:"host" reflect:"host"`
+		Port string `yaml:"port" reflect:"port"`
+	} `yaml:"metricServer" reflect:"metricServer"`
+}
 
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int

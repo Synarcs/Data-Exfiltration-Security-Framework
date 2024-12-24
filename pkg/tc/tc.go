@@ -49,7 +49,7 @@ var (
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreaClient,
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreamClient,
 	globalErrorKernelHandlerChannel chan bool) TCHandler {
 	return TCHandler{
 		Interfaces:                      &iface,
@@ -236,7 +236,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
 
 	if prog == nil {
-		panic(fmt.Errorf("No Required TC Hook found for DNS egress"))
+		panic(fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG))
 	}
 	tc.Prog = prog
 	tc.TcCollection = spec
@@ -336,7 +336,7 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
 	if dnsLimitsMap != nil {
 		// grab the fd from the kernel process to load the egress filter map limit
-		
+
 		for index, limit := range cliProcessedDnsConfig {
 			err := dnsLimitsMap.Put(
 				index, limit)
