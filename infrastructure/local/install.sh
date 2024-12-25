@@ -2,5 +2,5 @@
 
 sudo dnf install named
 
-echo "nameserver 192.168.64.26" | sudo tee /etc/resolv.conf
+echo "nameserver 10.158.82.55" | sudo tee /etc/resolv.conf
 

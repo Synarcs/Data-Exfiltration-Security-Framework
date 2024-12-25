@@ -8,6 +8,7 @@ echo "[x] Building Kernel eBPF code, eBPF node agent Go Binary Cilium, and infer
 cd node_agent
 make build 
 make infer-build 
+rm -rf dist 
 
 cd ../
 echo "build autoInstall Build dir"
@@ -26,6 +27,7 @@ loadbinaries() {
   cp node_agent/main package/usr/bin
   cp node_agent/dist/infer package/usr/bin
   cp scripts/brctl.sh package/usr/bin
+  cp node_agent/config.yaml package/usr/bin 
   cp ebpf_agent.service package/lib/systemd/system/
   
   touch package/etc/sudoers.d/data-exfil

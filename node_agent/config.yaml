@@ -1,21 +1,33 @@
 # store the stream client lb ipv4 and ipv6 for message broker (kafka)
 streamServer:
   host: cssvlab01.uwb.edu
+  ip: 10.158.82.6 
   port: 9092
 
 # store the enterprise powerdns server 
 # uses internally the pdns recursor for fast concurrent query processing 
 dnsServer:
   host: cssvlab08.uwb.edu
+  ip: 10.158.82.55
   port: 8082
 
 
 # store the metric server (prmetheus exporters running to scrape info) ipv4 and ipv6 
 metricServer:
   host: cssvlab01.uwb.edu
+  ip: 10.158.82.6 
   port: 9090
 
+
+# service grafnaa viz exporter for dashboard UI 
 grafanaServer: 
   host: cssvlab01.uwb.edu
+  ip: 10.158.82.6  
   port: 3000
+  
+
+# prometheus custom local metrics exporter 
+metricsExporter:
+  port: 3232 # host is the local node exporting metrics whcih this centralized metric server can scrape 
+  ip: 0.0.0.0 # service local phsical inet net_device link bind from kernel 
   

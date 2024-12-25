@@ -270,7 +270,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		if !isNetBiosTunnelNSLookUp(dns) {
 			for _, feature := range features {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
-				go tun.StreamClient.MarshallThreadEvent(feature)
+				go tun.StreamClient.MarshallStreamThreadEvent(feature)
 			}
 			// the tunnel metric event for other non stanard port monitor from kernel
 			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{

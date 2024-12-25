@@ -137,7 +137,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(tcpPacket.DstPort))
 				}
-				go d.StreamClient.MarshallThreadEvent(feature)
+				go d.StreamClient.MarshallStreamThreadEvent(feature)
 			}
 		} else if len(features) == 1 {
 			if isUdp {
@@ -145,7 +145,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			} else {
 				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(tcpPacket.DstPort))
 			}
-			d.StreamClient.MarshallThreadEvent(features[0])
+			d.StreamClient.MarshallStreamThreadEvent(features[0])
 		}
 		return nil
 	} else {

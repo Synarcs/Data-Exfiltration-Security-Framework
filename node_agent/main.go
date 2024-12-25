@@ -160,7 +160,7 @@ func main() {
 	go kprobe.ProcessTunnelEvent(&ctx, &iface, tunnelSocketEventHandler, &tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
-	go events.StartPrometheusMetricExporterServer()
+	go events.StartPrometheusMetricExporterServer(globalConfig)
 
 	go ingress.SniffIgressForC2C()
 

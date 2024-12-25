@@ -1,3 +1,7 @@
+.PHONY: build 
+build:
+	bash build.sh 
+
 .PHONY: gazelle-update-repos
 gazelle-update-repos:
 	bazel run //:gazelle -- update-repos -from_file=go.mod

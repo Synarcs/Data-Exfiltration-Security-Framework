@@ -191,15 +191,20 @@ func init() {
 		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer)
 }
 
-func StartPrometheusMetricExporterServer() error {
+func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {
 
-	log.Println("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", 3232)
+	log.Println("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", config.MetricsExporter.Port)
+
 	metricMux := http.NewServeMux()
+
+	metricMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
 
 	metricMux.Handle("/metrics", promhttp.Handler())
 
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", utils.PROMETHEUS_METRICS_PORT),
+		Addr:    fmt.Sprintf(":%s", config.MetricsExporter.Port),
 		Handler: metricMux,
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,

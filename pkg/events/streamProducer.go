@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/segmentio/kafka-go"
@@ -22,6 +21,7 @@ type StreamClient struct {
 	StreamBrokerConfig
 	conn         *kafka.Conn
 	GlobalConfig *utils.NodeAgentConfig
+	ctx          *context.Context
 }
 
 const (
@@ -32,7 +32,6 @@ func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) er
 
 	conn, err := kafka.Dial("tcp", fmt.Sprintf("%s:%s", stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port))
 
-	log.Println("Connecting to Remote Message Broker", conn.RemoteAddr())
 	if err != nil {
 		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)
 		return err
@@ -64,6 +63,10 @@ func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) er
 		}
 		panic(err.Error())
 	}
+
+	log.Println("Connecting to remote kafka broker ", conn.RemoteAddr().String())
+
+	stream.ctx = ctx
 	return nil
 }
 
@@ -71,20 +74,28 @@ func (stream *StreamClient) StreamThreadEvent(event []byte) error {
 	if stream.conn == nil {
 		return nil
 	}
-	stream.conn.SetReadDeadline(time.Now().Add(time.Second * 10))
 
-	_, err := stream.conn.WriteMessages(
-		kafka.Message{
-			Value: event,
-		},
-	)
-	if err != nil {
+	log.Println("Remote host ", stream.GlobalConfig.StreamServer.Ip, stream.GlobalConfig.StreamServer.Port)
+
+	w := &kafka.Writer{
+		Addr:  kafka.TCP(net.JoinHostPort(stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port)),
+		Topic: STREAM_THREAT_TOPIC,
+	}
+
+	defer w.Close()
+	log.Println(w.Addr.Network(), w.Addr.String())
+	if err := w.WriteMessages(context.Background(), kafka.Message{
+		Value: event,
+	}); err != nil {
+		if utils.DEBUG {
+			log.Println("Error writing to kafka ", err)
+		}
 		return err
 	}
 	return nil
 }
 
-func (stream *StreamClient) MarshallThreadEvent(event interface{}) error {
+func (stream *StreamClient) MarshallStreamThreadEvent(event interface{}) error {
 	marshalledEvent, err := json.Marshal(event)
 	if err != nil {
 		return err
