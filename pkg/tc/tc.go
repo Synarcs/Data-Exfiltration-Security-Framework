@@ -323,7 +323,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	if INIT_KERNEL_SOCKET {
 
 		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
-			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient)
+			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel)
 		go tc_tunnel.SniffPacketsForTunnelDPI()
 
 		go tc_tunnel.SniffPacketsForTunnelDPI()

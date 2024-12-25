@@ -3,7 +3,11 @@ package tc
 // DPI over the clone redirect over tc from kernel done via the tc layer
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"runtime"
 	"time"
@@ -22,15 +26,17 @@ type TCCloneTunnel struct {
 	GlobalKernelErrorChannel chan bool
 	PhysicalTcInterface      *TCHandler
 	StreamClient             *events.StreamClient
+	Onnx                     *model.OnnxModel
 }
 
 func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan bool,
-	streamClient *events.StreamClient) *TCCloneTunnel {
+	streamClient *events.StreamClient, onnx *model.OnnxModel) *TCCloneTunnel {
 	return &TCCloneTunnel{
 		IfaceHandler:             iface,
 		GlobalKernelErrorChannel: globalErrorChannel,
 		PhysicalTcInterface:      tc,
 		StreamClient:             streamClient,
+		Onnx:                     onnx,
 	}
 }
 
@@ -223,7 +229,104 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 	if utils.DEBUG {
 		log.Println("Received a DNS packet for tunnel .....")
 	}
+
 	// a tunneled dns packet overlay over the protocol
+	// make the  packet pass through remote inferencing via the unix socket to be inferred with remote unix inference
+	processMaliciousInferenceNonStandardPort := func(features []model.DNSFeatures, destTransportPort uint16,
+		event *events.ExfilRawPacketMirror) error {
+
+		isAnySectionMal := false
+		for _, feature := range features {
+			if utils.GetKeyPresentInCache(feature.Tld) {
+				isAnySectionMal = true
+				break
+			}
+		}
+
+		if !isAnySectionMal {
+
+			/// used as a processing input for standard tensor vectors for the deep learning model
+			featureVectorsFloat := model.GenerateFloatVectors(features, tun.Onnx)
+			if tun.Onnx.StaticRuntimeChecks(featureVectorsFloat, true) == model.DEEP_LEXICAL_INFERENCING {
+				client, conn, err := model.GetInferenceUnixClient(true)
+
+				if err != nil {
+					log.Println("Error Gettting report inference socket for inference")
+
+				}
+				defer conn.Close()
+
+				inferRequest := model.InferenceRequest{
+					// pass all the 8 features which define the input layer for the inference in the onnx model
+					Features: featureVectorsFloat,
+				}
+				requestPayload, err := json.Marshal(inferRequest)
+				if err != nil {
+					log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
+					return err
+				}
+
+				resp, err := client.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
+				if err != nil {
+					log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+					return err
+				}
+
+				defer resp.Body.Close()
+
+				payload, err := io.ReadAll(resp.Body)
+
+				if err != nil {
+					log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+					return err
+				}
+
+				var inferenceResponse model.InferenceResponse
+				err = json.Unmarshal(payload, &inferenceResponse)
+
+				if err != nil {
+					log.Printf("Error while unmarshalling the onnx inference response %v", err)
+					return err
+				}
+
+				if !utils.DEBUG {
+					log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
+				}
+
+				if inferenceResponse.ThreatType {
+					for _, feature := range features {
+						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destTransportPort)) // (wont overflow (1 << 16))
+					}
+
+					go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
+						Src_port:       int(event.SrcPort),
+						Dest_port:      int(event.DstPort),
+						IsUDPTransport: false,
+					})
+				}
+
+			}
+			return nil
+		} else {
+			// mark the packet transfered over non standard port to be benigns
+			tun.EnsureTransportTunnelPortMapUpdate(ebpfMap, destTransportPort, event, errorChannel, true)
+			for _, feature := range features {
+				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destTransportPort)) // (wont overflow (1 << 16))
+			}
+
+			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
+				Src_port:       int(event.SrcPort),
+				Dest_port:      int(event.DstPort),
+				IsUDPTransport: false,
+			})
+
+			for _, feature := range features {
+				utils.UpdateDomainBlacklistInCache(feature.Tld, feature.Fqdn)
+			}
+
+			return nil
+		}
+	}
 
 	if udpPack != nil {
 		destPort := udpPack.(*layers.UDP).DstPort
@@ -278,10 +381,21 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 				Dest_port:      int(event.DstPort),
 				IsUDPTransport: true,
 			})
-		} else {
-			// process nothing in userspace
-			// just cehck and deep parse the questions of the record for netbios kernel query
-			// standard go packet does not parse any NB query records
+		}
+		// process nothing in userspace
+		// just cehck and deep parse the questions of the record for netbios kernel query
+		// standard go packet does not parse any NB query records
+
+		if err := processMaliciousInferenceNonStandardPort(features, destPortGenType, &event); err != nil {
+			if utils.DEBUG {
+				log.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
+
+				errorChannel <- struct {
+					Err string
+				}{
+					Err: fmt.Sprintf("Error in streaming the threat event for exfiltration attempt happened over non standard port Transport TCP:: %+v", err),
+				}
+			}
 		}
 
 	} else {
@@ -313,16 +427,16 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			}
 		}
 
-		tun.EnsureTransportTunnelPortMapUpdate(ebpfMap, destPortGenType, &event, errorChannel, false)
+		if err := processMaliciousInferenceNonStandardPort(features, destPortGenType, &event); err != nil {
+			if utils.DEBUG {
+				log.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 
-		for _, feature := range features {
-			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
+				errorChannel <- struct {
+					Err string
+				}{
+					Err: fmt.Sprintf("Error in streaming the threat event for exfiltration attempt happened over non standard port Transport TCP:: %+v", err),
+				}
+			}
 		}
-
-		go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
-			Src_port:       int(event.SrcPort),
-			Dest_port:      int(event.DstPort),
-			IsUDPTransport: false,
-		})
 	}
 }
