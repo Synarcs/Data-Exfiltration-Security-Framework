@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -137,7 +138,12 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(tcpPacket.DstPort))
 				}
-				go d.StreamClient.MarshallStreamThreadEvent(feature)
+				go d.StreamClient.MarshallStreamThreadEvent(feature, events.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+				})
 			}
 		} else if len(features) == 1 {
 			if isUdp {
@@ -145,7 +151,12 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			} else {
 				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(tcpPacket.DstPort))
 			}
-			d.StreamClient.MarshallStreamThreadEvent(features[0])
+			d.StreamClient.MarshallStreamThreadEvent(features[0], events.HostNetworkExfilFeatures{
+				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT), // keep this as it until more kernele xfil control is added
+				Protocol:         string(events.DNS),
+				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+			})
 		}
 		return nil
 	} else {

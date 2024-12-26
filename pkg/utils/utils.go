@@ -66,11 +66,13 @@ type NodeAgentConfig struct {
 		Ip   string `yaml:"ip" reflect:"ip"`
 		Port string `yaml:"port" reflect:"port"`
 	} `yaml:"dnsServer" reflect:"dnsServer"`
+
 	MetricServer struct {
 		Host string `yaml:"host" reflect:"host"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 		Port string `yaml:"port" reflect:"port"`
 	} `yaml:"metricServer" reflect:"metricServer"`
+	
 	MetricsExporter struct {
 		Port string `yaml:"port" reflect:"port"`
 		Ip   string `yaml:"ip" reflect:"ip"`

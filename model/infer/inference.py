@@ -141,8 +141,8 @@ class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpS
         self.thread_pool = []
         self.max_threads = self.request_queue_size
 
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, socket.SOCK_CLOEXEC, 1)
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, socket.SOCK_CLOEXEC, 1)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
     def server_bind(self) -> None:
         try:

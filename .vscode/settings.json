@@ -45,6 +45,8 @@
         "bridge_nf.h": "c",
         "charconv": "c",
         "variant": "c",
-        "in6.h": "c"
+        "in6.h": "c",
+        "siginfo-consts.h": "c",
+        "siginfo_t.h": "c"
     }
 }

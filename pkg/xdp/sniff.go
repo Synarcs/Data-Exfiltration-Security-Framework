@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -95,7 +96,12 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 				// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
 				// the same port as used for egrres will be used as src port for response from remote c2c malware
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT)
-				go ing.StreamClient.MarshallStreamThreadEvent(rawFeatures[index])
+				go ing.StreamClient.MarshallStreamThreadEvent(rawFeatures[index], events.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: ing.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: ing.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+				})
 			}
 		}
 	}

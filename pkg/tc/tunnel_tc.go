@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -373,7 +374,12 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		if !isNetBiosTunnelNSLookUp(dns) {
 			for _, feature := range features {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
-				go tun.StreamClient.MarshallStreamThreadEvent(feature)
+				go tun.StreamClient.MarshallStreamThreadEvent(feature, events.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+				})
 			}
 			// the tunnel metric event for other non stanard port monitor from kernel
 			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{

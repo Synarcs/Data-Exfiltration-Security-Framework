@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"reflect"
+	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/segmentio/kafka-go"
@@ -22,6 +24,14 @@ type StreamClient struct {
 	conn         *kafka.Conn
 	GlobalConfig *utils.NodeAgentConfig
 	ctx          *context.Context
+	Writer       *kafka.Writer
+}
+
+type HostNetworkExfilFeatures struct {
+	ExfilPort        string
+	Protocol         string
+	PhysicalNodeIpv4 string
+	PhysicalNodeIpv6 string
 }
 
 const (
@@ -29,23 +39,27 @@ const (
 )
 
 func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) error {
+	brokerAddress := fmt.Sprintf("%s:%s", stream.GlobalConfig.StreamServer.Ip, stream.GlobalConfig.StreamServer.Port)
 
-	conn, err := kafka.Dial("tcp", fmt.Sprintf("%s:%s", stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port))
-
-	if err != nil {
-		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)
-		return err
-	}
-
-	if err != nil {
-		panic(err.Error())
+	stream.Writer = &kafka.Writer{
+		Addr:         kafka.TCP(brokerAddress),
+		Topic:        STREAM_THREAT_TOPIC,
+		Balancer:     &kafka.LeastBytes{},
+		BatchSize:    1,
+		RequiredAcks: kafka.RequireAll,
+		Async:        false,
+		Transport: &kafka.Transport{
+			DialTimeout: time.Second * 10,
+			TLS:         nil,
+		},
 	}
 
 	// dial to kraft enbaled leader kafka broker
 	connLeader, err := kafka.Dial("tcp", net.JoinHostPort(stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port))
 
 	if err != nil {
-		panic(err.Error())
+		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)
+		return err
 	}
 	stream.conn = connLeader
 
@@ -64,30 +78,22 @@ func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) er
 		panic(err.Error())
 	}
 
-	log.Println("Connecting to remote kafka broker ", conn.RemoteAddr().String())
-
 	stream.ctx = ctx
 	return nil
 }
 
 func (stream *StreamClient) StreamThreadEvent(event []byte) error {
-	if stream.conn == nil {
-		return nil
+	if stream.Writer == nil {
+		return fmt.Errorf("kafka writer not initialized")
 	}
 
-	log.Println("Remote host ", stream.GlobalConfig.StreamServer.Ip, stream.GlobalConfig.StreamServer.Port)
+	log.Println("Publishing  to remote kafka broker ", stream.Writer.Addr.Network(), stream.Writer.Addr.String())
 
-	w := &kafka.Writer{
-		Addr:  kafka.TCP(net.JoinHostPort(stream.GlobalConfig.StreamServer.Host, stream.GlobalConfig.StreamServer.Port)),
-		Topic: STREAM_THREAT_TOPIC,
-	}
-
-	defer w.Close()
-	log.Println(w.Addr.Network(), w.Addr.String())
-	if err := w.WriteMessages(context.Background(), kafka.Message{
+	if err := stream.Writer.WriteMessages(context.Background(), kafka.Message{
 		Value: event,
+		Time:  time.Now(),
 	}); err != nil {
-		if utils.DEBUG {
+		if !utils.DEBUG {
 			log.Println("Error writing to kafka ", err)
 		}
 		return err
@@ -95,8 +101,23 @@ func (stream *StreamClient) StreamThreadEvent(event []byte) error {
 	return nil
 }
 
-func (stream *StreamClient) MarshallStreamThreadEvent(event interface{}) error {
-	marshalledEvent, err := json.Marshal(event)
+func StreamOrderMergedEvent(structs ...interface{}) map[string]interface{} {
+	var streamEvent map[string]interface{} = make(map[string]interface{})
+
+	for _, ss := range structs {
+		v := reflect.ValueOf(ss)
+		t := reflect.TypeOf(ss)
+
+		for i := 0; i < v.NumField(); i++ {
+			streamEvent[t.Field(i).Name] = v.Field(i).Interface()
+		}
+	}
+	return streamEvent
+}
+
+func (stream *StreamClient) MarshallStreamThreadEvent(event interface{}, networkConfig HostNetworkExfilFeatures) error {
+
+	marshalledEvent, err := json.Marshal(StreamOrderMergedEvent(event, networkConfig))
 	if err != nil {
 		return err
 	}
@@ -109,9 +130,10 @@ func (stream *StreamClient) MarshallStreamThreadEvent(event interface{}) error {
 }
 
 func (stream *StreamClient) CloseStreamClient() error {
-	if stream.conn == nil {
-		return fmt.Errorf("The remote kafka broker conn is %+v", stream.conn)
+	if stream.Writer == nil {
+		return fmt.Errorf("kafka writer not initialized")
 	}
+
 	if err := stream.conn.Close(); err != nil {
 		return err
 	}

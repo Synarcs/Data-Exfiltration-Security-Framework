@@ -6,6 +6,8 @@
 
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
+#include <signal.h>
 
 using namespace std; 
 
