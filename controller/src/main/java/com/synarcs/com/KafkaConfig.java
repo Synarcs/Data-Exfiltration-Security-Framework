@@ -4,16 +4,20 @@ import java.io.Serializable;
 
 public class KafkaConfig implements Serializable {
 
-    private String BrokerUrlIpv4;
+    private final String BrokerUrlIpv4 = "10.158.82.6";
 
-    private int BrokerPort;
+    private final int BrokerPort =  9092; 
 
-    private String KafkaTOpic;
+    private final String STREAM_THREAT_TOPIC = "exfil-sec";
+
+    private final String STREAM_THREAT_TOPIC_INFER_STATE = "exfil-sec-infer-controller";
 
 
     public String getBrokerUrl() { return BrokerUrlIpv4; }
 
     public int getBrokerPort() { return BrokerPort; } 
 
-    public String getKafkaTopic() { return KafkaTOpic; } 
+    public String getKafkaInputStreamTopic() { return STREAM_THREAT_TOPIC; } 
+
+    public String getKafkaInputStreamInferTopic() { return STREAM_THREAT_TOPIC_INFER_STATE; } 
 }

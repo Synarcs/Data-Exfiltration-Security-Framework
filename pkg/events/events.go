@@ -16,9 +16,11 @@ type DPIRedirectionKernelMap struct {
 }
 
 type RemoteStreamInferenceAnalyzed struct {
-	Fqdn        string
-	Tld         string
-	IsMalicious bool
+	Fqdn               string      `json:"fqdn"`
+	Tld                string      `json:"tld"`
+	RecordType         string      `json:"RecordType"`
+	AuthZoneSoaservers interface{} `json:"AuthZoneSoaservers"`
+	IsMalicious        bool        `json:"IsMalicious"`
 }
 
 type ExfilRawPacketMirror struct {

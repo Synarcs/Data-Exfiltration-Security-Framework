@@ -3,6 +3,8 @@ package com.synarcs.com;
 import java.io.Serializable;
 import java.util.Properties;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.common.serialization.StringDeserializer;
+
 
 public class ControllerStreamRunner implements Serializable, IController, Runnable {
     private KafkaConfig config;
@@ -11,6 +13,13 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
     public ControllerStreamRunner() {
         super();
         this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
+        this.config = new KafkaConfig(); 
+    }
+
+
+    public void initKafkaConnection() {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "broker1:9092,broker2:9092");
     }
 
     public ControllerStreamRunner(KafkaConfig config) {
@@ -20,6 +29,9 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
 
     public Properties ConfigureBroker() {
         Properties props = new Properties();
+        props.put("bootstrap.servers", this.config.getBrokerUrl()+":"+this.config.getBrokerPort());
+        props.put("key.deserializer", StringDeserializer.class.getName());
+        props.put("value.deserializer", StringDeserializer.class.getName());
         return props;
     }
 

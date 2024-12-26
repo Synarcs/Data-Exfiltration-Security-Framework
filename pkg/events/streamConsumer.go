@@ -18,7 +18,7 @@ func (k *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: k.Brokers,
-		Topic:   k.Topic,
+		Topic:   utils.STREAM_THREAT_TOPIC_INFER_STATE,
 	})
 
 	k.Consumer = streamReader

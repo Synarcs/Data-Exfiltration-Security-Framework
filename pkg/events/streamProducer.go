@@ -16,7 +16,6 @@ import (
 
 type StreamBrokerConfig struct {
 	Brokers []string
-	Topic   string
 }
 
 type StreamClient struct {
@@ -34,16 +33,12 @@ type HostNetworkExfilFeatures struct {
 	PhysicalNodeIpv6 string
 }
 
-const (
-	STREAM_THREAT_TOPIC = "exfil-sec"
-)
-
 func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) error {
 	brokerAddress := fmt.Sprintf("%s:%s", stream.GlobalConfig.StreamServer.Ip, stream.GlobalConfig.StreamServer.Port)
 
 	stream.Writer = &kafka.Writer{
 		Addr:         kafka.TCP(brokerAddress),
-		Topic:        STREAM_THREAT_TOPIC,
+		Topic:        utils.STREAM_THREAT_TOPIC,
 		Balancer:     &kafka.LeastBytes{},
 		BatchSize:    1,
 		RequiredAcks: kafka.RequireAll,
@@ -65,7 +60,7 @@ func (stream *StreamClient) GenerateStreamKafkaProducer(ctx *context.Context) er
 
 	topic := []kafka.TopicConfig{
 		{
-			Topic:             STREAM_THREAT_TOPIC,
+			Topic:             utils.STREAM_THREAT_TOPIC,
 			NumPartitions:     1,
 			ReplicationFactor: 1,
 		},

@@ -8,6 +8,8 @@ import random , requests as rq , time
 
 # while true; do seq 10000 | xargs -n1 -P 10000 curl -s "https://kv01.prod.do.dsp.mp.microsoft.com/"; done
 
+# parallel -j 100 "time dig +short kv801.prod.do.dsp.mp.microsoft.com" ::: {1..100}
+
 domains = ["mx-ll-171.4.217-176.dynamic.3bb.co.th","kv801.prod.do.dsp.mp.microsoft.com", "dns.msftncsi.com"]
 
 

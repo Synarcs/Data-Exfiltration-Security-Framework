@@ -57,6 +57,7 @@
 struct skb_cursor {
     void *data;
     void *data_end;
+    struct bpf_spin_lock *lock;
 };
 
 struct vxlanhdr {
@@ -820,7 +821,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 static 
 __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
 
-    bpf_printk("called packet for clone redirection over bridge %u %u", br_index, dest_addr_route);
     __be32 current_dest_addr; 
 
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
@@ -1134,14 +1134,14 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
         dns_volume_stats->packet_size += dns_payload_size;
         #ifdef DEBUG
             if (DEBUG) {
-                bpf_printk("current packet threshold is %u",  dns_volume_stats->packet_size);
+                bpf_printk("rate limiting current packet threshold is %u",  dns_volume_stats->packet_size);
             }
         #endif
     }
 
     if (ts - dns_volume_stats->last_timestamp <= TIMEWINDOW && dns_volume_stats->packet_size > MAX_VOLUME_THRESHOLD){
         #ifdef DEBUG
-            if (DEBUG) {
+            if (!DEBUG) {
                 bpf_printk("kernel started rate limiting the packets for egress");
             }
         #endif

@@ -72,12 +72,17 @@ type NodeAgentConfig struct {
 		Ip   string `yaml:"ip" reflect:"ip"`
 		Port string `yaml:"port" reflect:"port"`
 	} `yaml:"metricServer" reflect:"metricServer"`
-	
+
 	MetricsExporter struct {
 		Port string `yaml:"port" reflect:"port"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 	} `yaml:"metricsExporter" reflect:"metricsExporter"`
 }
+
+const (
+	STREAM_THREAT_TOPIC             = "exfil-sec"
+	STREAM_THREAT_TOPIC_INFER_STATE = "exfil-sec-infer-controller"
+)
 
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int
