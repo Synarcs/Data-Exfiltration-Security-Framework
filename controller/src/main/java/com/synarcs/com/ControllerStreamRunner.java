@@ -6,9 +6,11 @@ import org.apache.kafka.streams.kstream.*;
 
 public class ControllerStreamRunner implements Serializable, IController, Runnable {
     private KafkaConfig config;
+    private ControllerInspectProtocolsBuilder protocolsBuilder;
 
     public ControllerStreamRunner() {
         super();
+        this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
     }
 
     public ControllerStreamRunner(KafkaConfig config) {
