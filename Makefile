@@ -2,6 +2,17 @@
 build:
 	bash build.sh 
 
+.PHONY: build-controller
+build-controller:
+	@echo "Building the controller"
+	cd controller && mvn clean compile install 
+
+.PHONY: build-framework 
+build-framework:
+	@echo "building the framework"
+	make build
+	make build-controller
+
 .PHONY: gazelle-update-repos
 gazelle-update-repos:
 	bazel run //:gazelle -- update-repos -from_file=go.mod
