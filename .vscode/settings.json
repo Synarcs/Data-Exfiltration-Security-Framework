@@ -87,5 +87,5 @@
         "cinttypes": "cpp",
         "typeinfo": "cpp"
     },
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "automatic"
 }

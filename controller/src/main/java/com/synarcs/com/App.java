@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *  Main Kafka Stream Controller 
@@ -11,24 +13,22 @@ import java.util.concurrent.Executors;
  */
 public class App implements Serializable {
     private static final int MAX_LOCKS = 10;
-    private static final CountDownLatch lockThreads = new CountDownLatch(MAX_LOCKS);
+    private static final CountDownLatch lockThreads = new CountDownLatch(1);
+    private final Lock lock = new ReentrantLock();
 
-    public static void main( String[] args ){
-
-        ExecutorService service = Executors.newFixedThreadPool(1 << 5);
-        for (int i=0; i < (1 << 5); i++) service.submit(new ControllerStreamRunner());
+    
+    public static void main(String[] args) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Closing the kafka stream controller...");
+            lockThreads.countDown();
+        }));
 
         try {
+            new Thread(new ControllerStreamRunner()).start();
             lockThreads.await();
-        }catch (InterruptedException exception) {
-            exception.printStackTrace();
+        } catch (InterruptedException exception) {
+            System.out.println("Current Root Thread Interrupted");
+            Thread.currentThread().interrupt();
         }
-
-        Runtime.getRuntime().addShutdownHook(
-            new Thread(() -> {
-                service.shutdown();
-                System.out.println("Clossing the kafka stream controller with result close ...");
-            })
-        );
-    }   
+    }
 }
