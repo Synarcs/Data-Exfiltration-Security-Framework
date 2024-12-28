@@ -6,19 +6,31 @@ debug ?= false
 
 .PHONY: compile 
 compile:
-	@echo "Compiling the Ebpf Node Agent" 
+	@echo "Compiling the Ebpf Node Agent for $(shell go env GOOS && go env GOARCH)"
 	go build $(node_agent) 
+
 
 .PHONY: compile-kernel
 compile-kernel:
 	@echo "Compiling all kernel ebpf programs"
 	cd ../kernel && make
 
+.PHONY: compile-kernel-x86
+compile-kernel-x86: 
+	@echo "Compiling eBPF Kernel Programs for x86-64 architecture"
+	cd ../kernel && make compile-x86
+
 .PHONY: build
 build:
-	@echo "Building and compiling the Ebpf Node Agent"
+	@echo "Building and compiling the eBPF Node Agent {Kernel, User-Space}"
 	make compile-kernel
-	go build $(node_agent) 
+	make compile
+
+.PHONY: build-x86
+build-x86:
+	@echo "Building and compiling eBPF Node Agent {Kernel, User-space}"
+	make compile-kernel-x86
+	make compile
 
 .PHONY: run-inference
 run-inference:
