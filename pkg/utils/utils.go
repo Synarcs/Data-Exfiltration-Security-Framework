@@ -32,6 +32,15 @@ const (
 	MALICIOUS_NETNS_IPV6  = "fe80::d091:3cff:fe25:6d97"
 )
 
+var (
+	GLOBAL_ROUTE_IPV6_TRANSFER_LINKS = []string{
+		"2001:4860:4860::8888",
+		"2001:4860:4860::8844",
+		"2606:4700:4700::1111",
+		"2606:4700:4700::1001",
+	}
+)
+
 const (
 	BRIDGE_IPAM_IPV4_CIDR          = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP            = "10.200.0."

@@ -34,7 +34,7 @@ typedef struct handler {
     union {
         int (*size) (struct handler *);
     };
-} List;
+} __attribute__((packed)) List;
 
 int * processMap (int *arr, int (*map) (int ), void *end, int size) {
     for (int i=0; i < size; i++) {

@@ -120,6 +120,36 @@ __u32 redirect_skb_mark = 0xFF;
 #endif
 // fe80::5c0a:20ff:fe93:9ef1
 
+// configrue the global ipv6 range and forward for the global googl's ipv6 address. 
+struct in6_addr * configure_global_ipv6_route_handlers() {
+    struct in6_addr inet_addr[2] = {{}};
+    inet_addr[0] = (struct in6_addr){
+        .in6_u.u6_addr16 = {
+           bpf_ntohs(0x2001), 
+           bpf_ntohs(0x4860), 
+           bpf_ntohs(0x4860), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x8888), 
+        }
+    };
+    inet_addr[1] = (struct in6_addr){
+        .in6_u.u6_addr16 = {
+           bpf_ntohs(0x2001), 
+           bpf_ntohs(0x4860), 
+           bpf_ntohs(0x4860), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x0000), 
+           bpf_ntohs(0x8844), 
+        }
+    };
+    return &inet_addr;
+}
+
 struct result_parse_dns_labels {
     bool deep_scan_mirror;
     bool drop;

@@ -85,7 +85,10 @@
         "streambuf": "cpp",
         "text_encoding": "cpp",
         "cinttypes": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "tcp.h": "c",
+        "mptcp.h": "c",
+        "io_uring.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic"
 }

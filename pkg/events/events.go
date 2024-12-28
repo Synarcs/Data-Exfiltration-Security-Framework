@@ -11,7 +11,7 @@ type DnsEvent struct {
 
 type DPIRedirectionKernelMap struct {
 	Checksum      uint16
-	_             [6]byte // padding for offset
+	_             [6]byte // padding for offset, since in kernel the ring buffer objects are packed and aligned to fix size memory blocks.
 	Kernel_timets uint64
 }
 

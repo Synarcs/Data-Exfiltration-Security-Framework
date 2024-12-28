@@ -20,9 +20,11 @@
 #include <linux/tcp.h>
 #include <linux/netfilter/nfnetlink.h>
 #include <linux/bpf.h>
-
 #include <linux/pkt_cls.h>
 #include <stdbool.h>
+#include <liburing/io_uring.h>
+
+
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
@@ -1345,9 +1347,9 @@ int classify(struct __sk_buff *skb){
         hproto = eth->h_proto;
     }
 
-
+    bool isEncapL2 = skb->vlan_present == 1 ? true : false;
     // Parse IPv4 or IPv6 based on Ethernet protocol type
-    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+    if (hproto == bpf_htons(ETH_P_IP)) {
         if (actions.parse_ipv4(&cursor) == 0) return TC_DROP;
         ip = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
