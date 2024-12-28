@@ -48,16 +48,15 @@ compile-llvm-x86:
 # for x86 compilation of cpu 
 .PHONY: compile-x86
 compile-x86:
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -c $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -o $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -c $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
-	make tc_tun-x86
+	make tc-tun-x86
 	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 	make clean-bpf 
-	make clean-
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc

@@ -34,7 +34,8 @@ sudo apt update -y && sudo apt install -y \
     libsasl2-dev  \
     librdkafka-dev \
     inetutils-ping \
-    bsdmainutils
+    bsdmainutils \ 
+    liburing-dev
 
 sudo apt install -y \
     libssl-dev libncurses5-dev libsqlite3-dev libreadline-dev libtk8.6 libgdm-dev libpcap-dev
