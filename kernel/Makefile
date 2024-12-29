@@ -16,9 +16,9 @@ p2p_kernel_out := tun.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	sudo clang -target bpf -fomit-frame-pointer -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
 	make xdp 
@@ -124,25 +124,25 @@ xdp-umount:
 .PHONY: netlink
 netlink: 
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: netlink-x86 
 netlink-x86: 
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for x86" 
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 
 .PHONY: tc_tun 
 tc_tun:
 	@echo "Compiling the tunnel tc egress filter"
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc-tun-x86 
 	@echo "Compiling the tunnel tc egress filter for x86"
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 
