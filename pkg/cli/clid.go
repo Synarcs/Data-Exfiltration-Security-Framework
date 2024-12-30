@@ -70,6 +70,9 @@ func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) 
 }
 
 func (nc *NodeDaemonCli) CleanRemoteSock() error {
+	if nc.UnixSocketConn == nil {
+		return nil
+	}
 	_, err := os.Stat(LocalCliUnixSockPath)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return nil

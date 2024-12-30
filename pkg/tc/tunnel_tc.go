@@ -374,8 +374,9 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		if !isNetBiosTunnelNSLookUp(dns) {
 			for _, feature := range features {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
+
 				go tun.StreamClient.MarshallStreamThreadEvent(feature, events.HostNetworkExfilFeatures{
-					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+					ExfilPort:        strconv.Itoa(int(destPort)),
 					Protocol:         string(events.DNS),
 					PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 					PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
@@ -389,7 +390,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			})
 		}
 		// process nothing in userspace
-		// just cehck and deep parse the questions of the record for netbios kernel query
+		// just cehck and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
 		// standard go packet does not parse any NB query records
 
 		if err := processMaliciousInferenceNonStandardPort(features, destPortGenType, &event); err != nil {

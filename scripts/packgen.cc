@@ -17,30 +17,31 @@
 
 typedef u_int32_t __u32; 
 
-struct PacketGen {
+typedef struct PacketProcessHeader {
     __u32 packet_class;
     __u32 protocol;
     void * GetHandler();
-} __attribute__((packed));
+} PacketProcessHeader __attribute__((packed));
 
 class PacketHandler {
     private:
         std::vector<__u32> watchpolledFd;
         const int capQueueSize = (int) 1e5;
     protected:
-        struct PacketGen *packet; 
+        struct PacketProcessHeader *packet; 
     public:
         __u32 fd;
         std::queue<__u32> submissionWatchQueue;
-        PacketHandler() {}
+        PacketHandler(PacketProcessHeader *header) { this->packet = header; }
         PacketHandler(int fd) { 
             this->fd = fd;
-            this->packet = (struct PacketGen *) malloc(sizeof(struct PacketGen)); 
+            this->packet = (struct PacketProcessHeader *) malloc(sizeof(PacketProcessHeader)); 
         }
         std::vector<__u32> GetWatchPolledFd();
         std::vector<__u32> GetWatchPolledFd(const int& size);
         bool submitTasksWatchQueue(__u32 * fd);
         ~PacketHandler() {
+            std::cout << "Deallocate the allocated kernel memory " << std::endl;
             free(this->packet);
         }
         __u32& GeneratePacket();
@@ -59,11 +60,10 @@ std::vector<__u32> PacketHandler::GetWatchPolledFd() {
 __u32& PacketHandler::GeneratePacket() { return fd; }
 
 int main(void) {
-    PacketGen *handler = new PacketGen();
-    {
-        std::unique_ptr<PacketGen> uptr = std::make_unique<PacketGen>();\
-        printf("UPtr base reference %p and pakcet reference %p", uptr, handler );
-    }
+    PacketProcessHeader *header = new PacketProcessHeader();
+    PacketHandler *handler = new PacketHandler(header);
 
-    std::cout << "Page Size in memory is " << sysconf(_SC_PHYS_PAGES) << " " << sysconf(_SC_PAGESIZE) << std::endl;
+    std::cout << "Page Size in memory is " << sysconf(_SC_PHYS_PAGES) << " " << sysconf(_SC_PAGESIZE) << " " << sysconf(_SC_THREAD_CPUTIME) << std::endl;
+    std::cout << "size of the Packet Generator " << sizeof(handler) << std::endl;
+    return 0;
 }
