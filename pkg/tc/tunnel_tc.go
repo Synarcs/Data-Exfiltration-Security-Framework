@@ -272,7 +272,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					log.Printf("Error while evaluating the onnx model for the dns features %v", err)
 					return err
 				}
-
 				defer resp.Body.Close()
 
 				payload, err := io.ReadAll(resp.Body)
