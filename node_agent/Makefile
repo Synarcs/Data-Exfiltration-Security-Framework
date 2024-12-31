@@ -9,7 +9,6 @@ compile:
 	@echo "Compiling the Ebpf Node Agent for $(shell go env GOOS && go env GOARCH)"
 	go build $(node_agent) 
 
-
 .PHONY: compile-kernel
 compile-kernel:
 	@echo "Compiling all kernel ebpf programs"
@@ -20,10 +19,16 @@ compile-kernel-x86:
 	@echo "Compiling eBPF Kernel Programs for x86-64 architecture"
 	cd ../kernel && make compile-x86
 
+.PHONY: build-cli 
+build-cli:
+	@echo "Building eBPF Node Agent CLI for unix IPC"
+	cd ../cmd && make build 
+
 .PHONY: build
 build:
 	@echo "Building and compiling the eBPF Node Agent {Kernel, User-Space}"
 	make compile-kernel
+	make build-cli 
 	make compile
 
 .PHONY: build-x86

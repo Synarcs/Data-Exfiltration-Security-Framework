@@ -99,3 +99,19 @@ func DeleteDomainBlackListInCache(tld, fqdn string) {
 func IngDeleteDomainBlackListInCache(tld string) bool {
 	return NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Remove(tld)
 }
+
+func GetBlaclistedDomainsEgressCache() []string {
+	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
+
+	returnBlacklistedDomains := []string{}
+	returnBlacklistedDomains = append(returnBlacklistedDomains, NODE_AGENT_BLACKLISTED_DOMAINS.Keys()...)
+	return returnBlacklistedDomains
+}
+
+func GetBlaclistedDomainsIngressCache() []string {
+	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
+	returnBlacklistedDomains := []string{}
+
+	returnBlacklistedDomains = append(returnBlacklistedDomains, NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Keys()...)
+	return returnBlacklistedDomains
+}
