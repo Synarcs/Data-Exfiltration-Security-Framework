@@ -86,6 +86,11 @@ type NodeAgentConfig struct {
 		Port string `yaml:"port" reflect:"port"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 	} `yaml:"metricsExporter" reflect:"metricsExporter"`
+
+	DisableExporters struct {
+		Streaming bool `yaml:"streaming" reflect:"streaming"`
+		Metrics   bool `yaml:"metrics" reflect:"metrics"`
+	} `yaml:"disableExporters" reflect:"disableExporters"`
 }
 
 const (
