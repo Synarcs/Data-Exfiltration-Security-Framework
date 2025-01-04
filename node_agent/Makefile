@@ -35,6 +35,7 @@ build:
 build-x86:
 	@echo "Building and compiling eBPF Node Agent {Kernel, User-space}"
 	make compile-kernel-x86
+	make build-cli 
 	make compile
 
 .PHONY: run-inference

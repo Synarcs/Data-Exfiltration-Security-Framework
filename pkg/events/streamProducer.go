@@ -125,6 +125,10 @@ func (stream *StreamClient) MarshallStreamThreadEvent(event interface{}, network
 }
 
 func (stream *StreamClient) CloseStreamClient() error {
+	if stream.conn == nil {
+		return fmt.Errorf("The kafka conn client is not initialized cannot close a non-existant open connection ....")
+	}
+	
 	if stream.Writer == nil {
 		return fmt.Errorf("kafka writer not initialized")
 	}

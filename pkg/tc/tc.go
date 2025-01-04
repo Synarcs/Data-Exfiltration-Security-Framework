@@ -247,7 +247,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 	}
 
 	if len(iface.BridgeLinks) != 2 {
-		log.Fatalf("The Node agen cannot be botted unless all the DPI bridger veth are added using netlink before exiting ....")
+		log.Fatalf("The Node agen cannot be botted unless all the DPI linux veth bridges are added using netlink before exiting ....")
 		// TODO: Add a process global error channel for detach if any of the tc panic
 		tc.GlobalErrorKernelHandlerChannel <- true
 		return

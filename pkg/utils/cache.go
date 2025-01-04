@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"errors"
+	"fmt"
 	"log"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -80,20 +82,26 @@ func IngGetKeyPresentInCache(tld string) bool {
 	return fd
 }
 
-func DeleteDomainBlackListInCache(tld, fqdn string) {
+func DeleteDomainBlackListInCache(tld, fqdn string) error {
 	var evict bool
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
-		log.Fatalf("The Domain is not in the Cache Cannot evict the cache %s", tld)
+		return errors.New(fmt.Sprintf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld))
 	} else {
 		value, _ := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
-		value.Remove(fqdn)
+		if fqdn == "" {
+			log.Println("Removing a specific fqdn domain from node blacklist cache")
+			NODE_AGENT_BLACKLISTED_DOMAINS.Remove(tld)
+		} else {
+			value.Remove(fqdn)
+		}
 	}
 
 	if evict && DEBUG {
 		log.Println("Cache Hit the max Size evicted the Least Recently Used Key")
 	}
 
+	return nil
 }
 
 func IngDeleteDomainBlackListInCache(tld string) bool {

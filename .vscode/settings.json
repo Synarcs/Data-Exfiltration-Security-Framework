@@ -88,7 +88,10 @@
         "typeinfo": "cpp",
         "tcp.h": "c",
         "mptcp.h": "c",
-        "io_uring.h": "c"
+        "io_uring.h": "c",
+        "unistd.h": "c",
+        "ioctl.h": "c",
+        "struct_iovec.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic"
 }

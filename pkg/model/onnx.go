@@ -131,7 +131,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			}
 			return eval
 		} else {
-			if direction {
+			if direction && utils.DEBUG {
 				log.Println("The inference model is not required for the dns features due to the benign tld host domain")
 			}
 			return true

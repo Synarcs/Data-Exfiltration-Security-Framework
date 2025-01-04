@@ -1,8 +1,11 @@
 #holds and process all thhe mutation exfil domains 
 import os 
 from typing import List 
+from functools import cache, wraps
 
 exfil_host_domains: List = []
+
+@cache 
 def gen_exfil_domains(mx_ln: int = 5, domain_charsAllowed: List = [], vis: List = None, curr: str = "") -> None:
     if vis is None: vis = [False for x in range(len(domain_charsAllowed))]
         

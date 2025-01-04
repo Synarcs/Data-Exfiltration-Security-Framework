@@ -11,6 +11,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/syscall.h>
+#include <liburing/io_uring.h>
 
 #include <queue>
 #include <signal.h>
@@ -38,6 +39,7 @@ class PacketHandler {
             this->packet = (struct PacketProcessHeader *) malloc(sizeof(PacketProcessHeader)); 
         }
         std::vector<__u32> GetWatchPolledFd();
+        std::vector<__u32> FilterWatcherPolFd(const std::vector<__u32> &);
         std::vector<__u32> GetWatchPolledFd(const int& size);
         bool submitTasksWatchQueue(__u32 * fd);
         ~PacketHandler() {
@@ -52,6 +54,10 @@ bool PacketHandler::submitTasksWatchQueue(__u32 * fd) {
     this->submissionWatchQueue.emplace(*fd);
     return true;
 } 
+
+std::vector<__u32> PacketHandler::FilterWatcherPolFd(const std::vector<__u32> &pollFd) {
+    return pollFd;
+}
 
 std::vector<__u32> PacketHandler::GetWatchPolledFd() {
     return this->watchpolledFd;

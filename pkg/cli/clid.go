@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -83,6 +84,61 @@ func blacklistEgressDomains(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func UnblockDomain(w http.ResponseWriter, r *http.Request) {
+	sld := r.URL.Query().Get("domain")
+
+	log.Println("The domain to be unblocked is .....", sld)
+
+	errResponse := func(errMessage string) {
+		err := struct {
+			Error string
+		}{
+			Error: errMessage,
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+
+		if err := json.NewEncoder(w).Encode(err); err != nil {
+			log.Println("Error the required JSON cannot be encoded ...")
+		}
+	}
+
+	successResponse := func(msg string) {
+		message := struct {
+			Msg string
+		}{
+			Msg: msg,
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+
+		if err := json.NewEncoder(w).Encode(message); err != nil {
+			log.Println("Error the required JSON cannot be encoded ...")
+		}
+	}
+	if len(sld) >= 0 && len(sld) <= (1<<8)-1 {
+		// unblock the domain both over ingress and egress routes
+		if strings.Count(strings.TrimSpace(sld), ".") != 1 {
+			log.Println()
+			errResponse("Please provide a SLD and not TLD or an FQDN with multiple labels ...")
+			return
+		}
+
+		if err := utils.DeleteDomainBlackListInCache(sld, ""); err != nil {
+			errResponse(err.Error())
+			return
+		}
+		// ignore ingress anyways it will be synced with lock and concurrency control from egress cache
+		utils.IngDeleteDomainBlackListInCache(sld)
+		successResponse("Success")
+		return
+	}
+
+	errResponse("Error this is not an valid domain to be removed from blaclisted cahce, ensure it adheres to RFC 1035..")
+}
+
 func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) {
 
 	listener, err := net.Listen("unix", string(nc.Unixsock))
@@ -98,6 +154,7 @@ func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) 
 	mux.HandleFunc("/limits", configureStreamLimits)
 	mux.HandleFunc("/blacklist/ingress", blacklistIngressDomains)
 	mux.HandleFunc("/blacklist/egress", blacklistEgressDomains)
+	mux.HandleFunc("/whitelist", UnblockDomain)
 
 	server := http.Server{
 		Handler: mux,

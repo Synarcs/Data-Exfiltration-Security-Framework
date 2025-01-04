@@ -355,7 +355,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	}
 
 	if !utils.DEBUG && isEgress {
-		log.Println("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
+		// log.Println("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
 		for _, feature := range features {
 			mrsh, _ := json.Marshal(feature)
 			fmt.Println(string(mrsh))
