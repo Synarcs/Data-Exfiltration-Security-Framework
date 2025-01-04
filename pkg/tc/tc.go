@@ -59,7 +59,7 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	}
 }
 
-func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) error {
+func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
 
 	for _, link := range tc.Interfaces.PhysicalLinks {
 		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
@@ -99,7 +99,7 @@ func (tc *TCHandler) AttachTcHandler(ctx *context.Context, prog *ebpf.Program) e
 	return nil
 }
 
-func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) {
+func (tc *TCHandler) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) {
 
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
@@ -140,7 +140,7 @@ func (tc *TCHandler) PollRingBuffer(ctx *context.Context, ebpfEvents *ebpf.Map) 
 	}
 }
 
-func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
+func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
 	var KernelPacketRedirectCount uint16 = 0
 
 	runtime.LockOSThread()
@@ -210,9 +210,14 @@ func (tc *TCHandler) PollMonitoringMaps(ctx *context.Context, ebpfMap *ebpf.Map,
 	}
 }
 
-func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetIface) {
+func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
 	handler, err := utils.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+
+	if errors.Is(ctx.Err(), context.Canceled) {
+		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
+		return
+	}
 
 	if err != nil {
 		panic(err.Error())
@@ -327,7 +332,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx *context.Context, iface *netinet.NetI
 		go tc_tunnel.SniffPacketsForTunnelDPI()
 
 		go tc_tunnel.SniffPacketsForTunnelDPI()
-		tc.ProcessSniffDPIPacketCapture(iface, nil)
+		tc.ProcessSniffDPIPacketCapture(ctx, iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}
 }
@@ -352,7 +357,7 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 	return nil
 }
 
-func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
+func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -535,7 +540,7 @@ func (tc *TCHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *net
 	return nil
 }
 
-func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
+func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
 	errorChannel chan<- error, isStandardPort bool) error {
 
 	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
@@ -559,12 +564,12 @@ func (tc *TCHandler) ProcessPcapFilterHandler(linkInterface netlink.Link, ifaceH
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		go tc.ProcessEachPacket(packet, ifaceHandler, cap)
+		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap)
 	}
 	return nil
 }
 
-func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
+func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	log.Println("Loading the Egress Packet Capture over Custom Linux iface in network namespace")
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
@@ -573,12 +578,12 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ifaceHandler *netinet.NetIface
 		log.Println("Processing of multiple Physical links")
 
 		for iface := 0; iface < len(ifaceHandler.PhysicalLinks); iface++ {
-			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
-			go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
+			go tc.ProcessPcapFilterHandler(ctx, ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
+			go tc.ProcessPcapFilterHandler(ctx, ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
 		}
 	} else {
 		// TODO: Need a fix over go routing getting empty or non valid bad fd for the map
-		tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
+		tc.ProcessPcapFilterHandler(ctx, ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, true)
 		// go tc.ProcessPcapFilterHandler(ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel, false, true)
 	}
 

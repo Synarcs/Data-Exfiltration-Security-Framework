@@ -30,11 +30,14 @@
 typedef uint64_t uSizemax_t;
 typedef uint32_t uSizemid_t;
 
+#define BASE_DEBUG(...) do { \
+            bpf_trace_printk(__VA_ARGS__); \
+        } 
+
 #define GENERIC_bpf_trace_printk(x, ...) _Generic((x), \
     uSizemax_t: bpf_trace_printk("\n \\\\\\ %lu", x), \
     u_int16_t: __DEBUG__  ? bpf_trace_printk("\n %lu", x) : NULL, \ 
-    default: bpf_trace_printk("Unsupported type")); \
-    bpf_trace_printk(__VA_ARGS__);
+    default:  BASE_DEBUG(__VA_ARGS);
 
 #define ForN(TYPE, val , ...) for (TYPE i=1; i <= val; i++) { GENERIC_bpf_trace_printk(i, __VA_ARGS__); bpf_trace_printk(__VA_ARGS__); }
 #define ForNArr(TYPE,buf, ... ) for (TYPE i=0; i < sizeof(buf) / sizeof(buf[0]); i++) GENERIC_bpf_trace_printk(buf[i], __VA_ARGS__)

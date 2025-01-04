@@ -86,6 +86,11 @@ type NodeAgentConfig struct {
 		Port string `yaml:"port" reflect:"port"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 	} `yaml:"metricsExporter" reflect:"metricsExporter"`
+
+	DisableExporters struct {
+		Streaming bool `yaml:"streaming" reflect:"streaming"`
+		Metrics   bool `yaml:"metrics" reflect:"metrics"`
+	} `yaml:"disableExporters" reflect:"disableExporters"`
 }
 
 const (
@@ -133,7 +138,7 @@ func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	return binary.BigEndian.Uint32(ip)
 }
 
-func ReadEbpfFromSpec(ctx *context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
+func ReadEbpfFromSpec(ctx context.Context, ebpfProgCode string) (*ebpf.CollectionSpec, error) {
 	spec, err := ebpf.LoadCollectionSpec(ebpfProgCode)
 	if err != nil {
 		return nil, err

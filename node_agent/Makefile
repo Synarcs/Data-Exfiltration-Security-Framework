@@ -6,7 +6,7 @@ debug ?= false
 
 .PHONY: compile 
 compile:
-	@echo "Compiling the Ebpf Node Agent for $(shell go env GOOS && go env GOARCH)"
+	@echo "Compiling the eBPF Node Agent for $(shell go env GOOS && go env GOARCH)"
 	go build $(node_agent) 
 
 .PHONY: compile-kernel

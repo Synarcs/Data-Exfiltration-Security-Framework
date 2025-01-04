@@ -30,4 +30,8 @@ grafanaServer:
 metricsExporter:
   port: 3232 # host is the local node exporting metrics whcih this centralized metric server can scrape 
   ip: 0.0.0.0 # service local phsical inet net_device link bind from kernel 
-  
+
+
+disableExporters:
+  streaming: false
+  metrics: false 

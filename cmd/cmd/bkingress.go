@@ -18,5 +18,7 @@ var bkingCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(bkingCmd)
-
+	rootCmd.Aliases = []string{
+		"ing", "ingress",
+	}
 }

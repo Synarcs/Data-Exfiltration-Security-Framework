@@ -110,7 +110,7 @@ func main() {
 
 	// io Disk Cache Inodes for Node agent
 	utils.InitCache()
-	topDomains, err := utils.VerifyTopDomainsData()
+	topDomains, err := utils.ReadTldDomainsData()
 
 	if err != nil {
 		log.Println("error loading the top domains", err)
@@ -144,20 +144,20 @@ func main() {
 	kprobe := kprobe.GenerateKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(&ctx, &iface)
+	go tc.TcHandlerEbfpProg(ctx, &iface)
 
 	// kernel netfilter process post routing hooks
 	netfilter := netfilter.NetFilter{
 		Interfaces: &iface,
 	}
-	go netfilter.AttachTcHandlerIngressBridge(&ctx, false)
+	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
 
 	// process pre default boot interfaces of type tunnels loaded pre in kernel
-	go tcl.VerifyTunnelNetDevicesOnBoot(&ctx, &tc, &iface)
+	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, &tc, &iface)
 
 	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
-	go kprobe.ProcessTunnelEvent(&ctx, &iface, tunnelSocketEventHandler, &tc)
+	go kprobe.ProcessTunnelEvent(ctx, &iface, tunnelSocketEventHandler, &tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(globalConfig)

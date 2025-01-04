@@ -38,7 +38,7 @@ func GenerateKprobeEventFactory() *NetKProbes {
 	return &NetKProbes{}
 }
 
-func (k *NetKProbes) ProcessTunnelEvent(ctx *context.Context,
+func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 	iface *netinet.NetIface, eventChannel chan events.KernelNetlinkSocket, tc *tc.TCHandler) {
 	for {
 		select {

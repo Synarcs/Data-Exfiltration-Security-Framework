@@ -13,7 +13,7 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-func VerifyTunnelNetDevicesOnBoot(ctx *context.Context, tc *TCHandler, iface *netinet.NetIface) error {
+func VerifyTunnelNetDevicesOnBoot(ctx context.Context, tc *TCHandler, iface *netinet.NetIface) error {
 
 	tunnelNetDev := iface.FindTunnelLinksOnBootUp()
 	if len(tunnelNetDev) > 1 {
@@ -26,7 +26,7 @@ func VerifyTunnelNetDevicesOnBoot(ctx *context.Context, tc *TCHandler, iface *ne
 	return nil
 }
 
-func (tc *TCHandler) AttachTcProgramTunTap(ctx *context.Context, interfaceName string) error {
+func (tc *TCHandler) AttachTcProgramTunTap(ctx context.Context, interfaceName string) error {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
 	}

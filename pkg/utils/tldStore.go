@@ -56,7 +56,7 @@ func processChunk(file *os.File, chunk ChunkRange, t *TopDomains, wg *sync.WaitG
 	}
 }
 
-func VerifyTopDomainsData() (*TopDomains, error) {
+func VerifyTopDomainsData() (string, error) {
 	fd := path.Join("../data/top-host.csv")
 	_, err := os.Stat(fd)
 
@@ -66,6 +66,16 @@ func VerifyTopDomainsData() (*TopDomains, error) {
 		} else {
 			log.Println("Runtime permission error please check the file stats and permission", err)
 		}
+		return "", err
+	}
+
+	return fd, nil
+}
+
+func ReadTldDomainsData() (*TopDomains, error) {
+	fd, err := VerifyTopDomainsData()
+	if err != nil {
+		log.Println(err.Error())
 		return nil, err
 	}
 

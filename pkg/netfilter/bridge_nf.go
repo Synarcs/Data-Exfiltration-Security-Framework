@@ -23,7 +23,7 @@ type NetFilter struct {
 	Interfaces               *netinet.NetIface
 }
 
-func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx *context.Context, isEgress bool) error {
+func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress bool) error {
 	log.Println("Attaching the netfilter hook in kernel for ingress bridge PreRouting traffic")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -54,7 +54,7 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx *context.Context, isEgress
 		hookPoint = unix.NF_INET_POST_ROUTING
 	}
 
-	if len(nf.Interfaces.BridgeLinks) >= 1  {
+	if len(nf.Interfaces.BridgeLinks) >= 1 {
 		var nf_filter_const_val uint32 = 0
 		var nf_bridgr_interface_if_index uint32 = uint32(nf.Interfaces.BridgeLinks[0].Attrs().Index)
 		if err := nf.NetfilterBridgeSocketMap.Put(nf_filter_const_val, nf_bridgr_interface_if_index); err != nil {
