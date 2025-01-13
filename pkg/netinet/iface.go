@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"path"
 	"strings"
 	"syscall"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
 	"github.com/google/gopacket/pcap"
@@ -57,6 +60,9 @@ type NetIface struct {
 
 	PhysicalNodeBridgeIpv4 net.IP
 	PhysicalNodeBridgeIpv6 net.IP
+
+	NetnsHandles       []netns.NsHandle // store all mounted kernel fd for each network namespace
+	ConnTrackNsHandles map[netns.NsHandle]conntrack.ConntrackSock
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -302,6 +308,45 @@ func (nf *NetIface) GetRootNamespace() (*netns.NsHandle, error) {
 		return nil, err
 	}
 	return &rootNs, nil
+}
+
+func (nf *NetIface) GetAllNetworkNamespaces() error {
+
+	fs, err := os.ReadDir("/var/run/netns")
+	if err != nil {
+		log.Println("Error Fatal the eBPF Node agent cannot read and process the netns search on the node, please check privileges")
+		return err
+	}
+
+	var netnsHandles []netns.NsHandle
+	for _, file := range fs {
+		netNs, err := netns.GetFromPath(path.Join("/var/run/netns", file.Name()))
+		if err != nil {
+			log.Println("Error Reading the Netns file path ", netNs.String())
+			continue
+		}
+		netnsHandles = append(netnsHandles, netNs)
+	}
+
+	nf.NetnsHandles = netnsHandles
+	return nil
+}
+
+func (nf *NetIface) InitconnTrackSockHandles() error {
+	nf.GetAllNetworkNamespaces()
+
+	var conntracknsHandles map[netns.NsHandle]conntrack.ConntrackSock = make(map[netns.NsHandle]conntrack.ConntrackSock)
+	for _, netns := range nf.NetnsHandles {
+		connTrackSock, err := conntrack.NewContrackSock(int(netns)) // init and ensure the conntrack kernel entries are cleaned for the root ns
+		if err != nil {
+			log.Printf("Error getting the NetLink socket for cleaning dangling conntrack entries for Root Network Namespace %v", connTrackSock)
+			return err
+		}
+		conntracknsHandles[netns] = *connTrackSock
+	}
+
+	nf.ConnTrackNsHandles = conntracknsHandles
+	return nil
 }
 
 func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {

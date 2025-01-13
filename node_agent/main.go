@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
@@ -109,12 +108,6 @@ func main() {
 	iface.ReadRoutes()
 	iface.GetRootGateway()
 
-	connTrackSock, err := conntrack.NewContrackSock(0) // init and ensure the conntrack kernel entries are cleaned for the root ns
-
-	if err != nil {
-		log.Printf("Error getting the NetLink socket for cleaning dangling conntrack entries for Root Network Namespace %v", connTrackSock)
-	}
-
 	// io Disk Cache Inodes for Node agent
 	utils.InitCache()
 	topDomains, err := utils.ReadTldDomainsData()
@@ -191,7 +184,9 @@ func main() {
 
 		kprobe.DetachSockHandler()
 
-		connTrackSock.CloseConntrackNetlinkSock()
+		for _, openConnSocks := range iface.ConnTrackNsHandles {
+			openConnSocks.CloseConntrackNetlinkSock()
+		}
 
 		if cliFlag {
 			cliSock.CleanRemoteSock()

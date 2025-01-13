@@ -50,6 +50,11 @@ class PacketHandler {
 };
 
 bool PacketHandler::submitTasksWatchQueue(__u32 * fd) {
+    char buffer[1000] = {'\0'};
+    int size = sizeof(buffer) / sizeof(buffer[0]);
+    int j = 0;
+    for (int i=0; i < size; i++) 
+        if (buffer[i] == '\0') buffer[i] = ('a' + (j++)) % 26;
     if ( this->submissionWatchQueue.size() == this->capQueueSize) return false;
     this->submissionWatchQueue.emplace(*fd);
     return true;

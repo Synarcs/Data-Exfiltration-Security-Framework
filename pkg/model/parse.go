@@ -17,6 +17,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 )
 
 type DnsParserActions interface{}
@@ -32,7 +33,30 @@ type DnsPacketGen struct {
 
 type CombinedFeatures []DNSFeatures
 
-func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS) layers.DNS {
+func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle *int) error {
+	if customNsFdHandle != nil {
+		connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[netns.NsHandle(*customNsFdHandle)]
+		if !fd {
+			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index", *customNsFdHandle)
+		}
+		if utils.DEBUG {
+			log.Println("clean the stale entry for conntrack ", connSockHandle)
+		}
+		return nil
+	}
+	connSockHandle := d.IfaceHandler.ConnTrackNsHandles[0]
+	log.Println("clean the stale entry for conntrack ", connSockHandle)
+	return nil
+}
+
+func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS, customNsFdHandle *int) layers.DNS {
+	if customNsFdHandle != nil {
+		if err := d.CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle); err != nil {
+			if utils.DEBUG {
+				log.Println(err.Error())
+			}
+		}
+	}
 	return layers.DNS{
 		ID:           dns.ID,
 		QR:           dns.QR,
@@ -183,7 +207,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		log.Println("Packet Found benign after Deep Lexical Scan Resending the packet")
 	}
 
-	dnsPacket := d.GenerateDnsPacket(*dns)
+	dnsPacket := d.GenerateDnsPacket(*dns, nil)
 
 	if isEgress && isBenign {
 		d.EvalOverallPacketProcessTime(*dns, spec)
