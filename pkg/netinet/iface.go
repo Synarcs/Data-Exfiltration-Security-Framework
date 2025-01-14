@@ -1,11 +1,11 @@
 package netinet
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"path"
+	"os/exec"
 	"strings"
 	"syscall"
 
@@ -61,8 +61,7 @@ type NetIface struct {
 	PhysicalNodeBridgeIpv4 net.IP
 	PhysicalNodeBridgeIpv6 net.IP
 
-	NetnsHandles       []netns.NsHandle // store all mounted kernel fd for each network namespace
-	ConnTrackNsHandles map[netns.NsHandle]conntrack.ConntrackSock
+	ConnTrackNsHandles map[int]conntrack.ConntrackSock
 }
 
 func (nf *NetIface) ReadInterfaces() error {
@@ -307,44 +306,77 @@ func (nf *NetIface) GetRootNamespace() (*netns.NsHandle, error) {
 		log.Println("[x] Error Getting the Root Namespace")
 		return nil, err
 	}
+
 	return &rootNs, nil
 }
 
-func (nf *NetIface) GetAllNetworkNamespaces() error {
+func (nf *NetIface) ListRootnetlinkNetworkNamespaces() map[string]int {
+	cmd := exec.Command("ip", "netns", "list")
+	var buffer bytes.Buffer
 
-	fs, err := os.ReadDir("/var/run/netns")
+	var stderr bytes.Buffer
+	cmd.Stdout = &buffer
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
 	if err != nil {
-		log.Println("Error Fatal the eBPF Node agent cannot read and process the netns search on the node, please check privileges")
-		return err
+		log.Println("The Node Agent lack permission to process NETLINK socket for ns")
+		panic(err.Error())
 	}
 
-	var netnsHandles []netns.NsHandle
-	for _, file := range fs {
-		netNs, err := netns.GetFromPath(path.Join("/var/run/netns", file.Name()))
-		if err != nil {
-			log.Println("Error Reading the Netns file path ", netNs.String())
+	if len(stderr.String()) > 0 {
+		return nil
+	}
+
+	lines := strings.Split(buffer.String(), "\n")
+	namespaces := make(map[string]int)
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		netnsHandles = append(netnsHandles, netNs)
-	}
 
-	nf.NetnsHandles = netnsHandles
-	return nil
+		parts := strings.Split(line, " ")
+		if len(parts) < 3 {
+			continue
+		}
+
+		name := parts[0]
+		idStr := strings.Trim(parts[len(parts)-1], "()id:")
+		var id int
+		fmt.Sscanf(idStr, "%d", &id)
+		namespaces[name] = id
+	}
+	return namespaces
+}
+
+func (nf *NetIface) GetAllNetworkNamespaces() (map[string]int, error) {
+
+	// process raw RF_NETLINK kernel socket for biind process and return all ns and id (ip nentns list-id / ip netns list)
+	if nsMap := nf.ListRootnetlinkNetworkNamespaces(); nsMap == nil {
+		return nil, fmt.Errorf("Error cannot generate netns map for all network namspace")
+	} else {
+		nsMap["root"] = 0
+		return nsMap, nil
+	}
 }
 
 func (nf *NetIface) InitconnTrackSockHandles() error {
-	nf.GetAllNetworkNamespaces()
+	nsHandles, err := nf.GetAllNetworkNamespaces()
 
-	var conntracknsHandles map[netns.NsHandle]conntrack.ConntrackSock = make(map[netns.NsHandle]conntrack.ConntrackSock)
-	for _, netns := range nf.NetnsHandles {
-		connTrackSock, err := conntrack.NewContrackSock(int(netns)) // init and ensure the conntrack kernel entries are cleaned for the root ns
+	if err != nil {
+		log.Panicln("Error getting tall the netwrk Handles ....")
+	}
+	var conntracknsHandles map[int]conntrack.ConntrackSock = make(map[int]conntrack.ConntrackSock)
+	for _, id := range nsHandles {
+		connTrackSock, err := conntrack.NewContrackSock(id) // init and ensure the conntrack kernel entries are cleaned for the root ns
 		if err != nil {
 			log.Printf("Error getting the NetLink socket for cleaning dangling conntrack entries for Root Network Namespace %v", connTrackSock)
 			return err
 		}
-		conntracknsHandles[netns] = *connTrackSock
+		conntracknsHandles[id] = *connTrackSock
 	}
-
 	nf.ConnTrackNsHandles = conntracknsHandles
 	return nil
 }

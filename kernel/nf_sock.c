@@ -52,7 +52,7 @@ int netlink_socket() {
         return 0;
     }
     struct event_setSockEvent event = (struct event_setSockEvent) {
-        .process_id = bpf_get_current_pid_tgid() >> 32,
+        .process_id = bpf_get_current_pid_tgid() >> 32, 
         .tgid = bpf_get_current_pid_tgid() & 0xFFFFFFFF,
         .uid = bpf_get_current_uid_gid() >> 32,
         .gid = bpf_get_current_uid_gid() & 0xFFFFFFFF, 

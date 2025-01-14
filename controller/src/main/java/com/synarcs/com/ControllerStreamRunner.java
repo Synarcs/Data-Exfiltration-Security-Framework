@@ -8,7 +8,6 @@ import java.util.concurrent.CountDownLatch;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.common.serialization.Serdes;
 

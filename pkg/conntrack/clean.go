@@ -30,7 +30,7 @@ func NewContrackSock(netns int) (*ConntrackSock, error) {
 		return nil, err
 	}
 
-	log.Println("Init complete for Conntrakc Socket over Netlink ..")
+	log.Println("Init complete for Conntrack Socket over Netlink socket for Network Namespace ", netns)
 
 	if utils.DEBUG {
 		stats, _ := c.Stats()
@@ -59,7 +59,21 @@ func (c *ConntrackSock) CleanCloneDanglingEntries(flowEntry *ConntrackCleanEntry
 		},
 	}
 
-	c.ConntrackSock.Delete(flow)
+	if utils.DEBUG {
+		flows, _ := c.ConntrackSock.Dump(&conntrack.DumpOptions{})
+		for _, flow := range flows {
+			log.Println("flow for the naetwork ns ", flow)
+		}
+	}
+
+	if c.ConntrackSock == nil {
+		log.Println("Error ther con sock cannot be empty")
+		return nil
+	}
+	log.Println("Cleaning dest conntrack entry for the flow entry ", flowEntry)
+	if err := c.ConntrackSock.Delete(flow); err != nil {
+		return err
+	}
 	return nil
 }
 

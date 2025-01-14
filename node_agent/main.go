@@ -51,6 +51,8 @@ func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
 }
 
 func main() {
+	runtime.LockOSThread()
+
 	var cliFlag bool
 	var debug bool
 	var streamClient bool
@@ -107,6 +109,7 @@ func main() {
 	iface.ReadInterfaces()
 	iface.ReadRoutes()
 	iface.GetRootGateway()
+	iface.InitconnTrackSockHandles()
 
 	// io Disk Cache Inodes for Node agent
 	utils.InitCache()

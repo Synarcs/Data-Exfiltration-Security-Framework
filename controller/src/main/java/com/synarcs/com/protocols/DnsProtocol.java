@@ -1,6 +1,7 @@
 package com.synarcs.com.protocols;
 
 import java.io.Serializable;
+import java.util.TreeSet;
 
 
 public class DnsProtocol implements Serializable, IFeatureTransportProtocol {
@@ -59,5 +60,9 @@ public class DnsProtocol implements Serializable, IFeatureTransportProtocol {
     
     public Integer GetProtocolCustomExfiltratedPort() {
         return ExfilPort;
+    }
+
+    @SuppressWarnings("unused")
+    public void test() {
     }
 }

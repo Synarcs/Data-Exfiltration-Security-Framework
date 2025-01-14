@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -33,9 +35,10 @@ type DnsPacketGen struct {
 
 type CombinedFeatures []DNSFeatures
 
-func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle *int) error {
+// Re packet send gen ensure removal of stale conntrack entries to reserved cokernel memory and prevent the conntrack table to grow
+func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle *int, conntrackEntry *conntrack.ConntrackCleanEntry) error {
 	if customNsFdHandle != nil {
-		connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[netns.NsHandle(*customNsFdHandle)]
+		connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[int(netns.NsHandle(*customNsFdHandle))]
 		if !fd {
 			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index", *customNsFdHandle)
 		}
@@ -44,19 +47,22 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 		}
 		return nil
 	}
-	connSockHandle := d.IfaceHandler.ConnTrackNsHandles[0]
-	log.Println("clean the stale entry for conntrack ", connSockHandle)
+
+	connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[0]
+	if !fd {
+		log.Println("The Required Root namespace not found make sure the Netns map si initiated properly .. ")
+		return nil
+	}
+	if err := connSockHandle.CleanCloneDanglingEntries(conntrackEntry); err != nil {
+		if utils.DEBUG {
+			// the conntrack internally use the base netfilter layer from kernel if the required conntrack table has no entry and nil value is returned
+			log.Println("Error removing the staled conntrack entry", err.Error())
+		}
+	}
 	return nil
 }
 
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS, customNsFdHandle *int) layers.DNS {
-	if customNsFdHandle != nil {
-		if err := d.CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle); err != nil {
-			if utils.DEBUG {
-				log.Println(err.Error())
-			}
-		}
-	}
 	return layers.DNS{
 		ID:           dns.ID,
 		QR:           dns.QR,
@@ -220,8 +226,20 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ComputeChecksums: true,
 	}
 
+	// the kernel redirect has already done DNAT over the packet frame in kernel tc post redirect for next reschedule
+	// conntrack entry must be created fro origin packet with the preserved Src address because of no SNAT and interception in Input filter chain in netfilter prerouting phase.
+
 	if isIpv4 && isUdp {
 		// ipv4 and udp
+		packetL3SrcAddress, _ := netip.ParseAddr(ipv4.SrcIP.String())
+		destAddress, _ := netip.ParseAddr(ipv4.DstIP.String())
+		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
+			SrcAddress: packetL3SrcAddress,
+			DestAddres: destAddress,
+			SrcPort:    uint16(udpPacket.SrcPort),
+			Destport:   uint16(udpPacket.DstPort),
+			Protocol:   6,
+		})
 		udpPacket.SetNetworkLayerForChecksum(ipv4)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, udpPacket, &dnsPacket); err != nil {
 			log.Println("Error reconstructing the DNS packet", err)
@@ -229,6 +247,15 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		}
 	} else if !isIpv4 && isUdp {
 		// ipv6 and udp
+		packetL3SrcAddress, _ := netip.ParseAddr(ipv6.SrcIP.String())
+		destAddress, _ := netip.ParseAddr(ipv6.DstIP.String())
+		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
+			SrcAddress: packetL3SrcAddress,
+			DestAddres: destAddress,
+			SrcPort:    uint16(udpPacket.SrcPort),
+			Destport:   uint16(udpPacket.DstPort),
+			Protocol:   6,
+		})
 		opts.ComputeChecksums = false
 		udpPacket.SetNetworkLayerForChecksum(ipv6)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, udpPacket, &dnsPacket); err != nil {
@@ -237,6 +264,15 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		}
 	} else if isIpv4 && !isUdp {
 		// ipv4 and tcp
+		packetL3SrcAddress, _ := netip.ParseAddr(ipv4.SrcIP.String())
+		destAddress, _ := netip.ParseAddr(ipv4.DstIP.String())
+		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
+			SrcAddress: packetL3SrcAddress,
+			DestAddres: destAddress,
+			SrcPort:    uint16(tcpPacket.SrcPort),
+			Destport:   uint16(tcpPacket.DstPort),
+			Protocol:   6,
+		})
 		tcpPacket.SetNetworkLayerForChecksum(ipv4)
 		fmt.Println("tcp packet", tcpPacket)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, tcpPacket, &dnsPacket); err != nil {
@@ -245,6 +281,15 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		}
 	} else if !isIpv4 && !isUdp {
 		// ipv6 and tcp
+		packetL3SrcAddress, _ := netip.ParseAddr(ipv6.SrcIP.String())
+		destAddress, _ := netip.ParseAddr(ipv6.DstIP.String())
+		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
+			SrcAddress: packetL3SrcAddress,
+			DestAddres: destAddress,
+			SrcPort:    uint16(tcpPacket.SrcPort),
+			Destport:   uint16(tcpPacket.DstPort),
+			Protocol:   6,
+		})
 		opts.ComputeChecksums = false
 		tcpPacket.SetNetworkLayerForChecksum(ipv6)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, tcpPacket, &dnsPacket); err != nil {
