@@ -15,6 +15,11 @@ type DPIRedirectionKernelMap struct {
 	Kernel_timets uint64
 }
 
+type DPIVxlanKernelEncapEvent struct {
+	Transport_Dest_Port uint16
+	Transport_Src_Port  uint16
+}
+
 type RemoteStreamInferenceAnalyzed struct {
 	Fqdn               string      `json:"fqdn"`
 	Tld                string      `json:"tld"`
@@ -43,6 +48,7 @@ type DPIRedirectionTimestampVerify struct {
 	UserSpace_Egress_Loaded uint8
 }
 
+// kernel eBPF maps over kernel network stack
 const (
 	EXFILL_SECURITY_EGRESS_REDIRECT_MAP                   = "exfil_security_egress_redirect_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP         = "exfil_security_egress_redurect_ts_verify"
@@ -56,4 +62,10 @@ const (
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
 
 	EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN = "exfil_security_egress_reconnisance_map_scan"
+)
+
+// kernel eBPF ring buffers over kernel network stack
+const (
+	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_redirect_ring_buff_non_standard_port"
+	EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP                     = "exfil_security_egress_vxlan_encap_drop"
 )

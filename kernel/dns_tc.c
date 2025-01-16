@@ -33,6 +33,7 @@
 #include "consts.h"
 #include "utils.h" 
 #include "raw_proc.h"
+#include "vxlan.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
@@ -62,10 +63,6 @@ struct skb_cursor {
     struct bpf_spin_lock *lock;
 };
 
-struct vxlanhdr {
-	__be32 vx_flags;
-	__be32 vx_vni;
-};
 
 struct vlan_hdr {
 	__be16	h_vlan_TCI;
@@ -99,7 +96,7 @@ struct packet_actions {
     __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
-    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *);
+    __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *, struct udphdr *);
     __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , struct __sk_buff *, void *, struct dns_header_tcp *);
 };
 
@@ -113,6 +110,18 @@ struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
 } exfil_security_egrees_redirect_ring_buff_non_standard_port SEC(".maps");
+
+// vxlan encap from kernel the src port and the dest port used to detect any vxlan encap channels 
+struct exfil_vxlan_exfil_event {
+    __u16 transport_dest_port;
+    __u16 transport_src_port;
+};
+
+// emits an potential ring buff kernel event with value setting an port in UDP which is potentially used to perform exfiltration and data breach 
+struct exfil_security_egress_vxlan_encap_drop {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 12);
+} exfil_security_egress_vxlan_encap_drop SEC(".maps");
 
 
 // 
@@ -657,8 +666,39 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
 
 /*
+    Emit the kernel event to user space to bind and read traffic over the port 
+    Userspace should clean the dptr kernel only emits dptr dynamic events for user space to sniff the traffic on these ports to read udp traffic post parsing and storing the vxlan header 
+*/
+static
+__always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, __u32 egress_ifindex) {
+    struct bpf_dynptr dptr;
+    if (bpf_ringbuf_reserve_dynptr(&exfil_security_egress_vxlan_encap_drop, sizeof(struct exfil_vxlan_exfil_event), 0, &dptr) < 0){
+        if (DEBUG) {
+            bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
+        }
+        bpf_ringbuf_discard_dynptr(&dptr, 0);
+        return;
+    }
+    if (DEBUG)
+        bpf_printk("emit an vxlan kernel event for udp %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
+    struct exfil_vxlan_exfil_event vxlan_event = (struct exfil_vxlan_exfil_event) {
+        .transport_dest_port = bpf_ntohs(udp->dest),
+        .transport_src_port = bpf_ntohs(udp->source)
+    };
+    long res = bpf_dynptr_write(&dptr, 0, &vxlan_event, sizeof(struct exfil_vxlan_exfil_event), 0);
+    #ifdef DEBUG 
+        if (DEBUG) {
+            bpf_printk("wrote the service map events in the ring buff dptr from kernel evetn emit %u", res);
+        }
+    #endif 
+    bpf_ringbuf_submit_dynptr(&dptr, 0);
+    bpf_printk("Emit the vxlan encap tracing event to user space");
+}
+
+
+/*
     The kernel does a packet tunneling usually over the epheral udp port (4379) and not a standard dns tunnel for packet forward
-        kernel neverl allows the packet to pass over standard dns udp l4 to be encapsulated as a vxlan inside the main packet. 
+        kernel never allows the packet to pass over standard dns udp l4 to be encapsulated as a vxlan inside the main packet. 
 */
 static 
 __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, void * transport_payload) {
@@ -669,40 +709,22 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
     struct vxlanhdr *vxlan = (struct vxlanhdr *)transport_payload;
     if ((void *)vxlan + sizeof(struct vxlanhdr) > skb->data_end)  return BENIGN;
 
+    if (__parse_vxlan_flag__hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
+
+    __be32 vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
+    if (vlan_id == 9)
+    if (__parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
+
+    bpf_printk("Suspicious vxlan tunnel detected");
     struct ethhdr *eth = (struct ethhdr *)((void *)vxlan + sizeof(struct vxlanhdr));
     if ((void *)eth + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
-
-   switch bpf_ntohs(eth->h_proto) {
-     case ETH_P_IP: 
-        struct iphdr *ip = (struct iphdr *) ((void *)eth + sizeof(struct ethhdr));
-        if ((void *) (ip + sizeof(struct iphdr)) > skb->data_end) return BENIGN;
-
-        switch (ip->protocol) {
-            case IPPROTO_UDP: 
-                struct udphdr *udp = (struct udphdr *) ((void *)ip + sizeof(struct iphdr));
-                if ((void *) udp + 1 > skb->data_end) return BENIGN;
-                if (bpf_ntohs(udp->dest) == DNS_EGRESS_PORT) {
-                    struct dns_header *dns = (struct dns_header *) ((void *)udp + sizeof(struct udphdr));
-                    if ((void *) dns + 1 > skb->data_end) return BENIGN;
-
-                    void *dns_vxlan_encap_payload = dns + sizeof(struct dns_header);
-                    if ((void *) dns_vxlan_encap_payload + 1 > skb->data_end) return BENIGN;
-
-                    return SUSPICIOUS;
-                }else if (bpf_ntohs(udp->dest) == DNS_EGRESS_MULTICAST_PORT) return BENIGN;
-                else return BENIGN;
-            case IPPROTO_TCP: return BENIGN;
-            default: return BENIGN;
-        }
-     case ETH_P_IPV6:  return BENIGN;
-     default: return BENIGN;
-   }
-
+    
+    return SUSPICIOUS;
 }
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, struct __sk_buff *raw_skb,void *dns_payload, 
-                struct dns_header *dns_header) {
+                struct dns_header *dns_header, struct udphdr *udp) {
     // check whether a non standard port is used for dns query and dns payload 
     
     // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
@@ -718,11 +740,15 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
             dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
         }else {
             #ifdef DEBUG
-            if (!DEBUG) {
+            if (DEBUG) {
                 bpf_printk("kernel cannot find the requred kernel config redirect map");
             }
             #endif
         }
+
+        // emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
+        __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
+
         return 1;
     }
 
@@ -999,7 +1025,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
      
         // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, skb,
-                            dns_payload, dns);
+                            dns_payload, dns, udp);
         if (__non_standard_port_dpi == 0) {
             // emit the ring buff from kernel as a transport event 
             if (DEBUG)

@@ -1,6 +1,12 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
+
+#define DEBUG(x)   do \
+                    printf("%d", x) \ 
+                   while(0) 
 
 #define __print_handler(x, y, ...) __GENERIC(x, \
     __uint16_t: printf("%u\n", y), \
@@ -69,6 +75,9 @@ void * handler (void *start, void *end, int size) {
 int main(void){
     procMap *proc = (procMap *) malloc(sizeof(procMap));
 
+    if (!proc) 
+        return 0;
+    size_t processNodesSize = sizeof(proc);
     int ** mem  = (int **) malloc (sizeof(int *) * 10);
     const int sz = 1 << 2;
 

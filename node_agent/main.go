@@ -218,11 +218,13 @@ func main() {
 		}
 	}()
 
+	// TODO move this to uring or epoll fd listners for the remote inference server to emity socket close signal event consumed via unix trafer port
 	go func() {
 		for {
-			_, err := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
+			_, egress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+			_, ingress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+			if egress != nil || ingress != nil {
+				if errors.Is(egress, os.ErrNotExist) || errors.Is(ingress, os.ErrNotExist) {
 					log.Println("The Unix Local Unix Inference Socket is not available", err.Error())
 					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
 				} else {

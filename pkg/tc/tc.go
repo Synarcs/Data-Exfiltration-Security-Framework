@@ -299,12 +299,15 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	errMapPollChannel := make(chan error)
 	for _, maps := range spec.Maps {
 		// process all the maps which needs to monitoted or polled from kernel for events without explicity events for ring buffer
-		if strings.Contains(maps.String(), "exfil_security_egrees_redirect_ring_buff_non_standard_port") {
+		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
 			// an ring event buffer
 			if utils.DEBUG {
 				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
 			}
 			go tc.PollRingBuffer(ctx, maps)
+		}
+		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP) {
+			go tc.PollVxlanRingBuffer(ctx, maps)
 		}
 		if strings.Contains(maps.String(), events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP) || strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP) {
 			go tc.PollMonitoringMaps(ctx, maps, errMapPollChannel)
