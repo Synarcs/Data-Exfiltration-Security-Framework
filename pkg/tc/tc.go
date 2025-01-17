@@ -124,7 +124,7 @@ func (tc *TCHandler) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) {
 		var event events.DnsEvent
 		if utils.CpuArch() == "arm64" {
 			log.Println("Polling the ring buffer for the arm arch")
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
 			}

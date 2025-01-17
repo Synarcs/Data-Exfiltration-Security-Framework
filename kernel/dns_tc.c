@@ -10,7 +10,7 @@
 
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
-#include <linux/if_packet.h>
+#include <linux/if_packet.h> // AF_PACKET raw kernel sock 
 #include <linux/if_tun.h> // for TUN_TAP tunnel packet link 
 #include <linux/in.h>
 #include <linux/ip.h>
@@ -115,7 +115,17 @@ struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
 struct exfil_vxlan_exfil_event {
     __u16 transport_dest_port;
     __u16 transport_src_port;
-};
+} __attribute__((packed));
+
+// map storing information about the vxlan kernel encap channels port for transfer, userspace instruct kernel DPI to block traffic unless scanned nexxt time via ring buff 
+// userspace has always ensured that there is an l7 dns layer with malicious payload encapsulated inside the frame for vxlan packet frame.
+struct exfil_vxlan_block_egress_port {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u16); // userspace post DPI determines the kernel sock for the port to drop traffic 
+    __type(value, __u8); // kernel flags for __u8 populated to suggest to block any traffic henceforth over this port
+    __uint(max_entries, 1 << 10); // ideally matches the max (0xffff) ports over encap udp transport 
+} exfil_vxlan_block_egress_port SEC(".maps");
+
 
 // emits an potential ring buff kernel event with value setting an port in UDP which is potentially used to perform exfiltration and data breach 
 struct exfil_security_egress_vxlan_encap_drop {
@@ -718,7 +728,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
     bpf_printk("Suspicious vxlan tunnel detected");
     struct ethhdr *eth = (struct ethhdr *)((void *)vxlan + sizeof(struct vxlanhdr));
     if ((void *)eth + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
-    
+
     return SUSPICIOUS;
 }
 
@@ -746,8 +756,31 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
             #endif
         }
 
-        // emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
-        __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
+
+        __u32 udp_dest_port = bpf_ntohs(udp->dest);
+        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+        if (userspace_vxlan_flag_val) {
+            #ifdef DEBUG 
+                if (DEBUG) 
+                    bpf_printk("kernel found the vxlan flag for the udp port %u", udp_dest_port); 
+            #endif
+            if (*userspace_vxlan_flag_val == 1) {
+                // there is an malicious exfiltrated dns traffic done over this vxlan port 
+                return 0;
+            }
+            // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
+            if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
+                #ifdef DEBUG 
+                    if (DEBUG) {
+                        bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
+                    }
+                #endif 
+            }
+        }else {
+            // emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
+            // continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
+            __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
+        }
 
         return 1;
     }

@@ -2,6 +2,7 @@
     #define  __VXLAN_H 
 
 #include <linux/in.h>
+#include <linux/bpf.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_endian.h>
 
@@ -10,6 +11,7 @@
 
 //  8 bit offset for the reserved (vxlan >> 24) & (VXLAND_I_OFFSET_BIT)
 #define VXLAN_RD_VNI_FLAG 0x08
+#define VXLAN_RESERVED_OFFSET_BITS_MASK 0xffffff
 
 //    VXLAN Header:
 //    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -30,6 +32,7 @@ __u8 __parse_vxlan_flag__hdr(void *transport_data, struct vxlanhdr *vxlan_hdr, v
     if ((void *) flags_vxlan_hdr + sizeof(__be32) > data_end) return 0;
     // an valid I sender flag set denoting sender for the vxlan packet 
     __u32 ff = (flags_vxlan_hdr >> 24) & VXLAN_RD_VNI_FLAG;
+    __u32 offset_vxlan_flags = flags_vxlan_hdr & VXLAN_RESERVED_OFFSET_BITS_MASK;
     if ((ff >> 3) == 1) return 1;
 
     return 0;

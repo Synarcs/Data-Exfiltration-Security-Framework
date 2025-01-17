@@ -346,7 +346,10 @@ func (nf *NetIface) ListRootnetlinkNetworkNamespaces() map[string]int {
 		name := parts[0]
 		idStr := strings.Trim(parts[len(parts)-1], "()id:")
 		var id int
-		fmt.Sscanf(idStr, "%d", &id)
+		_, err := fmt.Sscanf(idStr, "%d", &id)
+		if err != nil {
+			continue
+		}
 		namespaces[name] = id
 	}
 	return namespaces

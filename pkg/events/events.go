@@ -15,9 +15,10 @@ type DPIRedirectionKernelMap struct {
 	Kernel_timets uint64
 }
 
+// Page align with ring buff page size and alighment of bytes
 type DPIVxlanKernelEncapEvent struct {
-	Transport_Dest_Port uint16
-	Transport_Src_Port  uint16
+	Transport_Dest_Port uint16 `align:"4"`
+	Transport_Src_Port  uint16 `align:"4"`
 }
 
 type RemoteStreamInferenceAnalyzed struct {
@@ -57,6 +58,7 @@ const (
 	EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP             = "exfil_security_egress_redirect_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP = "exfil_security_egress_redirect_drop_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME             = "exfil_security_egress_redirect_loop_time"
+	EXFIL_VXLAN_BLOCK_EGRESS_PORT                         = "exfil_vxlan_block_egress_port"
 
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
