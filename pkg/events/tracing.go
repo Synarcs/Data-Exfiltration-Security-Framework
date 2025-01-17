@@ -177,6 +177,18 @@ var (
 			"isUDPTransport",
 		},
 	)
+
+	malicious_vxlan_encap_dns_vtep_tunnel_transfer = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "malicious_vxlan_encap_dns_vtep_tunnel_transfer",
+			Help: "Detected packet transfer over a non standard DNS port overlay over UDP / TCP",
+		}, []string{
+			"vni",
+			"udp_src_port",
+			"udp_dst_port",
+			"domains",
+		},
+	)
 )
 
 const (
@@ -188,7 +200,8 @@ func init() {
 		redirect_event_metric, redirect_event_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
-		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer)
+		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer, 
+		malicious_vxlan_encap_dns_vtep_tunnel_transfer)
 }
 
 func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {

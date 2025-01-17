@@ -721,13 +721,17 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
 
     if (__parse_vxlan_flag__hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
 
-    __be32 vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
-    if (vlan_id == 9)
-    if (__parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
+    __u32 vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
 
-    bpf_printk("Suspicious vxlan tunnel detected");
-    struct ethhdr *eth = (struct ethhdr *)((void *)vxlan + sizeof(struct vxlanhdr));
-    if ((void *)eth + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
+    bpf_printk("Suspicious vxlan tunnel detected started trecursive internal parsing for the skb header");
+
+    // do an raw head parsing from the skb->data until the detection for any l7 traffic
+    void *payload = (void *)vxlan + sizeof(struct vxlanhdr);
+    if ((void *) payload + sizeof(struct ethhdr) > skb->data_end) return BENIGN;
+
+    struct ethhdr *eth = (struct ethhdr *)payload;
+    if ((void*)(eth + 1) > skb->data_end)
+        return BENIGN;
 
     return SUSPICIOUS;
 }
@@ -1071,6 +1075,8 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                         bpf_printk("Error reserve kernel memroy for the event");
                     }
                 #endif
+                unsigned long long ring_buff_aloc_data = bpf_ringbuf_query(&exfil_security_egrees_redirect_ring_buff_non_standard_port, BPF_RB_AVAIL_DATA);
+                if (ring_buff_aloc_data > 0) {}
                 // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
                 return 1;
             }

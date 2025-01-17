@@ -70,7 +70,9 @@ func (c *ConntrackSock) CleanCloneDanglingEntries(flowEntry *ConntrackCleanEntry
 		log.Println("Error ther con sock cannot be empty")
 		return nil
 	}
-	log.Println("Cleaning dest conntrack entry for the flow entry ", flowEntry)
+	if utils.DEBUG {
+		log.Println("Cleaning dest conntrack entry for the flow entry ", flowEntry)
+	}
 	if err := c.ConntrackSock.Delete(flow); err != nil {
 		return err
 	}

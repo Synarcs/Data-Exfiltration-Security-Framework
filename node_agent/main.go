@@ -224,8 +224,11 @@ func main() {
 			_, egress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
 			_, ingress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
 			if egress != nil || ingress != nil {
-				if errors.Is(egress, os.ErrNotExist) || errors.Is(ingress, os.ErrNotExist) {
-					log.Println("The Unix Local Unix Inference Socket is not available", err.Error())
+				if errors.Is(egress, os.ErrNotExist) {
+					log.Println("The Unix Local Unix Inference Socket is not available", egress.Error())
+					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
+				} else if errors.Is(ingress, os.ErrNotExist) {
+					log.Println("The Unix Local Unix Inference Socket is not available", ingress.Error())
 					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
 				} else {
 					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
