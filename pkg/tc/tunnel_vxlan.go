@@ -17,6 +17,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/vishvananda/netlink"
 )
 
 var sniffPortUspaceLock sync.Mutex = sync.Mutex{}
@@ -39,7 +40,27 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 		vniPackTransferCount[vni] += 1
 	}
 
+	_, err := tc.GetTunnelLinkInterfaceInfo(dstPort)
+	if err != nil {
+		return
+	}
 	// TODO: emit and encap tunnel prometheus event detection for vxlan
+}
+
+func (tc *TCHandler) GetTunnelLinkInterfaceInfo(dstPort uint16) (*netlink.Vxlan, error) {
+	encapTunnelVtepLinks, err := tc.Interfaces.GetVxlanTunnelInterfaces()
+	if err != nil {
+		log.Println("Error getting the vxlan tunnel interfaces", err)
+		return nil, err
+	}
+
+	// kerel use dest  port for vxlan encap over ht the link and it should be there on the net_device matching a vxlan
+	if vxlanLink, fd := encapTunnelVtepLinks[dstPort]; !fd {
+		log.Println("Error getting the vxlan tunnel interfaces", err)
+		return nil, fmt.Errorf("Error getting the vxlan tunnel interfaces")
+	} else {
+		return vxlanLink, nil
+	}
 }
 
 func (tc *TCHandler) UpdateVxlanDestPortTransferMapDrop(dstPort uint16, ebpfMap *ebpf.Map) error {

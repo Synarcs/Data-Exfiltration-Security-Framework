@@ -184,8 +184,10 @@ var (
 			Help: "Detected packet transfer over a non standard DNS port overlay over UDP / TCP",
 		}, []string{
 			"vni",
-			"udp_src_port",
+			"udp_src_port", // l4 overlay ports for vxlan encap vial link with  virtual mac
 			"udp_dst_port",
+			"l3_tunnel_address", // l3 tunnel address for remote tunnel not the host bridge 
+			"l2_tunnel_mac_address", // l2 tunnel mac address for the vtep on the host
 			"domains",
 		},
 	)
@@ -200,7 +202,7 @@ func init() {
 		redirect_event_metric, redirect_event_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
-		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer, 
+		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer,
 		malicious_vxlan_encap_dns_vtep_tunnel_transfer)
 }
 

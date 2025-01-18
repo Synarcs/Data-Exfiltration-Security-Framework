@@ -234,11 +234,13 @@ func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 	var tunnelLinks []netlink.Link = make([]netlink.Link, 0)
 
 	for _, link := range links {
+		// for the kernel p2p2 encap via l2/l3 pair of tun/tap interfaces
 		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
 			log.Println("Found a tunnel link ", link.Attrs().Name, "  ", link.Attrs().MTU)
 			tunnelLinks = append(tunnelLinks, link)
 		}
 	}
+	iface.GetVxlanTunnelInterfaces()
 
 	return tunnelLinks
 }
@@ -282,6 +284,22 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 
 	}
 	return hardwardIntefaces, loopBackInterface, bridgeInterfaces
+}
+
+func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error) {
+	if len(nf.Links) == 0 {
+		return nil, fmt.Errorf("Vxlan Tunnel Interfaces cannot be found use netlink soscket to read all net_devices on node")
+	}
+
+	var tunnelVxlanInterfaces map[uint16]*netlink.Vxlan = make(map[uint16]*netlink.Vxlan)
+	for _, link := range nf.Links {
+		if vxlan, ok := link.(*netlink.Vxlan); ok {
+			fmt.Println("interface vxlan ", link.Attrs().Name, vxlan.Group.String())
+			tunnelVxlanInterfaces[uint16(vxlan.Port)] = vxlan
+		}
+	}
+
+	return tunnelVxlanInterfaces, nil
 }
 
 func (nf *NetIface) GetNetworkNamespace(route string) (*netns.NsHandle, error) {
@@ -388,12 +406,14 @@ func (nf *NetIface) InitconnTrackSockHandles() error {
 func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
 func (nf *NetIface) GetRootNamespacePcapHandleDuration(time time.Duration) (*pcap.Handle, error) {
 
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, time)
+	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
