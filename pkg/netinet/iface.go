@@ -240,7 +240,6 @@ func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 			tunnelLinks = append(tunnelLinks, link)
 		}
 	}
-	iface.GetVxlanTunnelInterfaces()
 
 	return tunnelLinks
 }
@@ -294,7 +293,6 @@ func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error
 	var tunnelVxlanInterfaces map[uint16]*netlink.Vxlan = make(map[uint16]*netlink.Vxlan)
 	for _, link := range nf.Links {
 		if vxlan, ok := link.(*netlink.Vxlan); ok {
-			fmt.Println("interface vxlan ", link.Attrs().Name, vxlan.Group.String())
 			tunnelVxlanInterfaces[uint16(vxlan.Port)] = vxlan
 		}
 	}

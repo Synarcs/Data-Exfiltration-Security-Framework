@@ -84,11 +84,11 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
         streams.start();
         System.out.println("Connected to topic: " + config.getKafkaInputStreamTopic());
         System.out.println("Connected to broker: " + config.getBrokerUrl() + ":" + config.getBrokerPort());
-    
+        
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
-            streams.close();
+            streams.cleanUp();
         }
     }
 }

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -27,6 +28,15 @@ type PacketDPIRedirectionCountEvent struct {
 type PacketDPIKernelDropCountEvent struct {
 	KernelDropPacketCount uint32
 	EvenTime              string
+}
+
+type VxlanEncapKenrelEvent struct {
+	Vni                   uint32
+	Udp_src_port          uint16
+	Udp_dst_port          uint16
+	L3_tunnel_address     string
+	L2_tunnel_mac_address string
+	Domains               []string
 }
 
 type DNSFeatures struct {
@@ -66,7 +76,7 @@ const (
 
 type KernelPacketDropRedirectInterface interface {
 	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
-		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer
+		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer | VxlanEncapKenrelEvent
 }
 
 type RawDnsEvent struct {
@@ -186,7 +196,7 @@ var (
 			"vni",
 			"udp_src_port", // l4 overlay ports for vxlan encap vial link with  virtual mac
 			"udp_dst_port",
-			"l3_tunnel_address", // l3 tunnel address for remote tunnel not the host bridge 
+			"l3_tunnel_address",     // l3 tunnel address for remote tunnel not the host bridge
 			"l2_tunnel_mac_address", // l2 tunnel mac address for the vtep on the host
 			"domains",
 		},
@@ -286,6 +296,18 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"isUDPTransport": strconv.FormatBool(e.IsUDPTransport),
 		}).Set(float64(e.Dest_port))
 		return nil
+		
+	case VxlanEncapKenrelEvent:
+		malicious_vxlan_encap_dns_vtep_tunnel_transfer.With(prometheus.Labels{
+			"vni":                   strconv.Itoa(int(e.Vni)),
+			"udp_src_port":          strconv.Itoa(int(e.Udp_dst_port)),
+			"udp_dst_port":          strconv.Itoa(int(e.Udp_dst_port)),
+			"l3_tunnel_address":     e.L3_tunnel_address,
+			"l2_tunnel_mac_address": e.L2_tunnel_mac_address,
+			"domains":               strings.Join(e.Domains, ","),
+		}).Set(float64(time.Now().Nanosecond()))
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported event type: %T", e)
 	}

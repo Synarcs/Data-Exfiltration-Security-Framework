@@ -31,7 +31,8 @@ const (
 	POLL_TICKER_VXLAN_PCAP_DURATION = 5 * time.Minute  // poll the pcap handle over every 5 minute interval
 )
 
-func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, dstPort uint16) {
+func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, dstPort uint16,
+	dnsPacket *layers.DNS) {
 	sniffPortUspaceLock.Lock()
 	defer sniffPortUspaceLock.Unlock()
 	if _, fd := vniPackTransferCount[vni]; !fd {
@@ -40,11 +41,46 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 		vniPackTransferCount[vni] += 1
 	}
 
-	_, err := tc.GetTunnelLinkInterfaceInfo(dstPort)
+	getAllDomainsINEncapDNs := func() []string {
+		var domains []string
+		if dnsPacket.QDCount > 0 {
+			// all question record for dns added
+			for _, questions := range dnsPacket.Questions {
+				domains = append(domains, string(questions.Name))
+			}
+		}
+		if dnsPacket.ARCount > 0 {
+			// auth encap dns
+			for _, auth := range dnsPacket.Authorities {
+				domains = append(domains, string(auth.Name))
+			}
+		}
+		if dnsPacket.NSCount > 0 {
+			// additional encap dns
+			for _, ns := range dnsPacket.Additionals {
+				domains = append(domains, string(ns.Name))
+			}
+		}
+		return domains
+	}
+
+	// get the active live net_device fetched from netlink socket running vxlan encapsulation
+	vxlanTunnelInterface, err := tc.GetTunnelLinkInterfaceInfo(dstPort)
 	if err != nil {
+		// dont emit event, since the vxlan tunnel is gone and netlink cannot find vxlan interface with the udp dst port
+		log.Println("The Required Dst UDP port vxlan tunnel net_device not found", err)
 		return
 	}
+
 	// TODO: emit and encap tunnel prometheus event detection for vxlan
+	events.ExportPromeEbpfExporterEvents[events.VxlanEncapKenrelEvent](events.VxlanEncapKenrelEvent{
+		Vni:                   uint32(vxlanTunnelInterface.VxlanId),
+		Udp_src_port:          srcPort,
+		Udp_dst_port:          dstPort,
+		L3_tunnel_address:     vxlanTunnelInterface.Group.String(), // pass the endpoint of tunnel on c2 exfil machine
+		L2_tunnel_mac_address: "",                                  // also get the roo mac address from the link on device for remote vtep
+		Domains:               getAllDomainsINEncapDNs(),
+	})
 }
 
 func (tc *TCHandler) GetTunnelLinkInterfaceInfo(dstPort uint16) (*netlink.Vxlan, error) {
@@ -103,7 +139,7 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 			if layer := innerPacket.Layer(layers.LayerTypeDNS); layer != nil {
 				dnsLayer := layer.(*layers.DNS)
 				log.Println("Sniffed DNS traffic over vxlan encap ", dnsLayer)
-				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort))
+				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort), dnsLayer)
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
 					log.Println(err.Error())
 				}
@@ -114,7 +150,7 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 			if layer := innerPacket.Layer(layers.LayerTypeDNS); layer != nil {
 				dnsLayer := layer.(*layers.DNS)
 				log.Println("Sniffed DNS traffic over vxlan encap ", dnsLayer)
-				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort))
+				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort), dnsLayer)
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
 					log.Println(err.Error())
 				}

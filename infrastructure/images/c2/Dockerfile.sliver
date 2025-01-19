@@ -1,0 +1,5 @@
+FROM ubuntu:20.04 as exfil_binary
+
+ENV DNS_EXFIL_TOOL=sliver
+
+VOLUME . /home 

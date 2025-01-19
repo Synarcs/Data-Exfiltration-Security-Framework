@@ -1,0 +1,21 @@
+FROM ubuntu:20.04 as exfil_binary_server
+
+ARG Mainter="Synarcs"
+ENV DNS_EXFIL_TOOL=dnscat2 
+
+
+WORKDIR /dnscat2
+
+RUN apt-get update && apt-get install -y build-essential git && \
+    git clone https://github.com/iagox86/dnscat2.git 
+
+RUN cd dnscat2 
+
+
+FROM ubuntu:20.04 as exfil_binary_client 
+
+
+ARG Mainter="Synarcs"
+ENV DNS_EXFIL_TOOL=dnscat2 
+
+COPY --from=exfil_binary_server /dnscat2/dnscat2/dnscat2 .
