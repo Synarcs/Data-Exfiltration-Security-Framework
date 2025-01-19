@@ -9,9 +9,3 @@ function handler()
         end 
     end
 end
-
-
-handler()
-
-
-

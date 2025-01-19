@@ -7,6 +7,11 @@ build-controller:
 	@echo "Building the controller"
 	cd controller && mvn clean compile install 
 
+.PHONY: run-controller
+run-controller:
+	@echo "Running the controller"
+	cd controller && java -jar target/controller-0.0.1-SNAPSHOT.jar
+
 .PHONY: build-framework 
 build-framework:
 	@echo "building the framework"

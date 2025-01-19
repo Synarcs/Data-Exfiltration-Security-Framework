@@ -8,6 +8,12 @@
   <name>node-agent-controller</name>
   <url>http://maven.apache.org</url>
 
+<repositories>
+    <repository>
+        <id>confluent</id>
+        <url>https://packages.confluent.io/maven/</url>
+    </repository>
+</repositories>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source> 
@@ -20,6 +26,30 @@
       <artifactId>junit</artifactId>
       <version>3.8.1</version>
       <scope>test</scope>
+    </dependency>
+
+
+        <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>2.0.16</version>
+    </dependency>
+
+     <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>2.0.16</version>
+        <scope>test</scope>
+    </dependency>
+
+    <!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-log4j12 -->
+    <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-log4j12</artifactId>
+        <version>2.0.16</version>
+        <scope>runtime</scope>
     </dependency>
 
       <dependency>
@@ -62,6 +92,13 @@
             <artifactId>jackson-databind</artifactId>
             <version>2.18.2</version>
         </dependency>
+
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-json-serializer</artifactId>
+            <version>7.8.0</version>
+        </dependency>
+    
 
   </dependencies>
    <build>
