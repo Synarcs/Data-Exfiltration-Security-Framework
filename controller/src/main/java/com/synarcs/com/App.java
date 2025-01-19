@@ -22,7 +22,7 @@ public class App implements Serializable {
         }));
 
         try {
-            new Thread(new ControllerStreamRunner()).start();
+            new Thread(new EventsConsumer()).start();
             lockThreads.await();
         } catch (InterruptedException exception) {
             System.out.println("Current Root Thread Interrupted");
