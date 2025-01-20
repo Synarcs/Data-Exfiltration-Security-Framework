@@ -12,9 +12,13 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+<<<<<<< HEAD
 import com.synarcs.com.cache.NodeCache;
 import com.synarcs.com.protocols.DnsFeatures;
 import com.synarcs.com.protocols.DnsProtocol;
+=======
+import com.synarcs.com.protocols.DnsFeatures;
+>>>>>>> 91643f60c915799a096f7e07800b0dec03ae1627
 import com.synarcs.com.protocols.ProtocolEnums;
 
 import io.confluent.kafka.serializers.KafkaJsonDeserializer;
@@ -28,7 +32,10 @@ public class EventsConsumer implements Serializable, Runnable {
     private KafkaConfig config;
     private ControllerInspectProtocolsBuilder protocolsBuilder;
     private Logger log = LoggerFactory.getLogger(EventsConsumer.class);
+<<<<<<< HEAD
     private final String threat_event_topic = "exfil-sec";
+=======
+>>>>>>> 91643f60c915799a096f7e07800b0dec03ae1627
 
     public EventsConsumer(KafkaConfig config) {
         super();
