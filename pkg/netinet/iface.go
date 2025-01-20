@@ -293,6 +293,9 @@ func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error
 	var tunnelVxlanInterfaces map[uint16]*netlink.Vxlan = make(map[uint16]*netlink.Vxlan)
 	for _, link := range nf.Links {
 		if vxlan, ok := link.(*netlink.Vxlan); ok {
+			if vxlan.Group == nil || vxlan.SrcAddr == nil {
+				continue
+			}
 			tunnelVxlanInterfaces[uint16(vxlan.Port)] = vxlan
 		}
 	}

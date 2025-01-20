@@ -72,7 +72,6 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 		return
 	}
 
-	// TODO: emit and encap tunnel prometheus event detection for vxlan
 	events.ExportPromeEbpfExporterEvents[events.VxlanEncapKenrelEvent](events.VxlanEncapKenrelEvent{
 		Vni:                   uint32(vxlanTunnelInterface.VxlanId),
 		Udp_src_port:          srcPort,
@@ -145,8 +144,8 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 				}
 			}
 		} else if tcpLayer := innerPacket.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-			srcPort := udpLayer.(*layers.UDP).SrcPort
-			dstPort := udpLayer.(*layers.UDP).DstPort
+			srcPort := udpLayer.(*layers.TCP).SrcPort
+			dstPort := udpLayer.(*layers.TCP).DstPort
 			if layer := innerPacket.Layer(layers.LayerTypeDNS); layer != nil {
 				dnsLayer := layer.(*layers.DNS)
 				log.Println("Sniffed DNS traffic over vxlan encap ", dnsLayer)
