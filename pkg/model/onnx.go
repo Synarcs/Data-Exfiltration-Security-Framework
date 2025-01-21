@@ -77,6 +77,10 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 					// consider malicious if any section of DNS packet contains this malicious domain TLD and already blacklisted in egress cache
 					return false, nil
 				}
+				if utils.IngDeleteDomainBlackListInCache(dnsFeature.Tld) {
+					// if found in ingress cache as the tld should be blacklisted and dropped
+					return false, nil
+				}
 			}
 
 			inferRequest := InferenceRequest{

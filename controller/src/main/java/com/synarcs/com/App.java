@@ -17,7 +17,7 @@ public class App implements Serializable {
     
     public static void main(String[] args) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Closing the kafka stream controller...");
+            System.out.println("Closing the controller for Data exfiltration security framework");
             lockThreads.countDown();
         }));
 

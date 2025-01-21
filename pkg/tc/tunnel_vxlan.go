@@ -167,7 +167,6 @@ func (tc *TCHandler) SniffPcapVxlanTrafficPort(event *events.DPIVxlanKernelEncap
 
 	if _, fd := controlChannelMap[event.Transport_Dest_Port]; fd {
 		// there is already an pcap live handler snifing traffic over pcap
-		log.Println("Error Please before init sniff over this packet ensure the packeet is added in sniff map channel")
 		return nil
 	}
 	controlChannelMap[event.Transport_Dest_Port] = make(chan bool)
@@ -253,7 +252,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 		}
 
 		var event events.DPIVxlanKernelEncapEvent
-		if utils.CpuArch() == "arm64" {
+		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
 			err = binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)

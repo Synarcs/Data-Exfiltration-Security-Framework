@@ -786,7 +786,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
             __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
         }
 
-        return 1;
     }
 
     struct dns_flags  flags;

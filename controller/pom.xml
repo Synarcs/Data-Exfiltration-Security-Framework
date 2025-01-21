@@ -107,7 +107,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
                 <configuration>
-                    <release>11</release>
+                    <maven.compiler.release>17</maven.compiler.release>
                     <encoding>UTF-8</encoding>
                     <compilerArguments>
                         <endorseddirs>${project.build.directory}/endorsed</endorseddirs>

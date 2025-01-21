@@ -10,7 +10,13 @@ build-controller:
 .PHONY: run-controller
 run-controller:
 	@echo "Running the controller"
-	cd controller && java -jar target/controller-0.0.1-SNAPSHOT.jar
+	cd controller && java -jar target/node-agent-controller-1.0-SNAPSHOT.jar
+
+.PHONY: controller 
+controller:
+	@echo "Build and Run Controller" 
+	make build-controller 
+	make run-controller
 
 .PHONY: build-framework 
 build-framework:
