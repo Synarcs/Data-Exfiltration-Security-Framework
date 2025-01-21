@@ -26,6 +26,7 @@ func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
 		if fd {
 			continue
 		} else {
+			// check if the tld is not already blacklisted and present in node egress LRU cache
 			perLabelFeatures := make([]float32, 8)
 			perLabelFeatures[0] = float32(features[i].TotalChars)
 			perLabelFeatures[1] = float32(features[i].TotalCharsInSubdomain)
@@ -61,6 +62,8 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 		if !ok {
 			log.Panic("The Required features needs to adher to the protocol definition")
 		}
+
+		// calls the python unix socket for inferenceing against the onnx loaded deep learning model
 		processRemoteUnixInference := func(featureVectorsFloat [][]float32, direction bool) (bool, error) {
 			client, conn, err := GetInferenceUnixClient(direction)
 			if err != nil {
@@ -70,7 +73,8 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			defer conn.Close()
 
 			for _, dnsFeature := range dnsFeatures {
-				if utils.GetKeyPresentInCache(dnsFeature.Tld) {
+				if utils.GetKeyPresentInEgressCache(dnsFeature.Tld) {
+					// consider malicious if any section of DNS packet contains this malicious domain TLD and already blacklisted in egress cache
 					return false, nil
 				}
 			}
@@ -115,7 +119,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				// add in the threat cache map for nested lru
 				// marked all the dns features as malicious
 				for _, dnsFeature := range dnsFeatures {
-					utils.UpdateDomainBlacklistInCache(dnsFeature.Tld, dnsFeature.Fqdn)
+					utils.UpdateDomainBlacklistInEgressCache(dnsFeature.Tld, dnsFeature.Fqdn)
 				}
 				return false, nil
 			}

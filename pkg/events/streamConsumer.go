@@ -38,8 +38,8 @@ func (k *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 			return err
 		}
 
-		if egress := utils.GetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-			utils.UpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+		if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
+			utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
 		}
 
 		if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {

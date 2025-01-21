@@ -9,24 +9,35 @@
 typedef struct BufferEventInfo {
     char *event;
     uint64_t fd;
+    int (*getFd) ();
+    struct BufferEventInfo * (*getEventInfo) (struct BufferEventInfo *);
 } __attribute__((packed)) BufferEventInfo;
+
+typedef struct rcu_event_head {
+    struct BufferEventInfo *data;
+    struct rcu_event_head *left;
+    struct rcu_event_head *right;
+} __attribute__((packed)) rcu_event_head;
 
 typedef struct BufferPollEvent {
     int event_id;
     union {
-        struct event_head *BufferEventInfo;
+        struct rcu_event_head *event;
     };
 } __attribute__((packed)) BufferPollEvent;
 
 int main(void) {
-    const int max_ring_size = 10;
-    struct BufferPollEvent * ring[max_ring_size];
-    for (int i=0; i < max_ring_size; i++) 
-        ring[i] = (struct BufferPollEvent *)malloc(sizeof(struct BufferPollEvent));
-    
-    for (int i=0; i < max_ring_size; i++)  {
-        size_t ring_event_size = sizeof(ring[i]);
-        printf("%ld \n" , ring_event_size);
+    struct rcu_event_head *event_rcu_node = &(struct rcu_event_head) {
+        .data = &(struct BufferEventInfo) {
+            .event = "root",
+            .fd = 0xff,
+        },
+    };
+    event_rcu_node->left = NULL;
+    event_rcu_node->right = NULL;
+
+    if (event_rcu_node->data != NULL) {
+        printf("Event fd info %lx" , event_rcu_node->data->fd);
     }
     return 0;
 }

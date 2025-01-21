@@ -230,7 +230,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
 		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
-		cap, err := pcap.OpenLive(linkInterface.Attrs().Name, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+		cap, err := ing.IfaceHandler.GetPcapHandleoverNetDev(linkInterface)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
 			errorChannel <- err

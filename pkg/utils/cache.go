@@ -23,6 +23,7 @@ const INFERENED_DOMAIN_CACHE_SIZE_PER_TLD = 1000
 var NODE_AGENT_BLACKLISTED_DOMAINS *lru.Cache[string, *lru.Cache[string, bool]]
 var NODE_AGENT_INGRESS_BACKLISTED_DOMAINS *lru.Cache[string, bool]
 
+// Init the cache for the eBPF node agent in user space
 func InitCache() error {
 	log.Println("Init the Lru Cache for the Node Agent")
 	cache, err := lru.New[string, *lru.Cache[string, bool]](MAX_NODE_AGENT_CACHE_SIZE)
@@ -42,8 +43,9 @@ func InitCache() error {
 	return nil
 }
 
+// Egress cache processing for the eBPF node-agent LRU cache
 // tld and the value
-func UpdateDomainBlacklistInCache(tld, fqdn string) {
+func UpdateDomainBlacklistInEgressCache(tld, fqdn string) {
 	log.Println("Adding Malicious Domain in the Cache", tld)
 	var evict bool
 	fdCache, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
@@ -64,25 +66,14 @@ func UpdateDomainBlacklistInCache(tld, fqdn string) {
 
 }
 
-// add support for generics with go base type inferences
-func IngUpdateDomainBlacklistInCache(tld string) {
-	isEvict := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Add(tld, true)
-	if isEvict && DEBUG {
-		log.Println("The Node cache for ingress becaome almost full evict cache process ...")
-	}
-}
-
-func GetKeyPresentInCache(tld string) bool {
+// Get the tld from the egress cache
+func GetKeyPresentInEgressCache(tld string) bool {
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	return fd
 }
 
-func IngGetKeyPresentInCache(tld string) bool {
-	_, fd := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Get(tld)
-	return fd
-}
-
-func DeleteDomainBlackListInCache(tld, fqdn string) error {
+// Delete the tld and fqdn from the egress cache
+func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
 	var evict bool
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
@@ -104,10 +95,7 @@ func DeleteDomainBlackListInCache(tld, fqdn string) error {
 	return nil
 }
 
-func IngDeleteDomainBlackListInCache(tld string) bool {
-	return NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Remove(tld)
-}
-
+// Get the blacklisted domains from the  egress cache
 func GetBlaclistedDomainsEgressCache() []string {
 	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
 
@@ -116,6 +104,27 @@ func GetBlaclistedDomainsEgressCache() []string {
 	return returnBlacklistedDomains
 }
 
+// Ingress cache processing for the eBPF node-agent LRU cache
+// Add the tld to the ingress cache
+func IngUpdateDomainBlacklistInCache(tld string) {
+	isEvict := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Add(tld, true)
+	if isEvict && DEBUG {
+		log.Println("The Node cache for ingress becaome almost full evict cache process ...")
+	}
+}
+
+// Check if the tld is present in the ingress cache and return value if present
+func IngGetKeyPresentInCache(tld string) bool {
+	_, fd := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Get(tld)
+	return fd
+}
+
+// Delete the tld from the ingress cache
+func IngDeleteDomainBlackListInCache(tld string) bool {
+	return NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Remove(tld)
+}
+
+// Get the list of tld present in the ingress cache
 func GetBlaclistedDomainsIngressCache() []string {
 	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
 	returnBlacklistedDomains := []string{}

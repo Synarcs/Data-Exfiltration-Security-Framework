@@ -126,7 +126,7 @@ func UnblockDomain(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := utils.DeleteDomainBlackListInCache(sld, ""); err != nil {
+		if err := utils.DeleteDomainBlackListInEgressCache(sld, ""); err != nil {
 			errResponse(err.Error())
 			return
 		}

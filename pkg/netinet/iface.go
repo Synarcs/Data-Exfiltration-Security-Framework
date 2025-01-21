@@ -404,9 +404,24 @@ func (nf *NetIface) InitconnTrackSockHandles() error {
 	return nil
 }
 
+// uses the first default pcap handle from the host physical netlink (net_device) and seclect bpf filter for live sniff
 func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	cap.ZeroCopyReadPacketData()
+	return cap, err
+}
+
+// opens pcap handle over cusotm netlink  (net_device)
+func (nf *NetIface) GetPcapHandleoverNetDev(link netlink.Link) (*pcap.Handle, error) {
+	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
+	cap.ZeroCopyReadPacketData()
+	return cap, err
+}
+
+// opens pcap handle over cusotm netlink  (net_device for sniff over custom duration time
+func (nf *NetIface) GetPcapHandleoverNetDevDuration(link netlink.Link, duration time.Duration) (*pcap.Handle, error) {
+	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, duration)
 	cap.ZeroCopyReadPacketData()
 	return cap, err
 }

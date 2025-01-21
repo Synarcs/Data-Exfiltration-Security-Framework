@@ -238,7 +238,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 
 		isAnySectionMal := false
 		for _, feature := range features {
-			if utils.GetKeyPresentInCache(feature.Tld) {
+			if utils.GetKeyPresentInEgressCache(feature.Tld) {
 				isAnySectionMal = true
 				break
 			}
@@ -321,7 +321,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			})
 
 			for _, feature := range features {
-				utils.UpdateDomainBlacklistInCache(feature.Tld, feature.Fqdn)
+				utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 			}
 
 			return nil

@@ -53,7 +53,7 @@ func exfil_client() {
 				return
 			}
 			if val != nil {
-				utils.UpdateDomainBlacklistInCache(val.Tld, val.GetDomain())
+				utils.UpdateDomainBlacklistInEgressCache(val.Tld, val.GetDomain())
 			}
 			fmt.Println("got stream ", val)
 		}
