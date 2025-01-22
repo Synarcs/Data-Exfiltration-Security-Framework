@@ -13,16 +13,22 @@
 
 #define ETH_P_IP        0x0800
 #define ETH_P_IPV6      0x86DD
+#define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
 
 #define NF_MAX_VERDICT NF_STOP
 
 __u32 redirect_skb_mark = 0xFF;
 #define DEBUG true
 
+struct br_net_filter_config_map { 
+    __u32 Bridge_if_index; // holds and process the if_index for bridge of linux ns 
+    __u32  SKB_Mark;
+}; 
+
 struct exfil_nf_bridge_config_map {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32); // constant kernel key 
-    __type(value, __u32);   // layer ifindex for the kenrle bridge route;
+    __type(value, struct br_net_filter_config_map);   // layer ifindex for the kenrle bridge route;
     __uint(max_entries, 1);
 } exfil_nf_bridge_config_map SEC(".maps");
 
@@ -32,22 +38,25 @@ SEC("netfilter")
 int bridge_classify(struct bpf_nf_ctx *ctx){
     struct __sk_buff *skb = (struct  __sk_buff *)ctx->skb;
 
-    __u32 mark = skb->ifindex;
+    __u32 out = skb->ifindex;
 
-    __u32 br_index = 4;
+    __u32 br_index = 4; __u32 skb_mark = redirect_skb_mark;
 
     __u32 br_index_config_map_key = 0;
 
-    __u32 * br_index_config_map_value = bpf_map_lookup_elem(&exfil_nf_bridge_config_map, &br_index_config_map_key); 
+    struct br_net_filter_config_map * br_index_config_map_value = bpf_map_lookup_elem(&exfil_nf_bridge_config_map, &br_index_config_map_key); 
     if (br_index_config_map_value) {
-        br_index = *br_index_config_map_value; 
+        br_index = br_index_config_map_value->Bridge_if_index;
+        skb_mark = br_index_config_map_value->SKB_Mark;
     }
     
     if (ctx->skb->skb_iif == br_index){
-        if (ctx->skb->mark == redirect_skb_mark) return NF_ACCEPT;
+        bpf_printk("doing strick skb check since the packet redirected / cloned fro tc qdisc in kernel DPI");
+        if (ctx->skb->mark == skb_mark) return NF_ACCEPT;
         else return NF_DROP;
-    } 
+    }
 
+    // since netfilter is global allow all other net_devices traffic to flow over netfilter hooks  and chains 
     return NF_ACCEPT;
 }
 

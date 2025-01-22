@@ -31,14 +31,6 @@ struct exfil_kernel_config  {
     __be32 NfNdpBridgeRedirectIpv4;
 };
 
-struct exfil_security_config_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u32);
-    __type(value, struct exfil_kernel_config);
-    __uint(max_entries, 1 << 6);
-} exfil_security_config_map SEC(".maps");
-
-
 /* 
     Each key maps to the service limits for the dns traffic, for example 
     0 --> min_domain_lenth, 1 --> max_domain_length and so on

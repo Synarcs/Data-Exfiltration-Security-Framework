@@ -44,6 +44,12 @@ type ExfilKernelConfig struct {
 	NfNdpBridgeRedirectIpv4 uint32
 }
 
+// nf_filter bridge config processing the eBPF maps as input to kernel netfilter ingress route over veth for linux ns
+type NetfilterMapConfig struct {
+	Bridge_if_index uint32
+	SKB_Mark        uint32
+}
+
 type DPIRedirectionTimestampVerify struct {
 	Kernel_timets           uint64
 	UserSpace_Egress_Loaded uint8

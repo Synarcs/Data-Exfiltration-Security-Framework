@@ -259,6 +259,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}
 
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
+
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 

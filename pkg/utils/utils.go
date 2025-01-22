@@ -41,6 +41,16 @@ var (
 	}
 )
 
+// map pin vfs for bpf to mount pinned maps
+const (
+	PINPATH = "/sys/fs/bpf"
+)
+
+// kernel skb makr from tc qdisc over netns filter or netfilter chain
+const (
+	REDIRECT_SKB_MARK = 0xff
+)
+
 const (
 	BRIDGE_IPAM_IPV4_CIDR          = "10.200.0.0/24"
 	BRIDGE_IPAM_IPV4_IP            = "10.200.0."

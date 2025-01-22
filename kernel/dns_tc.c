@@ -183,6 +183,15 @@ struct exfil_security_egress_redurect_ts_verify {
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
 
+// kernel config map to load the config for the redirect links to egress and associated bridge if_index 
+struct exfil_security_config_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, struct exfil_kernel_config);
+    __uint(max_entries, 1 << 6);
+} exfil_security_config_map SEC(".maps");
+
+
 
 // useful to determine the loop back time from kernel packet redirection to user space enhanced scanning 
 // the totola kernel packet redirection time - userspace post DPI time

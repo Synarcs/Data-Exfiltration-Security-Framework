@@ -4,8 +4,10 @@ import (
 	"context"
 	"log"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
@@ -55,9 +57,14 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress 
 	}
 
 	if len(nf.Interfaces.BridgeLinks) >= 1 {
-		var nf_filter_const_val uint32 = 0
+		var nf_filter_const_key uint32 = 0
 		var nf_bridgr_interface_if_index uint32 = uint32(nf.Interfaces.BridgeLinks[0].Attrs().Index)
-		if err := nf.NetfilterBridgeSocketMap.Put(nf_filter_const_val, nf_bridgr_interface_if_index); err != nil {
+
+		var nf_vns_bridge_config events.NetfilterMapConfig = events.NetfilterMapConfig{
+			Bridge_if_index: nf_bridgr_interface_if_index,
+			SKB_Mark:        utils.REDIRECT_SKB_MARK,
+		}
+		if err := nf.NetfilterBridgeSocketMap.Put(nf_filter_const_key, &nf_vns_bridge_config); err != nil {
 			log.Printf("error inserting the netfilter bridge map: %v", err)
 			return err
 		}
@@ -66,7 +73,7 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress 
 		Program:        nf.NfBridgeProg,
 		ProtocolFamily: unix.NFPROTO_IPV4,
 		HookNumber:     uint32(hookPoint),
-		Priority:       50,
+		Priority:       50, // Priority within hook for netfilter hook direction
 	})
 
 	if err != nil {
