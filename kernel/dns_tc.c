@@ -677,7 +677,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
 /*
     Emit the kernel event to user space to bind and read traffic over the port 
-    Userspace should clean the dptr kernel only emits dptr dynamic events for user space to sniff the traffic on these ports to read udp traffic post parsing and storing the vxlan header 
+    Userspace should clean the dptr kernel only emits dptr dynamic events for user space to sniff the traffic on these ports to read udp traffic post parsing and processing the vxlan header 
+    If a vxlan transfer with malicious dns is found the user space update map to ensure kernel drop the  packet through UDP over vxlan net_device / link in kernel 
 */
 static
 __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, __u32 egress_ifindex) {
@@ -723,7 +724,6 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
 
     __u32 vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
 
-    bpf_printk("Suspicious vxlan tunnel detected started trecursive internal parsing for the skb header");
 
     // do an raw head parsing from the skb->data until the detection for any l7 traffic
     void *payload = (void *)vxlan + sizeof(struct vxlanhdr);
@@ -732,8 +732,53 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
     struct ethhdr *eth = (struct ethhdr *)payload;
     if ((void*)(eth + 1) > skb->data_end)
         return BENIGN;
+    
+    // debug potential vxlan encap or tunnel vni parsed 
+    #ifdef DEBUG
+        if (DEBUG) {
+            bpf_printk("Suspicious vxlan tunnel detected started trecursive internal parsing for the skb header with vni %d", vlan_id);
+            bpf_printk("the next header for eth packet in vxlan is %x %x", eth->h_proto, bpf_htons(ETH_P_IP));
+        }
+    #endif
 
-    return SUSPICIOUS;
+    /*
+        Do further nested deep scan to check really the packet has dns with an encap frame in it in skb 
+    */
+    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        struct iphdr *ip = (struct iphdr *)(eth + 1);
+        if ((void *)(ip + 1) > skb->data_end) return BENIGN;
+        if (ip->protocol == IPPROTO_UDP) {
+            struct udphdr *udp = (struct udphdr *)(ip + 1);
+            if ((void *)(udp + 1) > skb->data_end) return BENIGN;
+            struct dns_header *dns_header = (struct dnshdr *)(udp + 1);
+            if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+            return SUSPICIOUS;
+        }else if (ip->protocol == IPPROTO_TCP) {
+            struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
+            if ((void *)(tcp + 1) > skb->data_end) return BENIGN;
+            struct dns_header *dns_header = (struct dnshdr *)(tcp + 1);
+            if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+            return SUSPICIOUS;
+        }
+    }else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
+        struct ipv6hdr *ipv6 = (struct ipv6hdr *)(eth + 1);
+        if ((void *)(ipv6 + 1) > skb->data_end) return BENIGN;
+        if (ipv6->nexthdr == IPPROTO_UDP) {
+            struct udphdr *udp = (struct udphdr *)(ipv6 + 1);
+            if ((void *)(udp + 1) > skb->data_end) return BENIGN;
+            struct dns_header *dns_header = (struct dnshdr *)(udp + 1);
+            if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+            return SUSPICIOUS;
+        }else if (ipv6->nexthdr == IPPROTO_TCP) {
+            struct tcphdr *tcp = (struct tcphdr *)(ipv6 + 1);
+            if ((void *)(tcp + 1) > skb->data_end) return BENIGN;
+            struct dns_header *dns_header = (struct dnshdr *)(tcp + 1);
+            if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+            return SUSPICIOUS;
+        }
+        return BENIGN;
+    }
+    return BENIGN;
 }
 
 static 
@@ -741,53 +786,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
                 struct dns_header *dns_header, struct udphdr *udp) {
     // check whether a non standard port is used for dns query and dns payload 
     
-    // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
-    if (__parse_encap_vxlan_tunnel_header(skb, dns_payload) == SUSPICIOUS) {
-        __u32 br_index = 5;
-        __u32 out = raw_skb->ifindex;
-        __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
-
-        // populate the br_index handler clone for skb from kernel over the packet bridge 
-        struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-        if (config) {
-            br_index = config->NfNdpBridgeIndexId;
-            dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
-        }else {
-            #ifdef DEBUG
-            if (DEBUG) {
-                bpf_printk("kernel cannot find the requred kernel config redirect map");
-            }
-            #endif
-        }
-
-
-        __u32 udp_dest_port = bpf_ntohs(udp->dest);
-        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
-        if (userspace_vxlan_flag_val) {
-            #ifdef DEBUG 
-                if (DEBUG) 
-                    bpf_printk("kernel found the vxlan flag for the udp port %u", udp_dest_port); 
-            #endif
-            if (*userspace_vxlan_flag_val == 1) {
-                // there is an malicious exfiltrated dns traffic done over this vxlan port 
-                return 0;
-            }
-            // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
-            if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
-                    }
-                #endif 
-            }
-        }else {
-            // emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
-            // continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
-            __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
-        }
-
-    }
-
     struct dns_flags  flags;
     flags = get_dns_flags(dns_header);
     
@@ -916,7 +914,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
 }
 
 
-
+// process the skb_clone redirect to user space to perform deep scan over the DNS packet for possible tunnel over this non standard port 
 static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
@@ -1023,17 +1021,69 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         }
     }
     return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
-}   
+}
 
+static 
+__always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void * transport_payload, 
+                    struct __sk_buff *raw_skb, struct udphdr *udp) {
+        // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
+    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == SUSPICIOUS) {
+        __u32 br_index = 5;
+        __u32 out = raw_skb->ifindex;
+        __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+
+        __u32 udp_dest_port = bpf_ntohs(udp->dest);
+        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+        if (userspace_vxlan_flag_val) {
+            #ifdef DEBUG 
+                if (DEBUG) 
+                    bpf_printk("kernel found the vxlan flag for the udp port %u", udp_dest_port); 
+            #endif
+            if (*userspace_vxlan_flag_val == 1) {
+                // there is an malicious exfiltrated dns traffic done over this vxlan port 
+                return 0;
+            }
+            // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
+            if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
+                #ifdef DEBUG 
+                    if (DEBUG) {
+                        bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
+                    }
+                #endif 
+            }
+        }else {
+            /* emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
+                   continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
+                The Kernel parallely emits 2 events for DPI over non-standard port and potential vxlan 
+                any next exfil packet process and any of those maps user space has populated as malicious i drop
+                This cause the malware to have intermidate connection with remote c2 server potentially breaking the connection between c2 implant and remote server.
+            */
+            __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
+        }
+    }
+
+    return 1;
+}
 
 static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
-                    __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, bool isIpv4) {
+                    __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, struct udphdr *udp, bool isIpv4) {
+
+        // verify and parse for vxlan in the packet , we dont need dns header check since vxlan has the entire packet encap inside the udp frame for skb 
+        __u8 isVxlanEncap_fd = __verify_vxlan_encap_over_udp(
+            &cursor, udp_data,  skb, udp
+        );
+
+        if (isVxlanEncap_fd == 0) {
+            // a vxlan encap found and dns header inside the vxlan packet drop this packet and let the vxlan check contiue for DPI over vxlan 
+            return 0;
+        }
+
         // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
         if (actions.parse_dns_header_size(&cursor, isIpv4 ? true : false, true) == 0)
             // an non dns protocol based udp packet (no dns header found) 
-             return 1;
-            
+            return 1;
+
         void *dns_payload = cursor.data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + 
                                 sizeof(struct udphdr) + sizeof(struct dns_header);
 
@@ -1046,16 +1096,15 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         
 
         #ifdef DEBUG 
-        if (DEBUG) {
-            bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
-        }
+            if (DEBUG) {
+                bpf_printk("DNS packet found header %u %u", bpf_ntohl(dns->qd_count), bpf_ntohl(dns->ans_count));
+            }
         #endif
         
         void *header_payload = cursor.data + sizeof(struct ethhdr) + 
                         (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
-        struct udphdr *udp = (struct udphdr *) (header_payload);
+        udp = (struct udphdr *) (header_payload);
         if ((void *) (udp + 1) > cursor.data_end) return 1;
-
 
         __u32 dest_port = bpf_ntohs(udp->dest);
      
@@ -1075,8 +1124,6 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                     }
                 #endif
                 unsigned long long ring_buff_aloc_data = bpf_ringbuf_query(&exfil_security_egrees_redirect_ring_buff_non_standard_port, BPF_RB_AVAIL_DATA);
-                if (ring_buff_aloc_data > 0) {}
-                // bpf_ringbuf_discard(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 0);
                 return 1;
             }
             
@@ -1578,7 +1625,7 @@ int classify(struct __sk_buff *skb){
             }else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
-                                    udp_data, udp_payload_len, true) == 1)
+                                    udp_data, udp_payload_len, udp, true) == 1)
                     return TC_FORWARD;
                 return TC_DROP;
             }
@@ -1849,7 +1896,7 @@ int classify(struct __sk_buff *skb){
                 }
                 return TC_FORWARD; 
             }else {
-                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, false) == 1)
+                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;
                 return TC_DROP;
             }

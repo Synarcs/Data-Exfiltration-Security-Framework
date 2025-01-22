@@ -125,13 +125,13 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 	vxlanLayer := vxlanPacket.Layer(layers.LayerTypeVXLAN)
 	if vxlanLayer != nil {
 		vxlanPacket := vxlanLayer.(*layers.VXLAN)
-		log.Println("Sniffed traffic over VNI for vxlan encap ", vxlanPacket.VNI)
 		innerPacket := gopacket.NewPacket(
 			vxlanPacket.LayerPayload(),
 			layers.LayerTypeEthernet,
 			gopacket.Default,
 		)
 
+		isDnsLayerPresent := false
 		if udpLayer := innerPacket.Layer(layers.LayerTypeUDP); udpLayer != nil {
 			srcPort := udpLayer.(*layers.UDP).SrcPort
 			dstPort := udpLayer.(*layers.UDP).DstPort
@@ -142,6 +142,7 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
 					log.Println(err.Error())
 				}
+				isDnsLayerPresent = true
 			}
 		} else if tcpLayer := innerPacket.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 			srcPort := udpLayer.(*layers.TCP).SrcPort
@@ -153,7 +154,13 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
 					log.Println(err.Error())
 				}
+				isDnsLayerPresent = true
 			}
+		}
+		if !isDnsLayerPresent {
+			log.Println("Sniffed traffic over VNI for vxlan encap, no DNS encap in vxlan packed", vxlanPacket.VNI)
+		} else {
+			log.Println("Sniffed traffic over VNI for vxlan, contains DNS encap in vxlan", vxlanPacket.VNI)
 		}
 	}
 

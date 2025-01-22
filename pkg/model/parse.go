@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/netip"
 	"strconv"
@@ -123,8 +124,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
-		// TODO: Need a fix the router not sending solicitation ra response
-		ipv6.DstIP = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[0]).To16()
+		ipv6.DstIP = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[rand.Intn(len(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS))]).To16()
 	}
 
 	var udpPacket *layers.UDP

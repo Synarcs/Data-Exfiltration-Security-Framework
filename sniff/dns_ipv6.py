@@ -12,17 +12,19 @@ dns = DNS(
     rd=1,  
 )
 
-dns.qd = DNSQR(qname=domains[0])
+def send() -> None:
+    for domain in range(1, len(domains)):
+        dns.qd = DNSQR(qname=domain)
 
-dns_req = (
-    IPv6(dst='fe80::cc08:faff:fe26:a064', hlim=64)/ 
-    UDP(dport= 53) /
-    dns
-)
-
-dns_req.show()
+        dns_req = (
+            IPv6(dst='fe80::cc08:faff:fe26:a064', hlim=64)/ 
+            UDP(dport= 53) /
+            dns
+        )
+        ans = sr1(dns_req, iface="enp0s1", timeout=2, verbose=True)
+        if ans: ans.show()
 
 if __name__ == "__main__":
-    ans = sr1(dns_req, iface="enp0s1", timeout=2, verbose=True)
-    if ans:
-        ans.show()
+    send()
+
+        
