@@ -22,12 +22,12 @@
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <stdbool.h>
-#include <liburing/io_uring.h>
 
-
+// libbpf
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
+#include <bpf/bpf_core_read.h>
 
 #include "dns.h"
 #include "consts.h"
@@ -1231,7 +1231,7 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
 }
 
 
-
+// performs high volume throughput based on rate limiting using the skb_buff size in payloads present in l7 for DNS 
 static 
 __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u32 dns_payload_size){
     
@@ -1272,6 +1272,13 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
         dns_volume_stats->last_timestamp = ts;
     return 1;
 }
+
+// TODOD: Add the kernel Token bucket algorithm for rate limiting using the eBPF direct action qdisc in tc 
+static 
+__always_inline __u8 __dns_rate_limit_tb(struct skb_cursor *cursor, struct __sk_buff *skb) {
+    return 1; // forward the packet 
+}
+
 
 static 
 __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
@@ -1440,13 +1447,6 @@ int classify(struct __sk_buff *skb){
     if (actions.parse_eth(&cursor) == 0) return TC_DROP;
     eth = cursor.data;
     __u32 nhoff = ETH_HLEN;
-
-    #ifdef DEBUG 
-      if (DEBUG) {
-        long (*callback_debug_func) (struct bpf_map *, const void *, void *, void *);
-      }
-    #endif 
-
 
 	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 

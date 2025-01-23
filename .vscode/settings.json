@@ -91,7 +91,9 @@
         "io_uring.h": "c",
         "unistd.h": "c",
         "ioctl.h": "c",
-        "struct_iovec.h": "c"
+        "struct_iovec.h": "c",
+        "libbpf.h": "c",
+        "bpf.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic"
 }

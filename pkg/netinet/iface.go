@@ -476,5 +476,6 @@ func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
 
 func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(NETNS_RAW_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+	cap.ZeroCopyReadPacketData()
 	return cap, err
 }

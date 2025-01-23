@@ -31,6 +31,17 @@ build:
 	make build-cli 
 	make compile
 
+.PHONY: build-k8s-sdr 
+build-k8s-sdr
+	cd ../sdr
+	make build 
+
+.PHONY: build-sdr
+build-sdr:
+	@echo "Building the Sidecar pod and container for eBPF Exfilration security as sidecar in Kubernetes"
+	make compile-kernel
+	make build-cli 
+
 .PHONY: build-x86
 build-x86:
 	@echo "Building and compiling eBPF Node Agent {Kernel, User-space}"

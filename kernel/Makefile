@@ -1,7 +1,7 @@
 tc_kernel := dns_tc.c 
 tc_kernel_out := tc.o 
 
-bridge_tc_kernel := bridge_tc.c
+bridge_tc_kernel := bridge_nf.c
 bridge_tc_kernel_out := bridge.o 
 
 xdp_kernel := dns_xdp.c 
@@ -12,6 +12,9 @@ netlink_kernel_out := netlink.o
 
 p2p_kernel := dns_tun.c
 p2p_kernel_out := tun.o
+
+sock_sdr := dns_sock.c 
+sock_sdr_out := sock.o
 
 # for arm compilation of cpu 
 .PHONY: compile

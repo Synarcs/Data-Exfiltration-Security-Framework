@@ -57,17 +57,27 @@ func main() {
 	var cliFlag bool
 	var debug bool
 	var streamClient bool
+	var sdr bool
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
 	flag.BoolVar(&debug, "debug", false, "Run the Node Agent in debug mode")
 	flag.BoolVar(&streamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 	flag.BoolVar(&cliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
-
+	flag.BoolVar(&sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
 		flag.PrintDefaults()
 	}
 
 	flag.Parse()
+
+	if sdr {
+		/*
+			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
+			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering
+		*/
+		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
+		return
+	}
 
 	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
 
