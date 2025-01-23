@@ -1,11 +1,11 @@
 	.text
 	.file	"nf_sock.c"
-	.file	0 "/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel" "nf_sock.c" md5 0x9df6ac13df85d9776e24be049943792c
+	.file	0 "/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel" "nf_sock.c" md5 0x0dfe27897c15f48e1b33a39e79f4e852
 	.file	1 "/usr/include/asm-generic" "int-ll64.h" md5 0xb810f270733e106319b67ef512c6246e
-	.file	2 "." "consts.h" md5 0x42ec6d9419410e4006cb63e2d23f1c83
+	.file	2 "." "consts.h" md5 0x23435a748b8553c58f2f4a7d9fa3fe48
 	.file	3 "/usr/include/linux" "in6.h" md5 0xfca1889f0274df066e49cf4d8db8011e
 	.file	4 "/usr/include/linux" "types.h" md5 0xbf9fbc0e8f60927fef9d8917535375a6
-	.file	5 "." "dns.h" md5 0x5cfdbc692acc202e55e1b638d5f1dad9
+	.file	5 "." "dns.h" md5 0xc6d8cc9cca8d4cfda48bb78b1aba6ebe
 	.file	6 "/usr/include/linux" "bpf.h" md5 0xeec04c95b9f59f758a8270a58c2ff5f6
 	.file	7 "/usr/include/bpf" "bpf_helper_defs.h" md5 0x65e4dc8e3121f91a5c2c9eb8563c5692
 	.globl	configure_global_ipv6_route_handlers # -- Begin function configure_global_ipv6_route_handlers
@@ -13,30 +13,30 @@
 	.type	configure_global_ipv6_route_handlers,@function
 configure_global_ipv6_route_handlers:   # @configure_global_ipv6_route_handlers
 .Lfunc_begin0:
-	.loc	2 124 0                         # ./consts.h:124:0
+	.loc	2 121 0                         # ./consts.h:121:0
 	.cfi_sections .debug_frame
 	.cfi_startproc
 # %bb.0:
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 0 16] 288
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 16 16] 24648
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 32 16] 24648
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 48 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 64 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 80 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 96 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 112 16] -30584
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 128 16] 288
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 144 16] 24648
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 160 16] 24648
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 176 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 192 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 208 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 224 16] 0
-	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr <- [DW_OP_LLVM_fragment 240 16] 17544
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 0 16] 288
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 16 16] 24648
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 32 16] 24648
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 48 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 64 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 80 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 96 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 112 16] -30584
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 128 16] 288
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 144 16] 24648
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 160 16] 24648
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 176 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 192 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 208 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 224 16] 0
+	#DEBUG_VALUE: configure_global_ipv6_route_handlers:inet_addr_map <- [DW_OP_LLVM_fragment 240 16] 17544
 	r0 = r10
 	r0 += -32
 .Ltmp0:
-	.loc	2 150 5 prologue_end            # ./consts.h:150:5
+	.loc	2 147 5 prologue_end            # ./consts.h:147:5
 .Ltmp1:
 .Ltmp2:
 	exit
@@ -349,15 +349,8 @@ __license:
 	.asciz	"Dual MIT/GPL"
 	.size	__license, 13
 
-	.type	exfil_security_config_map,@object # @exfil_security_config_map
-	.section	.maps,"aw",@progbits
-	.globl	exfil_security_config_map
-	.p2align	3, 0x0
-exfil_security_config_map:
-	.zero	32
-	.size	exfil_security_config_map, 32
-
 	.type	exfil_security_egress_dns_limites,@object # @exfil_security_egress_dns_limites
+	.section	.maps,"aw",@progbits
 	.globl	exfil_security_egress_dns_limites
 	.p2align	3, 0x0
 exfil_security_egress_dns_limites:
@@ -384,7 +377,7 @@ flags:
 	.long	.Ldebug_loc1-.Lloclists_table_base0
 .Ldebug_loc0:
 	.byte	3                               # DW_LLE_startx_length
-	.byte	12                              #   start index
+	.byte	11                              #   start index
 	.uleb128 .Lfunc_end0-.Lfunc_begin0      #   length
 	.byte	93                              # Loc expr size
 	.byte	16                              # DW_OP_constu
@@ -483,7 +476,7 @@ flags:
 	.byte	0                               # DW_LLE_end_of_list
 .Ldebug_loc1:
 	.byte	1                               # DW_LLE_base_addressx
-	.byte	13                              #   base address index
+	.byte	12                              #   base address index
 	.byte	4                               # DW_LLE_offset_pair
 	.uleb128 .Lfunc_begin1-.Lfunc_begin1    #   starting offset
 	.uleb128 .Ltmp21-.Lfunc_begin1          #   ending offset
@@ -924,7 +917,7 @@ flags:
 	.byte	1                               # DWARF Unit Type
 	.byte	8                               # Address Size (in bytes)
 	.long	.debug_abbrev                   # Offset Into Abbrev. Section
-	.byte	1                               # Abbrev [1] 0xc:0x4d2 DW_TAG_compile_unit
+	.byte	1                               # Abbrev [1] 0xc:0x474 DW_TAG_compile_unit
 	.byte	0                               # DW_AT_producer
 	.short	29                              # DW_AT_language
 	.byte	1                               # DW_AT_name
@@ -941,7 +934,7 @@ flags:
 	.long	58                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	68                              # DW_AT_decl_line
+	.byte	60                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	0
@@ -959,7 +952,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	80                              # DW_AT_decl_line
+	.byte	72                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	1
@@ -1053,7 +1046,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	94                              # DW_AT_decl_line
+	.byte	86                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	2
@@ -1062,7 +1055,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	108                             # DW_AT_decl_line
+	.byte	100                             # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	3
@@ -1071,7 +1064,7 @@ flags:
 	.long	241                             # DW_AT_type
                                         # DW_AT_external
 	.byte	5                               # DW_AT_decl_file
-	.byte	69                              # DW_AT_decl_line
+	.byte	68                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	4
@@ -1079,90 +1072,90 @@ flags:
 	.byte	21                              # DW_AT_name
 	.byte	14                              # DW_AT_byte_size
 	.byte	5                               # DW_AT_decl_file
-	.byte	66                              # DW_AT_decl_line
+	.byte	65                              # DW_AT_decl_line
 	.byte	6                               # Abbrev [6] 0xf6:0x9 DW_TAG_member
 	.byte	22                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0xff:0x9 DW_TAG_member
 	.byte	23                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	1                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x108:0x9 DW_TAG_member
 	.byte	24                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x111:0x9 DW_TAG_member
 	.byte	25                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	3                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x11a:0x9 DW_TAG_member
 	.byte	26                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	4                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x123:0x9 DW_TAG_member
 	.byte	27                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	5                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x12c:0x9 DW_TAG_member
 	.byte	28                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	6                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x135:0x9 DW_TAG_member
 	.byte	29                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	7                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x13e:0x9 DW_TAG_member
 	.byte	30                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x147:0x9 DW_TAG_member
 	.byte	31                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	9                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x150:0x9 DW_TAG_member
 	.byte	32                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	67                              # DW_AT_decl_line
+	.byte	66                              # DW_AT_decl_line
 	.byte	10                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x159:0x9 DW_TAG_member
 	.byte	33                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	68                              # DW_AT_decl_line
+	.byte	67                              # DW_AT_decl_line
 	.byte	11                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x162:0x9 DW_TAG_member
 	.byte	34                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	68                              # DW_AT_decl_line
+	.byte	67                              # DW_AT_decl_line
 	.byte	12                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x16b:0x9 DW_TAG_member
 	.byte	35                              # DW_AT_name
 	.long	140                             # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	68                              # DW_AT_decl_line
+	.byte	67                              # DW_AT_decl_line
 	.byte	13                              # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
 	.byte	2                               # Abbrev [2] 0x175:0xb DW_TAG_variable
@@ -1170,7 +1163,7 @@ flags:
 	.long	384                             # DW_AT_type
                                         # DW_AT_external
 	.byte	5                               # DW_AT_decl_file
-	.byte	107                             # DW_AT_decl_line
+	.byte	106                             # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	5
@@ -1191,7 +1184,7 @@ flags:
 	.long	416                             # DW_AT_type
                                         # DW_AT_external
 	.byte	5                               # DW_AT_decl_file
-	.byte	225                             # DW_AT_decl_line
+	.byte	224                             # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	6
@@ -1199,54 +1192,54 @@ flags:
 	.byte	47                              # DW_AT_name
 	.byte	32                              # DW_AT_byte_size
 	.byte	5                               # DW_AT_decl_file
-	.byte	209                             # DW_AT_decl_line
+	.byte	208                             # DW_AT_decl_line
 	.byte	6                               # Abbrev [6] 0x1a5:0x9 DW_TAG_member
 	.byte	39                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	210                             # DW_AT_decl_line
+	.byte	209                             # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1ae:0x9 DW_TAG_member
 	.byte	40                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	211                             # DW_AT_decl_line
+	.byte	210                             # DW_AT_decl_line
 	.byte	4                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1b7:0x9 DW_TAG_member
 	.byte	41                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	214                             # DW_AT_decl_line
+	.byte	213                             # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1c0:0x9 DW_TAG_member
 	.byte	42                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	215                             # DW_AT_decl_line
+	.byte	214                             # DW_AT_decl_line
 	.byte	12                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1c9:0x9 DW_TAG_member
 	.byte	43                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	218                             # DW_AT_decl_line
+	.byte	217                             # DW_AT_decl_line
 	.byte	16                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1d2:0x9 DW_TAG_member
 	.byte	44                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	219                             # DW_AT_decl_line
+	.byte	218                             # DW_AT_decl_line
 	.byte	20                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1db:0x9 DW_TAG_member
 	.byte	45                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	222                             # DW_AT_decl_line
+	.byte	221                             # DW_AT_decl_line
 	.byte	24                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1e4:0x9 DW_TAG_member
 	.byte	46                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	223                             # DW_AT_decl_line
+	.byte	222                             # DW_AT_decl_line
 	.byte	28                              # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
 	.byte	12                              # Abbrev [12] 0x1ee:0x9 DW_TAG_variable
@@ -1411,7 +1404,7 @@ flags:
 	.long	797                             # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	39                              # DW_AT_decl_line
+	.byte	43                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	8
@@ -1419,30 +1412,30 @@ flags:
 	.byte	62                              # DW_AT_name
 	.byte	32                              # DW_AT_byte_size
 	.byte	2                               # DW_AT_decl_file
-	.byte	34                              # DW_AT_decl_line
+	.byte	38                              # DW_AT_decl_line
 	.byte	6                               # Abbrev [6] 0x322:0x9 DW_TAG_member
 	.byte	63                              # DW_AT_name
 	.long	839                             # DW_AT_type
 	.byte	2                               # DW_AT_decl_file
-	.byte	35                              # DW_AT_decl_line
+	.byte	39                              # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x32b:0x9 DW_TAG_member
 	.byte	64                              # DW_AT_name
 	.long	856                             # DW_AT_type
 	.byte	2                               # DW_AT_decl_file
-	.byte	36                              # DW_AT_decl_line
+	.byte	40                              # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x334:0x9 DW_TAG_member
 	.byte	65                              # DW_AT_name
-	.long	861                             # DW_AT_type
+	.long	856                             # DW_AT_type
 	.byte	2                               # DW_AT_decl_file
-	.byte	37                              # DW_AT_decl_line
+	.byte	41                              # DW_AT_decl_line
 	.byte	16                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x33d:0x9 DW_TAG_member
-	.byte	71                              # DW_AT_name
-	.long	908                             # DW_AT_type
+	.byte	66                              # DW_AT_name
+	.long	861                             # DW_AT_type
 	.byte	2                               # DW_AT_decl_file
-	.byte	38                              # DW_AT_decl_line
+	.byte	42                              # DW_AT_decl_line
 	.byte	24                              # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
 	.byte	13                              # Abbrev [13] 0x347:0x5 DW_TAG_pointer_type
@@ -1457,255 +1450,193 @@ flags:
 	.long	58                              # DW_AT_type
 	.byte	13                              # Abbrev [13] 0x35d:0x5 DW_TAG_pointer_type
 	.long	866                             # DW_AT_type
-	.byte	5                               # Abbrev [5] 0x362:0x2a DW_TAG_structure_type
-	.byte	70                              # DW_AT_name
-	.byte	16                              # DW_AT_byte_size
-	.byte	2                               # DW_AT_decl_file
-	.byte	27                              # DW_AT_decl_line
-	.byte	6                               # Abbrev [6] 0x367:0x9 DW_TAG_member
-	.byte	66                              # DW_AT_name
-	.long	58                              # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	28                              # DW_AT_decl_line
-	.byte	0                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x370:0x9 DW_TAG_member
-	.byte	67                              # DW_AT_name
-	.long	58                              # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	29                              # DW_AT_decl_line
-	.byte	4                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x379:0x9 DW_TAG_member
-	.byte	68                              # DW_AT_name
-	.long	200                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	30                              # DW_AT_decl_line
-	.byte	8                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x382:0x9 DW_TAG_member
-	.byte	69                              # DW_AT_name
-	.long	200                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	31                              # DW_AT_decl_line
-	.byte	12                              # DW_AT_data_member_location
-	.byte	0                               # End Of Children Mark
-	.byte	13                              # Abbrev [13] 0x38c:0x5 DW_TAG_pointer_type
-	.long	913                             # DW_AT_type
-	.byte	8                               # Abbrev [8] 0x391:0xc DW_TAG_array_type
+	.byte	8                               # Abbrev [8] 0x362:0xc DW_TAG_array_type
 	.long	401                             # DW_AT_type
-	.byte	9                               # Abbrev [9] 0x396:0x6 DW_TAG_subrange_type
-	.long	152                             # DW_AT_type
-	.byte	64                              # DW_AT_count
-	.byte	0                               # End Of Children Mark
-	.byte	2                               # Abbrev [2] 0x39d:0xb DW_TAG_variable
-	.byte	72                              # DW_AT_name
-	.long	936                             # DW_AT_type
-                                        # DW_AT_external
-	.byte	2                               # DW_AT_decl_file
-	.byte	51                              # DW_AT_decl_line
-	.byte	2                               # DW_AT_location
-	.byte	161
-	.byte	9
-	.byte	5                               # Abbrev [5] 0x3a8:0x2a DW_TAG_structure_type
-	.byte	72                              # DW_AT_name
-	.byte	32                              # DW_AT_byte_size
-	.byte	2                               # DW_AT_decl_file
-	.byte	46                              # DW_AT_decl_line
-	.byte	6                               # Abbrev [6] 0x3ad:0x9 DW_TAG_member
-	.byte	63                              # DW_AT_name
-	.long	839                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	47                              # DW_AT_decl_line
-	.byte	0                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x3b6:0x9 DW_TAG_member
-	.byte	64                              # DW_AT_name
-	.long	856                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	48                              # DW_AT_decl_line
-	.byte	8                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x3bf:0x9 DW_TAG_member
-	.byte	65                              # DW_AT_name
-	.long	856                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	49                              # DW_AT_decl_line
-	.byte	16                              # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x3c8:0x9 DW_TAG_member
-	.byte	71                              # DW_AT_name
-	.long	978                             # DW_AT_type
-	.byte	2                               # DW_AT_decl_file
-	.byte	50                              # DW_AT_decl_line
-	.byte	24                              # DW_AT_data_member_location
-	.byte	0                               # End Of Children Mark
-	.byte	13                              # Abbrev [13] 0x3d2:0x5 DW_TAG_pointer_type
-	.long	983                             # DW_AT_type
-	.byte	8                               # Abbrev [8] 0x3d7:0xc DW_TAG_array_type
-	.long	401                             # DW_AT_type
-	.byte	9                               # Abbrev [9] 0x3dc:0x6 DW_TAG_subrange_type
+	.byte	9                               # Abbrev [9] 0x367:0x6 DW_TAG_subrange_type
 	.long	152                             # DW_AT_type
 	.byte	16                              # DW_AT_count
 	.byte	0                               # End Of Children Mark
-	.byte	2                               # Abbrev [2] 0x3e3:0xb DW_TAG_variable
-	.byte	73                              # DW_AT_name
-	.long	1006                            # DW_AT_type
+	.byte	2                               # Abbrev [2] 0x36e:0xb DW_TAG_variable
+	.byte	67                              # DW_AT_name
+	.long	889                             # DW_AT_type
                                         # DW_AT_external
 	.byte	5                               # DW_AT_decl_file
-	.byte	21                              # DW_AT_decl_line
+	.byte	20                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
-	.byte	10
-	.byte	21                              # Abbrev [21] 0x3ee:0x13 DW_TAG_enumeration_type
+	.byte	9
+	.byte	21                              # Abbrev [21] 0x379:0x13 DW_TAG_enumeration_type
 	.long	66                              # DW_AT_type
-	.byte	77                              # DW_AT_name
+	.byte	71                              # DW_AT_name
 	.byte	4                               # DW_AT_byte_size
 	.byte	5                               # DW_AT_decl_file
-	.byte	17                              # DW_AT_decl_line
-	.byte	22                              # Abbrev [22] 0x3f7:0x3 DW_TAG_enumerator
-	.byte	74                              # DW_AT_name
+	.byte	16                              # DW_AT_decl_line
+	.byte	22                              # Abbrev [22] 0x382:0x3 DW_TAG_enumerator
+	.byte	68                              # DW_AT_name
 	.byte	0                               # DW_AT_const_value
-	.byte	22                              # Abbrev [22] 0x3fa:0x3 DW_TAG_enumerator
-	.byte	75                              # DW_AT_name
+	.byte	22                              # Abbrev [22] 0x385:0x3 DW_TAG_enumerator
+	.byte	69                              # DW_AT_name
 	.byte	1                               # DW_AT_const_value
-	.byte	22                              # Abbrev [22] 0x3fd:0x3 DW_TAG_enumerator
-	.byte	76                              # DW_AT_name
+	.byte	22                              # Abbrev [22] 0x388:0x3 DW_TAG_enumerator
+	.byte	70                              # DW_AT_name
 	.byte	2                               # DW_AT_const_value
 	.byte	0                               # End Of Children Mark
-	.byte	2                               # Abbrev [2] 0x401:0xb DW_TAG_variable
-	.byte	78                              # DW_AT_name
-	.long	1036                            # DW_AT_type
+	.byte	2                               # Abbrev [2] 0x38c:0xb DW_TAG_variable
+	.byte	72                              # DW_AT_name
+	.long	919                             # DW_AT_type
                                         # DW_AT_external
 	.byte	0                               # DW_AT_decl_file
 	.byte	19                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
-	.byte	11
-	.byte	5                               # Abbrev [5] 0x40c:0x18 DW_TAG_structure_type
-	.byte	78                              # DW_AT_name
+	.byte	10
+	.byte	5                               # Abbrev [5] 0x397:0x18 DW_TAG_structure_type
+	.byte	72                              # DW_AT_name
 	.byte	16                              # DW_AT_byte_size
 	.byte	0                               # DW_AT_decl_file
 	.byte	16                              # DW_AT_decl_line
-	.byte	6                               # Abbrev [6] 0x411:0x9 DW_TAG_member
+	.byte	6                               # Abbrev [6] 0x39c:0x9 DW_TAG_member
 	.byte	63                              # DW_AT_name
-	.long	1060                            # DW_AT_type
+	.long	943                             # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	17                              # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x41a:0x9 DW_TAG_member
-	.byte	71                              # DW_AT_name
-	.long	1077                            # DW_AT_type
+	.byte	6                               # Abbrev [6] 0x3a5:0x9 DW_TAG_member
+	.byte	66                              # DW_AT_name
+	.long	960                             # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	18                              # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
-	.byte	13                              # Abbrev [13] 0x424:0x5 DW_TAG_pointer_type
-	.long	1065                            # DW_AT_type
-	.byte	8                               # Abbrev [8] 0x429:0xc DW_TAG_array_type
+	.byte	13                              # Abbrev [13] 0x3af:0x5 DW_TAG_pointer_type
+	.long	948                             # DW_AT_type
+	.byte	8                               # Abbrev [8] 0x3b4:0xc DW_TAG_array_type
 	.long	401                             # DW_AT_type
-	.byte	9                               # Abbrev [9] 0x42e:0x6 DW_TAG_subrange_type
+	.byte	9                               # Abbrev [9] 0x3b9:0x6 DW_TAG_subrange_type
 	.long	152                             # DW_AT_type
 	.byte	27                              # DW_AT_count
 	.byte	0                               # End Of Children Mark
-	.byte	13                              # Abbrev [13] 0x435:0x5 DW_TAG_pointer_type
-	.long	1082                            # DW_AT_type
-	.byte	8                               # Abbrev [8] 0x43a:0xd DW_TAG_array_type
+	.byte	13                              # Abbrev [13] 0x3c0:0x5 DW_TAG_pointer_type
+	.long	965                             # DW_AT_type
+	.byte	8                               # Abbrev [8] 0x3c5:0xd DW_TAG_array_type
 	.long	401                             # DW_AT_type
-	.byte	23                              # Abbrev [23] 0x43f:0x7 DW_TAG_subrange_type
+	.byte	23                              # Abbrev [23] 0x3ca:0x7 DW_TAG_subrange_type
 	.long	152                             # DW_AT_type
 	.short	4096                            # DW_AT_count
 	.byte	0                               # End Of Children Mark
-	.byte	24                              # Abbrev [24] 0x447:0x19 DW_TAG_subprogram
-	.byte	12                              # DW_AT_low_pc
+	.byte	24                              # Abbrev [24] 0x3d2:0x19 DW_TAG_subprogram
+	.byte	11                              # DW_AT_low_pc
 	.long	.Lfunc_end0-.Lfunc_begin0       # DW_AT_high_pc
 	.byte	1                               # DW_AT_frame_base
 	.byte	90
                                         # DW_AT_call_all_calls
-	.byte	79                              # DW_AT_name
+	.byte	73                              # DW_AT_name
 	.byte	2                               # DW_AT_decl_file
-	.byte	124                             # DW_AT_decl_line
-	.long	1165                            # DW_AT_type
+	.byte	121                             # DW_AT_decl_line
+	.long	1048                            # DW_AT_type
                                         # DW_AT_external
-	.byte	25                              # Abbrev [25] 0x456:0x9 DW_TAG_variable
+	.byte	25                              # Abbrev [25] 0x3e1:0x9 DW_TAG_variable
 	.byte	0                               # DW_AT_location
-	.byte	81                              # DW_AT_name
+	.byte	77                              # DW_AT_name
 	.byte	2                               # DW_AT_decl_file
-	.byte	125                             # DW_AT_decl_line
-	.long	1170                            # DW_AT_type
+	.byte	122                             # DW_AT_decl_line
+	.long	1053                            # DW_AT_type
 	.byte	0                               # End Of Children Mark
-	.byte	24                              # Abbrev [24] 0x460:0x2d DW_TAG_subprogram
-	.byte	13                              # DW_AT_low_pc
+	.byte	24                              # Abbrev [24] 0x3eb:0x2d DW_TAG_subprogram
+	.byte	12                              # DW_AT_low_pc
 	.long	.Lfunc_end1-.Lfunc_begin1       # DW_AT_high_pc
 	.byte	1                               # DW_AT_frame_base
 	.byte	90
                                         # DW_AT_call_all_calls
-	.byte	80                              # DW_AT_name
+	.byte	76                              # DW_AT_name
 	.byte	0                               # DW_AT_decl_file
 	.byte	44                              # DW_AT_decl_line
 	.long	401                             # DW_AT_type
                                         # DW_AT_external
-	.byte	26                              # Abbrev [26] 0x46f:0xc DW_TAG_variable
+	.byte	26                              # Abbrev [26] 0x3fa:0xc DW_TAG_variable
 	.byte	3                               # DW_AT_location
 	.byte	145
 	.ascii	"\330\001"
-	.byte	82                              # DW_AT_name
+	.byte	78                              # DW_AT_name
 	.byte	0                               # DW_AT_decl_file
 	.byte	46                              # DW_AT_decl_line
 	.long	561                             # DW_AT_type
-	.byte	25                              # Abbrev [25] 0x47b:0x9 DW_TAG_variable
+	.byte	25                              # Abbrev [25] 0x406:0x9 DW_TAG_variable
 	.byte	1                               # DW_AT_location
-	.byte	83                              # DW_AT_name
+	.byte	79                              # DW_AT_name
 	.byte	0                               # DW_AT_decl_file
 	.byte	54                              # DW_AT_decl_line
-	.long	1182                            # DW_AT_type
-	.byte	27                              # Abbrev [27] 0x484:0x8 DW_TAG_variable
-	.byte	90                              # DW_AT_name
+	.long	1088                            # DW_AT_type
+	.byte	27                              # Abbrev [27] 0x40f:0x8 DW_TAG_variable
+	.byte	86                              # DW_AT_name
 	.byte	0                               # DW_AT_decl_file
 	.byte	66                              # DW_AT_decl_line
 	.long	539                             # DW_AT_type
 	.byte	0                               # End Of Children Mark
-	.byte	13                              # Abbrev [13] 0x48d:0x5 DW_TAG_pointer_type
+	.byte	13                              # Abbrev [13] 0x418:0x5 DW_TAG_pointer_type
+	.long	1053                            # DW_AT_type
+	.byte	3                               # Abbrev [3] 0x41d:0x8 DW_TAG_typedef
+	.long	1061                            # DW_AT_type
+	.byte	75                              # DW_AT_name
+	.byte	2                               # DW_AT_decl_file
+	.byte	117                             # DW_AT_decl_line
+	.byte	5                               # Abbrev [5] 0x425:0xf DW_TAG_structure_type
+	.byte	75                              # DW_AT_name
+	.byte	32                              # DW_AT_byte_size
+	.byte	2                               # DW_AT_decl_file
+	.byte	115                             # DW_AT_decl_line
+	.byte	6                               # Abbrev [6] 0x42a:0x9 DW_TAG_member
+	.byte	74                              # DW_AT_name
+	.long	1076                            # DW_AT_type
+	.byte	2                               # DW_AT_decl_file
+	.byte	116                             # DW_AT_decl_line
+	.byte	0                               # DW_AT_data_member_location
+	.byte	0                               # End Of Children Mark
+	.byte	8                               # Abbrev [8] 0x434:0xc DW_TAG_array_type
 	.long	81                              # DW_AT_type
-	.byte	8                               # Abbrev [8] 0x492:0xc DW_TAG_array_type
-	.long	81                              # DW_AT_type
-	.byte	9                               # Abbrev [9] 0x497:0x6 DW_TAG_subrange_type
+	.byte	9                               # Abbrev [9] 0x439:0x6 DW_TAG_subrange_type
 	.long	152                             # DW_AT_type
 	.byte	2                               # DW_AT_count
 	.byte	0                               # End Of Children Mark
-	.byte	5                               # Abbrev [5] 0x49e:0x33 DW_TAG_structure_type
-	.byte	89                              # DW_AT_name
+	.byte	5                               # Abbrev [5] 0x440:0x33 DW_TAG_structure_type
+	.byte	85                              # DW_AT_name
 	.byte	216                             # DW_AT_byte_size
 	.byte	0                               # DW_AT_decl_file
 	.byte	25                              # DW_AT_decl_line
-	.byte	6                               # Abbrev [6] 0x4a3:0x9 DW_TAG_member
-	.byte	84                              # DW_AT_name
+	.byte	6                               # Abbrev [6] 0x445:0x9 DW_TAG_member
+	.byte	80                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	26                              # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x4ac:0x9 DW_TAG_member
-	.byte	85                              # DW_AT_name
+	.byte	6                               # Abbrev [6] 0x44e:0x9 DW_TAG_member
+	.byte	81                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	27                              # DW_AT_decl_line
 	.byte	4                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x4b5:0x9 DW_TAG_member
-	.byte	86                              # DW_AT_name
+	.byte	6                               # Abbrev [6] 0x457:0x9 DW_TAG_member
+	.byte	82                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	28                              # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x4be:0x9 DW_TAG_member
-	.byte	87                              # DW_AT_name
+	.byte	6                               # Abbrev [6] 0x460:0x9 DW_TAG_member
+	.byte	83                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	29                              # DW_AT_decl_line
 	.byte	12                              # DW_AT_data_member_location
-	.byte	6                               # Abbrev [6] 0x4c7:0x9 DW_TAG_member
-	.byte	88                              # DW_AT_name
-	.long	1233                            # DW_AT_type
+	.byte	6                               # Abbrev [6] 0x469:0x9 DW_TAG_member
+	.byte	84                              # DW_AT_name
+	.long	1139                            # DW_AT_type
 	.byte	0                               # DW_AT_decl_file
 	.byte	30                              # DW_AT_decl_line
 	.byte	16                              # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
-	.byte	8                               # Abbrev [8] 0x4d1:0xc DW_TAG_array_type
+	.byte	8                               # Abbrev [8] 0x473:0xc DW_TAG_array_type
 	.long	782                             # DW_AT_type
-	.byte	9                               # Abbrev [9] 0x4d6:0x6 DW_TAG_subrange_type
+	.byte	9                               # Abbrev [9] 0x478:0x6 DW_TAG_subrange_type
 	.long	152                             # DW_AT_type
 	.byte	200                             # DW_AT_count
 	.byte	0                               # End Of Children Mark
@@ -1722,15 +1653,15 @@ flags:
 	.long	.Ldebug_ranges0-.Lrnglists_table_base0
 .Ldebug_ranges0:
 	.byte	3                               # DW_RLE_startx_length
-	.byte	12                              #   start index
+	.byte	11                              #   start index
 	.uleb128 .Lfunc_end0-.Lfunc_begin0      #   length
 	.byte	3                               # DW_RLE_startx_length
-	.byte	13                              #   start index
+	.byte	12                              #   start index
 	.uleb128 .Lfunc_end1-.Lfunc_begin1      #   length
 	.byte	0                               # DW_RLE_end_of_list
 .Ldebug_list_header_end1:
 	.section	.debug_str_offsets,"",@progbits
-	.long	368                             # Length of String Offsets Set
+	.long	352                             # Length of String Offsets Set
 	.short	5
 	.short	0
 .Lstr_offsets_base0:
@@ -1860,63 +1791,55 @@ flags:
 .Linfo_string61:
 	.asciz	"char"                          # string offset=965
 .Linfo_string62:
-	.asciz	"exfil_security_config_map"     # string offset=970
+	.asciz	"exfil_security_egress_dns_limites" # string offset=970
 .Linfo_string63:
-	.asciz	"type"                          # string offset=996
+	.asciz	"type"                          # string offset=1004
 .Linfo_string64:
-	.asciz	"key"                           # string offset=1001
+	.asciz	"key"                           # string offset=1009
 .Linfo_string65:
-	.asciz	"value"                         # string offset=1005
+	.asciz	"value"                         # string offset=1013
 .Linfo_string66:
-	.asciz	"BridgeIndexId"                 # string offset=1011
+	.asciz	"max_entries"                   # string offset=1019
 .Linfo_string67:
-	.asciz	"NfNdpBridgeIndexId"            # string offset=1025
+	.asciz	"flags"                         # string offset=1031
 .Linfo_string68:
-	.asciz	"RedirectIpv4"                  # string offset=1044
+	.asciz	"BENIGN"                        # string offset=1037
 .Linfo_string69:
-	.asciz	"NfNdpBridgeRedirectIpv4"       # string offset=1057
+	.asciz	"SUSPICIOUS"                    # string offset=1044
 .Linfo_string70:
-	.asciz	"exfil_kernel_config"           # string offset=1081
+	.asciz	"MALICIOUS"                     # string offset=1055
 .Linfo_string71:
-	.asciz	"max_entries"                   # string offset=1101
+	.asciz	"MALICIOUS_FLAGS"               # string offset=1065
 .Linfo_string72:
-	.asciz	"exfil_security_egress_dns_limites" # string offset=1113
+	.asciz	"exfil_security_detected_c2c_tunneling_netlink_sock_event" # string offset=1081
 .Linfo_string73:
-	.asciz	"flags"                         # string offset=1147
+	.asciz	"configure_global_ipv6_route_handlers" # string offset=1138
 .Linfo_string74:
-	.asciz	"BENIGN"                        # string offset=1153
+	.asciz	"inet_addr"                     # string offset=1175
 .Linfo_string75:
-	.asciz	"SUSPICIOUS"                    # string offset=1160
+	.asciz	"inet6_bridge_address"          # string offset=1185
 .Linfo_string76:
-	.asciz	"MALICIOUS"                     # string offset=1171
+	.asciz	"netlink_socket"                # string offset=1206
 .Linfo_string77:
-	.asciz	"MALICIOUS_FLAGS"               # string offset=1181
+	.asciz	"inet_addr_map"                 # string offset=1221
 .Linfo_string78:
-	.asciz	"exfil_security_detected_c2c_tunneling_netlink_sock_event" # string offset=1197
+	.asciz	"dptr"                          # string offset=1235
 .Linfo_string79:
-	.asciz	"configure_global_ipv6_route_handlers" # string offset=1254
+	.asciz	"event"                         # string offset=1240
 .Linfo_string80:
-	.asciz	"netlink_socket"                # string offset=1291
+	.asciz	"process_id"                    # string offset=1246
 .Linfo_string81:
-	.asciz	"inet_addr"                     # string offset=1306
+	.asciz	"uid"                           # string offset=1257
 .Linfo_string82:
-	.asciz	"dptr"                          # string offset=1316
+	.asciz	"gid"                           # string offset=1261
 .Linfo_string83:
-	.asciz	"event"                         # string offset=1321
+	.asciz	"tgid"                          # string offset=1265
 .Linfo_string84:
-	.asciz	"process_id"                    # string offset=1327
+	.asciz	"prog"                          # string offset=1270
 .Linfo_string85:
-	.asciz	"uid"                           # string offset=1338
+	.asciz	"event_setSockEvent"            # string offset=1275
 .Linfo_string86:
-	.asciz	"gid"                           # string offset=1342
-.Linfo_string87:
-	.asciz	"tgid"                          # string offset=1346
-.Linfo_string88:
-	.asciz	"prog"                          # string offset=1351
-.Linfo_string89:
-	.asciz	"event_setSockEvent"            # string offset=1356
-.Linfo_string90:
-	.asciz	"res"                           # string offset=1375
+	.asciz	"res"                           # string offset=1294
 	.section	.debug_str_offsets,"",@progbits
 	.long	.Linfo_string0
 	.long	.Linfo_string1
@@ -2005,10 +1928,6 @@ flags:
 	.long	.Linfo_string84
 	.long	.Linfo_string85
 	.long	.Linfo_string86
-	.long	.Linfo_string87
-	.long	.Linfo_string88
-	.long	.Linfo_string89
-	.long	.Linfo_string90
 	.section	.debug_addr,"",@progbits
 	.long	.Ldebug_addr_end0-.Ldebug_addr_start0 # Length of contribution
 .Ldebug_addr_start0:
@@ -2024,7 +1943,6 @@ flags:
 	.quad	valid_opcodes
 	.quad	DNS_RECORD_LIMITS
 	.quad	__license
-	.quad	exfil_security_config_map
 	.quad	exfil_security_egress_dns_limites
 	.quad	flags
 	.quad	exfil_security_detected_c2c_tunneling_netlink_sock_event
@@ -2037,9 +1955,9 @@ flags:
 	.byte	0
 	.long	24
 	.long	0
-	.long	1560
-	.long	1560
-	.long	2001
+	.long	1424
+	.long	1424
+	.long	1926
 	.long	0                               # BTF_KIND_PTR(id = 1)
 	.long	33554432                        # 0x2000000
 	.long	3
@@ -2101,333 +2019,299 @@ flags:
 	.long	0                               # BTF_KIND_PTR(id = 14)
 	.long	33554432                        # 0x2000000
 	.long	15
-	.long	118                             # BTF_KIND_STRUCT(id = 15)
-	.long	67108868                        # 0x4000004
+	.long	0                               # BTF_KIND_ARRAY(id = 15)
+	.long	50331648                        # 0x3000000
+	.long	0
+	.long	2
+	.long	4
 	.long	16
-	.long	138
-	.long	12
+	.long	118                             # BTF_KIND_STRUCT(id = 16)
+	.long	67108868                        # 0x4000004
+	.long	32
+	.long	82
+	.long	9
 	.long	0                               # 0x0
 	.long	152
-	.long	12
-	.long	32                              # 0x20
-	.long	171
-	.long	16
-	.long	64                              # 0x40
-	.long	184
-	.long	16
-	.long	96                              # 0x60
-	.long	208                             # BTF_KIND_TYPEDEF(id = 16)
-	.long	134217728                       # 0x8000000
-	.long	12
-	.long	0                               # BTF_KIND_PTR(id = 17)
-	.long	33554432                        # 0x2000000
-	.long	18
-	.long	0                               # BTF_KIND_ARRAY(id = 18)
-	.long	50331648                        # 0x3000000
-	.long	0
-	.long	2
-	.long	4
-	.long	64
-	.long	215                             # BTF_KIND_STRUCT(id = 19)
-	.long	67108868                        # 0x4000004
-	.long	32
-	.long	82
-	.long	9
-	.long	0                               # 0x0
-	.long	241
 	.long	11
 	.long	64                              # 0x40
-	.long	245
+	.long	156
+	.long	11
+	.long	128                             # 0x80
+	.long	87
 	.long	14
-	.long	128                             # 0x80
-	.long	87
-	.long	17
 	.long	192                             # 0xc0
-	.long	215                             # BTF_KIND_VAR(id = 20)
+	.long	118                             # BTF_KIND_VAR(id = 17)
 	.long	234881024                       # 0xe000000
-	.long	19
-	.long	1
-	.long	0                               # BTF_KIND_PTR(id = 21)
-	.long	33554432                        # 0x2000000
-	.long	22
-	.long	0                               # BTF_KIND_ARRAY(id = 22)
-	.long	50331648                        # 0x3000000
-	.long	0
-	.long	2
-	.long	4
 	.long	16
-	.long	251                             # BTF_KIND_STRUCT(id = 23)
-	.long	67108868                        # 0x4000004
-	.long	32
-	.long	82
-	.long	9
-	.long	0                               # 0x0
-	.long	241
-	.long	11
-	.long	64                              # 0x40
-	.long	245
-	.long	11
-	.long	128                             # 0x80
-	.long	87
-	.long	21
-	.long	192                             # 0xc0
-	.long	251                             # BTF_KIND_VAR(id = 24)
-	.long	234881024                       # 0xe000000
-	.long	23
 	.long	1
-	.long	0                               # BTF_KIND_FUNC_PROTO(id = 25)
+	.long	0                               # BTF_KIND_FUNC_PROTO(id = 18)
 	.long	218103808                       # 0xd000000
-	.long	26
-	.long	0                               # BTF_KIND_PTR(id = 26)
+	.long	19
+	.long	0                               # BTF_KIND_PTR(id = 19)
 	.long	33554432                        # 0x2000000
-	.long	27
-	.long	285                             # BTF_KIND_STRUCT(id = 27)
+	.long	20
+	.long	162                             # BTF_KIND_TYPEDEF(id = 20)
+	.long	134217728                       # 0x8000000
+	.long	21
+	.long	162                             # BTF_KIND_STRUCT(id = 21)
+	.long	67108865                        # 0x4000001
+	.long	32
+	.long	183
+	.long	33
+	.long	0                               # 0x0
+	.long	193                             # BTF_KIND_STRUCT(id = 22)
 	.long	67108865                        # 0x4000001
 	.long	16
-	.long	294
-	.long	28
+	.long	202
+	.long	23
 	.long	0                               # 0x0
-	.long	0                               # BTF_KIND_UNION(id = 28)
+	.long	0                               # BTF_KIND_UNION(id = 23)
 	.long	83886083                        # 0x5000003
 	.long	16
-	.long	300
-	.long	31
+	.long	208
+	.long	26
 	.long	0                               # 0x0
-	.long	309
-	.long	35
-	.long	0                               # 0x0
-	.long	319
-	.long	36
-	.long	0                               # 0x0
-	.long	329                             # BTF_KIND_TYPEDEF(id = 29)
-	.long	134217728                       # 0x8000000
+	.long	217
 	.long	30
-	.long	334                             # BTF_KIND_INT(id = 30)
+	.long	0                               # 0x0
+	.long	227
+	.long	32
+	.long	0                               # 0x0
+	.long	237                             # BTF_KIND_TYPEDEF(id = 24)
+	.long	134217728                       # 0x8000000
+	.long	25
+	.long	242                             # BTF_KIND_INT(id = 25)
 	.long	16777216                        # 0x1000000
 	.long	1
 	.long	8                               # 0x8
-	.long	0                               # BTF_KIND_ARRAY(id = 31)
+	.long	0                               # BTF_KIND_ARRAY(id = 26)
 	.long	50331648                        # 0x3000000
 	.long	0
-	.long	29
+	.long	24
 	.long	4
 	.long	16
-	.long	348                             # BTF_KIND_TYPEDEF(id = 32)
+	.long	256                             # BTF_KIND_TYPEDEF(id = 27)
 	.long	134217728                       # 0x8000000
-	.long	33
-	.long	355                             # BTF_KIND_TYPEDEF(id = 33)
+	.long	28
+	.long	263                             # BTF_KIND_TYPEDEF(id = 28)
 	.long	134217728                       # 0x8000000
-	.long	34
-	.long	361                             # BTF_KIND_INT(id = 34)
+	.long	29
+	.long	269                             # BTF_KIND_INT(id = 29)
 	.long	16777216                        # 0x1000000
 	.long	2
 	.long	16                              # 0x10
-	.long	0                               # BTF_KIND_ARRAY(id = 35)
+	.long	0                               # BTF_KIND_ARRAY(id = 30)
 	.long	50331648                        # 0x3000000
 	.long	0
-	.long	32
+	.long	27
 	.long	4
 	.long	8
-	.long	0                               # BTF_KIND_ARRAY(id = 36)
+	.long	284                             # BTF_KIND_TYPEDEF(id = 31)
+	.long	134217728                       # 0x8000000
+	.long	12
+	.long	0                               # BTF_KIND_ARRAY(id = 32)
 	.long	50331648                        # 0x3000000
 	.long	0
-	.long	16
+	.long	31
 	.long	4
 	.long	4
-	.long	376                             # BTF_KIND_FUNC(id = 37)
+	.long	0                               # BTF_KIND_ARRAY(id = 33)
+	.long	50331648                        # 0x3000000
+	.long	0
+	.long	22
+	.long	4
+	.long	2
+	.long	291                             # BTF_KIND_FUNC(id = 34)
 	.long	201326593                       # 0xc000001
-	.long	25
-	.long	0                               # BTF_KIND_FUNC_PROTO(id = 38)
+	.long	18
+	.long	0                               # BTF_KIND_FUNC_PROTO(id = 35)
 	.long	218103808                       # 0xd000000
 	.long	2
-	.long	594                             # BTF_KIND_FUNC(id = 39)
+	.long	518                             # BTF_KIND_FUNC(id = 36)
 	.long	201326593                       # 0xc000001
-	.long	38
-	.long	1437                            # BTF_KIND_VAR(id = 40)
+	.long	35
+	.long	1362                            # BTF_KIND_VAR(id = 37)
 	.long	234881024                       # 0xe000000
 	.long	12
 	.long	1
-	.long	1455                            # BTF_KIND_VAR(id = 41)
+	.long	1380                            # BTF_KIND_VAR(id = 38)
 	.long	234881024                       # 0xe000000
-	.long	27
+	.long	22
 	.long	1
-	.long	1492                            # BTF_KIND_VAR(id = 42)
+	.long	1417                            # BTF_KIND_VAR(id = 39)
 	.long	234881024                       # 0xe000000
-	.long	27
+	.long	22
 	.long	1
-	.long	1528                            # BTF_KIND_VAR(id = 43)
+	.long	1453                            # BTF_KIND_VAR(id = 40)
 	.long	234881024                       # 0xe000000
-	.long	27
+	.long	22
 	.long	1
-	.long	1571                            # BTF_KIND_STRUCT(id = 44)
+	.long	1496                            # BTF_KIND_STRUCT(id = 41)
 	.long	67108878                        # 0x400000e
 	.long	14
-	.long	1578
-	.long	29
+	.long	1503
+	.long	24
 	.long	0                               # 0x0
-	.long	1580
-	.long	29
+	.long	1505
+	.long	24
 	.long	8                               # 0x8
-	.long	1583
-	.long	29
+	.long	1508
+	.long	24
 	.long	16                              # 0x10
-	.long	1589
-	.long	29
+	.long	1514
+	.long	24
 	.long	24                              # 0x18
-	.long	1593
-	.long	29
+	.long	1518
+	.long	24
 	.long	32                              # 0x20
-	.long	1597
-	.long	29
+	.long	1522
+	.long	24
 	.long	40                              # 0x28
-	.long	1600
-	.long	29
+	.long	1525
+	.long	24
 	.long	48                              # 0x30
-	.long	1604
-	.long	29
+	.long	1529
+	.long	24
 	.long	56                              # 0x38
-	.long	1609
-	.long	29
+	.long	1534
+	.long	24
 	.long	64                              # 0x40
-	.long	1613
-	.long	29
+	.long	1538
+	.long	24
 	.long	72                              # 0x48
-	.long	1619
-	.long	29
+	.long	1544
+	.long	24
 	.long	80                              # 0x50
-	.long	1623
-	.long	29
+	.long	1548
+	.long	24
 	.long	88                              # 0x58
-	.long	1629
-	.long	29
+	.long	1554
+	.long	24
 	.long	96                              # 0x60
-	.long	1633
-	.long	29
+	.long	1558
+	.long	24
 	.long	104                             # 0x68
-	.long	1571                            # BTF_KIND_VAR(id = 45)
+	.long	1496                            # BTF_KIND_VAR(id = 42)
+	.long	234881024                       # 0xe000000
+	.long	41
+	.long	1
+	.long	0                               # BTF_KIND_CONST(id = 43)
+	.long	167772160                       # 0xa000000
+	.long	2
+	.long	0                               # BTF_KIND_ARRAY(id = 44)
+	.long	50331648                        # 0x3000000
+	.long	0
+	.long	43
+	.long	4
+	.long	2
+	.long	1568                            # BTF_KIND_VAR(id = 45)
 	.long	234881024                       # 0xe000000
 	.long	44
 	.long	1
-	.long	0                               # BTF_KIND_CONST(id = 46)
-	.long	167772160                       # 0xa000000
-	.long	2
-	.long	0                               # BTF_KIND_ARRAY(id = 47)
-	.long	50331648                        # 0x3000000
-	.long	0
-	.long	46
-	.long	4
-	.long	2
-	.long	1643                            # BTF_KIND_VAR(id = 48)
-	.long	234881024                       # 0xe000000
-	.long	47
-	.long	1
-	.long	1657                            # BTF_KIND_STRUCT(id = 49)
+	.long	1582                            # BTF_KIND_STRUCT(id = 46)
 	.long	67108872                        # 0x4000008
 	.long	32
-	.long	1685
+	.long	1610
 	.long	12
 	.long	0                               # 0x0
-	.long	1703
+	.long	1628
 	.long	12
 	.long	32                              # 0x20
-	.long	1721
+	.long	1646
 	.long	12
 	.long	64                              # 0x40
-	.long	1752
+	.long	1677
 	.long	12
 	.long	96                              # 0x60
-	.long	1783
+	.long	1708
 	.long	12
 	.long	128                             # 0x80
-	.long	1799
+	.long	1724
 	.long	12
 	.long	160                             # 0xa0
-	.long	1815
+	.long	1740
 	.long	12
 	.long	192                             # 0xc0
-	.long	1850
+	.long	1775
 	.long	12
 	.long	224                             # 0xe0
-	.long	1885                            # BTF_KIND_VAR(id = 50)
+	.long	1810                            # BTF_KIND_VAR(id = 47)
 	.long	234881024                       # 0xe000000
-	.long	49
+	.long	46
 	.long	1
-	.long	1903                            # BTF_KIND_INT(id = 51)
+	.long	1828                            # BTF_KIND_INT(id = 48)
 	.long	16777216                        # 0x1000000
 	.long	1
 	.long	16777224                        # 0x1000008
-	.long	0                               # BTF_KIND_ARRAY(id = 52)
+	.long	0                               # BTF_KIND_ARRAY(id = 49)
 	.long	50331648                        # 0x3000000
 	.long	0
-	.long	51
+	.long	48
 	.long	4
 	.long	13
-	.long	1908                            # BTF_KIND_VAR(id = 53)
+	.long	1833                            # BTF_KIND_VAR(id = 50)
 	.long	234881024                       # 0xe000000
-	.long	52
+	.long	49
 	.long	1
-	.long	1918                            # BTF_KIND_ENUM(id = 54)
+	.long	1843                            # BTF_KIND_ENUM(id = 51)
 	.long	100663299                       # 0x6000003
 	.long	4
-	.long	1934
+	.long	1859
 	.long	0
-	.long	1941
+	.long	1866
 	.long	1
-	.long	1952
+	.long	1877
 	.long	2
-	.long	1962                            # BTF_KIND_VAR(id = 55)
+	.long	1887                            # BTF_KIND_VAR(id = 52)
 	.long	234881024                       # 0xe000000
-	.long	54
+	.long	51
 	.long	1
-	.long	1968                            # BTF_KIND_DATASEC(id = 56)
+	.long	1893                            # BTF_KIND_DATASEC(id = 53)
 	.long	251658241                       # 0xf000001
 	.long	0
-	.long	55
+	.long	52
 	.long	flags
 	.long	4
-	.long	1973                            # BTF_KIND_DATASEC(id = 57)
+	.long	1898                            # BTF_KIND_DATASEC(id = 54)
 	.long	251658246                       # 0xf000006
 	.long	0
-	.long	40
+	.long	37
 	.long	redirect_skb_mark
 	.long	4
-	.long	41
+	.long	38
 	.long	bridge_redirect_addr_ipv6_suspicious
 	.long	16
-	.long	42
+	.long	39
 	.long	bridge_redirect_addr_ipv6_malicious
 	.long	16
-	.long	43
+	.long	40
 	.long	bridge_redirect_addr_ipv6_malicious_tunnel
 	.long	16
-	.long	45
+	.long	42
 	.long	qtypes
 	.long	14
-	.long	50
+	.long	47
 	.long	DNS_RECORD_LIMITS
 	.long	32
-	.long	1979                            # BTF_KIND_DATASEC(id = 58)
-	.long	251658243                       # 0xf000003
+	.long	1904                            # BTF_KIND_DATASEC(id = 55)
+	.long	251658242                       # 0xf000002
 	.long	0
 	.long	8
 	.long	exfil_security_detected_c2c_tunneling_netlink_sock_event
 	.long	16
-	.long	20
-	.long	exfil_security_config_map
-	.long	32
-	.long	24
+	.long	17
 	.long	exfil_security_egress_dns_limites
 	.long	32
-	.long	1985                            # BTF_KIND_DATASEC(id = 59)
+	.long	1910                            # BTF_KIND_DATASEC(id = 56)
 	.long	251658241                       # 0xf000001
 	.long	0
-	.long	48
+	.long	45
 	.long	valid_opcodes
 	.long	8
-	.long	1993                            # BTF_KIND_DATASEC(id = 60)
+	.long	1918                            # BTF_KIND_DATASEC(id = 57)
 	.long	251658241                       # 0xf000001
 	.long	0
-	.long	53
+	.long	50
 	.long	__license
 	.long	13
 	.byte	0                               # string offset=0
@@ -2445,171 +2329,163 @@ flags:
 	.byte	0
 	.ascii	"unsigned int"                  # string offset=105
 	.byte	0
-	.ascii	"exfil_kernel_config"           # string offset=118
+	.ascii	"exfil_security_egress_dns_limites" # string offset=118
 	.byte	0
-	.ascii	"BridgeIndexId"                 # string offset=138
+	.ascii	"key"                           # string offset=152
 	.byte	0
-	.ascii	"NfNdpBridgeIndexId"            # string offset=152
+	.ascii	"value"                         # string offset=156
 	.byte	0
-	.ascii	"RedirectIpv4"                  # string offset=171
+	.ascii	"inet6_bridge_address"          # string offset=162
 	.byte	0
-	.ascii	"NfNdpBridgeRedirectIpv4"       # string offset=184
+	.ascii	"inet_addr"                     # string offset=183
 	.byte	0
-	.ascii	"__be32"                        # string offset=208
+	.ascii	"in6_addr"                      # string offset=193
 	.byte	0
-	.ascii	"exfil_security_config_map"     # string offset=215
+	.ascii	"in6_u"                         # string offset=202
 	.byte	0
-	.ascii	"key"                           # string offset=241
+	.ascii	"u6_addr8"                      # string offset=208
 	.byte	0
-	.ascii	"value"                         # string offset=245
+	.ascii	"u6_addr16"                     # string offset=217
 	.byte	0
-	.ascii	"exfil_security_egress_dns_limites" # string offset=251
+	.ascii	"u6_addr32"                     # string offset=227
 	.byte	0
-	.ascii	"in6_addr"                      # string offset=285
+	.ascii	"__u8"                          # string offset=237
 	.byte	0
-	.ascii	"in6_u"                         # string offset=294
+	.ascii	"unsigned char"                 # string offset=242
 	.byte	0
-	.ascii	"u6_addr8"                      # string offset=300
+	.ascii	"__be16"                        # string offset=256
 	.byte	0
-	.ascii	"u6_addr16"                     # string offset=309
+	.ascii	"__u16"                         # string offset=263
 	.byte	0
-	.ascii	"u6_addr32"                     # string offset=319
+	.ascii	"unsigned short"                # string offset=269
 	.byte	0
-	.ascii	"__u8"                          # string offset=329
+	.ascii	"__be32"                        # string offset=284
 	.byte	0
-	.ascii	"unsigned char"                 # string offset=334
+	.ascii	"configure_global_ipv6_route_handlers" # string offset=291
 	.byte	0
-	.ascii	"__be16"                        # string offset=348
+	.ascii	".text"                         # string offset=328
 	.byte	0
-	.ascii	"__u16"                         # string offset=355
+	.ascii	"/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel/./consts.h" # string offset=334
 	.byte	0
-	.ascii	"unsigned short"                # string offset=361
+	.ascii	"inet6_bridge_address * configure_global_ipv6_route_handlers() {" # string offset=427
 	.byte	0
-	.ascii	"configure_global_ipv6_route_handlers" # string offset=376
+	.ascii	"    return &inet_addr_map;"    # string offset=491
 	.byte	0
-	.ascii	".text"                         # string offset=413
+	.ascii	"netlink_socket"                # string offset=518
 	.byte	0
-	.ascii	"/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel/./consts.h" # string offset=419
+	.ascii	"kprobe/tun_chr_open"           # string offset=533
 	.byte	0
-	.ascii	"struct in6_addr * configure_global_ipv6_route_handlers() {" # string offset=512
+	.ascii	"/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel/nf_sock.c" # string offset=553
 	.byte	0
-	.ascii	"    return &inet_addr;"        # string offset=571
+	.ascii	"int netlink_socket() {"        # string offset=645
 	.byte	0
-	.ascii	"netlink_socket"                # string offset=594
+	.ascii	"    if (bpf_ringbuf_reserve_dynptr(&exfil_security_detected_c2c_tunneling_netlink_sock_event, sizeof(struct event_setSockEvent), 0, &dptr) < 0){" # string offset=668
 	.byte	0
-	.ascii	"kprobe/tun_chr_open"           # string offset=609
+	.ascii	"        bpf_ringbuf_discard_dynptr(&dptr, 0);" # string offset=813
 	.byte	0
-	.ascii	"/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel/nf_sock.c" # string offset=629
+	.ascii	"        return 0;"             # string offset=859
 	.byte	0
-	.ascii	"int netlink_socket() {"        # string offset=721
+	.ascii	"    struct event_setSockEvent event = (struct event_setSockEvent) {" # string offset=877
 	.byte	0
-	.ascii	"    if (bpf_ringbuf_reserve_dynptr(&exfil_security_detected_c2c_tunneling_netlink_sock_event, sizeof(struct event_setSockEvent), 0, &dptr) < 0){" # string offset=744
+	.ascii	"        .process_id = bpf_get_current_pid_tgid() >> 32, " # string offset=945
 	.byte	0
-	.ascii	"        bpf_ringbuf_discard_dynptr(&dptr, 0);" # string offset=889
+	.ascii	"        .uid = bpf_get_current_uid_gid() >> 32," # string offset=1002
 	.byte	0
-	.ascii	"        return 0;"             # string offset=935
+	.ascii	"        .gid = bpf_get_current_uid_gid() & 0xFFFFFFFF, " # string offset=1050
 	.byte	0
-	.ascii	"    struct event_setSockEvent event = (struct event_setSockEvent) {" # string offset=953
+	.ascii	"        .tgid = bpf_get_current_pid_tgid() & 0xFFFFFFFF," # string offset=1106
 	.byte	0
-	.ascii	"        .process_id = bpf_get_current_pid_tgid() >> 32," # string offset=1021
+	.ascii	"        bpf_get_current_comm(&event.prog, sizeof(event.prog)) == 0" # string offset=1163
 	.byte	0
-	.ascii	"        .uid = bpf_get_current_uid_gid() >> 32," # string offset=1077
+	.ascii	"    long res = bpf_dynptr_write(&dptr, 0, &event, sizeof(struct event_setSockEvent), 0);" # string offset=1230
 	.byte	0
-	.ascii	"        .gid = bpf_get_current_uid_gid() & 0xFFFFFFFF, " # string offset=1125
+	.ascii	"    bpf_ringbuf_submit_dynptr(&dptr, 0);" # string offset=1319
 	.byte	0
-	.ascii	"        .tgid = bpf_get_current_pid_tgid() & 0xFFFFFFFF," # string offset=1181
+	.byte	125                             # string offset=1360
 	.byte	0
-	.ascii	"        bpf_get_current_comm(&event.prog, sizeof(event.prog)) == 0" # string offset=1238
+	.ascii	"redirect_skb_mark"             # string offset=1362
 	.byte	0
-	.ascii	"    long res = bpf_dynptr_write(&dptr, 0, &event, sizeof(struct event_setSockEvent), 0);" # string offset=1305
+	.ascii	"bridge_redirect_addr_ipv6_suspicious" # string offset=1380
 	.byte	0
-	.ascii	"    bpf_ringbuf_submit_dynptr(&dptr, 0);" # string offset=1394
+	.ascii	"bridge_redirect_addr_ipv6_malicious" # string offset=1417
 	.byte	0
-	.byte	125                             # string offset=1435
+	.ascii	"bridge_redirect_addr_ipv6_malicious_tunnel" # string offset=1453
 	.byte	0
-	.ascii	"redirect_skb_mark"             # string offset=1437
+	.ascii	"qtypes"                        # string offset=1496
 	.byte	0
-	.ascii	"bridge_redirect_addr_ipv6_suspicious" # string offset=1455
+	.byte	65                              # string offset=1503
 	.byte	0
-	.ascii	"bridge_redirect_addr_ipv6_malicious" # string offset=1492
+	.ascii	"NS"                            # string offset=1505
 	.byte	0
-	.ascii	"bridge_redirect_addr_ipv6_malicious_tunnel" # string offset=1528
+	.ascii	"CNAME"                         # string offset=1508
 	.byte	0
-	.ascii	"qtypes"                        # string offset=1571
+	.ascii	"SOA"                           # string offset=1514
 	.byte	0
-	.byte	65                              # string offset=1578
+	.ascii	"PTR"                           # string offset=1518
 	.byte	0
-	.ascii	"NS"                            # string offset=1580
+	.ascii	"MX"                            # string offset=1522
 	.byte	0
-	.ascii	"CNAME"                         # string offset=1583
+	.ascii	"TXT"                           # string offset=1525
 	.byte	0
-	.ascii	"SOA"                           # string offset=1589
+	.ascii	"AAAA"                          # string offset=1529
 	.byte	0
-	.ascii	"PTR"                           # string offset=1593
+	.ascii	"SRV"                           # string offset=1534
 	.byte	0
-	.ascii	"MX"                            # string offset=1597
+	.ascii	"NAPTR"                         # string offset=1538
 	.byte	0
-	.ascii	"TXT"                           # string offset=1600
+	.ascii	"OPT"                           # string offset=1544
 	.byte	0
-	.ascii	"AAAA"                          # string offset=1604
+	.ascii	"HTTPS"                         # string offset=1548
 	.byte	0
-	.ascii	"SRV"                           # string offset=1609
+	.ascii	"ANY"                           # string offset=1554
 	.byte	0
-	.ascii	"NAPTR"                         # string offset=1613
+	.ascii	"NULL_TYPE"                     # string offset=1558
 	.byte	0
-	.ascii	"OPT"                           # string offset=1619
+	.ascii	"valid_opcodes"                 # string offset=1568
 	.byte	0
-	.ascii	"HTTPS"                         # string offset=1623
+	.ascii	"dns_record_limits_malicious"   # string offset=1582
 	.byte	0
-	.ascii	"ANY"                           # string offset=1629
+	.ascii	"MIN_DOMAIN_LENGTH"             # string offset=1610
 	.byte	0
-	.ascii	"NULL_TYPE"                     # string offset=1633
+	.ascii	"MAX_DOMAIN_LENGTH"             # string offset=1628
 	.byte	0
-	.ascii	"valid_opcodes"                 # string offset=1643
+	.ascii	"MIN_SUBDOMAIN_LENGTH_PER_LABEL" # string offset=1646
 	.byte	0
-	.ascii	"dns_record_limits_malicious"   # string offset=1657
+	.ascii	"MAX_SUBDOMAIN_LENGTH_PER_LABEL" # string offset=1677
 	.byte	0
-	.ascii	"MIN_DOMAIN_LENGTH"             # string offset=1685
+	.ascii	"MIN_LABEL_COUNT"               # string offset=1708
 	.byte	0
-	.ascii	"MAX_DOMAIN_LENGTH"             # string offset=1703
+	.ascii	"MAX_LABEL_COUNT"               # string offset=1724
 	.byte	0
-	.ascii	"MIN_SUBDOMAIN_LENGTH_PER_LABEL" # string offset=1721
+	.ascii	"MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD" # string offset=1740
 	.byte	0
-	.ascii	"MAX_SUBDOMAIN_LENGTH_PER_LABEL" # string offset=1752
+	.ascii	"MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD" # string offset=1775
 	.byte	0
-	.ascii	"MIN_LABEL_COUNT"               # string offset=1783
+	.ascii	"DNS_RECORD_LIMITS"             # string offset=1810
 	.byte	0
-	.ascii	"MAX_LABEL_COUNT"               # string offset=1799
+	.ascii	"char"                          # string offset=1828
 	.byte	0
-	.ascii	"MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD" # string offset=1815
+	.ascii	"__license"                     # string offset=1833
 	.byte	0
-	.ascii	"MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD" # string offset=1850
+	.ascii	"MALICIOUS_FLAGS"               # string offset=1843
 	.byte	0
-	.ascii	"DNS_RECORD_LIMITS"             # string offset=1885
+	.ascii	"BENIGN"                        # string offset=1859
 	.byte	0
-	.ascii	"char"                          # string offset=1903
+	.ascii	"SUSPICIOUS"                    # string offset=1866
 	.byte	0
-	.ascii	"__license"                     # string offset=1908
+	.ascii	"MALICIOUS"                     # string offset=1877
 	.byte	0
-	.ascii	"MALICIOUS_FLAGS"               # string offset=1918
+	.ascii	"flags"                         # string offset=1887
 	.byte	0
-	.ascii	"BENIGN"                        # string offset=1934
+	.ascii	".bss"                          # string offset=1893
 	.byte	0
-	.ascii	"SUSPICIOUS"                    # string offset=1941
+	.ascii	".data"                         # string offset=1898
 	.byte	0
-	.ascii	"MALICIOUS"                     # string offset=1952
+	.ascii	".maps"                         # string offset=1904
 	.byte	0
-	.ascii	"flags"                         # string offset=1962
+	.ascii	".rodata"                       # string offset=1910
 	.byte	0
-	.ascii	".bss"                          # string offset=1968
-	.byte	0
-	.ascii	".data"                         # string offset=1973
-	.byte	0
-	.ascii	".maps"                         # string offset=1979
-	.byte	0
-	.ascii	".rodata"                       # string offset=1985
-	.byte	0
-	.ascii	"license"                       # string offset=1993
+	.ascii	"license"                       # string offset=1918
 	.byte	0
 	.section	.BTF.ext,"",@progbits
 	.short	60319                           # 0xeb9f
@@ -2623,116 +2499,115 @@ flags:
 	.long	424
 	.long	0
 	.long	8                               # FuncInfo
-	.long	413                             # FuncInfo section string offset=413
+	.long	328                             # FuncInfo section string offset=328
 	.long	1
 	.long	.Lfunc_begin0
-	.long	37
-	.long	609                             # FuncInfo section string offset=609
+	.long	34
+	.long	533                             # FuncInfo section string offset=533
 	.long	1
 	.long	.Lfunc_begin1
-	.long	39
+	.long	36
 	.long	16                              # LineInfo
-	.long	413                             # LineInfo section string offset=413
+	.long	328                             # LineInfo section string offset=328
 	.long	2
 	.long	.Lfunc_begin0
-	.long	419
-	.long	512
-	.long	126976                          # Line 124 Col 0
+	.long	334
+	.long	427
+	.long	123904                          # Line 121 Col 0
 	.long	.Ltmp2
-	.long	419
-	.long	571
-	.long	153605                          # Line 150 Col 5
-	.long	609                             # LineInfo section string offset=609
+	.long	334
+	.long	491
+	.long	150533                          # Line 147 Col 5
+	.long	533                             # LineInfo section string offset=533
 	.long	21
 	.long	.Lfunc_begin1
-	.long	629
-	.long	721
+	.long	553
+	.long	645
 	.long	45056                           # Line 44 Col 0
 	.long	.Ltmp7
-	.long	629
-	.long	744
+	.long	553
+	.long	668
 	.long	48137                           # Line 47 Col 9
 	.long	.Ltmp10
-	.long	629
-	.long	744
+	.long	553
+	.long	668
 	.long	48137                           # Line 47 Col 9
 	.long	.Ltmp15
-	.long	629
-	.long	889
+	.long	553
+	.long	813
 	.long	52233                           # Line 51 Col 9
 	.long	.Ltmp17
-	.long	629
-	.long	935
+	.long	553
+	.long	859
 	.long	53257                           # Line 52 Col 9
 	.long	.Ltmp20
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55335                           # Line 54 Col 39
 	.long	.Ltmp23
-	.long	629
-	.long	1021
+	.long	553
+	.long	945
 	.long	56343                           # Line 55 Col 23
 	.long	.Ltmp25
-	.long	629
-	.long	1021
+	.long	553
+	.long	945
 	.long	56370                           # Line 55 Col 50
 	.long	.Ltmp26
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55363                           # Line 54 Col 67
 	.long	.Ltmp29
-	.long	629
-	.long	1077
+	.long	553
+	.long	1002
 	.long	58384                           # Line 57 Col 16
 	.long	.Ltmp31
-	.long	629
-	.long	1077
+	.long	553
+	.long	1002
 	.long	58410                           # Line 57 Col 42
 	.long	.Ltmp32
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55363                           # Line 54 Col 67
 	.long	.Ltmp35
-	.long	629
-	.long	1125
+	.long	553
+	.long	1050
 	.long	59408                           # Line 58 Col 16
 	.long	.Ltmp37
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55363                           # Line 54 Col 67
 	.long	.Ltmp40
-	.long	629
-	.long	1181
+	.long	553
+	.long	1106
 	.long	57361                           # Line 56 Col 17
 	.long	.Ltmp42
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55363                           # Line 54 Col 67
 	.long	.Ltmp45
-	.long	629
-	.long	953
+	.long	553
+	.long	877
 	.long	55335                           # Line 54 Col 39
 	.long	.Ltmp48
-	.long	629
-	.long	1238
+	.long	553
+	.long	1163
 	.long	62473                           # Line 61 Col 9
 	.long	.Ltmp52
-	.long	629
-	.long	1305
+	.long	553
+	.long	1230
 	.long	67600                           # Line 66 Col 16
 	.long	.Ltmp55
-	.long	629
-	.long	1394
+	.long	553
+	.long	1319
 	.long	68613                           # Line 67 Col 5
 	.long	.Ltmp58
-	.long	629
-	.long	1435
+	.long	553
+	.long	1360
 	.long	72705                           # Line 71 Col 1
 	.addrsig
 	.addrsig_sym netlink_socket
 	.addrsig_sym exfil_security_detected_c2c_tunneling_netlink_sock_event
 	.addrsig_sym __license
-	.addrsig_sym exfil_security_config_map
 	.addrsig_sym exfil_security_egress_dns_limites
 	.section	.debug_line,"",@progbits
 .Lline_table_start0:
