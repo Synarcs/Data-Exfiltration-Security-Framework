@@ -103,10 +103,6 @@ type NodeAgentConfig struct {
 	} `yaml:"disableExporters" reflect:"disableExporters"`
 }
 
-const (
-	STREAM_THREAT_TOPIC             = "exfil-sec"
-	STREAM_THREAT_TOPIC_INFER_STATE = "exfil-sec-infer-controller"
-)
 
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int

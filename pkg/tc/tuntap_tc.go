@@ -30,7 +30,7 @@ func (tc *TCHandler) AttachTcProgramTunTap(ctx context.Context, interfaceName st
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
 	}
-	handler, err := utils.ReadEbpfFromSpec(ctx, TC_EGRESS_TUNNEL_NETIFACE_INT) // the tuntap handler interface
+	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_TUNNEL_NETIFACE_INT) // the tuntap handler interface
 
 	if err != nil {
 		return err

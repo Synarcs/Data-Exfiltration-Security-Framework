@@ -6,7 +6,6 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -32,7 +31,7 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress 
 		return err
 	}
 
-	handler, err := ebpf.LoadCollectionSpec(tc.NF_EGRESS_BRIDGE_NETIFACE_INT)
+	handler, err := ebpf.LoadCollectionSpec(utils.NF_EGRESS_BRIDGE_NETIFACE_INT)
 	if err != nil {
 		log.Printf("error loading the netfilter program: %v", err)
 		return err

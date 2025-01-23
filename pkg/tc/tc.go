@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -35,13 +36,6 @@ type TCHandler struct {
 	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
 }
 
-const (
-	TC_EGRESS_ROOT_NETIFACE_INT   = "ebpf/tc.o"
-	NF_EGRESS_BRIDGE_NETIFACE_INT = "ebpf/bridge.o"
-	TC_EGRESS_TUNNEL_NETIFACE_INT = "ebpf/tun.o"
-	SOCK_TUNNEL_CODE_EBPF         = "ebpf/netlink.o"
-)
-
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
 	INIT_KERNEL_SOCKET        = true
@@ -49,7 +43,8 @@ var (
 )
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel, streamClient *events.StreamClient,
+func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
+	streamClient *stream.StreamProducer,
 	globalErrorKernelHandlerChannel chan bool) TCHandler {
 	return TCHandler{
 		Interfaces:                      &iface,
@@ -212,7 +207,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := utils.ReadEbpfFromSpec(ctx, TC_EGRESS_ROOT_NETIFACE_INT)
+	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if errors.Is(ctx.Err(), context.Canceled) {
 		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")

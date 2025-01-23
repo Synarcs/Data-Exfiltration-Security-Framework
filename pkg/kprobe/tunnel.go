@@ -76,7 +76,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 		panic(err.Error())
 	}
 
-	handler, err := ebpf.LoadCollectionSpec(tc.SOCK_TUNNEL_CODE_EBPF)
+	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
 
 	if err != nil {
 		log.Fatal("error loading the xdp program over interface")

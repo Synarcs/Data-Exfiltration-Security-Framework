@@ -14,6 +14,7 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netfilter"
@@ -120,12 +121,27 @@ func main() {
 		panic(err.Error())
 	}
 
-	streamProducer := &events.StreamClient{
+	// holds kafka brokers and other kafka cluster related config
+	globalKakfBrokerConfig := &stream.StreamBrokerConfig{
 		GlobalConfig: globalConfig,
 	}
+	globalKakfBrokerConfig.LoadKafkaBrokersConfig()
 
-	if err := streamProducer.GenerateStreamKafkaProducer(&ctx); err != nil {
-		log.Println("The Remote Kafka stream broken not found for threat stream analytics continue...", err)
+	// eBPF node-agent kafka stream producer for dns threat events streaming
+	streamProducer := &stream.StreamProducer{
+		KafkaBrokerConfig: globalKakfBrokerConfig,
+	}
+
+	streamConsumer := &stream.StreamConsumer{
+		KafkaBrokerConfig: globalKakfBrokerConfig,
+	}
+
+	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {
+		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+	}
+
+	if err := streamConsumer.GenerateStreamKafkaConsumer(ctx); err != nil {
+		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 	}
 
 	// load the model from onnx lib
@@ -248,7 +264,8 @@ func main() {
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		kernelHooksCleanUp()
-		streamProducer.CloseStreamClient()
+		streamProducer.CloseProducer()
+		streamConsumer.CloseConsumer()
 		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
 	}
 

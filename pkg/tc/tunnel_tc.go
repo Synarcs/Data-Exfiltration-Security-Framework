@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -26,12 +27,12 @@ type TCCloneTunnel struct {
 	IfaceHandler             *netinet.NetIface
 	GlobalKernelErrorChannel chan bool
 	PhysicalTcInterface      *TCHandler
-	StreamClient             *events.StreamClient
+	StreamClient             *stream.StreamProducer
 	Onnx                     *model.OnnxModel
 }
 
 func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan bool,
-	streamClient *events.StreamClient, onnx *model.OnnxModel) *TCCloneTunnel {
+	streamClient *stream.StreamProducer, onnx *model.OnnxModel) *TCCloneTunnel {
 	return &TCCloneTunnel{
 		IfaceHandler:             iface,
 		GlobalKernelErrorChannel: globalErrorChannel,
@@ -374,7 +375,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			for _, feature := range features {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
 
-				go tun.StreamClient.MarshallStreamThreadEvent(feature, events.HostNetworkExfilFeatures{
+				go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
 					ExfilPort:        strconv.Itoa(int(destPort)),
 					Protocol:         string(events.DNS),
 					PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),

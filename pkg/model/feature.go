@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/layers"
@@ -34,7 +34,7 @@ type DNSFeatures struct {
 }
 
 func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface,
-	onnxModel *OnnxModel, streamClient *events.StreamClient) *DnsPacketGen {
+	onnxModel *OnnxModel, streamClient *stream.StreamProducer) *DnsPacketGen {
 	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
 
 	if err == nil {

@@ -759,13 +759,13 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
         if (ip->protocol == IPPROTO_UDP) {
             struct udphdr *udp = (struct udphdr *)(ip + 1);
             if ((void *)(udp + 1) > skb->data_end) return BENIGN;
-            struct dns_header *dns_header = (struct dnshdr *)(udp + 1);
+            struct dns_header *dns_header = (struct dns_header *)(udp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
             return SUSPICIOUS;
         }else if (ip->protocol == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
             if ((void *)(tcp + 1) > skb->data_end) return BENIGN;
-            struct dns_header *dns_header = (struct dnshdr *)(tcp + 1);
+            struct dns_header *dns_header = (struct dns_header *)(tcp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
             return SUSPICIOUS;
         }
@@ -775,13 +775,13 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
         if (ipv6->nexthdr == IPPROTO_UDP) {
             struct udphdr *udp = (struct udphdr *)(ipv6 + 1);
             if ((void *)(udp + 1) > skb->data_end) return BENIGN;
-            struct dns_header *dns_header = (struct dnshdr *)(udp + 1);
+            struct dns_header *dns_header = (struct dns_header *)(udp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
             return SUSPICIOUS;
         }else if (ipv6->nexthdr == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(ipv6 + 1);
             if ((void *)(tcp + 1) > skb->data_end) return BENIGN;
-            struct dns_header *dns_header = (struct dnshdr *)(tcp + 1);
+            struct dns_header *dns_header = (struct dns_header *)(tcp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
             return SUSPICIOUS;
         }

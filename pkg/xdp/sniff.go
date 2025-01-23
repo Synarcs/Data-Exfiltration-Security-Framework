@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -27,7 +28,7 @@ type IngressSniffHandler struct {
 	OnnxModel    *model.OnnxModel
 	DnsFeatures  *model.DNSFeatures
 	DnsPacketGen *model.DnsPacketGen
-	StreamClient *events.StreamClient
+	StreamClient *stream.StreamProducer
 
 	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
 }
@@ -35,7 +36,7 @@ type IngressSniffHandler struct {
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
 func GenerateXDPIngressFactory(iface netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *events.StreamClient, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
+	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
 	return IngressSniffHandler{
 		IfaceHandler:                    &iface,
 		DnsPacketGen:                    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
@@ -96,7 +97,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 				// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
 				// the same port as used for egrres will be used as src port for response from remote c2c malware
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT)
-				go ing.StreamClient.MarshallStreamThreadEvent(rawFeatures[index], events.HostNetworkExfilFeatures{
+				go ing.StreamClient.MarshallStreamThreadEvent(rawFeatures[index], stream.HostNetworkExfilFeatures{
 					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
 					Protocol:         string(events.DNS),
 					PhysicalNodeIpv4: ing.IfaceHandler.PhysicalNodeBridgeIpv4.String(),

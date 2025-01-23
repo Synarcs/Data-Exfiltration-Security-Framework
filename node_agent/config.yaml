@@ -1,5 +1,5 @@
 # store the stream client lb ipv4 and ipv6 for message broker (kafka)
-streamServer:
+streamServers:
   host: cssvlab01.uwb.edu
   ip: 10.158.82.6 
   port: 9092

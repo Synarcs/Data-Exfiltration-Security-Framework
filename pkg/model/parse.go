@@ -12,6 +12,7 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
@@ -31,7 +32,7 @@ type DnsPacketGen struct {
 	SocketSendFd        *int
 	XdpSocketSendFd     *xdp.Socket
 	OnnxModel           *OnnxModel
-	StreamClient        *events.StreamClient
+	StreamClient        *stream.StreamProducer
 }
 
 type CombinedFeatures []DNSFeatures
@@ -169,7 +170,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(tcpPacket.DstPort))
 				}
-				go d.StreamClient.MarshallStreamThreadEvent(feature, events.HostNetworkExfilFeatures{
+				go d.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
 					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
 					Protocol:         string(events.DNS),
 					PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
@@ -182,7 +183,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			} else {
 				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(tcpPacket.DstPort))
 			}
-			d.StreamClient.MarshallStreamThreadEvent(features[0], events.HostNetworkExfilFeatures{
+			d.StreamClient.MarshallStreamThreadEvent(features[0], stream.HostNetworkExfilFeatures{
 				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT), // keep this as it until more kernele xfil control is added
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
