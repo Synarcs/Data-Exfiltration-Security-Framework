@@ -32,7 +32,7 @@ build:
 	make compile
 
 .PHONY: build-k8s-sdr 
-build-k8s-sdr
+build-k8s-sdr:
 	cd ../sdr
 	make build 
 

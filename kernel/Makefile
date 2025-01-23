@@ -150,6 +150,12 @@ tc_tun:
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 
+.PHONY: sock_sdr
+sock_sdr:
+	echo "Compiling the ebpf kprobe for sock_sdr for kernel socket layer"
+	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
+	cp $(sock_sdr_out) ../node_agent/ebpf/
+
 .PHONY: clean-bpf 
 clean-bpf: 
 	rm -rf *.o 
