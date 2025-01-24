@@ -1652,6 +1652,7 @@ int classify(struct __sk_buff *skb){
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header_tcp);
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
                 struct dns_header_tcp *dns = (struct dns_header_tcp *) (tcp_data);
+                
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
 
                 if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {

@@ -44,3 +44,7 @@ The framework is capable for
 * Enhanced protection for in-build scan and prevention over kernel encapsulation mecahnicsms (VLAN, Tun/Tap, VXLAN).
 * Build to prevent DGA (Domain generation algorithms), metrics with prometheus, grafana and practively adoptable for massively scaled infrastructures.
 
+
+
+## Authors
+- [Vedang Parasnis](https://github.com/Synarcs/)

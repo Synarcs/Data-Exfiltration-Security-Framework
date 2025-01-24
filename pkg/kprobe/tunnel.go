@@ -20,6 +20,11 @@ import (
 	"github.com/cilium/ebpf/rlimit"
 )
 
+const (
+	TUNTAP_NET_OPEN  = "tun_chr_open"
+	TUNTAP_NET_CLOSE = "tun_chr_close"
+)
+
 type KernelNetlinkSocket struct {
 	ProcessId     uint32
 	Uid           uint32
@@ -97,7 +102,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 	// "tracepoint/syscalls/sys_enter_socket"
 	//  Kernel Tracepoint for socket syscall for an open socket fd inside kernel of AF_FAMILY AF_NETLINK
-	sockettp, err := link.Kprobe("tun_chr_open", objs.NetlinkSocket, nil)
+	sockettp, err := link.Kprobe(TUNTAP_NET_OPEN, objs.NetlinkSocket, nil)
 	if err != nil {
 		log.Fatal("error loading the kprobe program over sys_enter sock")
 		return err

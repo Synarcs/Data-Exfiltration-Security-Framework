@@ -1,5 +1,6 @@
 package utils
 
+// used to guard exfiltration against host net_device for egress traffic 
 const (
 	TC_EGRESS_ROOT_NETIFACE_INT   = "ebpf/tc.o"
 	NF_EGRESS_BRIDGE_NETIFACE_INT = "ebpf/bridge.o"
