@@ -51,9 +51,9 @@ int bridge_classify(struct bpf_nf_ctx *ctx){
     }
     
     if (ctx->skb->skb_iif == br_index){
-        bpf_printk("doing strick skb check since the packet redirected / cloned fro tc qdisc in kernel DPI");
+        bpf_printk("doing strict skb check since the packet tc_redirected / tc_cloned from tc qdisc in kernel DPI");
         if (ctx->skb->mark == skb_mark) return NF_ACCEPT;
-        else return NF_DROP;
+        return NF_DROP;
     }
 
     // since netfilter is global allow all other net_devices traffic to flow over netfilter hooks  and chains 

@@ -74,11 +74,11 @@ const (
 )
 
 type NodeAgentConfig struct {
-	StreamServer struct {
+	StreamServers struct {
 		Host string `yaml:"host" reflect:"host"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 		Port string `yaml:"port" reflect:"port"`
-	} `yaml:"streamServer" reflect:"streamServer"`
+	} `yaml:"streamServers" reflect:"streamServers"`
 
 	DNSServer struct {
 		Host string `yaml:"host" reflect:"host"`
@@ -102,7 +102,6 @@ type NodeAgentConfig struct {
 		Metrics   bool `yaml:"metrics" reflect:"metrics"`
 	} `yaml:"disableExporters" reflect:"disableExporters"`
 }
-
 
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int

@@ -11,12 +11,18 @@ type StreamBrokerConfig struct {
 	GlobalConfig *utils.NodeAgentConfig
 }
 
-// TODO: Apply config creation pattern to load broker config with different input configuration
-func (config *StreamBrokerConfig) LoadKafkaBrokersConfig() {
-	// TODO: Repalce with broker list for multi broker Kafka cluster for HA, and topic replication more than 1
-	brokerAddress := fmt.Sprintf("%s:%s", config.GlobalConfig.StreamServer.Ip, config.GlobalConfig.StreamServer.Port)
+func InitBrokerConfig(globalConfig *utils.NodeAgentConfig) *StreamBrokerConfig {
+	return &StreamBrokerConfig{
+		Brokers:      LoadKafkaBrokersConfig(globalConfig),
+		GlobalConfig: globalConfig,
+	}
+}
 
-	config.Brokers = []string{
-		brokerAddress,
+// TODO: Apply config creation pattern to load broker config with different input configuration
+func LoadKafkaBrokersConfig(globalConfig *utils.NodeAgentConfig) []string {
+	// TODO: Repalce with broker list for multi broker Kafka cluster for HA, and topic replication more than 1
+
+	return []string{
+		fmt.Sprintf("%s:%s", globalConfig.StreamServers.Ip, globalConfig.StreamServers.Port),
 	}
 }

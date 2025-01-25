@@ -21,13 +21,27 @@ func podSidecarMutateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	
-	mutateMessage := struct {
-		MutateMessage string `json:"mutateMessage"`
-	}{
-		MutateMessage: "The Pod has been mutated with the sidecar for exfiltration security with injected eBPF code for DNS exfiltration security in Kernel",
+	sendResponse := func(msg string) interface{} {
+		injecteBPfSockFilterResp := struct {
+			MutateMessage string `json:"mutateMessage"`
+		}{
+			MutateMessage: msg,
+		}
+		return injecteBPfSockFilterResp
 	}
-	json.NewEncoder(w).Encode(mutateMessage)
+	if err := InjectKernelSocketFilters(); err != nil {
+		resp := sendResponse(
+			"Error injecting the eBPF sock filter via the sidecar for the pod networking err :" + err.Error(),
+		)
+		json.NewEncoder(w).Encode(resp)
+	} else {
+		resp :=
+			sendResponse(
+				"The Pod has been mutated with the sidecar for exfiltration security with injected eBPF code for DNS exfiltration security in Kernel",
+			)
+		json.NewEncoder(w).Encode(resp)
+	}
+
 }
 
 func NewMutationWebHook(port int, addr string) *MutationWebHook {

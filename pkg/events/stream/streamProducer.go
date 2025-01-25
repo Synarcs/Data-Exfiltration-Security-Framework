@@ -43,8 +43,8 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 	}
 
 	// dial to kraft enbaled leader kafka broker
-	connLeader, err := kafka.Dial("tcp", net.JoinHostPort(prod.KafkaBrokerConfig.GlobalConfig.StreamServer.Host,
-		prod.KafkaBrokerConfig.GlobalConfig.StreamServer.Port))
+	connLeader, err := kafka.Dial("tcp", net.JoinHostPort(prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Ip,
+		prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Port))
 
 	if err != nil {
 		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)

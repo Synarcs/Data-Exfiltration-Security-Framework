@@ -1,8 +1,8 @@
 #!/bin/bash
 
-set -eo 
+#set -eo 
 
-sudo apt-get install -y kdig dnsperf
+sudo apt-get install -y knot-dnsutils dnsperf
 
 runDigTest() {
     echo "runn load over kdig for global benign domain $2"
@@ -14,16 +14,16 @@ runDigTest() {
     done
 }
 
-domains=(console.google.com t.bleed.io sliver.bleed.io)
+domains=(console.google.com t.bleed.io dnscat.bleed.io)
 recordType=A
 i=10000
 
 echo "Running eBPF Node-Agent DNS Stress test for exfil and malicious domains $domains[@] processId Stress test $$"
 load () {
-  for ((parallel=i; parallel <= 1000000; parallel++)); do
+  for ((parallel=10000; parallel <= 1000000; parallel++)); do
      echo "running max parallel task $parallel"
      for domain in $(seq 1 ${#domains[@]}); do
-	runDigTest $i ${domains[domain]} $recordType
+	      runDigTest $i ${domains[domain]} $recordType
      done
   done
 }

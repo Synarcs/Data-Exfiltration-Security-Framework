@@ -73,6 +73,7 @@ func main() {
 
 	flag.Parse()
 
+	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
 	if sdr {
 		/*
 			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
@@ -137,11 +138,7 @@ func main() {
 	}
 
 	// holds kafka brokers and other kafka cluster related config
-	globalKakfBrokerConfig := &stream.StreamBrokerConfig{
-		GlobalConfig: globalConfig,
-	}
-	globalKakfBrokerConfig.LoadKafkaBrokersConfig()
-
+	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig)
 	// eBPF node-agent kafka stream producer for dns threat events streaming
 	streamProducer := &stream.StreamProducer{
 		KafkaBrokerConfig: globalKakfBrokerConfig,
@@ -251,15 +248,16 @@ func main() {
 
 	// TODO move this to uring or epoll fd listners for the remote inference server to emity socket close signal event consumed via unix trafer port
 	go func() {
-		for {
-			_, egress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-			_, ingress := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
-			if egress != nil || ingress != nil {
-				if errors.Is(egress, os.ErrNotExist) {
-					log.Println("The Unix Local Unix Inference Socket is not available", egress.Error())
+		ticker := time.NewTicker(time.Second)
+		evalOnnxInferenceUnixSockMount := func() {
+			_, egressErr := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+			_, ingressErr := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+			if egressErr != nil || ingressErr != nil {
+				if errors.Is(egressErr, os.ErrNotExist) {
+					log.Println("The Unix Local Unix Inference Socket is not available", egressErr.Error())
 					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
-				} else if errors.Is(ingress, os.ErrNotExist) {
-					log.Println("The Unix Local Unix Inference Socket is not available", ingress.Error())
+				} else if errors.Is(ingressErr, os.ErrNotExist) {
+					log.Println("The Unix Local Unix Inference Socket is not available", ingressErr.Error())
 					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
 				} else {
 					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
@@ -267,7 +265,14 @@ func main() {
 				kernelHooksCleanUp()
 				os.Exit(1)
 			}
-			time.Sleep(time.Second)
+		}
+		for {
+			select {
+			case <-ticker.C:
+				evalOnnxInferenceUnixSockMount()
+			default:
+				time.Sleep(time.Second)
+			}
 		}
 	}()
 

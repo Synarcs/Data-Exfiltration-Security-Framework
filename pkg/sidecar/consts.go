@@ -21,3 +21,7 @@ package sidecar
 const (
 	SOCK_SKB_FILTER = "sock.o" // root skb_filter for egress
 )
+
+const (
+	POD_EBPF_PROGRAM_MOUNT_PATH = "/opt" // DNS security eBPF container will mount volume or builtint the image
+)
