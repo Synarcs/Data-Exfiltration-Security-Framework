@@ -152,7 +152,7 @@ tc_tun:
 
 .PHONY: sock_sdr
 sock_sdr:
-	echo "Compiling the ebpf kprobe for sock_sdr for kernel socket layer"
+	echo "Compiling the ebpf kprobe for sock_sdr for kernel socket layer as sidecar over k8s pods for exfiltration security"
 	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
 	cp $(sock_sdr_out) ../node_agent/ebpf/
 

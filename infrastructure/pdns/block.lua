@@ -9,35 +9,3 @@ local function handler()
         end
     end
 end
-
-
-local function routinesBlock ()
-    local tt = {}
-    for i = 1, 100 do 
-        tt[i] = coroutine.create(function (i)
-            print("running routine thread" .. i)
-            return math.max(i)
-        end)
-    end 
-
-    for i = 1, 100 do 
-        local vv = coroutine.resume(tt[i] , i) 
-        print(coroutine.status(tt[i]))
-    end 
-
-
-    local process = {}
-
-    for i =  1, (1 << 19), 2  do 
-        process[i] = 1 << i
-    end 
-
-    for key, val in pairs(process) do
-        if key % 2 == 0  then
-            table.remove(process, key) 
-        end
-    end
-
-end
-
-routinesBlock() 

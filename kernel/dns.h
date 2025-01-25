@@ -129,12 +129,7 @@ __always_inline struct dns_flags  get_dns_flags (struct dns_header * dns_header)
 
 static 
 __always_inline struct dns_flags get_dns_flags_tcp (struct dns_header_tcp *dns_header) {
-    #ifdef DEBUG 
-        __u16 packet_tcp_length = bpf_ntohs(dns_header->length);
-        if (DEBUG) {
-            bpf_printk("found a dns packet framed over tcp %u", packet_tcp_length);
-        }
-    #endif
+    __u16 packet_tcp_length = bpf_ntohs(dns_header->length);
     struct dns_flags flags;
     __u16 host_order_flags = bpf_ntohs(dns_header->flags);
     flags = (struct dns_flags) {
