@@ -498,13 +498,19 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 		if isIpv4 && isUdp {
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection)
+				handler, true, isIpv4, isUdp, tc.TcCollection, &model.ProcessInfo{
+					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+				})
 			// ipv4 and udp
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection)
+				handler, true, isIpv4, isUdp, tc.TcCollection, &model.ProcessInfo{
+					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+				})
 		}
 
 	} else if tcpCheck {
@@ -527,12 +533,18 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			// ipv4 and tcp
 			fmt.Println("called here for redirect over tcp")
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection)
+				handler, true, isIpv4, isUdp, tc.TcCollection, &model.ProcessInfo{
+					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+				})
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection)
+				handler, true, isIpv4, isUdp, tc.TcCollection, &model.ProcessInfo{
+					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+				})
 		}
 	}
 

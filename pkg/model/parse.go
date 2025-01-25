@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -35,7 +36,26 @@ type DnsPacketGen struct {
 	StreamClient        *stream.StreamProducer
 }
 
+var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var maliciousProcCountguard sync.Mutex = sync.Mutex{}
+
+// works as a bridge between kernel netdev (tc) layer and kernel syscall layer eBPF hooks to kill if multiple malicious count found
+type ProcessInfo struct {
+	ProcessId uint32
+	ThreadId  uint32
+}
+
 type CombinedFeatures []DNSFeatures
+
+func IncrementMaliciousProcCountLocalCache(procId uint32) {
+	maliciousProcCountguard.Lock()
+	defer maliciousProcCountguard.Unlock()
+	if _, fd := maliciousExfilProcessCount[procId]; !fd {
+		maliciousExfilProcessCount[procId] = 1
+	} else {
+		maliciousExfilProcessCount[procId]++
+	}
+}
 
 // Re packet send gen ensure removal of stale conntrack entries to reserved cokernel memory and prevent the conntrack table to grow
 func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle *int, conntrackEntry *conntrack.ConntrackCleanEntry) error {
@@ -107,7 +127,8 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 
 // only use for l3 -> ipv4 and l4 -> udp
 func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
-	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection) error {
+	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
+	processInfo *ProcessInfo) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -159,6 +180,11 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	isBenign := d.OnnxModel.Evaluate(features, "DNS", isEgress)
 
 	if !isBenign {
+		if isEgress {
+			log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
+			// handle the sock layer inc for local cache, only track the egress filter, for xdp over ingress no sock layer needed required process can be sigkilled in egress path
+			go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
+		}
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
 		// add the tld and domain information in packet malicious map for local cache
 		if len(features) > 1 {

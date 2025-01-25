@@ -156,6 +156,8 @@ struct exfil_security_egress_reconnisance_map_scan {
 struct checkSum_redirect_struct_value {
     __u16 checksum; // the l3 checksum for the kernel packet before redirection 
     __u64 kernel_timets; // 
+    __u32 procId; // send the process info to user space for layer over kernel syscall layer to kill this process if found malicious 
+    __u32 threadId; // thread inn process task_struct comm used for sending this packet 
 };
 
 // stores inofrmation regarding checksum and the redirection of the packet from kernel 
@@ -1284,9 +1286,13 @@ static
 __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
     __u16 ipv6_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
     __u64 ipv6_kernel_time = bpf_ktime_get_ns();
+    __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+    __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
         .checksum =  ipv6_checksum, 
         .kernel_timets = ipv6_kernel_time, 
+        .procId = proc_id,
+        .threadId = threadId, 
     };
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }

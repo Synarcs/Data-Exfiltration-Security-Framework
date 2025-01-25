@@ -213,12 +213,12 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, false, isIpv4, isUdp, nil)
+				handler, false, isIpv4, isUdp, nil, nil)
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
 			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, false, isIpv4,
-				isUdp, nil)
+				isUdp, nil, nil)
 		}
 	}
 	return nil
