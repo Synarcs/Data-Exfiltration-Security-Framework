@@ -135,3 +135,26 @@ func UnblockDomain(domain string) error {
 
 	return nil
 }
+
+func GetMaliciousDetectedProcessCtOnNode() error {
+	_, connRef, err := GeteBPFAgentRemoteSockConn()
+	if err != nil {
+		return err
+	}
+
+	resp, err := connRef.Get(fmt.Sprintf("http://%s/malProcessCt", "unix"))
+	if err != nil {
+		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Println("Error reading the response body from the Node Agent")
+		return err
+	}
+	log.Println(string(body))
+
+	return nil
+}

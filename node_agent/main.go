@@ -60,12 +60,14 @@ func main() {
 	var streamClient bool
 	var sdr bool
 	var mutatePort int
+	var sigKill int // used for sigkill with threshold limit for maslicious exfil detection
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
 	flag.BoolVar(&debug, "debug", false, "Run the Node Agent in debug mode")
 	flag.BoolVar(&streamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 	flag.BoolVar(&cliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
 	flag.BoolVar(&sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
 	flag.IntVar(&mutatePort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
+	flag.IntVar(&sigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
 		flag.PrintDefaults()
@@ -223,6 +225,19 @@ func main() {
 			cliSock.CleanRemoteSock()
 		}
 	}
+
+	// handle process log to log for now the processes which are detected malicious to send sigkill and kill them from kernel exec hooks
+	go func() {
+		cleanTicker := time.NewTicker(onnx.EXFIL_PROCESS_CACHE_CLEAN_INTERVAL)
+		for {
+			select {
+			case <-cleanTicker.C:
+				onnx.LogMaliciousProcCountLocalCache()
+			default:
+				time.Sleep(time.Second)
+			}
+		}
+	}()
 
 	go func() {
 		for {

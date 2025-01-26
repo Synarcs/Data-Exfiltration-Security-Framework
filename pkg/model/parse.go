@@ -25,6 +25,11 @@ import (
 	"github.com/vishvananda/netns"
 )
 
+const (
+	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL  = time.Second * 10 // use to prune the map which ensure the required
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = 5                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+)
+
 type DnsParserActions interface{}
 
 type DnsPacketGen struct {
@@ -37,7 +42,7 @@ type DnsPacketGen struct {
 }
 
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
-var maliciousProcCountguard sync.Mutex = sync.Mutex{}
+var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
 // works as a bridge between kernel netdev (tc) layer and kernel syscall layer eBPF hooks to kill if multiple malicious count found
 type ProcessInfo struct {
@@ -55,6 +60,24 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	} else {
 		maliciousExfilProcessCount[procId]++
 	}
+}
+
+func LogMaliciousProcCountLocalCache() {
+	maliciousProcCountguard.RLock()
+	defer maliciousProcCountguard.RUnlock()
+	if len(maliciousExfilProcessCount) == 0 {
+		return
+	}
+
+	for procId, count := range maliciousExfilProcessCount {
+		log.Println("The process trying to exfiltrate data detected with count ", procId, count)
+	}
+}
+
+func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
+	maliciousProcCountguard.RLock()
+	defer maliciousProcCountguard.RUnlock()
+	return maliciousExfilProcessCount
 }
 
 // Re packet send gen ensure removal of stale conntrack entries to reserved cokernel memory and prevent the conntrack table to grow

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
@@ -139,6 +140,28 @@ func UnblockDomain(w http.ResponseWriter, r *http.Request) {
 	errResponse("Error this is not an valid domain to be removed from blaclisted cahce, ensure it adheres to RFC 1035..")
 }
 
+func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request) {
+	currProcCount := model.GetCurrentLoggedExfiltratedProcessids()
+	sendResp := func(msg string) interface{} {
+		return struct {
+			Msg string
+		}{
+			Msg: msg,
+		}
+	}
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	if len(currProcCount) == 0 {
+		json.NewEncoder(w).Encode(
+			sendResp("No malicious process Detected yet by the node-agent"),
+		)
+		return
+	}
+	json.NewEncoder(w).Encode(
+		sendResp(fmt.Sprintf("%s", currProcCount)),
+	)
+}
+
 func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) {
 
 	listener, err := net.Listen("unix", string(nc.Unixsock))
@@ -155,6 +178,7 @@ func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) 
 	mux.HandleFunc("/blacklist/ingress", blacklistIngressDomains)
 	mux.HandleFunc("/blacklist/egress", blacklistEgressDomains)
 	mux.HandleFunc("/whitelist", UnblockDomain)
+	mux.HandleFunc("/malProcessCt", GetMaliciousDetectedProcessCtOnNode)
 
 	server := http.Server{
 		Handler: mux,
