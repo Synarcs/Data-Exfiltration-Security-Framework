@@ -239,16 +239,6 @@ func main() {
 		}
 	}()
 
-	go func() {
-		for {
-			goRoutinesCount := runtime.NumGoroutine()
-			if utils.DEBUG {
-				log.Println("Number of goroutines running", goRoutinesCount)
-			}
-			time.Sleep(time.Second)
-		}
-	}()
-
 	// global error channel for the kernel hooks
 	go func() {
 		for {

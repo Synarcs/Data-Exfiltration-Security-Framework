@@ -49,12 +49,12 @@ struct exfil_security_egress_dns_limites {
 #define MAX_DNS_ADD_COUNT 3 
 #define MAX_PACKET_OFF 0xffff
 
-
-
 #define MAX_DNS_NAME_LENGTH 255 
 #define MAX_DNS_LABEL_LENGTH 63 
 #define MAX_DNS_LABEL_COUNT 127
 
+
+#define DEEP_SCAN_DNS_UDP_OVERLAY true
 #define IPV6_ROUTE 1 
 
 __u32 redirect_skb_mark = 0xFF;

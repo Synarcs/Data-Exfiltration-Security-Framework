@@ -7,6 +7,8 @@
 // ---------------------------->
 
 #include <linux/bpf.h>
+#include <linux/version.h>
+#include <linux/kernel.h>
 
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
@@ -947,17 +949,21 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
          #endif
     }
 
-    int MAX_PROTOCOL_SIZE = 22;
 
     bool isTunnelC2CStandardUdpTransport = false;
     if (isUdp) {
-
-        for (int i=0; i < MAX_PROTOCOL_SIZE; i++) {
-            if (__transport_dest_port == UDP_PROTOCOLS[i].port) {
-                isTunnelC2CStandardUdpTransport = true;
-                break;
-            } // no further scan from kernel is required to process the packet 
-        }
+        #ifdef DEEP_SCAN_DNS_UDP_OVERLAY
+            if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
+                // allow an non overlay for fixed ports used by other protocols, for struct check mode, kernel will not process the packet DPI will scan each of them 
+                const int MAX_PROTOCOL_SIZE = 22;
+                for (int i=0; i < MAX_PROTOCOL_SIZE; i++) {
+                    if (__transport_dest_port == UDP_PROTOCOLS[i].port) {
+                        isTunnelC2CStandardUdpTransport = true;
+                        break;
+                    } // no further scan from kernel is required to process the packet 
+                }
+            }
+        #endif 
     }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
@@ -1286,14 +1292,21 @@ static
 __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
     __u16 ipv6_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
     __u64 ipv6_kernel_time = bpf_ktime_get_ns();
-    __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-    __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
         .checksum =  ipv6_checksum, 
         .kernel_timets = ipv6_kernel_time, 
-        .procId = proc_id,
-        .threadId = threadId, 
     };
+    #ifdef LINUX_VERSION_CODE
+        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)) {
+            __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+            __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
+            layer3_checksum_ipv6.procId = proc_id; 
+            layer3_checksum_ipv6.threadId = threadId;
+        }else {
+            layer3_checksum_ipv6.procId = 0; // keep this the helper in libbpf was added post kernel version 6.11.0 
+            layer3_checksum_ipv6.threadId = 0; 
+        }
+    #endif 
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }
 

@@ -93,7 +93,14 @@
         "ioctl.h": "c",
         "struct_iovec.h": "c",
         "libbpf.h": "c",
-        "bpf.h": "c"
+        "bpf.h": "c",
+        "kernel.h": "c",
+        "version.h": "c",
+        "sysinfo.h": "c",
+        "const.h": "c",
+        "vxlan.h": "c",
+        "utils.h": "c",
+        "raw_proc.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic"
 }

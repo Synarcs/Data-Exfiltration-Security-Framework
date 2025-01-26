@@ -12,7 +12,6 @@ struct PortMapping {
 };
 
 static const struct PortMapping UDP_PROTOCOLS[] = {
-    {"DNS", 53},
     {"DHCP Client", 68},
     {"DHCP Server", 67},
     {"TFTP", 69},

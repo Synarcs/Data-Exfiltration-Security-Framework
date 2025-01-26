@@ -406,7 +406,6 @@ func (nf *NetIface) InitconnTrackSockHandles() error {
 
 // uses the first default pcap handle from the host physical netlink (net_device) and seclect bpf filter for live sniff
 func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
-
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
 	cap.ZeroCopyReadPacketData()
 	return cap, err

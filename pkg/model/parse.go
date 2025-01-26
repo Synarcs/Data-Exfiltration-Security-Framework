@@ -58,7 +58,12 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	if _, fd := maliciousExfilProcessCount[procId]; !fd {
 		maliciousExfilProcessCount[procId] = 1
 	} else {
-		maliciousExfilProcessCount[procId]++
+		if maliciousExfilProcessCount[procId] > EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
+			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", procId)
+			delete(maliciousExfilProcessCount, procId)
+		} else {
+			maliciousExfilProcessCount[procId]++
+		}
 	}
 }
 
