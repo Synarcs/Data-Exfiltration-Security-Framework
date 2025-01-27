@@ -55,6 +55,8 @@ struct exfil_security_egress_dns_limites {
 
 
 #define DEEP_SCAN_DNS_UDP_OVERLAY true
+#define DEEP_SCAN_DNS_TCP_OVERLAY true
+
 #define IPV6_ROUTE 1 
 
 __u32 redirect_skb_mark = 0xFF;

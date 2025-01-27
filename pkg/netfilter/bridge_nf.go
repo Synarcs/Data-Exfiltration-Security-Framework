@@ -89,7 +89,7 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress 
 
 func (nf *NetFilter) DetachKernelBridgeNetfilterHook(ctx *context.Context) error {
 	if nf.Link == nil {
-		log.Println("The Kernel did not attacj the bridge netfilter hook for the ingress prerouting bridge")
+		log.Println("The Kernel did not attach the bridge netfilter hook for the ingress prerouting bridge")
 		return nil
 	}
 	if err := nf.Link.Close(); err != nil {

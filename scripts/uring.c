@@ -6,10 +6,11 @@
 
 #define DEBUG_EVENT(ev, ...) printf("%d", ev)
 
+
 typedef struct BufferEventInfo {
     char *event;
     uint64_t fd;
-    int (*getFd) ();
+    uint64_t (*getFd) (struct BufferEventInfo *);
     struct BufferEventInfo * (*getEventInfo) (struct BufferEventInfo *);
 } __attribute__((packed)) BufferEventInfo;
 

@@ -248,11 +248,47 @@ struct exfil_security_egress_rate_limit_map {
 } exfil_security_egress_rate_limit_map SEC(".maps");
 
 
+// TODO: add macros for some DPI scans 
+#define HANDLE_MULTICAST_PORT_DPI(transport_dest, DEBUG_FLAG)                               \
+    do {                                                                              \
+        if ((transport_dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) ||                     \
+            (transport_dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT))) {             \
+            if (DEBUG_FLAG) {                                                         \
+                bpf_printk("Detected a possible multicast local link NS resolution request"); \
+            }                                                                         \
+            return TC_FORWARD;                                                        \
+        }                                                                             \
+    } while (0)
+
+// Parse the RAW SKB for query classes 
+#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class) \ 
+        switch ((dns_query_class)){                 \
+                case 0x0001:                        \
+                case 0x0002:                        \
+                case 0x0005:                        \
+                case 0x0006:                        \ 
+                case 0x001C:                        \
+                case 0x0041:                        \
+                    return BENIGN;                  \
+                case 0x000F:                        \
+                case 0x0021:                        \
+                case 0x0023:                        \
+                case 0x0029:                        \
+                case 0x0010:                        \
+                    return SUSPICIOUS;              \
+                case 0x00FF:                        \
+                case 0x000A:                        \
+                    return MALICIOUS;               \
+                default:                            \
+                    return SUSPICIOUS;              \
+            }                                       
+
+
 static 
 __always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
     cursor->data = (void *)(ll)(skb->data);
     cursor->data_end = (void *)(ll)(skb->data_end);
-    return true;  // Added return statement
+    return true;
 }
 
 static 
@@ -375,28 +411,7 @@ __always_inline __u8 parse_dns_payload_tcp(struct skb_cursor *skb, void *dns_pay
 static
   __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, __u16 dns_query_class, struct qtypes qt) {
 
-       
-        switch (dns_query_class){
-            case 0x0001: 
-            case 0x0002:
-            case 0x0005:
-            case 0x0006: 
-            case 0x001C:
-            case 0x0041:
-                return BENIGN;
-            case 0x000F:
-            case 0x0021:
-            case 0x0023:
-            case 0x0029: 
-            case 0x0010:
-                return SUSPICIOUS;
-            case 0x00FF:
-            case 0x000A:
-                return MALICIOUS;
-            default: {
-                return SUSPICIOUS;
-            }
-        }
+        EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)
         return SUSPICIOUS;
   }
 
@@ -1643,14 +1658,13 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
-            }else if (udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) || \
-                      udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
-                if (DEBUG) {
-                    bpf_printk("Detected a possible multicast local link NS resolution request");
+            }
+            #ifdef DEEP_SCAN_DNS_UDP_OVERLAY 
+                if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
+                    HANDLE_MULTICAST_PORT_DPI(udp->dest, DEBUG);
                 }
-                return TC_FORWARD;
-                
-            }else {
+            #endif
+            else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
                                     udp_data, udp_payload_len, udp, true) == 1)
@@ -1797,9 +1811,13 @@ int classify(struct __sk_buff *skb){
 
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, 0);
-            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
-                return TC_FORWARD;
-            }else {
+            }
+            #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
+                if (!DEEP_SCAN_DNS_TCP_OVERLAY) {
+                    HANDLE_MULTICAST_PORT_DPI(tcp->dest, DEBUG);
+                }
+            #endif
+            else {
 
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
                     return TC_FORWARD;
@@ -1918,13 +1936,13 @@ int classify(struct __sk_buff *skb){
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, 0);
 
-            } else if (udp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT) || \
-                      udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
-                if (DEBUG) {
-                    bpf_printk("Detected a possible multicast local link NS resolution request");
+            }
+            #ifdef DEEP_SCAN_DNS_UDP_OVERLAY 
+                if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
+                    HANDLE_MULTICAST_PORT_DPI(udp->dest, DEBUG);
                 }
-                return TC_FORWARD; 
-            }else {
+            #endif
+            else {
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;
                 return TC_DROP;
@@ -2015,9 +2033,13 @@ int classify(struct __sk_buff *skb){
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 __update_kernel_packet_redirection_time(dns->transaction_id);
                 return bpf_redirect(br_index, 0);
-            }else if (tcp->dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) {
-                return TC_FORWARD;
-            }else {
+            }
+            #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
+                if (!DEEP_SCAN_DNS_TCP_OVERLAY) {
+                    HANDLE_MULTICAST_PORT_DPI(tcp->dest, DEBUG);
+                }
+            #endif
+            else {
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, false) == 1) 
                     return TC_FORWARD;
                 
