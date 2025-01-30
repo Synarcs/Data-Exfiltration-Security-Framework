@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <pthread.h>
 
 #define MAX_EVENTS 5 
 static int READ_SIZE = 10;

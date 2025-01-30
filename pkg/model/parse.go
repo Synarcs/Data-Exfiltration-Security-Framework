@@ -68,14 +68,16 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 }
 
 func LogMaliciousProcCountLocalCache() {
-	maliciousProcCountguard.RLock()
-	defer maliciousProcCountguard.RUnlock()
-	if len(maliciousExfilProcessCount) == 0 {
-		return
-	}
+	if utils.DEBUG {
+		maliciousProcCountguard.RLock()
+		defer maliciousProcCountguard.RUnlock()
+		if len(maliciousExfilProcessCount) == 0 {
+			return
+		}
 
-	for procId, count := range maliciousExfilProcessCount {
-		log.Println("The process trying to exfiltrate data detected with count ", procId, count)
+		for procId, count := range maliciousExfilProcessCount {
+			log.Println("The process trying to exfiltrate data detected with count ", procId, count)
+		}
 	}
 }
 
@@ -214,7 +216,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				// handle the sock layer inc for local cache, only track the egress filter, for xdp over ingress no sock layer needed required process can be sigkilled in egress path
 				go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
 			}
-			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer 
+			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer
 		}
 		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
 		// add the tld and domain information in packet malicious map for local cache

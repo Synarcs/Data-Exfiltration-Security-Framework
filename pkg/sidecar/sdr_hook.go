@@ -9,6 +9,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 )
 
 type MutationWebHook struct {
@@ -54,6 +57,7 @@ func NewMutationWebHook(port int, addr string) *MutationWebHook {
 func (m *MutationWebHook) InitMutationServer(opts ...interface{}) {
 	ctx := context.Background()
 
+	var mutationServerwg sync.WaitGroup
 	flag.Usage = func() {
 		flag.PrintDefaults()
 	}
@@ -64,17 +68,33 @@ func (m *MutationWebHook) InitMutationServer(opts ...interface{}) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mutate", podSidecarMutateHandler)
 
-	server := http.Server{
-		Addr:    fmt.Sprintf(":%d", m.Port),
-		Handler: mux,
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		BaseContext: func(l net.Listener) context.Context {
-			return ctx
-		},
-	}
+	mutationServerwg.Add(1)
+	go func() {
+		defer mutationServerwg.Done()
+		go events.StartPrometheusMetricExporterServer(nil)
+	}()
 
-	log.Println("Starting the Mutation Webhook Server on port ", m.Port)
-	log.Panicln(server.ListenAndServe())
+	mutationServerwg.Add(1)
+	go func() {
+		defer mutationServerwg.Done()
+		server := http.Server{
+			Addr:    fmt.Sprintf(":%d", m.Port),
+			Handler: mux,
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			BaseContext: func(l net.Listener) context.Context {
+				return ctx
+			},
+		}
+
+		log.Println("Starting the Mutation Webhook Server on port ", m.Port)
+
+		if err := server.ListenAndServe(); err != nil {
+			log.Println("Error starting the mutation server")
+			panic(err.Error())
+		}
+	}()
+
+	mutationServerwg.Wait()
 }

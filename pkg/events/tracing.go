@@ -20,6 +20,10 @@ import (
 
 // metrics export for the prometheus ebpf kernel node exporter from egress tc traffic layer
 
+const (
+	METRICS_EXPORTER_DEFAULT_PORT = 9092
+)
+
 type PacketDPIRedirectionCountEvent struct {
 	KernelRedirectPacketCount uint32
 	EvenTime                  string
@@ -218,7 +222,14 @@ func init() {
 
 func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {
 
-	log.Println("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", config.MetricsExporter.Port)
+	var metricsExporterPort int
+	if config == nil {
+		metricsExporterPort = METRICS_EXPORTER_DEFAULT_PORT
+	} else {
+		metricsExporterPort, _ = strconv.Atoi(config.MetricsExporter.Port)
+	}
+
+	log.Println("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", metricsExporterPort)
 
 	metricMux := http.NewServeMux()
 
@@ -229,7 +240,7 @@ func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {
 	metricMux.Handle("/metrics", promhttp.Handler())
 
 	server := http.Server{
-		Addr:    fmt.Sprintf(":%s", config.MetricsExporter.Port),
+		Addr:    fmt.Sprintf(":%d", metricsExporterPort),
 		Handler: metricMux,
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -238,6 +249,7 @@ func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {
 			return context.WithValue(ctx, "metrics_time", time.Now().GoString())
 		},
 	}
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Println("error starting the prometheus exporter server", err)
 		return err
@@ -296,7 +308,7 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"isUDPTransport": strconv.FormatBool(e.IsUDPTransport),
 		}).Set(float64(e.Dest_port))
 		return nil
-		
+
 	case VxlanEncapKenrelEvent:
 		malicious_vxlan_encap_dns_vtep_tunnel_transfer.With(prometheus.Labels{
 			"vni":                   strconv.Itoa(int(e.Vni)),

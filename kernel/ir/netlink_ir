@@ -2,10 +2,10 @@
 	.file	"nf_sock.c"
 	.file	0 "/home/synarcs/Desktop/Kernel_security/Data-Exfiltration-Security-Framework/kernel" "nf_sock.c" md5 0x0dfe27897c15f48e1b33a39e79f4e852
 	.file	1 "/usr/include/asm-generic" "int-ll64.h" md5 0xb810f270733e106319b67ef512c6246e
-	.file	2 "." "consts.h" md5 0x23435a748b8553c58f2f4a7d9fa3fe48
+	.file	2 "." "consts.h" md5 0xa9bca13aeb8b9fe9860f3a8743a55dfe
 	.file	3 "/usr/include/linux" "in6.h" md5 0xfca1889f0274df066e49cf4d8db8011e
 	.file	4 "/usr/include/linux" "types.h" md5 0xbf9fbc0e8f60927fef9d8917535375a6
-	.file	5 "." "dns.h" md5 0xc6d8cc9cca8d4cfda48bb78b1aba6ebe
+	.file	5 "." "dns.h" md5 0x2a4b57adcb6cfe87ed7cef4fb98009e6
 	.file	6 "/usr/include/linux" "bpf.h" md5 0xeec04c95b9f59f758a8270a58c2ff5f6
 	.file	7 "/usr/include/bpf" "bpf_helper_defs.h" md5 0x65e4dc8e3121f91a5c2c9eb8563c5692
 	.globl	configure_global_ipv6_route_handlers # -- Begin function configure_global_ipv6_route_handlers
@@ -13,7 +13,7 @@
 	.type	configure_global_ipv6_route_handlers,@function
 configure_global_ipv6_route_handlers:   # @configure_global_ipv6_route_handlers
 .Lfunc_begin0:
-	.loc	2 121 0                         # ./consts.h:121:0
+	.loc	2 123 0                         # ./consts.h:123:0
 	.cfi_sections .debug_frame
 	.cfi_startproc
 # %bb.0:
@@ -36,7 +36,7 @@ configure_global_ipv6_route_handlers:   # @configure_global_ipv6_route_handlers
 	r0 = r10
 	r0 += -32
 .Ltmp0:
-	.loc	2 147 5 prologue_end            # ./consts.h:147:5
+	.loc	2 149 5 prologue_end            # ./consts.h:149:5
 .Ltmp1:
 .Ltmp2:
 	exit
@@ -934,7 +934,7 @@ flags:
 	.long	58                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	60                              # DW_AT_decl_line
+	.byte	62                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	0
@@ -952,7 +952,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	72                              # DW_AT_decl_line
+	.byte	74                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	1
@@ -1046,7 +1046,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	86                              # DW_AT_decl_line
+	.byte	88                              # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	2
@@ -1055,7 +1055,7 @@ flags:
 	.long	81                              # DW_AT_type
                                         # DW_AT_external
 	.byte	2                               # DW_AT_decl_file
-	.byte	100                             # DW_AT_decl_line
+	.byte	102                             # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	3
@@ -1184,7 +1184,7 @@ flags:
 	.long	416                             # DW_AT_type
                                         # DW_AT_external
 	.byte	5                               # DW_AT_decl_file
-	.byte	224                             # DW_AT_decl_line
+	.byte	219                             # DW_AT_decl_line
 	.byte	2                               # DW_AT_location
 	.byte	161
 	.byte	6
@@ -1192,54 +1192,54 @@ flags:
 	.byte	47                              # DW_AT_name
 	.byte	32                              # DW_AT_byte_size
 	.byte	5                               # DW_AT_decl_file
-	.byte	208                             # DW_AT_decl_line
+	.byte	203                             # DW_AT_decl_line
 	.byte	6                               # Abbrev [6] 0x1a5:0x9 DW_TAG_member
 	.byte	39                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	209                             # DW_AT_decl_line
+	.byte	204                             # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1ae:0x9 DW_TAG_member
 	.byte	40                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	210                             # DW_AT_decl_line
+	.byte	205                             # DW_AT_decl_line
 	.byte	4                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1b7:0x9 DW_TAG_member
 	.byte	41                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	213                             # DW_AT_decl_line
+	.byte	208                             # DW_AT_decl_line
 	.byte	8                               # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1c0:0x9 DW_TAG_member
 	.byte	42                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	214                             # DW_AT_decl_line
+	.byte	209                             # DW_AT_decl_line
 	.byte	12                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1c9:0x9 DW_TAG_member
 	.byte	43                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	217                             # DW_AT_decl_line
+	.byte	212                             # DW_AT_decl_line
 	.byte	16                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1d2:0x9 DW_TAG_member
 	.byte	44                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	218                             # DW_AT_decl_line
+	.byte	213                             # DW_AT_decl_line
 	.byte	20                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1db:0x9 DW_TAG_member
 	.byte	45                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	221                             # DW_AT_decl_line
+	.byte	216                             # DW_AT_decl_line
 	.byte	24                              # DW_AT_data_member_location
 	.byte	6                               # Abbrev [6] 0x1e4:0x9 DW_TAG_member
 	.byte	46                              # DW_AT_name
 	.long	58                              # DW_AT_type
 	.byte	5                               # DW_AT_decl_file
-	.byte	222                             # DW_AT_decl_line
+	.byte	217                             # DW_AT_decl_line
 	.byte	28                              # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
 	.byte	12                              # Abbrev [12] 0x1ee:0x9 DW_TAG_variable
@@ -1532,14 +1532,14 @@ flags:
                                         # DW_AT_call_all_calls
 	.byte	73                              # DW_AT_name
 	.byte	2                               # DW_AT_decl_file
-	.byte	121                             # DW_AT_decl_line
+	.byte	123                             # DW_AT_decl_line
 	.long	1048                            # DW_AT_type
                                         # DW_AT_external
 	.byte	25                              # Abbrev [25] 0x3e1:0x9 DW_TAG_variable
 	.byte	0                               # DW_AT_location
 	.byte	77                              # DW_AT_name
 	.byte	2                               # DW_AT_decl_file
-	.byte	122                             # DW_AT_decl_line
+	.byte	124                             # DW_AT_decl_line
 	.long	1053                            # DW_AT_type
 	.byte	0                               # End Of Children Mark
 	.byte	24                              # Abbrev [24] 0x3eb:0x2d DW_TAG_subprogram
@@ -1579,17 +1579,17 @@ flags:
 	.long	1061                            # DW_AT_type
 	.byte	75                              # DW_AT_name
 	.byte	2                               # DW_AT_decl_file
-	.byte	117                             # DW_AT_decl_line
+	.byte	119                             # DW_AT_decl_line
 	.byte	5                               # Abbrev [5] 0x425:0xf DW_TAG_structure_type
 	.byte	75                              # DW_AT_name
 	.byte	32                              # DW_AT_byte_size
 	.byte	2                               # DW_AT_decl_file
-	.byte	115                             # DW_AT_decl_line
+	.byte	117                             # DW_AT_decl_line
 	.byte	6                               # Abbrev [6] 0x42a:0x9 DW_TAG_member
 	.byte	74                              # DW_AT_name
 	.long	1076                            # DW_AT_type
 	.byte	2                               # DW_AT_decl_file
-	.byte	116                             # DW_AT_decl_line
+	.byte	118                             # DW_AT_decl_line
 	.byte	0                               # DW_AT_data_member_location
 	.byte	0                               # End Of Children Mark
 	.byte	8                               # Abbrev [8] 0x434:0xc DW_TAG_array_type
@@ -2513,11 +2513,11 @@ flags:
 	.long	.Lfunc_begin0
 	.long	334
 	.long	427
-	.long	123904                          # Line 121 Col 0
+	.long	125952                          # Line 123 Col 0
 	.long	.Ltmp2
 	.long	334
 	.long	491
-	.long	150533                          # Line 147 Col 5
+	.long	152581                          # Line 149 Col 5
 	.long	533                             # LineInfo section string offset=533
 	.long	21
 	.long	.Lfunc_begin1

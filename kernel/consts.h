@@ -53,9 +53,15 @@ struct exfil_security_egress_dns_limites {
 #define MAX_DNS_LABEL_LENGTH 63 
 #define MAX_DNS_LABEL_COUNT 127
 
+// Pull all this from eBPF map config for dynamic packet filtering in kernel 
 
+// deep scan kernel packets for overlay l4 protocols 
 #define DEEP_SCAN_DNS_UDP_OVERLAY true
 #define DEEP_SCAN_DNS_TCP_OVERLAY true
+
+// rate limit config
+#define DNS_RATE_LIMIT_VOLUME true
+#define DNS_RATE_LIMIT_TOCKEN_BUCKET false
 
 #define IPV6_ROUTE 1 
 

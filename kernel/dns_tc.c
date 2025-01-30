@@ -1536,7 +1536,6 @@ int classify(struct __sk_buff *skb){
                     return TC_DROP;
                 }
 
-
                 __u8 parse_flag = actions.parse_dns_payload_memsafet_payload(&cursor, dns_payload, dns);
         
                 struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
@@ -1779,9 +1778,24 @@ int classify(struct __sk_buff *skb){
 
                 __u32 tcp_payload_len = bpf_ntohs(ip->tot_len) - (ip->ihl * 4) - (tcp->doff * 4);
                 if (result.deep_scan_mirror) {
-                    __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) tcp_payload_len);
-                    // __u8 dns_rate_limit_action = 1;
-                    if (dns_rate_limit_action == 0) return TC_DROP;
+                    #ifdef DNS_RATE_LIMIT_VOLUME 
+                        if (DNS_RATE_LIMIT_VOLUME) {
+                            __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) tcp_payload_len);
+                            if (dns_rate_limit_action == 0) {
+                                if (DEBUG) bpf_printk("dropping packet exceed volume threshold for dns egress traffic flow for dns volume traffic");
+                                return TC_DROP;
+                            }
+                        }
+                    #endif
+
+                    #ifdef DNS_RATE_LIMIT_TOCKEN_BUCKET
+                        if (DNS_RATE_LIMIT_TOCKEN_BUCKET) {
+                            if (__dns_rate_limit_tb(&cursor, skb) == 0) {
+                                if (DEBUG) bpf_printk("Dropping DNS egress suspicious traffic exceed thrshold for Tocken Bucket rate limit");
+                                return TC_DROP;
+                            }
+                        }
+                    #endif
                 }
 
                 if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
