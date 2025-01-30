@@ -31,6 +31,17 @@ func initGlobalErrorControlChannel() chan bool {
 	return make(chan bool)
 }
 
+type EbpfNodeAgentOptions struct {
+	CliFlag          bool
+	Debug            bool
+	StreamClient     bool
+	Sdr              bool
+	MutatePort       int
+	ContainerRuntime bool
+	// used for sigkill with threshold limit for maslicious exfil detection
+	SigKill int
+}
+
 func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
 	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -54,35 +65,43 @@ func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
 
 func main() {
 	runtime.LockOSThread()
-
-	var cliFlag bool
-	var debug bool
-	var streamClient bool
-	var sdr bool
-	var mutatePort int
-	var sigKill int // used for sigkill with threshold limit for maslicious exfil detection
+	var nodeAgentOptions EbpfNodeAgentOptions
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
-	flag.BoolVar(&debug, "debug", false, "Run the Node Agent in debug mode")
-	flag.BoolVar(&streamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
-	flag.BoolVar(&cliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
-	flag.BoolVar(&sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
-	flag.IntVar(&mutatePort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
-	flag.IntVar(&sigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
+	flag.BoolVar(&nodeAgentOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
+	flag.BoolVar(&nodeAgentOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
+	flag.BoolVar(&nodeAgentOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
+	flag.BoolVar(&nodeAgentOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
+	flag.IntVar(&nodeAgentOptions.MutatePort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
+	flag.IntVar(&nodeAgentOptions.SigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
+	flag.BoolVar(&nodeAgentOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
+
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
 		flag.PrintDefaults()
 	}
-
 	flag.Parse()
 
+	ctx := context.Background()
+
+	// rf Netlink packet parsing for the node agent
+	iface := netinet.NetIface{}
+	iface.ReadInterfaces(nodeAgentOptions.ContainerRuntime || nodeAgentOptions.Sdr)
+	iface.ReadRoutes()
+	iface.GetRootGateway()
+	iface.InitconnTrackSockHandles()
+
+	// io Disk Cache Inodes for Node agent
+	utils.InitCache()
+	topDomains, err := utils.ReadTldDomainsData()
+
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
-	if sdr {
+	if nodeAgentOptions.Sdr {
 		/*
 			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
 			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering
 		*/
 		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
-		mutationHookService := sidecar.NewMutationWebHook(mutatePort, ":")
+		mutationHookService := sidecar.NewMutationWebHook(nodeAgentOptions.MutatePort, ":")
 		mutationHookService.InitMutationServer()
 		return
 	}
@@ -97,16 +116,16 @@ func main() {
 	log.Println("The Node Agent booted with global config", globalConfig)
 
 	cliSock := cli.GenerateRemoteCliSocketServer()
-	if cliFlag {
+	if nodeAgentOptions.CliFlag {
 		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
 		go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
 	}
 
-	if debug {
-		utils.DEBUG = debug
+	if nodeAgentOptions.Debug {
+		utils.DEBUG = nodeAgentOptions.CliFlag
 	}
 
-	if streamClient {
+	if nodeAgentOptions.StreamClient {
 		config := make(chan interface{})
 		rpcServer := rpc.NodeAgentService{
 			ConfigChannel: config,
@@ -120,19 +139,6 @@ func main() {
 
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
-
-	ctx := context.Background()
-
-	// rf Netlink packet parsing for the node agent
-	iface := netinet.NetIface{}
-	iface.ReadInterfaces()
-	iface.ReadRoutes()
-	iface.GetRootGateway()
-	iface.InitconnTrackSockHandles()
-
-	// io Disk Cache Inodes for Node agent
-	utils.InitCache()
-	topDomains, err := utils.ReadTldDomainsData()
 
 	if err != nil {
 		log.Println("error loading the top domains", err)
@@ -221,7 +227,7 @@ func main() {
 			openConnSocks.CloseConntrackNetlinkSock()
 		}
 
-		if cliFlag {
+		if nodeAgentOptions.CliFlag {
 			cliSock.CleanRemoteSock()
 		}
 	}

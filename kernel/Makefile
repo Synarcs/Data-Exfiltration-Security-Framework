@@ -19,16 +19,15 @@ sock_sdr_out := sock.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
+	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink 
 	make tc_tun 
 	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
 	make clean-bpf 
-
 
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
@@ -38,23 +37,23 @@ vmlinux-btf:
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
 	@echo "emit llvm compile ir for the ebpf bytecode"
-	sudo clang -target bpf -S -emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o ir/tc_ir -c $(tc_kernel)
-	sudo clang -target bpf -S -I/usr/include/aarch64-linux-gnu -g -O2 -o ir/netlink_ir -c $(netlink_kernel) 
+	clang -target bpf -S -emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o ir/tc_ir -c $(tc_kernel)
+	clang -target bpf -S -I/usr/include/aarch64-linux-gnu -g -O2 -o ir/netlink_ir -c $(netlink_kernel) 
 
 
 .PHONY: compile-llvm-x86
 compile-llvm-x86:
-	sudo clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm  -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
+	clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm  -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
 	cp tc.o ../node_agent
 	cp bridge.o ../node_agent/ebpf/ 
-	sudo llv-objdump -S tc.o 
+	llv-objdump -S tc.o 
 
 # for x86 compilation of cpu 
 .PHONY: compile-x86
 compile-x86:
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -o $(tc_kernel_out) -c $(tc_kernel) 
+	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -o $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
 	make tc-tun-x86
 	make xdp-x86
@@ -93,12 +92,11 @@ tc-tracing:
 
 .PHONY: xdp
 xdp: 
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
-
+	clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
 
 .PHONY: xdp-x86
 xdp-x86:
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
+	clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
 
 
 .PHONY: xdp-mount
@@ -128,32 +126,32 @@ xdp-umount:
 .PHONY: netlink
 netlink: 
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
-	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: netlink-x86 
 netlink-x86: 
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for x86" 
-	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
-
 
 .PHONY: tc_tun 
 tc_tun:
 	@echo "Compiling the tunnel tc egress filter"
-	sudo clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
-.PHONY: tc-tun-x86 
+.PHONY: tc_tun-x86 
+tc_tun-x86:
 	@echo "Compiling the tunnel tc egress filter for x86"
-	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
 
 
 .PHONY: sock_sdr
 sock_sdr:
 	echo "Compiling the ebpf kprobe for sock_sdr for kernel socket layer as sidecar over k8s pods for exfiltration security"
-	sudo clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
+	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
 	cp $(sock_sdr_out) ../node_agent/ebpf/
 
 .PHONY: clean-bpf 

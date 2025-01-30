@@ -4,8 +4,17 @@
 local function handler()
     domains = {"t.bleed.io", "sliver.bleed.io", "dnscat2.bleed.io"}
     for i = 1, #domains, 1 do
-        for dom in string.gmatch(string.lower(domains[i]), ".") do 
-            print(dom)
+        if domains[i] == string.reverse(domains[i]) then
+            print('match domain reverse ')
         end
+        if string.match(domains[i], "arpa") then
+            print("a reverse domain ptr request for domain resolution")
+        end
+        vv = string.gmatch(string.lower(domains[i]), ".")
+        print(vv)
     end
 end
+
+
+handler()
+

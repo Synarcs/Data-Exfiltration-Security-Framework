@@ -1,6 +1,6 @@
 #!/bin/sh 
 
-set -e 
+set -eo 
 echo "px] Install llvm clang and kernel bindings for ebpf"
 sudo apt update -y && sudo apt install -y \
     build-essential \
@@ -35,7 +35,10 @@ sudo apt update -y && sudo apt install -y \
     librdkafka-dev \
     inetutils-ping \
     bsdmainutils \ 
-    liburing-dev
+    liburing-dev \
+    iptables \
+    iproute2 
+
 
 sudo apt install -y \
     libssl-dev libncurses5-dev libsqlite3-dev libreadline-dev libtk8.6 libgdm-dev libpcap-dev
@@ -45,8 +48,15 @@ sudo apt-get install libffi-dev \
     libsqlite3-dev tk-dev libgdbm-dev \
     libc6-dev libbz2-dev
 
-# x86_x64 cpu arch libc 
-sudo apt-get install libc6-dev-i386
+arch=$(uname -m)
+if [[ $? -eq 0 ]]; then 
+    if [[ $arch == "x86_64" ]]; then
+        # x86_x64 cpu arch libc, libc bindings for i386 cpu architectures 
+        sudo apt-get install libc6-dev-i386
+    fi 
+fi 
+
+
 
 if [ $? -eq 0 ]; then 
     echo "Installed the kernel build librries"

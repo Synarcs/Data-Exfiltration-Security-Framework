@@ -65,7 +65,7 @@ type NetIface struct {
 	ConnTrackNsHandles map[int]conntrack.ConntrackSock
 }
 
-func (nf *NetIface) ReadInterfaces() error {
+func (nf *NetIface) ReadInterfaces(containered bool) error {
 	links, err := netlink.LinkList()
 	if err != nil {
 		log.Println(err)
@@ -82,7 +82,14 @@ func (nf *NetIface) ReadInterfaces() error {
 
 	log.Println("the custom link to process are ", customLinks)
 	nf.Links = links
-	hardwareInterfaces, logicalInterfaces, bridgeInterfaces := nf.findLinkAddressByType()
+	var hardwareInterfaces []netlink.Link
+	var logicalInterfaces []netlink.Link
+	var bridgeInterfaces []netlink.Link
+	if containered {
+		hardwareInterfaces, logicalInterfaces, bridgeInterfaces = nf.findLinkAddressByTypeContainer()
+	} else {
+		hardwareInterfaces, logicalInterfaces, bridgeInterfaces = nf.findLinkAddressByType()
+	}
 	if len(hardwareInterfaces) > 0 {
 		nf.PhysicalLinks = hardwareInterfaces
 	}
@@ -283,6 +290,55 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 
 	}
 	return hardwardIntefaces, loopBackInterface, bridgeInterfaces
+}
+
+// container has veth pair to the host bridge for k8s mount to the CNI vnxlan bridge for docker its docker bridge
+// physical interfaces are the host pair veth interface which attach to the bridge for l3 balancing l3 and l2 traffic for all pods in CNI subnet or docker ips on docker bridge
+func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.Link, []netlink.Link) {
+	containerVethPairInterface := make([]netlink.Link, 0)
+	log.Println("Reading net links for container environments via netlink sockets")
+	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
+	bridgeInterfaces := make([]netlink.Link, 0)
+
+	nf.LinkMap = make(map[string]bool)
+
+	for _, link := range nf.Links {
+
+		nf.LinkMap[link.Attrs().Name] = true
+		attrs := link.Attrs()
+		if link.Attrs().Flags == net.FlagPointToPoint { // (tun/tap ppp tunnels cannot be there inside containers or POID intern networking CIDR)
+			// an possible tunnelling interface for packet processing
+			log.Println("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
+			continue
+		} else {
+			isLoopbackType := attrs.EncapType == "loopback" ||
+				attrs.Name == "lo" ||
+				link.Attrs().Flags == net.FlagLoopback
+
+			isNotVirtualDevice := link.Type() != "veth" &&
+				link.Type() != "device"
+
+			isLoopBack := isLoopbackType && !isNotVirtualDevice
+
+			// for now assume container runtime internal physical interface is eth0, and containers only have one physical interface attached to veth bridge for CNI or docker bridge
+			if attrs.Name == "eth0" {
+				fmt.Println("inteface physical name ", attrs.Name)
+				containerVethPairInterface = append(containerVethPairInterface, link) // (always fixed docker networking and any k8s CNI uses this for veth pair for l2, l3 routing inside cotnianer / pod network)
+			}
+			if isLoopBack {
+				fmt.Println("loopback iface name ", attrs.Name)
+				loopBackInterface = append(loopBackInterface, link)
+			}
+
+			// hanle all the container ns for their pod traffic
+			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
+				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
+			} else if link.Attrs().Name == NETNS_RAW_NETLINK_BRIDGE_DPI {
+				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
+			}
+		}
+	}
+	return containerVethPairInterface, loopBackInterface, bridgeInterfaces
 }
 
 func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error) {
