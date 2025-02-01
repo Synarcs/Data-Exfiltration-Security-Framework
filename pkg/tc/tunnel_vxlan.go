@@ -20,7 +20,7 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-var sniffPortUspaceLock sync.Mutex = sync.Mutex{}
+var sniffPortUspaceLock sync.RWMutex = sync.RWMutex{}
 
 var vniPackTransferCount map[int]int = make(map[int]int)
 

@@ -11,6 +11,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.common.serialization.Serdes;
 
+import com.synarcs.com.config.ControllerConfigLoader;
+import com.synarcs.com.config.KafkaConfig;
+import com.synarcs.com.config.yaml.Config;
 import com.synarcs.com.protocols.DnsFeatures;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -19,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class ControllerStreamRunner implements Serializable, IController, Runnable {
     private KafkaConfig config;
+    private Config controllerConfig;
     private ControllerInspectProtocolsBuilder protocolsBuilder;
 
     public ControllerStreamRunner(KafkaConfig config) {
@@ -27,8 +31,20 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
     }
 
     public ControllerStreamRunner() {
-        this(new KafkaConfig());
-        this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
+        try {
+            this.controllerConfig = new ControllerConfigLoader().loadControllerConfig();
+            this.config = KafkaConfig.builder()
+                    .BrokerPort(this.controllerConfig.getStreamConfig().getBrokerPort())
+                    .BrokerUrlIpv4(this.controllerConfig.getStreamConfig().getHost())
+                    .SchemaRegistryPort(this.controllerConfig.getStreamConfig().getSchemaRegistry().getPort())
+                    .STREAM_THREAT_TOPIC(this.controllerConfig.getStreamConfig().getStreamThreatTopic())
+                    .STREAM_THREAT_TOPIC_INFER_STATE(this.controllerConfig.getStreamConfig().getStreamThreatTopicInferState())
+                    .consumerGroupName(this.controllerConfig.getStreamConfig().getConsumerGroupName())
+                    .build();
+            this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
+        }catch (IOException exception) {
+            exception.printStackTrace();
+        }
     }
 
     @Override 
@@ -46,8 +62,8 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
      */
     public void ProcessStreamAnalyticsDSl(){
         final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "dns_exfil-security");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, this.config.getBrokerUrl()+":"+this.config.getBrokerPort());
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, this.config.getConsumerGroupName()); // use app ID same as consumer config  or group name 
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, this.config.getBrokerUrlIpv4()+":"+this.config.getBrokerPort());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
@@ -58,11 +74,11 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
 
 
-        props.put(StreamsConfig.CLIENT_ID_CONFIG, "dns_exfil-security");
+        props.put(StreamsConfig.CLIENT_ID_CONFIG, this.config.getConsumerGroupName());
         StreamsBuilder builder = new StreamsBuilder();
         ObjectMapper objectMapper = new ObjectMapper();
 
-        builder.stream(config.getKafkaInputStreamTopic(), 
+        builder.stream(config.getSTREAM_THREAT_TOPIC(), 
             Consumed.with(Serdes.String(), Serdes.ByteArray()))
             .<DnsFeatures>mapValues(bytes -> {
                 try {
@@ -82,8 +98,8 @@ public class ControllerStreamRunner implements Serializable, IController, Runnab
         });
 
         streams.start();
-        System.out.println("Connected to topic: " + config.getKafkaInputStreamTopic());
-        System.out.println("Connected to broker: " + config.getBrokerUrl() + ":" + config.getBrokerPort());
+        System.out.println("Connected to topic: " + config.getSTREAM_THREAT_TOPIC());
+        System.out.println("Connected to broker: " + config.getBrokerUrlIpv4() + ":" + config.getBrokerPort());
         
         try {
             Thread.currentThread().join();

@@ -1,5 +1,6 @@
 package com.synarcs.com;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.time.Duration;
 import java.util.Arrays;
@@ -13,6 +14,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.synarcs.com.cache.NodeCache;
+import com.synarcs.com.config.ControllerConfigLoader;
+import com.synarcs.com.config.KafkaConfig;
+import com.synarcs.com.config.yaml.Config;
 import com.synarcs.com.protocols.DnsFeatures;
 import com.synarcs.com.protocols.DnsProtocol;
 import com.synarcs.com.protocols.ProtocolEnums;
@@ -26,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 public class EventsConsumer implements Serializable, Runnable {
     private KafkaConfig config;
+    private Config controllerConfig;
     private ControllerInspectProtocolsBuilder protocolsBuilder;
     private Logger log = LoggerFactory.getLogger(EventsConsumer.class);
     private final String threat_event_topic = "exfil-sec";
@@ -41,21 +46,32 @@ public class EventsConsumer implements Serializable, Runnable {
     }
 
     public EventsConsumer() {
-        this(new KafkaConfig());
-        this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
+        try {
+            this.controllerConfig = new ControllerConfigLoader().loadControllerConfig();
+            this.config = KafkaConfig.builder()
+                    .BrokerPort(this.controllerConfig.getStreamConfig().getBrokerPort())
+                    .BrokerUrlIpv4(this.controllerConfig.getStreamConfig().getHost())
+                    .SchemaRegistryPort(this.controllerConfig.getStreamConfig().getSchemaRegistry().getPort())
+                    .STREAM_THREAT_TOPIC(this.controllerConfig.getStreamConfig().getStreamThreatTopic())
+                    .STREAM_THREAT_TOPIC_INFER_STATE(this.controllerConfig.getStreamConfig().getStreamThreatTopicInferState())
+                    .consumerGroupName(this.controllerConfig.getStreamConfig().getConsumerGroupName())
+                    .build();
+            this.protocolsBuilder = new ControllerInspectProtocolsBuilder(); 
+        this.protocolsBuilder = new ControllerInspectProtocolsBuilder();
+        }catch (IOException exception) { exception.printStackTrace(); }
     }
 
     
     public Properties initKafkaConsumer() {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.config.getBrokerUrl() + ":" + this.config.getBrokerPort());
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.config.getBrokerUrlIpv4() + ":" + this.config.getBrokerPort());
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
             StringDeserializer.class);
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "exfil_dns_sec");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, this.config.getConsumerGroupName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, 
                 KafkaJsonDeserializer.class);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put("schema.registry.url", "http://"+this.config.getBrokerUrl() + ":" + this.config.getSchemaRegistryPort());
+        props.put("schema.registry.url", "http://"+this.config.getBrokerUrlIpv4() + ":" + this.config.getSchemaRegistryPort());
         props.put(KafkaJsonDeserializerConfig.JSON_VALUE_TYPE, DnsFeatures.class.getName());
 
         return props;

@@ -1,0 +1,16 @@
+# load the controller config 
+
+controller:
+  # use this to further expose the stream controller api endpoints for dynamic threat inferencing 
+  port: 8080
+
+streamConfig:
+  host: "10.158.82.6"
+  brokerPort: 9092 
+  schemaRegistry:
+    port: 8081
+  
+  streamThreatTopic: "exfil-sec"
+  streamThreatTopicInferState: "exfil-sec-infer-controller"
+
+  consumerGroupName: "exfil_dns_sec"
