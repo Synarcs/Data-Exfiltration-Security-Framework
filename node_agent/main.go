@@ -234,7 +234,7 @@ func main() {
 
 	// handle process log to log for now the processes which are detected malicious to send sigkill and kill them from kernel exec hooks
 	go func() {
-		cleanTicker := time.NewTicker(onnx.EXFIL_PROCESS_CACHE_CLEAN_INTERVAL)
+		cleanTicker := time.NewTicker(utils.EXFIL_PROCESS_CACHE_CLEAN_INTERVAL)
 		for {
 			select {
 			case <-cleanTicker.C:

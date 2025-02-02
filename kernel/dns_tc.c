@@ -108,10 +108,23 @@ __u32 INSECURE = 0;
 
 // non standard port DPI for enhanced c2c channels with remote c2c server for malware exfil over udp 
 // an standard kernel ring buffer event for transfer with dns portocol overlay for traffic in c2c case 
-struct exfil_security_egrees_redirect_ring_buff_non_standard_port {
+struct exfil_security_egrees_clone_redirect_ring_buff_non_standard_port {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24);
-} exfil_security_egrees_redirect_ring_buff_non_standard_port SEC(".maps");
+} exfil_security_egrees_clone_redirect_ring_buff_non_standard_port SEC(".maps");
+
+// process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
+struct proc_info_non_standard_port {
+    __u32 processId; 
+    __u32 threadId;
+} __attribute__((packed));
+
+struct exfil_security_egrees_clone_redirect_map_non_standard_port { 
+    __uint(type, BPF_MAP_TYPE_HASH); 
+    __uint(max_entries, 1 << 10);
+    __type(key, __u16);  // src port 
+    __type(value, struct proc_info_non_standard_port);
+} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
 
 // vxlan encap from kernel the src port and the dest port used to detect any vxlan encap channels 
 struct exfil_vxlan_exfil_event {
@@ -1098,6 +1111,36 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
 }
 
 static 
+__always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
+    struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
+    if (!val) {
+        #ifdef LINUX_VERSION_CODE
+            if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+                __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+                __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
+                struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+                    .processId = proc_id,
+                    .threadId = threadId
+                };
+                if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                                    &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0;
+                return 1;
+            }else {
+                struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+                    .processId = (__u32)0,
+                    .threadId = (__u32)0,
+                };
+                if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                                    &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0; 
+                return 1;
+            }
+        #endif 
+    }
+    return 0;
+}
+
+
+static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
                     __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, struct udphdr *udp, bool isIpv4) {
 
@@ -1147,7 +1190,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             // emit the ring buff from kernel as a transport event 
             if (DEBUG)
                 bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
-            void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port, 
+            void *res = bpf_ringbuf_reserve(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port, 
                             sizeof(struct dns_non_standard_transport_event), 0);
             if (!res) {
                 #ifdef DEBUG 
@@ -1155,7 +1198,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                         bpf_printk("Error reserve kernel memroy for the event");
                     }
                 #endif
-                unsigned long long ring_buff_aloc_data = bpf_ringbuf_query(&exfil_security_egrees_redirect_ring_buff_non_standard_port, BPF_RB_AVAIL_DATA);
+                unsigned long long ring_buff_aloc_data = bpf_ringbuf_query(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port, BPF_RB_AVAIL_DATA);
                 return 1;
             }
             
@@ -1165,8 +1208,28 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
             event->isTcp = (__u8)0;
             event->isUdp = (__u8)1;
-            bpf_ringbuf_submit(event, 0);
 
+            #ifdef LINUX_VERSION_CODE
+                if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+                    __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+                    __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
+                    event->processId = (__u32)proc_id; 
+                    event->threadId = (__u32)threadId; 
+                }else {
+                    event->processId = (__u32)0;
+                    event->threadId = (__u32)0;
+                }
+            #endif 
+
+            if (__update_non_stand_port_map(bpf_ntohs(udp->source)) == 0) {
+                #ifdef DEBUG 
+                    if (DEBUG) {
+                        bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic");
+                    }
+                #endif
+            }
+
+            bpf_ringbuf_submit(event, 0);
 
             // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
            return __process_packet_clone_redirection_non_standard_port(
@@ -1203,7 +1266,7 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
                                                                                   dns_payload, dns);
 
     if (__non_standard_port_dpi == 0) {
-        void *res = bpf_ringbuf_reserve(&exfil_security_egrees_redirect_ring_buff_non_standard_port,
+        void *res = bpf_ringbuf_reserve(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port,
                                       sizeof(struct dns_non_standard_transport_event), 0);
         if (!res)
             return 1;
@@ -1214,6 +1277,27 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
         event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
         event->isTcp = (__u8)1;
         event->isUdp = (__u8)0;
+
+        #ifdef LINUX_VERSION_CODE
+              if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+                  __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+                  __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
+                  event->processId = (__u32)proc_id; 
+                  event->threadId = (__u32)threadId; 
+              }else {
+                  event->processId = (__u32)0;
+                  event->threadId = (__u32)0;
+              }
+          #endif 
+          
+          if (__update_non_stand_port_map(bpf_ntohs(tcp->source)) == 0) {
+              #ifdef DEBUG 
+                  if (DEBUG) {
+                      bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic");
+                  }
+              #endif
+          }
+
         bpf_ringbuf_submit(res, 0);
 
         __process_packet_clone_redirection_non_standard_port(
@@ -1296,10 +1380,10 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     return 1;
 }
 
-// TODOD: Add the kernel Token bucket algorithm for rate limiting using the eBPF direct action qdisc in tc 
+// TODOD: Add the kernel Token bucket algorithm for rate limiting, for mass throughput time based exfiltration over standard DNS port only or any LLMNR, MDNS  based resolution.
 static 
 __always_inline __u8 __dns_rate_limit_tb(struct skb_cursor *cursor, struct __sk_buff *skb) {
-    return 1; // forward the packet 
+    return 1;// forward the packet 
 }
 
 

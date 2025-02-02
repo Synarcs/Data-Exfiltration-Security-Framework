@@ -25,11 +25,6 @@ import (
 	"github.com/vishvananda/netns"
 )
 
-const (
-	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL  = time.Second * 10 // use to prune the map which ensure the required
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = 5                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
-)
-
 type DnsParserActions interface{}
 
 type DnsPacketGen struct {
@@ -55,10 +50,10 @@ type CombinedFeatures []DNSFeatures
 func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	maliciousProcCountguard.Lock()
 	defer maliciousProcCountguard.Unlock()
-	if _, fd := maliciousExfilProcessCount[procId]; !fd {
+	if ct, fd := maliciousExfilProcessCount[procId]; !fd {
 		maliciousExfilProcessCount[procId] = 1
 	} else {
-		if maliciousExfilProcessCount[procId] > EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
+		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", procId)
 			delete(maliciousExfilProcessCount, procId)
 		} else {

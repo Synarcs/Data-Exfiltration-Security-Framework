@@ -237,6 +237,8 @@ struct dns_non_standard_transport_event {
     __u16 dns_transaction_id;
     __u8 isUdp;
     __u8 isTcp;
+    __u32 processId; // uise kernel proc id if kernel is compaatabile for process info extrac from task struct in kernel tc layer 
+    __u32 threadId;
 };
 
 #endif

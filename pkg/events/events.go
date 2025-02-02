@@ -7,6 +7,13 @@ type DnsEvent struct {
 	DnsTransactionId uint16
 	IsUdp            uint8
 	IsTcp            uint8
+	ProcessId        uint32
+	ThreadId         uint32
+}
+
+type DnsMapPayloadNonOverlayPort struct {
+	ProcessId uint32
+	ThreadId  uint32
 }
 
 type DPIRedirectionKernelMap struct {
@@ -71,11 +78,12 @@ const (
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
 
-	EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN = "exfil_security_egress_reconnisance_map_scan"
+	EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN                = "exfil_security_egress_reconnisance_map_scan"
+	EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_map_non_standard_port"
 )
 
 // kernel eBPF ring buffers over kernel network stack
 const (
-	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_redirect_ring_buff_non_standard_port"
+	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_ring_buff_non_standard_port"
 	EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP                     = "exfil_security_egress_vxlan_encap_drop"
 )

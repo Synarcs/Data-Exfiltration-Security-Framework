@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cilium/ebpf"
 )
@@ -61,6 +62,11 @@ const (
 	DNS_EGRESS_PORT           = 53
 	DOT_EGRESS_PORT           = 853
 	DNS_EGRESS_MULTICAST_PORT = 5353
+)
+
+const (
+	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL  = time.Second * 10 // use to prune the map which ensure the required
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
 )
 
 // user space remote inferencing support for unix domain sockets

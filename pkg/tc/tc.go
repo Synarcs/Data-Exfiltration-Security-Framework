@@ -1,7 +1,6 @@
 package tc
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
-	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -33,7 +31,8 @@ type TCHandler struct {
 	DnsPacketGen    *model.DnsPacketGen
 	OnnxLoadedModel *model.OnnxModel
 
-	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
+	TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
+	GlobalErrorKernelHandlerChannel chan bool      // handles all control channel created by main to kill any kernel code if found runtime panics
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -92,47 +91,6 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		}
 	}
 	return nil
-}
-
-func (tc *TCHandler) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) {
-
-	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer ringBuffer.Close()
-
-	for {
-		if utils.DEBUG {
-			log.Println("polling the ring buffer", "using th map", ebpfEvents)
-		}
-		record, err := ringBuffer.Read()
-		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
-				return
-			}
-			panic(err.Error())
-		}
-
-		var event events.DnsEvent
-		if utils.CpuArch() == "arm64" {
-			log.Println("Polling the ring buffer for the arm arch")
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
-			log.Println("dns Event polled from kernel non standard port", event)
-		} else {
-			log.Println("Polling the ring buffer for the x86 big endian systems")
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
-			log.Println("dns Event polled from kernel non standard port", event)
-		}
-	}
 }
 
 func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
@@ -295,13 +253,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	errMapPollChannel := make(chan error)
 	for _, maps := range spec.Maps {
 		// process all the maps which needs to monitoted or polled from kernel for events without explicity events for ring buffer
-		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
-			// an ring event buffer
-			if utils.DEBUG {
-				fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
-			}
-			go tc.PollRingBuffer(ctx, maps)
-		}
 		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP) {
 			go tc.PollVxlanRingBuffer(ctx, maps)
 		}
@@ -328,9 +279,21 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 
 		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
 			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel)
-		go tc_tunnel.SniffPacketsForTunnelDPI()
+		tc.TcTunnelNonStandardPortScan = tc_tunnel
 
-		go tc_tunnel.SniffPacketsForTunnelDPI()
+		// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
+		for _, maps := range spec.Maps {
+			if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
+				// an ring event buffer
+				if utils.DEBUG {
+					fmt.Println("[x] Spawning Go routine to pool the ring buffer ", maps.String())
+				}
+				go tc_tunnel.PollRingBuffer(ctx, maps)
+			}
+		}
+		
+		go tc_tunnel.SniffPacketsForTunnelDPI() // start the packet sniffing for non standard ports bpf_redirect_clone from kernel space
+
 		tc.ProcessSniffDPIPacketCapture(ctx, iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}

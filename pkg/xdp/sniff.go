@@ -177,7 +177,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		processFeaturesInference := func() error {
 			features, err := model.ProcessDnsFeatures(dns, false)
 			if err != nil {
-				log.Println(err)
+				log.Println(err.Error())
 				return err
 			}
 

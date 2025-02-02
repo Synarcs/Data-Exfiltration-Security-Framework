@@ -100,7 +100,8 @@
         "const.h": "c",
         "vxlan.h": "c",
         "utils.h": "c",
-        "raw_proc.h": "c"
+        "raw_proc.h": "c",
+        "*.inc": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic"
 }
