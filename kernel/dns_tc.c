@@ -1537,16 +1537,6 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
 }
 
 
-static 
-__always_inline long callback_fn(struct bpf_map *map, const void *key, void *value, void *ctx) {
-    bpf_printk("[x] // looping over the  map for kernel exfil config ");
-
-    bpf_printk("the key is ", *(__u32 *) key);
-    bpf_printk("the value is ", *(__be32 *) key);
-
-    return 0;
-}
-
 SEC("tc")
 int classify(struct __sk_buff *skb){
     

@@ -36,11 +36,11 @@ struct exfil_nf_bridge_config_map {
 // kernel for virtualized bridges dont have default qdisc and kernel queue classes to classify the packet in kernel
 SEC("netfilter") 
 int bridge_classify(struct bpf_nf_ctx *ctx){
-    struct __sk_buff *skb = (struct  __sk_buff *)ctx->skb;
+    struct __sk_buff *skb = (struct __sk_buff *)ctx->skb;
 
     __u32 out = skb->ifindex;
-
     __u32 br_index = 4; __u32 skb_mark = redirect_skb_mark;
+    bpf_printk("ifindex=%d, ingress_ifindex=%d", skb->ifindex, skb->ingress_ifindex);
 
     __u32 br_index_config_map_key = 0;
 

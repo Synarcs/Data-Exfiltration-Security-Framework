@@ -1,4 +1,5 @@
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import cache
 import numpy as np 
 from typing import Any, Callable, NoReturn, Self
 import os, sys, socket, json, subprocess
@@ -6,9 +7,10 @@ import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
 import http.server 
-import consts, infer
+import consts
 import datetime
 from abc import ABC, abstractmethod 
+from argparse import ArgumentParser
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -45,10 +47,6 @@ class OnnxInference(object):
     def verifyOnnxGraph(self) -> bool:
         return onnx.checker.check_model(self.model, full_check=True) 
     
-onnxInferenceServer: OnnxInference = OnnxInference() 
-onnxInferenceServer.load()
-
-ifServer = infer.Inference() 
 
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
@@ -183,7 +181,23 @@ def run_ingress_server() -> None:
             os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
 
 
+@cache 
+def loadInferenceServerControlNodes(*args, **kwargs) -> object: return None 
+
 if __name__ == "__main__":
+    parser = ArgumentParser() 
+    parser.add_argument('-c','--controller',type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
+    args = parser.parse_args()
+
+    controller: object = {}
+    if hasattr(args, 'controller') and args.controller:
+        log.info("Running the inference server on control plane attached to pdns recursor server")
+
+
+    onnxInferenceServer: OnnxInference = OnnxInference() 
+    onnxInferenceServer.load()
+
+    # ifServer = infer.Inference() 
     signal.signal(signal.SIGINT, killSock)
     signal.signal(signal.SIGTERM, killSock)
     print('Starting the inference server over unix socket transport with process ', os.getpid())

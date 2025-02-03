@@ -50,12 +50,13 @@ func (nf *NetFilter) AttachTcHandlerIngressBridge(ctx context.Context, isEgress 
 	nf.NfBridgeProg = objs.NetfilterBridgeSocket
 	nf.NetfilterBridgeSocketMap = objs.NetfilterBridgeSocketMap
 
-	hookPoint := unix.NF_INET_PRE_ROUTING
+	hookPoint := unix.NF_INET_POST_ROUTING
 	if isEgress {
-		hookPoint = unix.NF_INET_POST_ROUTING
+		hookPoint = unix.NF_INET_PRE_ROUTING
 	}
 
 	if len(nf.Interfaces.BridgeLinks) >= 1 {
+		log.Println("Attaching to ", nf.Interfaces.BridgeLinks[0].Attrs().Name)
 		var nf_filter_const_key uint32 = 0
 		var nf_bridgr_interface_if_index uint32 = uint32(nf.Interfaces.BridgeLinks[0].Attrs().Index)
 

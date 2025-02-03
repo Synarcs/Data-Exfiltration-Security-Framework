@@ -1,13 +1,12 @@
 
 #include "vmlinux.h"
-#include <linux/bpf.h> 
 #include <linux/if_ether.h> 
 #include <linux/netdevice.h> 
 
 // same kernel netfilter forward propogration hooks used in nf filter pkt drop kernel module 
 struct bpf_nf_ctx {
     const struct nf_hook_state *state; 
-    struct __sk_buff *skb;
+    struct sk_buff *skb;
 };
 
 struct nf_hook_state {
