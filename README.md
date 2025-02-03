@@ -41,7 +41,7 @@ The framework is capable for
 * Severing C2 channels on creation. 
 * Exposing C2 implants / APT malwares carrying DNS data exfiltration.
 * Destroying DNS tunnels carrying exfiltration of any protocol over DNS.
-* Destroying DNS tunnels and C2 channels carrying exfiltration of any protocol over DNS through any port irrespective of UDP or TCP transport
+* Destroying DNS tunnels and C2 channels carrying exfiltration of any protocol over DNS through any port irrespective of UDP transport
 * Destroying tunnels in tunnels and reverse forwarded tunnels on compromised machines.
 * Enhanced protection for in-build scan and prevention over kernel encapsulation mecahnicsms (VLAN, Tun/Tap, VXLAN).
 * Hardened Security using seccomp, LSM, BPF secured map pinning, and BPF map lockings to protect all eBPF maps inside Linux kernel. 
@@ -52,6 +52,7 @@ The framework is capable for
 
 ## Future Plans 
 * Started Integration with Kubernetes as sidecar and gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops).
+* Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP). 
 * Integration with Kubernetes mutation webhooks for dynamic exfiltration guard security containers to be injected on pods matching required security labels.
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orcehstrated environments.
 * Support prometheus metrics endpoints integrated inside the sidecar. 
