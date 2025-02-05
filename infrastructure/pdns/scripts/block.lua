@@ -9,7 +9,7 @@ local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/tmp/onnx-inference-in.sock"
 local EGRESS_INFER_ROUTE = "/onnx/dns"
 local INGRESS_INFER_ROUTE = "/onnx/dns/ing"
 
--- Domain packlist for dynamic domainn blacklist on dns serverf via sinholed location to the DNS server 
+-- Domain packlist for dynamic domainn blacklist on dns serverf via sinholed location to the DNS server
 local function handler()
     local domains = {"t.bleed.io", "sliver.bleed.io", "dnscat2.bleed.io"}
     for i = 1, #domains, 1 do
@@ -24,7 +24,7 @@ local function handler()
     end
 end
 
- 
+
 local function slice(tbl, first, last, step)
     local sliced = {}
     for i = first or 1, last or #tbl, step or 1 do
@@ -34,13 +34,13 @@ local function slice(tbl, first, last, step)
 end
 
 local function EntropyLabel(domain)
-    local charMap = {} 
-    for chars in string.gmatch(domain ,"%a") do 
-        if charMap[chars] then 
+    local charMap = {}
+    for chars in string.gmatch(domain ,"%a") do
+        if charMap[chars] then
             charMap[chars] = charMap[chars] + 1
-        else 
+        else
             charMap[chars] = 1
-        end 
+        end
     end
 
     local entropy = 0.0
@@ -56,21 +56,21 @@ local function extractFeatures(domain)
     local dnsFeatures = {}
     local dnsLabels = {}
 
-    local total_chars = 0 
+    local total_chars = 0
     local tld = 0
-    local TotalCharsInSubdomain = 0 
-    local UCaseCount = 0 
-    local NumberCount = 0 
-    local PeriodsInSubDomain = 0 
-    local LongestLabelDomain = 0 
+    local TotalCharsInSubdomain = 0
+    local UCaseCount = 0
+    local NumberCount = 0
+    local PeriodsInSubDomain = 0
+    local LongestLabelDomain = 0
 
     for label in string.gmatch(domain, '%w+') do
         table.insert(dnsLabels, label)
-        local labelLength = 0 
+        local labelLength = 0
         for _ in string.gmatch(label, '%a') do
             total_chars = total_chars + 1
             labelLength = labelLength + 1
-        end 
+        end
         LongestLabelDomain = math.max(LongestLabelDomain, labelLength)
         if tld >= 2 then
             TotalCharsInSubdomain = TotalCharsInSubdomain + 1
@@ -78,17 +78,17 @@ local function extractFeatures(domain)
                 if str.match(str, "%d") then
                     NumberCount = NumberCount + 1
                 else if str.match(str, '%u') then
-                    UCaseCount = UCaseCount + 1 
-                end 
+                    UCaseCount = UCaseCount + 1
                 end
-                labelLength = labelLength + 1 
+                end
+                labelLength = labelLength + 1
             end
             PeriodsInSubDomain = PeriodsInSubDomain + 1
-        end 
+        end
         tld = tld + 1
-    end 
+    end
 
-    dnsFeatures['Fqdn'] = domain 
+    dnsFeatures['Fqdn'] = domain
     dnsFeatures['Tld'] = slice(dnsLabels, #dnsLabels - 1 ,#dnsLabels)
     dnsFeatures['Subdomain'] = slice(dnsLabels, 0 ,#dnsLabels - 2)
 
@@ -108,7 +108,7 @@ local function extractFeatures(domain)
 end
 
 
-local function generateModelFLoatVectors(features) 
+local function generateModelFLoatVectors(features)
     local inferenceRequest = {}
 
     inferenceRequest['Features'] = {}
@@ -124,37 +124,22 @@ local function generateModelFLoatVectors(features)
         table.insert(indFeature, feature['LongestLabelDomain'])
         table.insert(indFeature, feature['AverageLabelLength'])
         tld = indFeature['Tld']
-        root = "" 
+        root = ""
         table.insert(inferenceRequest['Features'], indFeature)
     end
     return inferenceRequest
 end
 
-local DEBUG = false 
+local DEBUG = false
 
-
-local tt = extractFeatures("www.amazon.com")
-local inference_request = generateModelFLoatVectors(tt)
-
--- add support for this later 
-inference_request['Tld'] = "" 
-inference_request['Root'] = "" 
-
-if DEBUG then 
-    for k, v in pairs(inference_request["Features"]) do
-        for _, xx in pairs(v) do 
-            print(xx) 
-        end 
-    end
-end
 
 local function read_json(response)
-    local response_data = table.concat(response) 
-    local json_start = response_data:find("{") 
+    local response_data = table.concat(response)
+    local json_start = response_data:find("{")
     if json_start then
-        local json_response = response_data:sub(json_start) 
+        local json_response = response_data:sub(json_start)
         local decoded_response, decode_err = cjson.decode(json_response)
-    
+
         if decoded_response then
             return json_response
         else
@@ -168,11 +153,11 @@ local function read_json(response)
 end
 
 
-local function sendInferenceRequest(inference_request, isEgress)  
+local function sendInferenceRequest(inference_request, isEgress)
     local sock_egress_fd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
     if not sock_egress_fd then
-        error("Error creating egress socket") 
+        error("Error creating egress socket")
     end
 
     local success, err = socket.connect(sock_egress_fd, {family = socket.AF_UNIX, path = ONNX_INFERENCE_UNIX_SOCKET_EGRESS})
@@ -203,28 +188,65 @@ local function sendInferenceRequest(inference_request, isEgress)
             break
         end
         table.insert(response, chunk)
-        if DEBUG then 
-            for k, v in pairs(response) do 
-                print('val inference is ', k, v) 
-            end 
+        if DEBUG then
+            for k, v in pairs(response) do
+                print('val inference is ', k, v)
+            end
         end
         print(read_json(response))
     end
     unistd.close(sock_egress_fd)
-end 
-
-sendInferenceRequest(inference_request, true)
-
-local blacklistPdnsCache = {}
+end
 
 
-local function isDomainBlacklistCache(domain) 
-    if blacklistPdnsCache[domain] then
+local function extractFeaturesAndGetremoteInference(qname)
+
+    local tt = extractFeatures("www.amazon.com")
+    local inference_request = generateModelFLoatVectors(tt)
+
+    -- add support for this later
+    inference_request['Tld'] = ""
+    inference_request['Root'] = ""
+
+    if DEBUG then
+        for k, v in pairs(inference_request["Features"]) do
+            for _, xx in pairs(v) do
+                print(xx)
+            end
+        end
+    end
+    return sendInferenceRequest(inference_request, true)
+end
+
+local function isDomainBlacklistCache(domain)
+    return blacklistPdnsCache[domain] ~= nil
+end
+
+sf_grp = newDS()
+
+function getSLD(domain)
+    local dn = newDN(domain)
+    while dn:countLabels() > 2 do
+        dn:chopOff()
+    end
+    return dn
+end
+
+
+function preresolve(dq)
+    local qname = dq.qname:toString()
+    --extractFeaturesAndGetremoteInference(qname)
+    sf_grp:add(getSLD(qname))
+    if dq.isTcp then
+        pdnslog("Received query over TCP", pdns.loglevels.Info)
+    else
+        pdnslog("Received DNS query over recursor for: " .. qname, pdns.loglevels.Info)
+    end
+
+    if sf_grp:check(getSLD(qname)) then
+     	dq.rcode = pdns.NXDOMAIN
         return true 
-    end 
-    return false 
-end 
+    end
 
-
-local function preresolve()
+    return false
 end

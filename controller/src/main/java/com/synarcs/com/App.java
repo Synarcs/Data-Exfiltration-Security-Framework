@@ -5,11 +5,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import com.sun.tools.javac.Main;
+
 /**
  *  Main Kafka Stream Controller 
  *  Process Threat Streams forwarded and processed from kernel eBPF Node agent for threat detected events 
  */
-public class App implements Serializable {
+@SpringBootApplication
+public class App {
     public static final int MAX_LOCKS = 10;
     private static final CountDownLatch lockThreads = new CountDownLatch(1);
     private final Lock lock = new ReentrantLock();
@@ -21,12 +27,6 @@ public class App implements Serializable {
             lockThreads.countDown();
         }));
 
-        try {
-            new Thread(new EventsConsumer()).start();
-            lockThreads.await();
-        } catch (InterruptedException exception) {
-            System.out.println("Current Root Thread Interrupted");
-            Thread.currentThread().interrupt();
-        }
+        SpringApplication.run(App.class);
     }
 }

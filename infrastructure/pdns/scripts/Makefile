@@ -7,7 +7,7 @@ run:
 .PHONY: dep
 dep: 
 	luarocks install luaposix
-	luarocks install ltn12
+	luarocks install --server=https://luarocks.org/dev ltn12
 	luarocks install lua-cjson-ol 
 
 

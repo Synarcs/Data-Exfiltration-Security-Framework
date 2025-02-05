@@ -1,0 +1,24 @@
+
+server:
+  port: 9000
+
+
+spring:
+  datasource:
+    url: jdbc:postgresql://10.158.82.55:5432/pdns
+    username: pdns
+    password: pdns_exfil
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    show-sql: true
+    generate-ddl: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+
+logging:
+  level:
+    org:
+      springframework:
+        security: DEBUG
