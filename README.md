@@ -15,7 +15,7 @@ Kernel
     * Kernel Functions
     * Raw Tracepoints
 * eBPF dynamic advanced maps and tracing for malicious events
-    * BPF_MPA_TYPE_LRU_HASH
+    * BPF_MAP_TYPE_LRU_HASH
     * BPF_MAP_TYPE_RINGBUF
     * BPF_MAP_TYPE_HASH 
 
@@ -58,7 +58,7 @@ The framework is capable for
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orcehstrated environments.
 * Support prometheus metrics endpoints integrated inside the sidecar. 
 * Enhance framework for safeguarding enterprises from exfiltration over other protocols (ICMP, FTP) etc. 
-* Enhance  support for DOT (DNS over TLS). 
+* Enhance support for DOT (DNS over TLS). 
 * Add support for XDP ingress NXDOMAIN flood prevention to break DNS woter torture flood attacks. 
 
 ## Authors
