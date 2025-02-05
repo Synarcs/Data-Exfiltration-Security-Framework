@@ -7,7 +7,7 @@
 
 #define NF_DROP 0
 #define NF_ACCEPT 1
-#define NF_STOLEN 2
+#define NF_STOLEN 
 #define NF_QUEUE 3
 #define NF_REPEAT 4
 
@@ -34,7 +34,7 @@ struct exfil_nf_bridge_config_map {
 
 // only for ingress  process netfilter hooks over pre routing for ingress routing
 // kernel for virtualized bridges dont have default qdisc and kernel queue classes to classify the packet in kernel
-SEC("netfilter") 
+SEC("netfilter/ipv4/postrouting") 
 int bridge_classify(struct bpf_nf_ctx *ctx){
     struct __sk_buff *skb = (struct __sk_buff *)ctx->skb;
 
@@ -49,7 +49,8 @@ int bridge_classify(struct bpf_nf_ctx *ctx){
         br_index = br_index_config_map_value->Bridge_if_index;
         skb_mark = br_index_config_map_value->SKB_Mark;
     }
-    
+
+    bpf_printk("the skb mark for the packet over netfilter is %d", skb->mark);
     if (ctx->skb->skb_iif == br_index){
         bpf_printk("doing strict skb check since the packet tc_redirected / tc_cloned from tc qdisc in kernel DPI");
         if (ctx->skb->mark == skb_mark) return NF_ACCEPT;

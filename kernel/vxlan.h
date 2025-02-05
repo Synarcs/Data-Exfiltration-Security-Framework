@@ -44,7 +44,8 @@ __always_inline __u32 __parse_vxlan_vni_hdr(void *transport_payload, struct vxla
 
     __u32 resrvered = bpf_ntohs(vxlan_hdr->vx_vni) & 0xff;
     #ifdef DEBUG 
-        bpf_printk("ADDR Resereved flag %d and VNI %d",resrvered, vni);
+        if (DEBUG) 
+            bpf_printk("ADDR Resereved flag %d and VNI %d",resrvered, vni);
     #endif
 
     return vni;

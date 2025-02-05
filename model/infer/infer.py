@@ -22,8 +22,8 @@ class Inference:
     def __init__(self) -> None: 
         super().__init__()
 
-    
-    def predict(self, input_features) -> None:
+    @staticmethod
+    def predict(input_features) -> None:
         if input_features.shape != (1, 8):
             print('cannot infer a broken vector tensor for model inference')
             return 

@@ -43,6 +43,12 @@ run-inference:
 	@echo "Running the Remote unix socket inference server" 
 	sudo python3 ../model/infer/inference.py
 
+.PHONY: run-inference-controller
+run-inference-controller:
+	@echo "Running the Remote unix socket inference server on controller server"
+	python3 ../model/infer/inference.py -c true 
+
+
 .PHONY: netinet
 netinet:
 	@echo "Creating Network Overlay topology for eBPF Node agent via kernel veth brdiges and linux namespaces"

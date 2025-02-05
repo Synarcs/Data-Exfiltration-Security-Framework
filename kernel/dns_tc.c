@@ -20,8 +20,6 @@
 #include <linux/udp.h>
 #include <linux/icmp.h>
 #include <linux/tcp.h>
-#include <linux/netfilter/nfnetlink.h>
-#include <linux/bpf.h>
 #include <linux/pkt_cls.h>
 #include <stdbool.h>
 
