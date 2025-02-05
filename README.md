@@ -52,6 +52,7 @@ The framework is capable for
 
 ## Future Plans 
 * Started Integration with Kubernetes as sidecar and gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops).
+* Dynamic Injection of Cilium L7 DNS Network Policiy, and L3 Network Policity for Cilium agent and DNS proxy to block DNS and l3 ipv4 and ipv6 traffic from malicious remote C2 servers over Kubernetes pods via cilium eBPF reliance on SOCK layer before it reaches kernel traffic control on the host ned_device for eBPF DNS security agent to filter traffic. 
 * Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP). 
 * Integration with Kubernetes mutation webhooks for dynamic exfiltration guard security containers to be injected on pods matching required security labels.
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orcehstrated environments.
