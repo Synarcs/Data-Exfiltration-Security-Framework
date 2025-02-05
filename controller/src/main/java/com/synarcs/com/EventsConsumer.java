@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 
@@ -20,6 +21,8 @@ import com.synarcs.com.config.yaml.Config;
 import com.synarcs.com.protocols.DnsFeatures;
 import com.synarcs.com.protocols.DnsProtocol;
 import com.synarcs.com.protocols.ProtocolEnums;
+import com.synarcs.com.repository.MaliciousDomain;
+import com.synarcs.com.service.BlacklistDomain;
 
 import io.confluent.kafka.serializers.KafkaJsonDeserializer;
 import io.confluent.kafka.serializers.KafkaJsonDeserializerConfig;
@@ -27,7 +30,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 
+
+@Service
 public class EventsConsumer implements Serializable, Runnable {
     private KafkaConfig config;
     private Config controllerConfig;
@@ -39,6 +46,9 @@ public class EventsConsumer implements Serializable, Runnable {
         super();
         this.config = config;
     }
+
+    @Autowired
+    private BlacklistDomain blacklistDomainService;
 
     @Override
     public void run() {
@@ -105,6 +115,7 @@ public class EventsConsumer implements Serializable, Runnable {
                     cache.addExfilProtocolCountPerNode(ProtocolEnums.DNS_EGRESS, dnsFeature.PhysicalNodeIpv4);
                     cache.addSldCountPerNode(dnsFeature.Tld, dnsFeature.PhysicalNodeIpv4);
                     cache.readRecords();
+                    this.blacklistDomainService.save(new MaliciousDomain(dnsFeature.getTld(), dnsFeature.getFqdn(), false));
                 }
             }
         }finally {

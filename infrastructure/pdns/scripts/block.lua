@@ -3,11 +3,14 @@ local socket = require("posix.sys.socket")
 local unistd = require("posix.unistd")
 local ltn12 = require("ltn12")
 local cjson = require("cjson")
+local pgmoon = require("pgmoon")
 
-local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/tmp/onnx-inference-out.sock"
-local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/tmp/onnx-inference-in.sock"
+local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/etc/powerdns/onnx-inference-out.sock"
+local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/etc/powerdns/onnx-inference-in.sock"
 local EGRESS_INFER_ROUTE = "/onnx/dns"
 local INGRESS_INFER_ROUTE = "/onnx/dns/ing"
+local PDNS_RECURSOR_GPSQL_BACKEDN = "localhost"
+
 
 -- Domain packlist for dynamic domainn blacklist on dns serverf via sinholed location to the DNS server
 local function handler()
@@ -141,7 +144,7 @@ local function read_json(response)
         local decoded_response, decode_err = cjson.decode(json_response)
 
         if decoded_response then
-            return json_response
+            return decoded_response
         else
             print("Failed to decode JSON:", decode_err)
             return {}
@@ -193,16 +196,15 @@ local function sendInferenceRequest(inference_request, isEgress)
                 print('val inference is ', k, v)
             end
         end
-        print(read_json(response))
     end
     unistd.close(sock_egress_fd)
+    return read_json(response)
 end
 
 
 local function extractFeaturesAndGetremoteInference(qname)
 
-    local tt = extractFeatures("www.amazon.com")
-    local inference_request = generateModelFLoatVectors(tt)
+    local inference_request = generateModelFLoatVectors(extractFeatures(qname))
 
     -- add support for this later
     inference_request['Tld'] = ""
@@ -222,7 +224,48 @@ local function isDomainBlacklistCache(domain)
     return blacklistPdnsCache[domain] ~= nil
 end
 
+-- suffix group for trie based faster domain suffix lookups
 sf_grp = newDS()
+
+local pg = pgmoon.new({
+    host = PDNS_RECURSOR_GPSQL_BACKEDN,
+    port = "5432",
+    database = "pdns",
+    user = "pdns",
+    password = "pdns_exfil"
+})
+assert(pg:connect())
+
+local function connectDatabase()
+    local blockedDomains = {}
+    local domains = pg:query("select * from malicious_domain")
+    for k, v in pairs(domains) do
+      for col, dom in pairs(v) do
+          if col == "sld" then
+              table.insert(blockedDomains, dom)
+      	      if DEBUG then
+	      	pdnslog("query is " .. dom, pdns.loglevels.Info)
+      	      end
+	  end
+      end
+    end
+    if DEBUG then
+        for _, dom in pairs(blockedDomains)do print(dom) end
+    end
+    sf_grp:add(blockedDomains)
+end
+
+local function scandir(directory)
+    local i, t, popen = 0, {}, io.popen
+    local pfile = popen('ls -a "'..directory..'"')
+    for filename in pfile:lines() do
+        i = i + 1
+        t[i] = filename
+    end
+    pfile:close()
+    return t
+end
+
 
 function getSLD(domain)
     local dn = newDN(domain)
@@ -235,18 +278,27 @@ end
 
 function preresolve(dq)
     local qname = dq.qname:toString()
-    --extractFeaturesAndGetremoteInference(qname)
-    sf_grp:add(getSLD(qname))
+    connectDatabase()
+
     if dq.isTcp then
-        pdnslog("Received query over TCP", pdns.loglevels.Info)
+        local quer = extractFeaturesAndGetremoteInference(dq.qname:toString())
+	    pdnslog("Received query over TCP", pdns.loglevels.Info)
+        for k, v in pairs(quer) do
+            if k == "threat_type" then
+                if not v then
+                    pdnslog("result for the query is benign " , pdns.loglevels.Info)
+                end
+         	end
+        end
     else
         pdnslog("Received DNS query over recursor for: " .. qname, pdns.loglevels.Info)
     end
 
     if sf_grp:check(getSLD(qname)) then
-     	dq.rcode = pdns.NXDOMAIN
-        return true 
+	dq.rcode = pdns.NXDOMAIN
+	return true
     end
 
     return false
 end
+

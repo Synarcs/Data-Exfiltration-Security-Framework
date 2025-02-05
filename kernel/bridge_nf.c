@@ -7,7 +7,7 @@
 
 #define NF_DROP 0
 #define NF_ACCEPT 1
-#define NF_STOLEN 
+#define NF_STOLEN 2 
 #define NF_QUEUE 3
 #define NF_REPEAT 4
 

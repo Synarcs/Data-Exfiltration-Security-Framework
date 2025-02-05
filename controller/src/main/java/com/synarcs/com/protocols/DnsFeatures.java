@@ -1,10 +1,20 @@
 package com.synarcs.com.protocols;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 import java.io.Serializable;
 
 
 // conves the process to serialize the threat events from the kafka broker for processing streaming 
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class DnsFeatures implements Serializable {
 
     @JsonProperty

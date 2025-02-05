@@ -9,7 +9,9 @@ dep:
 	luarocks install luaposix
 	luarocks install --server=https://luarocks.org/dev ltn12
 	luarocks install lua-cjson-ol 
-
+	luarocks install pgmoon	
+	luarocks install luabitop 
+	luarocks install luaossl
 
 .PHONY: build
 build:

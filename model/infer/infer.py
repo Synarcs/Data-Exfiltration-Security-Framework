@@ -4,9 +4,10 @@ import signal
 import onnxruntime as ort
 import numpy as np
 import os , asyncio 
+from pathlib import Path
 import math
 
-model = '../model/dns_sec.onnx'
+model = Path('../model/dns_sec.onnx').absolute()
 session = ort.InferenceSession(model) 
 
 if not os.path.exists(model):
