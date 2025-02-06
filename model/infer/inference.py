@@ -6,30 +6,17 @@ import os, sys, socket, json, subprocess
 import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
-import http.server 
+import http.server
 import consts, infer 
 import datetime
 from abc import ABC, abstractmethod 
 from argparse import ArgumentParser
+from multiprocessing import cpu_count 
+from queue import Queue 
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 DEBUG: bool = False 
-
-def killSock(sig, frame) -> None:
-    print(f"Received a {sig}, removing the unix socket")
-    try:
-        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
-            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-            os.remove(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS): 
-            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
-            os.remove(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
-    except OSError as err: pass 
-    except Exception as err:
-        print(f"Error removing the unix socket Runtime Error: {err}")
-    finally:
-        sys.exit(0)
 
 class OnnxInference(object): 
     model = None 
@@ -149,57 +136,109 @@ class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpS
 
         return super().server_bind()
 
+def run_egress_server(controllerMode: bool = False, threadQueue: Queue = None) -> None:
+    if threadQueue is None:
+        threadQueue = Queue()
+    
+    print('[x] Running the Egress Unix socket server on thread', threading.current_thread().name)
+    inferSock: str = consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS
 
-# fix the redundnact later 
-
-def run_egress_server(controllerMode: bool = False) -> None:
-    print('[x] Running the Egress Unix socket server on thread ', threading.current_thread().name)
-    if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS):
-        os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS  if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS)
-
-    try:
-        httpd = ThreadingUnixSocketHttpServer(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS, HandleInferenceConnHttpLayer7)
-        print(f'HTTP Server over unix socket transport on {consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS}')
-        httpd.serve_forever()
-    except Exception as err:
-        print(f"Runtime exception occurred while starting the inference server over unix sock: {err}")
-    finally:
-        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS):
-            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS)
-
-def run_ingress_server(controllerMode: bool = False) -> None:
-    print('[x] Running the Ingress Unix socket server on thread ', threading.current_thread().name)
-    if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS):
-        os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+    if os.path.exists(inferSock):
+        os.unlink(inferSock)
 
     try:
-        httpd = ThreadingUnixSocketHttpServer(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS, HandleInferenceConnHttpLayer7)
-        print(f'HTTP Server over unix socket transport on {consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS}')
-        httpd.serve_forever()
+        httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
+        print(f'HTTP Server over unix socket transport on {inferSock}')
+        
+        tt = threading.Thread(target=httpd.serve_forever())
+        tt.start()
+        while True:
+            ss = threadQueue.get() 
+            log.info("closing the ingress server")
+            if ss:
+                return 
+
     except Exception as err:
         print(f"Runtime exception occurred while starting the inference server over unix sock: {err}")
+
     finally:
-        if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS):
-            os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS)
+        if os.path.exists(inferSock):
+            os.unlink(inferSock)
+
+
+def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) -> None:
+    if threadQueue is None:
+        threadQueue = Queue()
+
+    print('[x] Running the Ingress Unix socket server on thread', threading.current_thread().name)
+    inferSock: str = consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS
+
+    if os.path.exists(inferSock):
+        os.unlink(inferSock)
+
+    try:
+        httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
+        print(f'HTTP Server over unix socket transport on {inferSock}')
+        
+        tt = threading.Thread(target=httpd.serve_forever())
+        tt.start()
+        while True:
+            ss = threadQueue.get() 
+            log.info("closing the ingress server")
+            if ss:
+                return 
+
+    except Exception as err:
+        print(f"Runtime exception occurred while starting the inference server over unix sock: {err}")
+
+    finally:
+        if os.path.exists(inferSock):
+            os.unlink(inferSock)
 
 
 if __name__ == "__main__":
+    from argparse import ArgumentParser
+
     parser = ArgumentParser() 
-    parser.add_argument('-c','--controller',type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
+    parser.add_argument('-c', '--controller', type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
     args = parser.parse_args()
 
+    ingressQueue: Queue = Queue()
+    egressQueue: Queue = Queue() 
 
-    onnxInferenceServer: OnnxInference = OnnxInference() 
+    onnxInferenceServer: OnnxInference = OnnxInference()
     onnxInferenceServer.load()
+
+    executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=cpu_count())
+
+    def killSock(sig, frame) -> None:
+        print(f"Received {sig}, shutting down inference servers...")
+
+        try:
+            if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
+                os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
+            if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS): 
+                os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
+            
+            ingressQueue.put(True)
+            egressQueue.put(True)
+
+        except OSError as err: 
+            print(f"OS Error: {err}")
+        except Exception as err:
+            print(f"Runtime Error during shutdown: {err}")
+        finally:
+            executor.shutdown(wait=False)
+            print("Servers shut down gracefully.")
+            os._exit(0)  
 
     signal.signal(signal.SIGINT, killSock)
     signal.signal(signal.SIGTERM, killSock)
-    print('Starting the inference server over unix socket transport with process ', os.getpid())
+
+    print(f'Starting the inference server over Unix socket transport (PID: {os.getpid()})')
+
     try:
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            ingress: Future = executor.submit(run_ingress_server , (args.controller,))
-            egress: Future = executor.submit(run_egress_server, (args.controller,))
+        ingress: Future = executor.submit(run_ingress_server, args.controller, ingressQueue) 
+        egress: Future = executor.submit(run_egress_server, args.controller, egressQueue)  
     except KeyboardInterrupt:
-        print("Server stopped by user")
-    finally:
-        killSock(None, None)
+        killSock(signal.SIGINT, None)

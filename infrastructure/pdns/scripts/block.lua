@@ -278,7 +278,6 @@ end
 
 function preresolve(dq)
     local qname = dq.qname:toString()
-    connectDatabase()
 
     if dq.isTcp then
         local quer = extractFeaturesAndGetremoteInference(dq.qname:toString())
@@ -295,10 +294,14 @@ function preresolve(dq)
     end
 
     if sf_grp:check(getSLD(qname)) then
-	dq.rcode = pdns.NXDOMAIN
-	return true
+    	dq.rcode = pdns.NXDOMAIN
+	    return true
+    end
+    connectDatabase()
+    if sf_grp:check(getSLD(qname)) then
+        dq.rcode = pdns.NXDOMAIN
+        return true 
     end
 
     return false
 end
-

@@ -55,7 +55,7 @@ compile-x86:
 	make vmlinux-btf
 	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
 	make netlink-x86  
-	make tc-tun-x86
+	make tc_tun-x86
 	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 

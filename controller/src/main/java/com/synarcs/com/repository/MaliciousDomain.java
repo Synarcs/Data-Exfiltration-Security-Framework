@@ -1,6 +1,6 @@
 package com.synarcs.com.repository;
 
-import io.micrometer.common.lang.NonNull;
+import jakarta.annotation.Nonnull;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
@@ -18,7 +18,7 @@ public class MaliciousDomain {
     @Id
     private String SLD;
 
-    @NonNull
+    @Nonnull
     private String Fqdn;
 
     private boolean forcedUnblocked;
