@@ -1,9 +1,7 @@
-package com.synarcs.com.config;
+package com.synarcs.com.config.yaml;
 
 import java.io.IOException;
 import java.io.Serializable;
-
-import com.synarcs.com.config.yaml.Config;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

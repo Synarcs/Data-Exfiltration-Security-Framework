@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.synarcs.com.config.ControllerConfigLoader;
+import com.synarcs.com.config.yaml.Config;
 import com.synarcs.com.repository.MaliciousDomain;
 import com.synarcs.com.service.BlacklistDomain;
 
@@ -42,7 +44,6 @@ public class DnsSecController {
     public Optional<MaliciousDomain> getMaliciousDomainBuSLD(@PathVariable String sld) {
         return dnsBlockMaliciousDomainService.findById(sld);
     }
-
 
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping

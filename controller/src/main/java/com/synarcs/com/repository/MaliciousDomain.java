@@ -12,7 +12,6 @@ import lombok.Setter;
 @Getter
 @Setter
 @AllArgsConstructor
-@NoArgsConstructor
 public class MaliciousDomain {
 
     @Id
@@ -23,4 +22,7 @@ public class MaliciousDomain {
 
     private boolean forcedUnblocked;
 
+    public MaliciousDomain() {
+
+    }
 }

@@ -9,14 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Node;
 
-import com.synarcs.com.powerdns.RecursorBlackList;
 import com.synarcs.com.protocols.IFeatureTransportProtocol;
 import com.synarcs.com.protocols.ProtocolEnums;
 
 public class NodeCache<T> implements Serializable {
 
-    // post local caching use the powerdns recursor to apply preresolve interceptors to start blocking from this domains 
-    private RecursorBlackList<T> recursorBlackList;
 
     // preserve ordering for insertion 
     private Map<T, Integer> ct = new LinkedHashMap<>();
@@ -29,14 +26,6 @@ public class NodeCache<T> implements Serializable {
     Logger log = LoggerFactory.getLogger(NodeCache.class);
 
     public NodeCache() {
-        this.recursorBlackList = new RecursorBlackList<T>();
-    }
-
-    public void addRecordInCache(T sld) {
-        if (!this.ct.containsKey(sld)) {
-            this.recursorBlackList.blacklistDomain(sld);
-        }
-        this.ct.put(sld, this.ct.getOrDefault(sld,  0) + 1);
     }
 
     public void addSldCountPerNode(T sld, T nodeIp) {

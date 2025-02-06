@@ -12,4 +12,5 @@ import lombok.Setter;
 @AllArgsConstructor
 public class SchemaRegistryConfig {
     private int port;
+    private String host;
 }

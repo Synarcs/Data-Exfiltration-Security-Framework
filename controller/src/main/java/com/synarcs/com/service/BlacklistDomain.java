@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import com.synarcs.com.protocols.DnsFeatures;
 import com.synarcs.com.repository.DNSBlacklistRepository;
 import com.synarcs.com.repository.MaliciousDomain;
 
@@ -28,5 +30,16 @@ public class BlacklistDomain {
 
     public Optional<MaliciousDomain> findById(String sld) {
         return dnsBlacklistRepository.findById(sld);
+    }
+
+    @KafkaListener(topics = "exfil-sec", containerFactory = "maliciousDomainsListenerFactory")
+    public void blacklistMaliciousDomains(DnsFeatures maliciousEvent) {
+        dnsBlacklistRepository.save(
+            new MaliciousDomain(
+                maliciousEvent.getTld(),
+                maliciousEvent.getFqdn(),
+                false
+            )
+        );
     }
 }
