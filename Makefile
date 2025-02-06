@@ -5,7 +5,7 @@ build:
 .PHONY: build-controller
 build-controller:
 	@echo "Building the controller"
-	cd controller && mvn clean compile install 
+	cd controller && mvn clean package  
 
 .PHONY: run-controller
 run-controller:

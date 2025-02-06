@@ -1,4 +1,6 @@
-package com.synarcs.com;
+package com.synarcs.controller;
+
+import com.synarcs.controller.App;
 
 import junit.framework.Test;
 import junit.framework.TestCase;

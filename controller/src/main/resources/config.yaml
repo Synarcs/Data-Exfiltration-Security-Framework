@@ -8,6 +8,7 @@ streamConfig:
   host: "10.158.82.6"
   brokerPort: 9092 
   schemaRegistry:
+    host: "10.158.82.6"
     port: 8081
   
   streamThreatTopic: "exfil-sec"

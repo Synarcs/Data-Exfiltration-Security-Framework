@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
@@ -20,7 +21,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netfilter"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/sidecar"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
@@ -101,7 +101,7 @@ func main() {
 			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering
 		*/
 		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
-		mutationHookService := sidecar.NewMutationWebHook(nodeAgentOptions.MutatePort, ":")
+		mutationHookService := containers.NewMutationWebHook(nodeAgentOptions.MutatePort, ":")
 		mutationHookService.InitMutationServer()
 		return
 	}

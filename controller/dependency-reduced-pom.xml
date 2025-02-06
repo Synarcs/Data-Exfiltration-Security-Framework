@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>com.synarcs.com</groupId>
+  <groupId>com.synarcs.controller</groupId>
   <artifactId>node-agent-controller</artifactId>
   <name>node-agent-controller</name>
   <version>1.0-SNAPSHOT</version>
@@ -44,7 +44,7 @@
           <archive>
             <index>true</index>
             <manifest>
-              <mainClass>com.synarcs.com.App</mainClass>
+              <mainClass>com.synarcs.controller.App</mainClass>
             </manifest>
           </archive>
         </configuration>
