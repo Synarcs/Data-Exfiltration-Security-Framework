@@ -203,6 +203,12 @@ func main() {
 
 	go ingress.SniffIgressForC2C()
 
+	go func() {
+		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
+		log.Println("Loading the consumer for consuming thrat events update from control plane")
+		streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx)
+	}()
+
 	if utils.DEBUG {
 		for _, val := range iface.Links {
 			fmt.Println(val.Attrs().Index, val.Attrs().Name)

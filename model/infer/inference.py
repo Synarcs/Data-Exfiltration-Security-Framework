@@ -8,14 +8,13 @@ import socketserver
 import onnxruntime as ort , onnx 
 import http.server
 import consts, infer 
-import datetime
-from abc import ABC, abstractmethod 
+import datetime 
 from argparse import ArgumentParser
 from multiprocessing import cpu_count 
 from queue import Queue 
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 DEBUG: bool = False 
 
 class OnnxInference(object): 
@@ -25,7 +24,7 @@ class OnnxInference(object):
         pass 
 
     def load(self) -> NoReturn: 
-        print('[x] Loading the Onnx Inferencing Mode ...')
+        print('[x] Loading the Onnx Inferencing Serialized Model ...')
         if os.path.isfile(self.model_path): 
             self.model = onnx.load(self.model_path) 
 
@@ -34,7 +33,6 @@ class OnnxInference(object):
     def verifyOnnxGraph(self) -> bool:
         return onnx.checker.check_model(self.model, full_check=True) 
     
-
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)
@@ -54,7 +52,8 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
 
                 request_body = json.loads(post_data)
-                print('Received request for inference ', request_body)
+                if DEBUG:
+                    log.debug(f'Received request for inference {request_body}')
                 # True if benign else False 
                 # TODO: Run onnx evaluation for the model to process the data against trained deep learning model 
 
@@ -65,10 +64,14 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                         evalPrediction.append(self.infer(feature))
 
                     response = {
-                        "threat_type": True if any(evalPrediction) else False # for now to drop all the pakcet hitting the remote inference server 
+                        "threat_type": True if any(evalPrediction) else False, # for now to drop all the pakcet hitting the remote inference server 
+                        "protocol": "DNS" 
                     }
+                    self.send_response(http.HTTPStatus.OK) 
+                    self.send_header("Content-Type", "application/json") 
                     response_body = json.dumps(response).encode('utf-8')
-                    log.debug(f"Sending response: {response_body}")
+                    if DEBUG:
+                        log.debug(f"Sending response: {response_body}")
                     self.wfile.write(response_body)
                     return 
                 elif self.path == "/onnx/dns/ing":
@@ -77,23 +80,36 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                         evalPrediction.append(self.infer(feature))
                     
                     response = {
-                        "threat_type": evalPrediction
+                        "threat_type": evalPrediction, 
+                        "protocol": "DNS"
                     }
+                    self.send_response(http.HTTPStatus.OK) 
+                    self.send_header("Content-Type", "application/json") 
                     response_body = json.dumps(response).encode('utf-8')
-                    log.debug(f"Sending response: {response_body}")
+                    if DEBUG:
+                        log.debug(f"Sending response: {response_body}")
                     self.wfile.write(response_body) 
                     
             except Exception as e:
                 log.error(f"Error in do_POST: {str(e)}")
+        else:
+            payload = {
+                "err": "Inference Server Dont Support other inference modes"
+            }
+            self.send_response(http.HTTPStatus.NOT_IMPLEMENTED) 
+            self.send_header("Content-Type", "application/json") 
+            self.wfile.write(json.dumps(payload).encode("utf-8"))
 
     def do_GET(self) -> None:
         log.debug(f"Received GET request with path: {self.path}")
-        if self.path == "/onnx":
+        if self.path == "/health":
             try:
                 sample = {
                     "time": datetime.datetime.now().isoformat(),
+                    "version": "0.0.1", 
+                    "status": "Inference Server is UP and healthy" 
                 }
-                self.send_response(200)
+                self.send_response(http.HTTPStatus.OK)
                 self.send_header("content-type", "application/json")
                 self.end_headers()
                 response_body = json.dumps(sample).encode('utf-8')

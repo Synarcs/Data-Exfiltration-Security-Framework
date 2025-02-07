@@ -12,4 +12,5 @@ type InferenceResponse struct {
 
 type InferenceResponseIngress struct {
 	ThreatType []bool `json:"threat_type"`
+	Protocol   string `json:"protocol"`
 }

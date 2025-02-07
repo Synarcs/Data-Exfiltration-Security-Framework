@@ -34,6 +34,7 @@ func (consumer *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Con
 			if utils.DEBUG {
 				log.Printf("Error reading message for remote kafka broker %+v", err)
 			}
+			return err
 		}
 
 		// the remote kafka stream analytics will always use kafka streams for extreme enhanced streme analytics
@@ -44,6 +45,7 @@ func (consumer *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Con
 			return err
 		}
 
+		log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent", statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6)
 		if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
 			utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
 		}

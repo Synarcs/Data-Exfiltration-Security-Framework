@@ -1,8 +1,8 @@
 package com.synarcs.controller;
 
-import com.synarcs.controller.protocols.DnsFeatures;
 import com.synarcs.controller.protocols.DnsProtocol;
 import com.synarcs.controller.protocols.IFeatureTransportProtocol;
+import com.synarcs.controller.streamserdes.DnsFeatures;
 
 public class ControllerInspectProtocolsBuilder {
 

@@ -193,7 +193,9 @@ local function sendInferenceRequest(inference_request, isEgress)
         table.insert(response, chunk)
         if DEBUG then
             for k, v in pairs(response) do
-                print('val inference is ', k, v)
+                if k == "threat_type" then
+                    print('val inference is ', k, v)
+                end
             end
         end
     end

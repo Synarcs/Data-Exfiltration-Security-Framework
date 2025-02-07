@@ -21,7 +21,7 @@ DEBUG = True
 
 class Inference:
     def __init__(self) -> None: 
-        super().__init__()
+        super(Inference, self).__init__()
 
     @staticmethod
     def predict(input_features) -> None:

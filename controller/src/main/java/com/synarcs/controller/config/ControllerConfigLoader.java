@@ -19,7 +19,7 @@ import com.synarcs.controller.config.yaml.Config;
 public class ControllerConfigLoader implements Serializable {
     Logger logger = LoggerFactory.getLogger(ControllerConfigLoader.class);
 
-    @Bean 
+    @Bean
     public Config loadControllerConfig() throws IOException {
         Yaml yaml = new Yaml(new Constructor(Config.class, new LoaderOptions()));
         InputStream inputStream = this.getClass().getClassLoader().getResourceAsStream("config.yaml");
