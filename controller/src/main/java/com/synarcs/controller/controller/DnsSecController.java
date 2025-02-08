@@ -6,7 +6,6 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -24,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.synarcs.controller.repository.MaliciousDomain;
 import com.synarcs.controller.service.BlacklistDomain;
 
-import lombok.extern.slf4j.Slf4j;
 
 // later fix and move all business logic inside the dedicated blacklist service 
 

@@ -5,6 +5,8 @@ import java.util.Map;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +18,7 @@ import com.synarcs.controller.config.yaml.Config;
 @Configuration
 public class KafkaAdminConfig {
 
+    private Logger logger = LoggerFactory.getLogger(KafkaAdminConfig.class);
     private Config controllerConfig;
     
     @Autowired
@@ -33,9 +36,19 @@ public class KafkaAdminConfig {
 
     @Bean
     public NewTopic inferenceControllerTopic() { 
+        logger.info("Creating topic: " + controllerConfig.getStreamConfig().getStreamThreatTopicInferState()); 
         return TopicBuilder.name(controllerConfig.getStreamConfig().getStreamThreatTopicInferState()) 
             .partitions(1) 
             .replicas(1)
             .build(); 
     } 
+
+    @Bean
+    public NewTopic controlPlaneAnalysisTopic() {
+        logger.info("Creating topic: " + controllerConfig.getStreamConfig().getStreamThreatTopic()); 
+        return TopicBuilder.name(controllerConfig.getStreamConfig().getStreamThreatTopic())
+            .partitions(1)
+            .replicas(1)
+            .build();
+    }
 }

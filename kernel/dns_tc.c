@@ -522,6 +522,11 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
                 mx_label_ln = max(mx_label_ln, label_len);
+
+                // check for the max label len compare 
+                __u32 iter_label_chars_ln =  label_len;
+                if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
+                
                 if (label_len == 0x00) break;
                 label_count++;
 

@@ -80,7 +80,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
 			return
 		}
-		maliciousExfilProcessCount[mapField.ProcessId] += 1
+		maliciousExfilProcessCount[mapField.ProcessId]++
 	}
 }
 
@@ -396,8 +396,12 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 				// detected malicious exfiltrated object
 				if inferenceResponse.ThreatType {
 
-					if ev != nil && ev.ProcessId != 0 && ev.ThreadId != 0 {
-						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+					if ev != nil {
+						if ev.ProcessId != 0 && ev.ThreadId != 0 {
+							tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+						} else {
+							// older kernel version use kernel proc fs mount to ge process Information
+						}
 					}
 
 					for _, feature := range features {

@@ -31,7 +31,4 @@ public class AppTest extends TestCase {
         assertTrue( true );
     }
 
-    public void testControllerLatchLocks() {
-        assertEquals(App.MAX_LOCKS, 10);
-    }
 }

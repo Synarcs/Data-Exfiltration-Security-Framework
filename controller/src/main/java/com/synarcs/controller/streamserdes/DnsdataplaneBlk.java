@@ -1,6 +1,7 @@
 package com.synarcs.controller.streamserdes;
 
 import java.io.Serializable;
+import java.util.List;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,4 +28,6 @@ public class DnsdataplaneBlk implements Serializable  {
     private boolean isForcedUnBlocked;
     private String detectedThreadNodeIpv4;
     private String detectedThreadNodeIpv6;
+
+    private List<String> resolveAddressMaliciousC2Domains;
 }

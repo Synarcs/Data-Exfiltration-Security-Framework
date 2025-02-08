@@ -36,8 +36,9 @@ type RemoteStreamInferenceAnalyzed struct {
 	RecordType      string `json:"recordType"`
 	IsFprcedUnblock bool   `json:"isForcedUnBlocked"`
 	// node ip or endpoint where data breach occured for other nodes to loga and event source
-	DetectedThreadNodeIpv4 string `json:"detectedThreadNodeIpv4"`
-	DetectedThreadNodeIpv6 string `json:"detectedThreadNodeIpv6"`
+	DetectedThreadNodeIpv4           string   `json:"detectedThreadNodeIpv4"`
+	DetectedThreadNodeIpv6           string   `json:"detectedThreadNodeIpv6"`
+	ResolveAddressMaliciousC2Domains []string `json:"resolveAddressMaliciousC2Domains"`
 }
 
 type ExfilRawPacketMirror struct {

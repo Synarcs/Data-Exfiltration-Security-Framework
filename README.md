@@ -45,10 +45,10 @@ DNS Network Topologies
 
 ## Control Plane 
 Threat Event Stream Message Analysis Control Plane Server 
-* Apache KAfka (Producer, Consumer)
+* Apache Kafka (Producer, Consumer)
 * Spring Kafka 
 * Spring 
-* Hibernat Spring JPA
+* Hibernate Spring JPA
 
 
 
