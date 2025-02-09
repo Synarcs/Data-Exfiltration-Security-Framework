@@ -59,6 +59,11 @@ struct exfil_security_egress_dns_limites {
 #define DEEP_SCAN_DNS_UDP_OVERLAY true
 #define DEEP_SCAN_DNS_TCP_OVERLAY true
 
+// if enabled the eBPF node agent in user-space dynamically inject L3, inet in kernel over TC for eBPF in kernel tc to stop any DNS traffic with these l3 traffic 
+// For cloud the eBPF node agent dynamicaaly create netpools for l3 netpools, (eBPF sock / iptables / ipvs) for the CNI in k8s to block DNS upstream traffic to any of such Ip in the network 
+#define L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS false 
+#define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS false 
+
 // rate limit config
 #define DNS_RATE_LIMIT_VOLUME true
 #define DNS_RATE_LIMIT_TOCKEN_BUCKET false
@@ -76,6 +81,7 @@ __u32 redirect_skb_mark = 0xFF;
 #endif
 
 #ifdef IPV6_ROUTE 
+    // TODO: Let user space dynamically inject the ipv6 8 * 16 byte address in kernel for route rewrite 
     // fe80::d091:3cff:fe25:6d96/64
     struct in6_addr bridge_redirect_addr_ipv6_suspicious = {
         .in6_u.u6_addr16 = {

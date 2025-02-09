@@ -1,6 +1,5 @@
 package com.synarcs.controller.service;
 
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,7 +13,6 @@ import org.xbill.DNS.Type;
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SimpleResolver;
-import org.xbill.DNS.TextParseException;
 import org.xbill.DNS.Message;
 import org.xbill.DNS.Resolver;
 import org.xbill.DNS.Section;
@@ -64,8 +62,8 @@ public class MaliciousNsResolve {
             /*
              * The data plane only cares for the remote auth server responsible for C2 and not with additional which non-authorative servers adds during DNS lookups 
              */
-            Record[] answers = response.getSectionArray(Section.ANSWER);
-            if (answers.length == 0) {
+            List<Record> answers = response.getSection(Section.ANSWER);
+            if (answers.size() == 0) {
                 logger.info("No records found for " + domain + " Type: " + Type.string(type));
             } else {
                 for (Record record : answers) {

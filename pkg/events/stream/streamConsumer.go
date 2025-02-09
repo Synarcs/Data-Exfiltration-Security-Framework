@@ -45,7 +45,8 @@ func (consumer *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Con
 			return err
 		}
 
-		log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent", statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6)
+		log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
+			statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 		if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
 			utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
 		}

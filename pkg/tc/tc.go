@@ -291,7 +291,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				go tc_tunnel.PollRingBuffer(ctx, maps)
 			}
 		}
-		
+
 		go tc_tunnel.SniffPacketsForTunnelDPI() // start the packet sniffing for non standard ports bpf_redirect_clone from kernel space
 
 		tc.ProcessSniffDPIPacketCapture(ctx, iface, nil)

@@ -207,7 +207,6 @@ struct exfil_security_config_map {
 } exfil_security_config_map SEC(".maps");
 
 
-
 // useful to determine the loop back time from kernel packet redirection to user space enhanced scanning 
 // the totola kernel packet redirection time - userspace post DPI time
 // this is only used to find the effect of DPI scanning in userspace post redirect and then resend from user space.
@@ -259,16 +258,42 @@ struct exfil_security_egress_rate_limit_map {
 } exfil_security_egress_rate_limit_map SEC(".maps");
 
 
+// dynamic netpool l3 ipv4 filtering for any malicious traffic found to upstream servers 
+#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    struct exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter {
+        __uint(type, BPF_MAP_TYPE_LRU_HASH);
+        __type(key, __u32);
+        __type(value, __u32);
+        __uint(max_entries, 1 << 10);
+    } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
+#endif 
+
+#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    struct ipv6_address {
+        __u8 u6_addr8[16];
+        __u8 u6_addr16[8];
+        __u32 u6_addr32[4];
+    } __attribute__((packed));
+
+    struct exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter {
+        __uint(type, BPF_MAP_TYPE_LRU_HASH);
+        __type(key, struct ipv6_address);
+        __type(value, struct ipv6_address);
+        __uint(max_entries, 1 << 10);
+    } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
+#endif 
+
+
 // TODO: add macros for some DPI scans 
 #define HANDLE_MULTICAST_PORT_DPI(transport_dest, DEBUG_FLAG)                               \
-    do {                                                                              \
+    do {                                                                                    \
         if ((transport_dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) ||                     \
             (transport_dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT))) {             \
-            if (DEBUG_FLAG) {                                                         \
+            if (DEBUG_FLAG) {                                                               \
                 bpf_printk("Detected a possible multicast local link NS resolution request"); \
-            }                                                                         \
-            return TC_FORWARD;                                                        \
-        }                                                                             \
+            }                                                                               \
+            return TC_FORWARD;                                                              \
+        }                                                                                   \
     } while (0)
 
 // Parse the RAW SKB for query classes 
@@ -293,6 +318,29 @@ struct exfil_security_egress_rate_limit_map {
                 default:                            \
                     return SUSPICIOUS;              \
             }                                       
+
+
+#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip)                                   \
+        do {                                                                            \
+            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
+                if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
+                    return TC_DROP;                                                     \
+                }                                                                       \
+            }                                                                           \
+        } while(0)
+#endif
+
+#ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
+    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip)                                   \ 
+    do {                                                                                \
+            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
+                if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(ip)) {            \
+                    return TC_DROP;                                                     \
+                }                                                                       \
+            }                                                                           \
+    } while(0)        
+#endif 
 
 
 static 
@@ -1496,6 +1544,24 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb) {
     skb->mark = bpf_ntohs(redirect_skb_mark);
 }
 
+// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
+static 
+__always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
+    __u32 dst_addr = bpf_ntohs(ip->daddr);
+    __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, (void *) &dst_addr);
+    if (isDynamicBlacklisted) {
+        return true;
+    }
+    return false;
+}
+
+// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
+// TODO: Add dynamic L3 IPv6 netpool c2 server filter over kernel tc layer, user space eBPF ndoe agent will create dynamic netpool for any k8s CNI to stop traffic over kernel sock (ebpf) or netfilter (ipv6) before it reach kernel traffic control 
+static 
+__always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
+    return false;
+}
+
 
 static 
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
@@ -1598,7 +1664,9 @@ int classify(struct __sk_buff *skb){
             if (total_offset > skb->len) return TC_DROP;
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
-
+            
+            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
 
@@ -1756,6 +1824,8 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
+            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header_tcp);
@@ -1934,6 +2004,8 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
        
+            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip);
+
             if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
                 if (actions.parse_dns_header_size(&cursor, true, true) == 0)
@@ -2047,6 +2119,8 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
             
+            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip);
+
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
                 struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 

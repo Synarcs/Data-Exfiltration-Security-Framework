@@ -1,6 +1,8 @@
 package com.synarcs.controller.controller;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.synarcs.controller.repository.MaliciousDomain;
 import com.synarcs.controller.service.BlacklistDomain;
+import com.synarcs.controller.service.MaliciousNsResolve;
 
 
 // later fix and move all business logic inside the dedicated blacklist service 
@@ -34,6 +37,9 @@ public class DnsSecController {
 
     @Autowired
     private BlacklistDomain dnsBlockMaliciousDomainService;
+
+    @Autowired 
+    private MaliciousNsResolve dnsResolver; 
     
     @GetMapping
     public String getControllerVersion() {
@@ -74,4 +80,24 @@ public class DnsSecController {
             dnsBlockMaliciousDomainService.unBlockDomain(domain.get());
         }
     }
+
+    /*
+     * Returns the resovled L3 RR, with overlay upstream DNS resolver to detect and provide all the upstream Node L3 Ip's runnsing the remote C2 Implant malware process 
+     * The eBPF node agent has already reprogrammed data plane and kernel eBPF node agent to kill all such dns traffic from such ip addresses
+     */
+    @ResponseStatus(HttpStatus.OK) 
+    @GetMapping("/c2/serverIp")
+    public Map<String, List<String>> getAllPreventedRemoteC2ImplantServers() {
+        Map<String, List<String>> c2ServersIps = new HashMap<>();
+        
+        List<MaliciousDomain> blkC2Domains = dnsBlockMaliciousDomainService.findAll();
+
+        for (MaliciousDomain domain: blkC2Domains) {
+            List<String> blkC2ServerIps = dnsResolver.getAddresses(domain.getSLD());
+            c2ServersIps.put(domain.getSLD(), blkC2ServerIps);
+        }
+        
+        return c2ServersIps;
+    }
+
 }

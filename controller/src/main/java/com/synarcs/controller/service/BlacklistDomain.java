@@ -87,6 +87,4 @@ public class BlacklistDomain {
         dnsBlacklistRepository.delete(domain);
     }
 
-
-  
 }
