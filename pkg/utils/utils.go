@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"runtime"
 	"strconv"
@@ -145,6 +146,9 @@ func ParseIpV6(saddr uint32) string {
 
 func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	ip := net.ParseIP(ipv4).To4()
+	if ip == nil {
+		log.Fatalln("Cannot configure incorrect Ipv4 l3 address in ebPF map for kernel for deep scan")
+	}
 	// convert to big endian for the kernel to store dest address
 	return binary.BigEndian.Uint32(ip)
 }

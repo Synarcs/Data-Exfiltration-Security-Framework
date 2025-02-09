@@ -32,12 +32,14 @@ func initGlobalErrorControlChannel() chan bool {
 }
 
 type EbpfNodeAgentOptions struct {
-	CliFlag          bool
-	Debug            bool
-	StreamClient     bool
-	Sdr              bool
-	MutatePort       int
-	ContainerRuntime bool
+	CliFlag                  bool
+	Debug                    bool
+	StreamClient             bool
+	Sdr                      bool
+	K8sControllerWebhookPort int
+	ContainerRuntime         bool
+	// support for the eBPF ndoe agent running over host net_device dynamically reconfigure netpools for k8s CNI stop exfiltration from pod in user space or kernel sock layer, before it even reaches kernel host net_device traffic control
+	Cni bool
 	// used for sigkill with threshold limit for maslicious exfil detection
 	SigKill int
 }
@@ -70,8 +72,15 @@ func main() {
 	flag.BoolVar(&nodeAgentOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
 	flag.BoolVar(&nodeAgentOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 	flag.BoolVar(&nodeAgentOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
+
+	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods configured by POD  by kubelet on the ndoe
 	flag.BoolVar(&nodeAgentOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
-	flag.IntVar(&nodeAgentOptions.MutatePort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
+
+	// CNi support, need some the eBPF controller guard to be running as daemonset and pod to handle traffic mutation for dynamic network policies creation
+	flag.BoolVar(&nodeAgentOptions.Cni, "cni", false, "Instructs current configured CNI")
+	flag.IntVar(&nodeAgentOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
+
+	// kernel syscall layer interaction , needs kernel to support ring buffer emission for
 	flag.IntVar(&nodeAgentOptions.SigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
 	flag.BoolVar(&nodeAgentOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
@@ -95,14 +104,15 @@ func main() {
 	topDomains, err := utils.ReadTldDomainsData()
 
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
-	if nodeAgentOptions.Sdr {
+	if nodeAgentOptions.Sdr || nodeAgentOptions.Cni {
 		/*
 			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
 			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering
 		*/
 		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
-		mutationHookService := containers.NewMutationWebHook(nodeAgentOptions.MutatePort, ":")
+		mutationHookService := containers.NewMutationWebHook(nodeAgentOptions.K8sControllerWebhookPort, ":")
 		mutationHookService.InitMutationServer()
+		// configure the k8s Admission mutation webhook to inject k8s eBPF DNS as a sidecar for all pods labelled as security required for eBPF node agent
 		return
 	}
 
@@ -203,11 +213,12 @@ func main() {
 
 	go ingress.SniffIgressForC2C()
 
-	go func() {
+	go func(tc tcl.TCHandler) {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
 		log.Println("Loading the consumer for consuming thrat events update from control plane")
+		streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog)
 		streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx)
-	}()
+	}(tc)
 
 	if utils.DEBUG {
 		for _, val := range iface.Links {

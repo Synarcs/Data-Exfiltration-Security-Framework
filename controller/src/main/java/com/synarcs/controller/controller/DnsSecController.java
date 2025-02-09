@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,7 +29,6 @@ import com.synarcs.controller.service.MaliciousNsResolve;
 // later fix and move all business logic inside the dedicated blacklist service 
 
 @RestController
-@RequestMapping("/")
 public class DnsSecController {
 
     private Logger logger = LoggerFactory.getLogger(DnsSecController.class);
@@ -88,16 +86,28 @@ public class DnsSecController {
     @ResponseStatus(HttpStatus.OK) 
     @GetMapping("/c2/serverIp")
     public Map<String, List<String>> getAllPreventedRemoteC2ImplantServers() {
+        logger.info("Fetching all the C2 Servers L3 Information Blacklisted by control plane , and reporgammed the data plane");
         Map<String, List<String>> c2ServersIps = new HashMap<>();
         
         List<MaliciousDomain> blkC2Domains = dnsBlockMaliciousDomainService.findAll();
 
-        for (MaliciousDomain domain: blkC2Domains) {
-            List<String> blkC2ServerIps = dnsResolver.getAddresses(domain.getSLD());
-            c2ServersIps.put(domain.getSLD(), blkC2ServerIps);
-        }
+        blkC2Domains.forEach(domain -> {
+            c2ServersIps.put(domain.getSLD(), dnsResolver.getAddresses(domain.getSLD()));
+        });
         
         return c2ServersIps;
+    }
+
+
+    @GetMapping("/c2/serverIp/{c2}")
+    public MaliciousDomain getPreventedRemoteC2ImplantServerByDomain(@PathVariable String c2) {
+        logger.info("Fetching the C2 Server L3 Information Blacklisted by control plane , and reporgammed the data plane" +  " " + c2);
+
+        Optional<MaliciousDomain> c2DomainServer = dnsBlockMaliciousDomainService.findById(c2);
+        if (c2DomainServer.isPresent()) {
+            return c2DomainServer.get();
+        }
+        return null;
     }
 
 }

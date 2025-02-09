@@ -58,6 +58,8 @@ public class BlacklistDomain {
     @KafkaListener(topics = "exfil-sec", containerFactory = "maliciousDomainsListenerFactory")
     public void blacklistMaliciousDomains(DnsFeatures maliciousEvent) {
         if (!maliciousEvent.getTld().equals("") && !maliciousEvent.getFqdn().equals("")) {
+            log.info("Consumed a malicious C2 domain Server, reprogram all nodes in data plane to hydrate cache and eBPF in kernel" + maliciousEvent.getTld() +
+                                    " " +  maliciousEvent.getFqdn());
             dnsBlacklistRepository.save(
                 new MaliciousDomain(
                     maliciousEvent.getTld(),

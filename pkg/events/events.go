@@ -30,7 +30,7 @@ type DPIVxlanKernelEncapEvent struct {
 	Transport_Src_Port  uint16 `align:"4"`
 }
 
-type RemoteStreamInferenceAnalyzed struct {
+type RemoteStreamInferenceControllerAnalyzed struct {
 	Fqdn            string `json:"fqdn"`
 	Tld             string `json:"tld"`
 	RecordType      string `json:"recordType"`
@@ -77,6 +77,10 @@ const (
 	EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP = "exfil_security_egress_redirect_drop_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME             = "exfil_security_egress_redirect_loop_time"
 	EXFIL_VXLAN_BLOCK_EGRESS_PORT                         = "exfil_vxlan_block_egress_port"
+
+	// controller aware l3, proxy maps for all maps kernel will drop traffic
+	EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter"
+	EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter"
 
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"

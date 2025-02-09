@@ -319,7 +319,7 @@ struct exfil_security_egress_rate_limit_map {
                     return SUSPICIOUS;              \
             }                                       
 
-
+// this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
 #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip)                                   \
         do {                                                                            \
@@ -331,6 +331,7 @@ struct exfil_security_egress_rate_limit_map {
         } while(0)
 #endif
 
+// this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv6 header 
 #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip)                                   \ 
     do {                                                                                \

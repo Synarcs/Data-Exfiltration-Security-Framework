@@ -246,9 +246,9 @@ local function connectDatabase()
           if col == "sld" then
               table.insert(blockedDomains, dom)
       	      if DEBUG then
-	      	pdnslog("query is " .. dom, pdns.loglevels.Info)
+	      	    pdnslog("query is " .. dom, pdns.loglevels.Info)
       	      end
-	  end
+    	  end
       end
     end
     if DEBUG then
@@ -289,7 +289,7 @@ function preresolve(dq)
                 if not v then
                     pdnslog("result for the query is benign " , pdns.loglevels.Info)
                 end
-         	end
+            end
         end
     else
         pdnslog("Received DNS query over recursor for: " .. qname, pdns.loglevels.Info)
