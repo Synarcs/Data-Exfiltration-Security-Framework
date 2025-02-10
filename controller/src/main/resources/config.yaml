@@ -12,6 +12,7 @@ streamConfig:
     port: 8081
   
   streamThreatTopic: "exfil-sec"
-  streamThreatTopicInferState: "exfil-sec-infer-controller"
+  streamThreatTopicInferState: "exfil-sec-infer-controller"  # only udp from the  data plane will be injected into the topic 
+  recursorTCPTransportMaliciousTopic: "exfil-sec-infer-controller-tcp" 
 
   consumerGroupName: "exfil_dns_sec"

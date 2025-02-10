@@ -15,7 +15,7 @@ import (
 
 type StreamConsumer struct {
 	KafkaBrokerConfig                     *StreamBrokerConfig
-	Consumer                              *kafka.Reader
+	Consumers                             []*kafka.Reader
 	EgresseBPFKernelSockCollection        *ebpf.Collection
 	EgresseBPFKernelSockCollectionProgram *ebpf.Program
 }
@@ -26,7 +26,13 @@ func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context)
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
 		Topic:   STREAM_THREAT_TOPIC_INFER,
 	})
-	consumer.Consumer = streamReader
+	streamReaderTcpRecursorInfer := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: consumer.KafkaBrokerConfig.Brokers,
+		Topic:   STREAM_THREAT_TOPIC_INFER_TCP,
+	})
+	consumer.Consumers = []*kafka.Reader{
+		streamReader, streamReaderTcpRecursorInfer,
+	}
 	return nil
 }
 
@@ -66,42 +72,58 @@ func (consumer *StreamConsumer) AddL3FilterForTraffic(ctx context.Context, consu
 	return nil
 }
 
-func (consumer *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
+func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
+	errorChan := make(chan error)
+	for _, consumer := range c.Consumers {
+		go func(consumer *kafka.Reader, errorChan chan error) error {
+			for {
+				msg, err := consumer.ReadMessage(ctx)
+				if err != nil {
+					if utils.DEBUG {
+						log.Printf("Error reading message for remote kafka broker %+v", err)
+					}
+					return err
+				}
+
+				// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
+				var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
+
+				if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
+					log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
+					return err
+				}
+
+				log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
+					statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
+				if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
+					utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+				}
+
+				if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
+					utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
+				}
+
+				if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
+					c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
+				}
+			}
+		}(consumer, errorChan)
+	}
 
 	for {
-		msg, err := consumer.Consumer.ReadMessage(ctx)
-		if err != nil {
-			if utils.DEBUG {
-				log.Printf("Error reading message for remote kafka broker %+v", err)
-			}
-			return err
+		select {
+		case err := <-errorChan:
+			return fmt.Errorf(err.Error())
 		}
-
-		// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
-		var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
-
-		if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
-			log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
-			return err
-		}
-
-		log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
-			statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
-		if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-			utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
-		}
-
-		if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
-			utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
-		}
-
 	}
 }
 
-func (consumer *StreamConsumer) CloseConsumer() error {
-	if consumer.Consumer == nil {
-		return fmt.Errorf("Error the Stream Consumer not started")
+func (c *StreamConsumer) CloseConsumer() error {
+	for _, consumer := range c.Consumers {
+		if consumer == nil {
+			continue
+		}
+		consumer.Close()
 	}
-	consumer.Consumer.Close()
 	return nil
 }

@@ -302,7 +302,7 @@ struct exfil_security_egress_rate_limit_map {
                 case 0x0001:                        \
                 case 0x0002:                        \
                 case 0x0005:                        \
-                case 0x0006:                        \ 
+                case 0x0006:                        \
                 case 0x001C:                        \
                 case 0x0041:                        \
                     return BENIGN;                  \
@@ -442,9 +442,6 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
     }
-
-    // the size of the header is matching for dns header must be  a dns header for ipv4 
-    struct dns_header *dns_hdr = skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr);
 
     return 1;
 }
@@ -605,6 +602,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
+            if (DEBUG) {
+                bpf_printk("subdomain count %d ", subdmoain_label_count);
+            }
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
             if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
@@ -1250,7 +1250,6 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                         bpf_printk("Error reserve kernel memroy for the event");
                     }
                 #endif
-                unsigned long long ring_buff_aloc_data = bpf_ringbuf_query(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port, BPF_RB_AVAIL_DATA);
                 return 1;
             }
             
@@ -1432,11 +1431,13 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     return 1;
 }
 
-// TODOD: Add the kernel Token bucket algorithm for rate limiting, for mass throughput time based exfiltration over standard DNS port only or any LLMNR, MDNS  based resolution.
-static 
-__always_inline __u8 __dns_rate_limit_tb(struct skb_cursor *cursor, struct __sk_buff *skb) {
-    return 1;// forward the packet 
-}
+// TODO: Add the kernel Token bucket algorithm for rate limiting, for mass throughput time based exfiltration over standard DNS port only or any LLMNR, MDNS  based resolution.
+#ifdef DNS_RATE_LIMIT_TOCKEN_BUCKET 
+    static 
+    __always_inline __u8 __dns_rate_limit_tb(struct skb_cursor *cursor, struct __sk_buff *skb) {
+        return 1;// forward the packet 
+    }
+#endif
 
 
 static 
@@ -1666,7 +1667,10 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
-            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #ifdef L3_UDP_IP_FILTER 
+                if (L3_UDP_IP_FILTER) 
+                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #endif
             
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
@@ -1825,7 +1829,10 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
-            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #ifdef L3_TCP_IP_FILTER
+                if (L3_TCP_IP_FILTER)
+                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #endif
             
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
@@ -2004,8 +2011,11 @@ int classify(struct __sk_buff *skb){
             if (total_offset > skb->len) return TC_DROP;
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
-       
-            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip);
+            
+            #ifdef L3_UDP_IP_FILTER 
+                if (L3_UDP_IP_FILTER)
+                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+            #endif
 
             if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 
@@ -2120,7 +2130,10 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
             
-            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip);
+            #ifdef L3_TCP_IP_FILTER
+                if (L3_TCP_IP_FILTER)
+                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+            #endif
 
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
 

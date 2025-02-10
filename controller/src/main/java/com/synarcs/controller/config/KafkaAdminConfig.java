@@ -51,4 +51,16 @@ public class KafkaAdminConfig {
             .replicas(1)
             .build();
     }
+
+    /*
+     * The controller should init the topic in broker for recursor to produce message always, since the controller owns kafka broker topics , groups and offsets 
+     */
+    @Bean
+    public NewTopic recursorTCPTransportMaliciousTopic() {
+        logger.info("Creating topic: " + controllerConfig.getStreamConfig().getStreamThreatTopic()); 
+        return TopicBuilder.name(controllerConfig.getStreamConfig().getRecursorTCPTransportMaliciousTopic())
+            .partitions(1)
+            .replicas(1)
+            .build();
+    }
 }

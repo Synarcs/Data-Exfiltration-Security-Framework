@@ -61,8 +61,11 @@ struct exfil_security_egress_dns_limites {
 
 // if enabled the eBPF node agent in user-space dynamically inject L3, inet in kernel over TC for eBPF in kernel tc to stop any DNS traffic with these l3 traffic 
 // For cloud the eBPF node agent dynamicaaly create netpools for l3 netpools, (eBPF sock / iptables / ipvs) for the CNI in k8s to block DNS upstream traffic to any of such Ip in the network 
-#define L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS false 
-#define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS false 
+#define L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true 
+#define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true
+
+#define L3_TCP_IP_FILTER true 
+#define L3_UDP_IP_FILTER false 
 
 // rate limit config
 #define DNS_RATE_LIMIT_VOLUME true
@@ -72,6 +75,11 @@ struct exfil_security_egress_dns_limites {
 
 __u32 redirect_skb_mark = 0xFF;
 
+
+// use the kernel eBPF maps to inject the dynamic config to process all the l3 filters 
+static 
+__always_inline void __configure_l3_filter_options() {
+}
 
 // 10.200.0.1 this is only for testing in kernel while parsing the process 
 #ifndef BRIDGE_REDIRECT_ADDRESS_IPV4

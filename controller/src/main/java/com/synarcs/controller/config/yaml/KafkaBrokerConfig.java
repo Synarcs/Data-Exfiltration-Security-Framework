@@ -16,5 +16,6 @@ public class KafkaBrokerConfig {
 
     private String streamThreatTopic;
     private String streamThreatTopicInferState;
+    private String recursorTCPTransportMaliciousTopic;
     private String consumerGroupName;
 }

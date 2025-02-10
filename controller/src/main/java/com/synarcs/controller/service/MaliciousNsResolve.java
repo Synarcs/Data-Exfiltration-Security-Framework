@@ -5,11 +5,15 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 
 import org.xbill.DNS.DClass;
 import org.xbill.DNS.Type;
+
+import com.synarcs.controller.config.yaml.Config;
+
 import org.xbill.DNS.Name;
 import org.xbill.DNS.Record;
 import org.xbill.DNS.SimpleResolver;
@@ -23,9 +27,15 @@ public class MaliciousNsResolve {
     private final Logger logger = LoggerFactory.getLogger(MaliciousNsResolve.class);
 
     // used by control plane to add infer messgae in topic to instruct all nodes in data plane to blacklist them in cache and rehydrate cache, preventing reuse of unix socket for inference over ONNX  on node
-    private final String controllerInferenceTopic = "exfil-sec-infer-controller";
     private final String internalRecursorerResolver = "10.158.82.55"; // use this since for test environment the server lookup for DNS over internal AUTH server 
     
+    private Config controllerConfig;
+
+    @Autowired
+    public MaliciousNsResolve(Config config) {
+        this.controllerConfig = config;
+    }
+
     /*
      * Returns the l4 address for resolution of the malicious detected c2 domains for all data plane nodes to stop l4 traffic over it 
      * For the test build use powerdns recursor which internally forwards the query to upstream recursor forwarders, or internal organizational PowerDNS auth servers 

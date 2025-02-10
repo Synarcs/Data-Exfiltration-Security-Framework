@@ -31,7 +31,7 @@ public class DnsProtocol implements Serializable, IFeatureTransportProtocol {
             case 53: 
                 this.ExfilPort = DnsExfilPorts.DOT_EGRESS_PORT;
                 this.ExfilProtocolInternalType = ProtocolEnums.DNS_EGRESS;
-                break;
+                 break;
             case 5353:
                 this.ExfilPort = DnsExfilPorts.DNS_EGRESS_MULTICAST_PORT;
                 this.ExfilProtocolInternalType = ProtocolEnums.DNS_MULTICAST_EGRESS;

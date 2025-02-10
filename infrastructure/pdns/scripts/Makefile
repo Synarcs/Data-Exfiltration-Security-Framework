@@ -12,7 +12,8 @@ dep:
 	luarocks install pgmoon	
 	luarocks install luabitop 
 	luarocks install luaossl
-	luarocks install redis-lua
+	luarocks install lua-resty-kafka
+	
 
 .PHONY: build
 build:

@@ -4,6 +4,8 @@ local unistd = require("posix.unistd")
 local ltn12 = require("ltn12")
 local cjson = require("cjson")
 local pgmoon = require("pgmoon")
+local kafka = require("resty.kafka.client")
+local kafkaProducer = require("resty.kafka.producer")
 
 local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/etc/powerdns/onnx-inference-out.sock"
 local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/etc/powerdns/onnx-inference-in.sock"
@@ -11,6 +13,10 @@ local EGRESS_INFER_ROUTE = "/onnx/dns"
 local INGRESS_INFER_ROUTE = "/onnx/dns/ing"
 local PDNS_RECURSOR_GPSQL_BACKEDN = "localhost"
 
+
+local KafkaBrokers = {
+    { host = "10.158.82.6", port = 9092 }
+}
 
 -- Domain packlist for dynamic domainn blacklist on dns serverf via sinholed location to the DNS server
 local function handler()
@@ -269,6 +275,22 @@ local function scandir(directory)
 end
 
 
+function EmitkafkaMessageOverlayTCPTransport(message, topic)
+    local kafka_producer = kafkaProducer:new(KafkaBrokers, { 
+        producer_type = "async",
+        required_acks = 1,        
+        flush_time = 1000        
+    })
+    local jsonSerdeMessage = cjson.encode(message) 
+    local ok, err = kafka_producer:send(topic, nil, jsonSerdeMessage)
+    if not ok then
+        pdnslog("Error publish TCP message to remote Kafka broker ", pdns.loglevels.Info)       
+    else 
+        pdnslog("Error publish TCP message to remote Kafka broker " .. err, pdns.loglevels.Info)
+    end 
+end 
+
+
 function getSLD(domain)
     local dn = newDN(domain)
     while dn:countLabels() > 2 do
@@ -284,13 +306,15 @@ function preresolve(dq)
     if dq.isTcp then
         local quer = extractFeaturesAndGetremoteInference(dq.qname:toString())
 	    pdnslog("Received query over TCP", pdns.loglevels.Info)
-        for k, v in pairs(quer) do
-            if k == "threat_type" then
-                if not v then
-                    pdnslog("result for the query is benign " , pdns.loglevels.Info)
+        if DEBUG then 
+            for k, v in pairs(quer) do
+                if k == "threat_type" then
+                    if not v then
+                        pdnslog("result for the query is benign " , pdns.loglevels.Info)
+                    end
                 end
             end
-        end
+        end 
     else
         pdnslog("Received DNS query over recursor for: " .. qname, pdns.loglevels.Info)
     end
@@ -302,7 +326,7 @@ function preresolve(dq)
     connectDatabase()
     if sf_grp:check(getSLD(qname)) then
         dq.rcode = pdns.NXDOMAIN
-        return true 
+        return true
     end
 
     return false
