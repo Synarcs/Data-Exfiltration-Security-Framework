@@ -289,7 +289,7 @@ struct exfil_security_egress_rate_limit_map {
     do {                                                                                    \
         if ((transport_dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) ||                     \
             (transport_dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT))) {             \
-            if (DEBUG_FLAG) {                                                               \
+            if (DEBUG) {                                                               \
                 bpf_printk("Detected a possible multicast local link NS resolution request"); \
             }                                                                               \
             return TC_FORWARD;                                                              \
@@ -325,6 +325,9 @@ struct exfil_security_egress_rate_limit_map {
         do {                                                                            \
             if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
                 if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
+                    if (DEBUG) {                                                        \
+                        bpf_printk("dropping traffic for malicious c2 ipv4 remote c2"); \
+                    }                                                                   \
                     return TC_DROP;                                                     \
                 }                                                                       \
             }                                                                           \
@@ -337,6 +340,9 @@ struct exfil_security_egress_rate_limit_map {
     do {                                                                                \
             if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
                 if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(ip)) {            \
+                    if (DEBUG) {                                                        \
+                        bpf_printk("dropping traffic for malicious c2 ipv6 remote c2"); \
+                    }                                                                   \
                     return TC_DROP;                                                     \
                 }                                                                       \
             }                                                                           \

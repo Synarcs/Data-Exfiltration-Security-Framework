@@ -45,38 +45,35 @@ func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(
 	consumer.EgresseBPFKernelSockCollectionProgram = tcProgram
 }
 
-func (consumer *StreamConsumer) AddL3FilterForTraffic(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) error {
+func (consumer *StreamConsumer) AddL3FilterForTraffic(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
 	configMapIpv4 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER]
-	configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
+	// TODO Add support for ipv6 filter routing in kernel
+	// configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
 
-	if configMapIpv4 == nil || configMapIpv6 == nil {
+	if configMapIpv4 == nil {
 		log.Println("Kernel is configured with l3 netpools for egress TC filter right now, please ensure L3 Netpool filter is enabled")
-		return nil
+		return
 	}
 
 	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
 		isIpv4 := net.IP(remoteIpAddressInferedMaliciousController).To4()
 		if isIpv4 == nil {
-			isIpv6 := net.IP(remoteIpAddressInferedMaliciousController).To16()
-			if isIpv6 == nil {
-				log.Println("Cannot blacklist in kernel eBPF since the rmmote c2 server does neither has correct Ipv4 and Ipv6 formatting")
-				return nil
-			}
-			// TODO: Implement L3 filter for the kernel eBPF map for ipv6 address
-			return nil
+			continue
 		}
 		// convert to network order
 		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(isIpv4.String())
 		configMapIpv4.Put(ipv4BigEndianAddress, ipv4BigEndianAddress)
 	}
-	return nil
 }
 
 func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
 	errorChan := make(chan error)
 	for _, consumer := range c.Consumers {
-		go func(consumer *kafka.Reader, errorChan chan error) error {
+		go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
 			for {
+				if err := ctx.Err(); err != nil {
+					return ctx.Err()
+				}
 				msg, err := consumer.ReadMessage(ctx)
 				if err != nil {
 					if utils.DEBUG {
@@ -107,13 +104,16 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
 				}
 			}
-		}(consumer, errorChan)
+		}(consumer, errorChan, ctx)
 	}
 
 	for {
 		select {
-		case err := <-errorChan:
-			return fmt.Errorf(err.Error())
+		case err, ok := <-errorChan:
+			if !ok {
+				return nil
+			}
+			return fmt.Errorf("%s", err.Error())
 		}
 	}
 }

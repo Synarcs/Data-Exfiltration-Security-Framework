@@ -35,6 +35,7 @@ int main() {
         for (int j=0; j < (int) size / 2; j++) *(*(buffer + i) + j) = j;
     }
 
+    int **ref_arr = &arr;
     free(buffer);
     free(arr);
 
