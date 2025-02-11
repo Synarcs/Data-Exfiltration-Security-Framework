@@ -4,8 +4,7 @@ local unistd = require("posix.unistd")
 local ltn12 = require("ltn12")
 local cjson = require("cjson")
 local pgmoon = require("pgmoon")
-local kafka = require("resty.kafka.client")
-local kafkaProducer = require("resty.kafka.producer")
+local encode_array = require("pgmoon.arrays").encode_array
 
 local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/etc/powerdns/onnx-inference-out.sock"
 local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/etc/powerdns/onnx-inference-in.sock"
@@ -13,10 +12,6 @@ local EGRESS_INFER_ROUTE = "/onnx/dns"
 local INGRESS_INFER_ROUTE = "/onnx/dns/ing"
 local PDNS_RECURSOR_GPSQL_BACKEDN = "localhost"
 
-
-local KafkaBrokers = {
-    { host = "10.158.82.6", port = 9092 }
-}
 
 -- Domain packlist for dynamic domainn blacklist on dns serverf via sinholed location to the DNS server
 local function handler()
@@ -166,15 +161,14 @@ local function sendInferenceRequest(inference_request, isEgress)
     local sock_egress_fd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
     if not sock_egress_fd then
-        error("Error creating egress socket")
+        pdnslog("Error creating egress socket ", pdns.loglevels.Error)
     end
 
     local success, err = socket.connect(sock_egress_fd, {family = socket.AF_UNIX, path = ONNX_INFERENCE_UNIX_SOCKET_EGRESS})
     if not success then
-        error("Failed to connect to socket: " .. err)
+        pdnslog("Failed to connect to socket: " .. err, pdns.loglevels.Error)
     end
 
-    print('connected to sock ', socket)
 
     local inference_request_payload = cjson.encode(inference_request)
 
@@ -199,9 +193,7 @@ local function sendInferenceRequest(inference_request, isEgress)
         table.insert(response, chunk)
         if DEBUG then
             for k, v in pairs(response) do
-                if k == "threat_type" then
-                    print('val inference is ', k, v)
-                end
+                print('val inference is ', k, v)
             end
         end
     end
@@ -244,7 +236,10 @@ local pg = pgmoon.new({
 })
 assert(pg:connect())
 
-local function connectDatabase()
+local broker_list = {
+    { host = "cssvlab01.uwb.edu", port = 9092 }
+}
+local function listBlocklistedDomains()
     local blockedDomains = {}
     local domains = pg:query("select * from malicious_domain")
     for k, v in pairs(domains) do
@@ -252,15 +247,37 @@ local function connectDatabase()
           if col == "sld" then
               table.insert(blockedDomains, dom)
       	      if DEBUG then
-	      	    pdnslog("query is " .. dom, pdns.loglevels.Info)
+	      	pdnslog("query is " .. dom, pdns.loglevels.Info)
       	      end
-    	  end
+	  end
       end
     end
     if DEBUG then
         for _, dom in pairs(blockedDomains)do print(dom) end
     end
     sf_grp:add(blockedDomains)
+end
+
+-- insert the malicious_domain in tcp to re program the data plane kernel eBPF programs to stop exfiltration against these nodes 
+-- only the recursor will call for malicious TCP transport and not UDP 
+local function insertMaliciousDomains(qname)
+    pdnslog("A malicious TCP query: " .. qname)
+
+    local fqdn = qname:sub(1, -2) 
+
+    local sld = getSLD(qname):toString()
+    sld = sld:sub(1, -2) 
+
+    -- fqdn, sld, isControllerUnblocked, isTransportUDP
+    local malicious_tcp_values = {fqdn, sld, false, true}
+
+    -- for secrity and sql safe check sanity 
+    local query = "INSERT INTO malicious_domain (sld, fqdn, forced_unblocked, is_transporttcp) VALUES ($1, $2, $3, $4)"
+    pg:query(query, unpack(malicious_tcp_values))
+
+    if DEBUG then 
+        pdnslog("Inserted the malicious TCP query in DB: " .. fqdn, pdns.loglevels.Info)
+    end
 end
 
 local function scandir(directory)
@@ -275,22 +292,6 @@ local function scandir(directory)
 end
 
 
-function EmitkafkaMessageOverlayTCPTransport(message, topic)
-    local kafka_producer = kafkaProducer:new(KafkaBrokers, { 
-        producer_type = "async",
-        required_acks = 1,        
-        flush_time = 1000        
-    })
-    local jsonSerdeMessage = cjson.encode(message) 
-    local ok, err = kafka_producer:send(topic, nil, jsonSerdeMessage)
-    if not ok then
-        pdnslog("Error publish TCP message to remote Kafka broker ", pdns.loglevels.Info)       
-    else 
-        pdnslog("Error publish TCP message to remote Kafka broker " .. err, pdns.loglevels.Info)
-    end 
-end 
-
-
 function getSLD(domain)
     local dn = newDN(domain)
     while dn:countLabels() > 2 do
@@ -302,32 +303,37 @@ end
 
 function preresolve(dq)
     local qname = dq.qname:toString()
+     -- connectDatabase()
 
     if dq.isTcp then
-        local quer = extractFeaturesAndGetremoteInference(dq.qname:toString())
-	    pdnslog("Received query over TCP", pdns.loglevels.Info)
-        if DEBUG then 
+        local quer_res = extractFeaturesAndGetremoteInference(dq.qname:toString())
+        pdnslog("Received query over TCP" .. qname, pdns.loglevels.Info)
+        if DEBUG then
             for k, v in pairs(quer) do
                 if k == "threat_type" then
                     if not v then
                         pdnslog("result for the query is benign " , pdns.loglevels.Info)
                     end
                 end
-            end
+            end 
         end 
-    else
-        pdnslog("Received DNS query over recursor for: " .. qname, pdns.loglevels.Info)
+        if quer_res['threat_type'] then
+            insertMaliciousDomains(qname)
+            dq.rcode = pdns.NXDOMAIN
+            return true
+        end 
     end
 
+    -- udp does not require since the endpoints runnin inside kernel will secure any exfiltration 
     if sf_grp:check(getSLD(qname)) then
     	dq.rcode = pdns.NXDOMAIN
 	    return true
     end
-    connectDatabase()
+    listBlocklistedDomains()
     if sf_grp:check(getSLD(qname)) then
         dq.rcode = pdns.NXDOMAIN
         return true
     end
-
     return false
 end
+

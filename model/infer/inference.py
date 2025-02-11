@@ -162,6 +162,7 @@ def run_egress_server(controllerMode: bool = False, threadQueue: Queue = None) -
     if os.path.exists(inferSock):
         os.unlink(inferSock)
 
+    # os.chmod(inferSock, 777) # only for testing TODO: Enforce strict MAC and kernel LSM for strict permission over the  unix sock fd 
     try:
         httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
         print(f'HTTP Server over unix socket transport on {inferSock}')
@@ -192,6 +193,7 @@ def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) 
     if os.path.exists(inferSock):
         os.unlink(inferSock)
 
+    # os.chmod(inferSock, 777) # only for testing TODO: Enforce strict MAC and kernel LSM for strict permission over the  unix sock fd 
     try:
         httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
         print(f'HTTP Server over unix socket transport on {inferSock}')
@@ -231,11 +233,13 @@ if __name__ == "__main__":
         print(f"Received {sig}, shutting down inference servers...")
 
         try:
-            if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS):
-                os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-            if os.path.exists(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS): 
-                os.unlink(consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
-            
+            ingressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if parser.controller == True else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS
+            egressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if parser.controller == True else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS
+            if os.path.exists(egressFd):
+                os.unlink(egressFd)
+            if os.path.exists(ingressFd): 
+                os.unlink(ingressFd) 
+     
             ingressQueue.put(True)
             egressQueue.put(True)
 

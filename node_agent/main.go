@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/bridgetc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netfilter"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
@@ -195,8 +195,8 @@ func main() {
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(ctx, &iface)
 
-	// kernel netfilter process post routing hooks
-	netfilter := netfilter.NetFilter{
+	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
+	netfilter := bridgetc.BridgeTCFilters{
 		Interfaces: &iface,
 	}
 	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
@@ -235,7 +235,7 @@ func main() {
 
 	kernelHooksCleanUp := func() {
 		tc.DetachHandler(&ctx)
-		netfilter.DetachKernelBridgeNetfilterHook(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
+		netfilter.DetachKernelBridgeTCFilters(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
 		tc.IsLinkPppLinkAttached(&ctx)
 
 		kprobe.DetachSockHandler()

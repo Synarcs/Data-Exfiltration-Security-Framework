@@ -40,12 +40,6 @@
 
 #define PRINT_DEBUG(fmt, ...) bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__)
 
-#ifndef tc
-    #define TC_FORWARD TC_ACT_OK
-    #define TC_DEFAULT TC_ACT_UNSPEC
-    #define TC_DROP TC_ACT_SHOT
-#endif
-
 
 #define IP_DST_OFF (ETH_HLEN + offsetof(struct iphdr, daddr))
 #define IP_CHECK_FF (ETH_HLEN + offsetof(struct iphdr, check))
@@ -1549,7 +1543,7 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 
 static 
 __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb) {
-    skb->mark = bpf_ntohs(redirect_skb_mark);
+    skb->mark = redirect_skb_mark;
 }
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
@@ -1759,7 +1753,7 @@ int classify(struct __sk_buff *skb){
 
                     __mark_skb_packet_buffer(skb);
 
-                    return bpf_redirect(br_index, dest_addr_route);
+                    return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
@@ -1911,8 +1905,8 @@ int classify(struct __sk_buff *skb){
                     __mark_skb_packet_buffer(skb);
                     
                     if (config) 
-                        return bpf_redirect(config->BridgeIndexId, 0);
-                    else return bpf_redirect(br_index, 0);
+                        return bpf_redirect(config->BridgeIndexId, BPF_F_INGRESS);
+                    else return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
                 __u32 transaction_id = bpf_ntohs(dns->transaction_id);
@@ -1985,7 +1979,7 @@ int classify(struct __sk_buff *skb){
                 __mark_skb_packet_buffer(skb);
 
                 __update_kernel_packet_redirection_time(transaction_id);
-                return bpf_redirect(br_index, 0);
+                return bpf_redirect(br_index, BPF_F_INGRESS);
             }
             #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
                 if (!DEEP_SCAN_DNS_TCP_OVERLAY) {
@@ -2080,7 +2074,7 @@ int classify(struct __sk_buff *skb){
 
                     __mark_skb_packet_buffer(skb);
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                    return bpf_redirect(br_index, 0);
+                    return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
                 if (DEBUG)
@@ -2114,7 +2108,7 @@ int classify(struct __sk_buff *skb){
 
                 __update_kernel_packet_redirection_time(transaction_id);
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
-                return bpf_redirect(br_index, 0);
+                return bpf_redirect(br_index, BPF_F_INGRESS);
 
             }
             #ifdef DEEP_SCAN_DNS_UDP_OVERLAY 
@@ -2180,7 +2174,7 @@ int classify(struct __sk_buff *skb){
                     __mark_skb_packet_buffer(skb);
                     
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                    return bpf_redirect(br_index, 0);
+                    return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
                 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
@@ -2217,7 +2211,7 @@ int classify(struct __sk_buff *skb){
                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 __update_kernel_packet_redirection_time(dns->transaction_id);
-                return bpf_redirect(br_index, 0);
+                return bpf_redirect(br_index, BPF_F_INGRESS);
             }
             #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
                 if (!DEEP_SCAN_DNS_TCP_OVERLAY) {

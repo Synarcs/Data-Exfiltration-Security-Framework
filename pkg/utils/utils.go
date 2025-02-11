@@ -18,9 +18,11 @@ var DEBUG = false
 
 // kernel network traffic control and xdp ingress layer
 const (
-	TC_CONTROL_PROG        = "classify"        // CLSACT
-	TC_CONTROL_PROG_BRIDGE = "bridge_classify" // CLSACT CLASSLESS QDISC
-	XDP_CONTROL_PROG       = "xdp"             // XDP Non Offloaded
+	TC_CONTROL_PROG                = "classify"              // CLSACT  QDISC
+	TC_CONTROL_PROG_BRIDGE_INGRESS = "bridge_ingress_filter" // CLSACT  QDISC
+	TC_CONTROL_PROG_BRIDGE_EGRESS  = "bridge_ingress_filter" // CLSACT  QDISC
+
+	XDP_CONTROL_PROG = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 )

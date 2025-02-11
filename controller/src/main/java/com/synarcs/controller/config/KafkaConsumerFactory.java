@@ -1,6 +1,8 @@
 package com.synarcs.controller.config;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -20,12 +22,15 @@ import com.synarcs.controller.streamserdes.DnsFeatures;
 @EnableKafka
 @Configuration
 public class KafkaConsumerFactory {
+    private List<String> controllerInferenceConumerTopics = new ArrayList<>();
 
     private final Config controllerConfig;
     
     @Autowired
     public KafkaConsumerFactory(Config config) {
         this.controllerConfig = config;
+        this.controllerInferenceConumerTopics.add(this.controllerConfig.getStreamConfig().getStreamThreatTopic());
+        this.controllerInferenceConumerTopics.add(this.controllerConfig.getStreamConfig().getRecursorTCPTransportMaliciousTopic());
     }
 
     @Bean

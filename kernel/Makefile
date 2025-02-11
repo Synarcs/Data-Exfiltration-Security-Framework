@@ -1,8 +1,11 @@
 tc_kernel := dns_tc.c 
 tc_kernel_out := tc.o 
 
-bridge_tc_kernel := bridge_nf.c
-bridge_tc_kernel_out := bridge.o 
+bridge_tc_kernel_ingress := bridge_tc_ing.c
+bridge_tc_kernel_ingress_out := bridge_ing.o 
+
+bridge_tc_kernel_egress := bridge_tc_egress.c
+bridge_tc_kernel_egress_out := bridge_egress.o 
 
 xdp_kernel := dns_xdp.c 
 xdp_kernel_out := xdp.o 
@@ -21,12 +24,14 @@ sock_sdr_out := sock.o
 compile:
 	clang -target bpf -Wall -Wunused-variable -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
+	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	make netlink 
 	make tc_tun 
 	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
 	make clean-bpf 
 
 # kernel vmlinux compile for root struct header 
@@ -53,7 +58,8 @@ compile-llvm-x86:
 compile-x86:
 	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -o $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o $(bridge_tc_kernel_out) -c $(bridge_tc_kernel)
+	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
+	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	make netlink-x86  
 	make tc_tun-x86
 	make xdp-x86
@@ -65,6 +71,7 @@ compile-x86:
 .PHONY: tc
 tc: 
 	sudo tc qdisc add dev enp0s1 clsact
+	sudo tc qdisc add dev br0 clsact
 	sudo tc qdisc show 
 
 .PHONY: tc-remove
@@ -77,13 +84,15 @@ tc-remove:
 
 .PHONY: tc-filter 
 tc-filter:
-	sudo tc filter add dev enp0s1 egress bpf direct-action obj tc.o sec tc
+	# sudo tc filter add dev enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
+	sudo tc filter add dev br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
 	# sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
 .PHONY: tc-show 
 tc-show:
 	sudo tc qdisc show 
 	sudo tc filter show dev enp0s1 egress 
+	sudo tc filter show dev br0 ingress 
 
 .PHONY: tc-tracing 
 tc-tracing:
@@ -145,7 +154,7 @@ tc_tun:
 tc_tun-x86:
 	@echo "Compiling the tunnel tc egress filter for x86"
 	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
+	cp $(p2p_kernel_out) ../node_agent/ebpf/ \
 
 
 .PHONY: sock_sdr

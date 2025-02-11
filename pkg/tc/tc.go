@@ -183,14 +183,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 
 	defer spec.Close()
 
-	// the node agent does not expect tail calls to the kernel ebpf programs over other network layers
-	if len(spec.Programs) > 1 {
-		log.Println("Multiple programs found in the root collection")
-	}
-	if len(spec.Programs) == 0 {
-		log.Println("The Ebpf Bytecode is corrupt or malformed")
-	}
-
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
 
 	if prog == nil {

@@ -46,7 +46,7 @@ run-inference:
 .PHONY: run-inference-controller
 run-inference-controller:
 	@echo "Running the Remote unix socket inference server on controller server"
-	python3 ../model/infer/inference.py -c true 
+	python3 ../model/infer/inference.py -c true && chmod 777 /etc/powerdns/onnx-inference-out.sock && chmod 777 /etc/powerdns/onnx-inference-in.sock
 
 
 .PHONY: netinet

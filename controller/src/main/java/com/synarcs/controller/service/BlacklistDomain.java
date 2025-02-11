@@ -60,12 +60,17 @@ public class BlacklistDomain {
         if (!maliciousEvent.getTld().equals("") && !maliciousEvent.getFqdn().equals("")) {
             log.info("Consumed a malicious C2 domain Server, reprogram all nodes in data plane to hydrate cache and eBPF in kernel" + maliciousEvent.getTld() +
                                     " " +  maliciousEvent.getFqdn());
+
+            // the data plane will only emits deep scanned packets from kernel                             
             dnsBlacklistRepository.save(
-                new MaliciousDomain(
-                    maliciousEvent.getTld(),
-                    maliciousEvent.getFqdn(),
-                    false
-                )
+                MaliciousDomain.builder()
+                    .Fqdn(maliciousEvent.getFqdn().endsWith(".") ? maliciousEvent.getFqdn().substring(0, maliciousEvent.getFqdn().length() - 1) 
+                                : maliciousEvent.getFqdn())
+                    .SLD(maliciousEvent.getTld().endsWith(".") ? maliciousEvent.getTld().substring(0, maliciousEvent.getTld().length() - 1) 
+                                : maliciousEvent.getTld())
+                    .forcedUnblocked(false)
+                    .isTransportTCP(false)
+                    .build()
             );
             sendDNSCacheAddDataplane(maliciousEvent, 
                     dnsResolver.getAddresses(maliciousEvent.getTld()));

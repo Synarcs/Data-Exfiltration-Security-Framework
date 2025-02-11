@@ -14,6 +14,12 @@
     #define NETBIOS_EGRESS_MULTICAST_PORT 137
 #endif
 
+// kernel actions for tc susbsytem for all traffic control action forward 
+#ifndef tc 
+    #define TC_FORWARD TC_ACT_OK
+    #define TC_DEFAULT TC_ACT_UNSPEC
+    #define TC_DROP TC_ACT_SHOT
+#endif
 
 // a all main custom flag for parsing the packet after redirection from N/S to a different port on same net-device 
 #ifndef RESERVED_KERNEL_SKBUFF_MAP 
