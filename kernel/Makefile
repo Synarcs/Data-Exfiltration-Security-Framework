@@ -64,7 +64,8 @@ compile-x86:
 	make tc_tun-x86
 	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
+	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
 	make clean-bpf 
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 

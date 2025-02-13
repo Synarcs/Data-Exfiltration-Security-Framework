@@ -9,8 +9,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket/layers"
 )
@@ -31,41 +29,6 @@ type DNSFeatures struct {
 	IsEgress              bool
 	RecordType            string
 	AuthZoneSoaservers    map[string]string // zone master --> mx record type
-}
-
-func GenerateDnsParserModelUtils(ifaceHandler *netinet.NetIface,
-	onnxModel *OnnxModel, streamClient *stream.StreamProducer) *DnsPacketGen {
-	xdpSocketFd, err := ifaceHandler.GetRootNamespaceRawSocketFdXDP()
-
-	if err == nil {
-		log.Println("[x] Using the raw packet with AF_PACKET Fd")
-
-		return &DnsPacketGen{
-			IfaceHandler:        ifaceHandler,
-			SockSendFdInterface: ifaceHandler.PhysicalLinks,
-			XdpSocketSendFd:     xdpSocketFd,
-			SocketSendFd:        nil,
-			OnnxModel:           onnxModel,
-			StreamClient:        streamClient,
-		}
-	} else {
-		log.Println("Error Binding the XDP Socket Physical driver lacking support")
-		fd, err := ifaceHandler.GetRootNamespaceRawSocketFd()
-
-		if err != nil {
-			log.Fatalln("Error fetching the raw socket fd for the socket")
-			panic(err.Error())
-		}
-
-		return &DnsPacketGen{
-			IfaceHandler:        ifaceHandler,
-			SockSendFdInterface: ifaceHandler.PhysicalLinks,
-			SocketSendFd:        fd,
-			XdpSocketSendFd:     nil,
-			OnnxModel:           onnxModel,
-			StreamClient:        streamClient,
-		}
-	}
 }
 
 func EntropyLabel(dns_label string) float64 {

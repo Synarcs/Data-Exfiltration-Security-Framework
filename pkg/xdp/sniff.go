@@ -37,9 +37,20 @@ type IngressSniffHandler struct {
 // TODO: Fix all the code redundancies
 func GenerateXDPIngressFactory(iface netinet.NetIface,
 	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
+
+	// only use  for ingress support for the link (net_device) in kernel
+	// Ingress sniff and process neither need AF_XDP not AF_PACKET
+	dnsPacketGenInferenceIngress := &model.DnsPacketGen{
+		IfaceHandler:        &iface,
+		SockSendFdInterface: iface.PhysicalLinks,
+		XdpSocketSendFd:     nil,
+		SocketSendFd:        nil,
+		OnnxModel:           onnxModel,
+		StreamClient:        streamClient,
+	}
 	return IngressSniffHandler{
 		IfaceHandler:                    &iface,
-		DnsPacketGen:                    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
+		DnsPacketGen:                    dnsPacketGenInferenceIngress,
 		OnnxModel:                       onnxModel,
 		StreamClient:                    streamClient,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,

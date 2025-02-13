@@ -14,8 +14,8 @@ from multiprocessing import cpu_count
 from queue import Queue 
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
 DEBUG: bool = False 
+log.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
 
 class OnnxInference(object): 
     model = None 
@@ -32,7 +32,7 @@ class OnnxInference(object):
 
     def verifyOnnxGraph(self) -> bool:
         return onnx.checker.check_model(self.model, full_check=True) 
-    
+
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)

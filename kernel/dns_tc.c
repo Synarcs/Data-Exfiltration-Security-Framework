@@ -291,7 +291,7 @@ struct exfil_security_egress_rate_limit_map {
     } while (0)
 
 // Parse the RAW SKB for query classes 
-#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class) \ 
+#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)      \ 
         switch ((dns_query_class)){                 \
                 case 0x0001:                        \
                 case 0x0002:                        \
@@ -560,6 +560,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
+            // \ln asasasa \0, \ln sdsds d \0
 
             __u8 root_domain  = 0;
 
@@ -1441,24 +1442,31 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
 
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
-    __u16 ipv6_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
-    __u64 ipv6_kernel_time = bpf_ktime_get_ns();
-    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
-        .checksum =  ipv6_checksum, 
-        .kernel_timets = ipv6_kernel_time, 
-    };
+__always_inline struct checkSum_redirect_struct_value * __update_kernel_task_struct_checksum_maps(struct checkSum_redirect_struct_value *checksum_map)  {
     #ifdef LINUX_VERSION_CODE
-        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)) {
-            __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-            __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
-            layer3_checksum_ipv6.procId = proc_id; 
-            layer3_checksum_ipv6.threadId = threadId;
-        }else {
-            layer3_checksum_ipv6.procId = 0; // keep this the helper in libbpf was added post kernel version 6.11.0 
-            layer3_checksum_ipv6.threadId = 0; 
-        }
+    if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)) {
+        __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+        __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
+        checksum_map->procId = proc_id; 
+        checksum_map->threadId = threadId;
+    }else {
+        checksum_map->procId = 0; // keep this the helper in libbpf was added post kernel version 6.11.0 
+        checksum_map->threadId = 0; 
+    }
     #endif 
+    return checksum_map;
+}
+
+
+static 
+__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
+    __u16 ip_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
+    __u64 ip_kernel_time = bpf_ktime_get_ns();
+    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
+        .checksum =  ip_checksum, 
+        .kernel_timets = ip_kernel_time, 
+    };
+    __update_kernel_task_struct_checksum_maps(&layer3_checksum_ipv6);
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }
 
@@ -1466,11 +1474,12 @@ __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_i
 static 
 __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum){
     __u64 ipv4_kernel_time = bpf_ktime_get_ns();
-    struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
+    struct checkSum_redirect_struct_value layer3_checksum_ipv4 = { 
         .checksum =  ipv4_checksum, 
         .kernel_timets = ipv4_kernel_time,
     };
-    return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
+    __update_kernel_task_struct_checksum_maps(&layer3_checksum_ipv4);
+    return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv4, BPF_ANY);   
 }
 
 
@@ -1482,7 +1491,6 @@ __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_i
 */
 static 
 __always_inline void __update_kernel_packet_redirection_time(__u32 dns_query_id) {
-    
     __u64 kernel_redirection_process_time = bpf_ktime_get_ns();
     if (bpf_map_update_elem(&exfil_security_egress_redirect_loop_time, &dns_query_id, &kernel_redirection_process_time, 0) < 0) {
         if (DEBUG) {
@@ -1761,7 +1769,7 @@ int classify(struct __sk_buff *skb){
                 __u16 ip_checksum = bpf_ntohs(ip->check);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum) < 0) { // kernel parsed dns query id within kernel 
                         #ifdef DEBUG 
                             if (!DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
@@ -1910,10 +1918,10 @@ int classify(struct __sk_buff *skb){
                 }
 
                 __u32 transaction_id = bpf_ntohs(dns->transaction_id);
-
+                __u16 ip_checksum = bpf_ntohs(ip->check);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum) < 0) {
                         #ifdef DEBUG 
                             if (!DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \

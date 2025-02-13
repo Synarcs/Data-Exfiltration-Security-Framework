@@ -33,6 +33,8 @@ type TCHandler struct {
 
 	TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
 	GlobalErrorKernelHandlerChannel chan bool      // handles all control channel created by main to kill any kernel code if found runtime panics
+
+	IsEgressXdpSupport bool
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -41,16 +43,55 @@ var (
 	INIT_LIMITS_KERNEL_CONFIG = false
 )
 
+func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
+	streamClient *stream.StreamProducer) *model.DnsPacketGen {
+	xdpSocketFd, err := interfaces.GetRootNamespaceRawSocketFdXDP()
+	if err == nil {
+		log.Println("[x] Using the raw packet with AF_PACKET Fd")
+
+		return &model.DnsPacketGen{
+			IfaceHandler:        interfaces,
+			SockSendFdInterface: interfaces.PhysicalLinks,
+			XdpSocketSendFd:     xdpSocketFd,
+			SocketSendFd:        nil,
+			OnnxModel:           onnxModel,
+			StreamClient:        streamClient,
+		}
+	} else {
+		log.Println("Error Binding the XDP Socket Physical driver lacking support")
+		fd, err := interfaces.GetRootNamespaceRawSocketFd()
+
+		if err != nil {
+			panic(err.Error())
+		}
+		return &model.DnsPacketGen{
+			IfaceHandler:        interfaces,
+			SockSendFdInterface: interfaces.PhysicalLinks,
+			SocketSendFd:        fd,
+			XdpSocketSendFd:     nil,
+			OnnxModel:           onnxModel,
+			StreamClient:        streamClient,
+		}
+	}
+}
+
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
 	globalErrorKernelHandlerChannel chan bool) TCHandler {
-	return TCHandler{
+	dnsPacketGen := GenerateDnsPacketResendUtils(&iface, onnxModel, streamClient)
+
+	handler := TCHandler{
 		Interfaces:                      &iface,
-		DnsPacketGen:                    model.GenerateDnsParserModelUtils(&iface, onnxModel, streamClient),
+		DnsPacketGen:                    dnsPacketGen,
 		OnnxLoadedModel:                 onnxModel,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
 	}
+	if dnsPacketGen.XdpSocketSendFd != nil {
+		handler.IsEgressXdpSupport = true
+	}
+
+	return handler
 }
 
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
@@ -428,14 +469,25 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 					log.Println("Error in Ipv6 header checksum verification ipv6 has no default checksum")
 				}
 			}
-			timeVal := events.DPIRedirectionTimestampVerify{
-				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
-				UserSpace_Egress_Loaded: 1,
-			}
 
-			if err := dnsMapRedirectVerify.Put(timeVal.Kernel_timets, timeVal.UserSpace_Egress_Loaded); err != nil {
-				log.Println("Error updating the timestamp kernel values for egress traffic")
-				return err
+			// for AF_XDP kernel inject in device driver TX queue no need for guard map again and timing attack check as required in AF_PACKET
+			if tc.IsEgressXdpSupport {
+				if err := dnsMapRedirectMap.Delete(&dns_packet_id); err != nil {
+					if !errors.Is(err, ebpf.ErrKeyNotExist) {
+						log.Println("Link has XDP support Error delete the Key ", dns_packet_id)
+					}
+				}
+			} else {
+				// will again pass through kernel AF_PACKET via kernel TC
+				timeVal := events.DPIRedirectionTimestampVerify{
+					Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
+					UserSpace_Egress_Loaded: 1,
+				}
+
+				if err := dnsMapRedirectVerify.Put(timeVal.Kernel_timets, timeVal.UserSpace_Egress_Loaded); err != nil {
+					log.Println("Error updating the timestamp kernel values for egress traffic")
+					return err
+				}
 			}
 		}
 		return nil

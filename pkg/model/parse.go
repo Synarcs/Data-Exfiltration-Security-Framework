@@ -109,6 +109,11 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 	return nil
 }
 
+func (d *DnsPacketGen) CleanRedirectEgressMapsForXdp() error {
+
+	return nil
+}
+
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS, customNsFdHandle *int) layers.DNS {
 	return layers.DNS{
 		ID:           dns.ID,
