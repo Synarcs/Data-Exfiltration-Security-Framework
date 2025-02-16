@@ -45,6 +45,8 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
         log.debug(f"Received POST request with path: {self.path}")
         if self.path == "/onnx/dns" or self.path == "/onnx/dns/ing": 
             try:
+                if DEBUG:
+                    log.info(f'Current thread handle the request {threading.current_thread().getName()}')
                 content_length = int(self.headers['Content-Length'])
                 post_data = self.rfile.read(content_length)
                 self.send_response(200)

@@ -214,7 +214,7 @@ struct exfil_security_egress_redirect_loop_time {
 // count the number of packets 
 struct exfil_security_egress_redirect_count_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(key, __u16);     // dns dest target ip over redirection  // usually the host subnet cidr gateway
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_count_map SEC(".maps");
@@ -222,7 +222,7 @@ struct exfil_security_egress_redirect_count_map {
 // count the number of packets over reidrect to drop linux ns
 struct exfil_security_egress_redirect_drop_count_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u16);  // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(key, __u16);     // dns dest target ip over redirection  // usually the host subnet cidr gateway
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_drop_count_map SEC(".maps");
@@ -283,7 +283,7 @@ struct exfil_security_egress_rate_limit_map {
     do {                                                                                    \
         if ((transport_dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) ||                     \
             (transport_dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT))) {             \
-            if (DEBUG) {                                                               \
+            if (DEBUG) {                                                                    \
                 bpf_printk("Detected a possible multicast local link NS resolution request"); \
             }                                                                               \
             return TC_FORWARD;                                                              \
@@ -1391,6 +1391,7 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
 
 
 // performs high volume throughput based on rate limiting using the skb_buff size in payloads present in l7 for DNS 
+// usses fixed window counter algorithm 
 static 
 __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u32 dns_payload_size){
     
@@ -1771,7 +1772,7 @@ int classify(struct __sk_buff *skb){
                 if (!map_layer3_redirect_value) {
                     if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum) < 0) { // kernel parsed dns query id within kernel 
                         #ifdef DEBUG 
-                            if (!DEBUG) {
+                            if (DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");
                             }

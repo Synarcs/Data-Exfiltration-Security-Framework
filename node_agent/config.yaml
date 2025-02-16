@@ -35,3 +35,9 @@ metricsExporter:
 disableExporters:
   streaming: false
   metrics: false 
+
+
+enhancedFeatures:
+  dns:
+    enableNxFloodPrevention: false 
+    

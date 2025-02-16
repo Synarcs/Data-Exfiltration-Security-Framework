@@ -186,7 +186,13 @@ func main() {
 	// keep the iface for now only restrictive over the DNS egress layer
 	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
-	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic
+	if globalConfig.EnhancedFeatures.Dns.EnableNxFloodPrevention {
+		xdpHandler := xdp.NewXdpHandler(&iface)
+		if err := xdpHandler.LinkXdp(); err != nil {
+			log.Printf("Error Attach the XDP to physical link %+v", err)
+		}
+	}
+	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
 	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent

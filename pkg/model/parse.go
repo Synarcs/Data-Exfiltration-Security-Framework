@@ -194,12 +194,6 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		return fmt.Errorf("error parsing DNS layer")
 	}
 
-	if utils.DEBUG {
-		fmt.Println("src ip is", ipv4.SrcIP.To4(), "dest ip ", ipv4.DstIP.To4())
-		fmt.Println("src ip is", ipv6.SrcIP.To4(), "dest ip ", ipv6.DstIP.To4())
-		fmt.Println("src port is", udpPacket.SrcPort, "dest port ", udpPacket.DstPort)
-	}
-
 	features, err := ProcessDnsFeatures(dns, isEgress)
 
 	if err != nil {

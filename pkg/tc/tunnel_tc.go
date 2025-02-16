@@ -71,9 +71,11 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", mapField.ProcessId)
+			var sigKillStdoutBuffer bytes.Buffer
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))
+			cmd.Stderr = &sigKillStdoutBuffer
 			if err := cmd.Run(); err != nil {
-				log.Printf("Error while sending sigkill to process %d", mapField.ProcessId)
+				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, sigKillStdoutBuffer)
 			}
 			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", mapField.ProcessId)
 			delete(maliciousExfilProcessCount, mapField.ProcessId)

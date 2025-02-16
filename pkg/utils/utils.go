@@ -110,6 +110,12 @@ type NodeAgentConfig struct {
 		Streaming bool `yaml:"streaming" reflect:"streaming"`
 		Metrics   bool `yaml:"metrics" reflect:"metrics"`
 	} `yaml:"disableExporters" reflect:"disableExporters"`
+
+	EnhancedFeatures struct {
+		Dns struct {
+			EnableNxFloodPrevention bool
+		} `yaml:"dns" reflect:"dns"`
+	} `yaml:"enhancedFeatures" reflect:"enhancedFeatures"`
 }
 
 type Limites struct {

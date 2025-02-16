@@ -8,7 +8,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -16,10 +15,16 @@ const (
 )
 
 type XdpHandler struct {
-	Interfaces []netlink.Link // phsycal interfaces which kernel supports
+	Interfaces *netinet.NetIface // phsycal interfaces which kernel supports
 }
 
-func (xdp *XdpHandler) LinkXdp(xdpHandle func(interfaceId *int) error) error {
+func NewXdpHandler(interfaces *netinet.NetIface) *XdpHandler {
+	return &XdpHandler{
+		Interfaces: interfaces,
+	}
+}
+
+func (xdp *XdpHandler) LinkXdp() error {
 	handler, err := ebpf.LoadCollectionSpec(TC_INGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
@@ -44,7 +49,7 @@ func (xdp *XdpHandler) LinkXdp(xdpHandle func(interfaceId *int) error) error {
 	prog := spec.Programs[utils.XDP_CONTROL_PROG]
 	defer prog.Close()
 
-	for _, links := range xdp.Interfaces {
+	for _, links := range xdp.Interfaces.PhysicalLinks {
 		go func() {
 			l, err := link.AttachXDP(link.XDPOptions{
 				Program:   prog,
