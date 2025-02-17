@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -25,6 +26,7 @@ const (
 	XDP_CONTROL_PROG = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
+	DEFAULT_SK_BUFF_NUONCE        = 0xff
 )
 
 const (
@@ -196,4 +198,13 @@ func CpuArch() string {
 
 func GetCPUCores() int {
 	return runtime.NumCPU()
+}
+
+func GetRandomBootSkbMark() uint32 {
+	var randomNuonceSkbMarkBoot []byte = make([]byte, 24)
+	_, err := rand.Read(randomNuonceSkbMarkBoot)
+	if err != nil {
+		return DEFAULT_SK_BUFF_NUONCE
+	}
+	return binary.LittleEndian.Uint32(randomNuonceSkbMarkBoot)
 }

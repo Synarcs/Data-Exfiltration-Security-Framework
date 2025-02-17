@@ -39,8 +39,6 @@
 #define UDP_CHECK_FF (ETH_HLEN + offsetof(struct udphdr, check))
 #define TCP_CHECK_FF (ETH_HLEN + offsetof(struct tcphdr, check))
 
-#define ul unsigned long 
-
 struct enabled_exfil_netPol_config { 
     __u8 l3_filter;
     __u8 l4_filter; // l4 filter only applies if the required l3 matches 
@@ -88,8 +86,8 @@ int process(struct __sk_buff *skb) {
     __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
     __u32 tgid = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
 
-    void *data = (void *)(ul)skb->data;
-    void *data_end = (void *)(ul)skb->data_end;
+    void *data = (void *)(ull)skb->data;
+    void *data_end = (void *)(ull)skb->data_end;
 
     // parse the raw skb upto l4, and l7 for only dns traffic filter 
     // the kernel sock virtualized cni bridge dont need l7 filter since if the malicious c2 passes through host for dNS resolution forwarded through coredns the host bridge k8s tc  eBPF node agent will kill it 

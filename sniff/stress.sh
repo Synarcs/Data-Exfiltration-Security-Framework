@@ -14,7 +14,7 @@ runDigTest() {
     done
 }
 
-domains=(console.google.com t.bleed.io dnscat.bleed.io)
+domains=(cloud.google.com t.bleed.io dnscat.bleed.io)
 recordType=A
 i=10000
 

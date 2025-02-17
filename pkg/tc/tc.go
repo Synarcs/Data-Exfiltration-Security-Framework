@@ -254,6 +254,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				NfNdpBridgeIndexId:      uint32(iface.BridgeLinks[1].Attrs().Index),
 				RedirectIpv4:            utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
 				NfNdpBridgeRedirectIpv4: utils.GenerateBigEndianIpv4(utils.BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP),
+				KernelTCSKBMark:         utils.GetRandomBootSkbMark(),
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {

@@ -9,10 +9,10 @@
 
 #include "consts.h"
 #include "utils.h"
+#include "dns.h"
+#include "raw_proc.h" 
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
-
-#define NF_MAX_VERDICT NF_STOP
 
 struct br_net_filter_config_map { 
     __u32 Bridge_if_index; // holds and process the if_index for bridge of linux ns 
@@ -32,10 +32,17 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     // Add more context to your print
     __u32 out = skb->ifindex;
     __u32 mark = skb->mark;
-    bpf_printk("Bridge TC: received packet on ifindex=%d mark=%u\n", 
+
+    if (!DEBUG) {
+        bpf_printk("Bridge TC: received packet on ifindex=%d mark=%u\n", 
             skb->ifindex, skb->mark);
+    }
+
+    // if (skb->mark != redirect_skb_mark)  {
+    //     return TC_ACT_SHOT;
+    // }
  
-    return TC_FORWARD;
+    return TC_ACT_OK;
 }
 
 

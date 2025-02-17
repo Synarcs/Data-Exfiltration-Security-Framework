@@ -33,7 +33,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			panic(err.Error())
 		}
 
-		log.Println("Attaching a qdisc handler")
+		log.Println("Attaching a qdisc handler for the bridge")
 		qdisc_clsact := &netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,
@@ -45,10 +45,10 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			panic(err.Error())
 		}
 
-		filter := netlink.BpfFilter{
+		ingressFilter := netlink.BpfFilter{
 			FilterAttrs: netlink.FilterAttrs{
 				LinkIndex: link.Attrs().Index,
-				Parent:    netlink.HANDLE_MIN_EGRESS,
+				Parent:    netlink.HANDLE_MIN_INGRESS,
 				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
 				Protocol:  unix.ETH_P_ALL,
 			},
@@ -57,7 +57,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			DirectAction: true,
 		}
 
-		if err := netlink.FilterReplace(&filter); err != nil {
+		if err := netlink.FilterReplace(&ingressFilter); err != nil {
 			panic(err.Error())
 		}
 	}

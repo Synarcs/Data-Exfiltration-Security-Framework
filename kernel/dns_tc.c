@@ -313,6 +313,18 @@ struct exfil_security_egress_rate_limit_map {
                     return SUSPICIOUS;              \
             }                                       
 
+// custom range order filtering for the DNS domains over the labels queries ssections 
+#define SUBDOMAIN_RANGE_FILTER(subdmoain_label_count,subdmoain_label_count_config_min_key,subdmoain_label_count_config_max_key)                           \
+    if (!DEBUG)                                                                                                                                             \
+        bpf_printk("subdomain count %d ", subdmoain_label_count);                                                                                           \
+    __u32 * subdmoain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdmoain_label_count_config_min_key);          \
+    if (!subdmoain_label_count_config_min_map) *subdmoain_label_count_config_min_map = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
+    __u32 * subdmoain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdmoain_label_count_config_max_key);          \
+    if (!subdmoain_label_count_config_max_map) *subdmoain_label_count_config_max_map = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
+    if (subdmoain_label_count >= subdmoain_label_count_config_min_map && subdmoain_label_count <= subdmoain_label_count_config_max_map) return SUSPICIOUS;  \
+    if (subdmoain_label_count > subdmoain_label_count_config_max_map) return MALICIOUS;                                                                     \
+
+
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
 #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip)                                   \
@@ -589,7 +601,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
             
-
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
@@ -602,10 +613,15 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            
+            #ifdef SUBDOMAIN_RANGE_LABEL_FILTER
+                if (SUBDOMAIN_RANGE_LABEL_FILTER) {
+                    __u32 subdmoain_label_count_config_min_key = 6; // min subdmains exclude the tld filter based on subdmain count
+                    __u32 subdmoain_label_count_config_max_key = 7; // max subdmains exclude the tld filter based on subdmain count
+                    SUBDOMAIN_RANGE_FILTER(subdmoain_label_count, subdmoain_label_count_config_min_key, subdmoain_label_count_config_max_key)
+                }
+            #endif
 
-            if (DEBUG) {
-                bpf_printk("subdomain count %d ", subdmoain_label_count);
-            }
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
             if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
@@ -722,7 +738,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
         
-
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
@@ -880,8 +895,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
                 struct dns_header *dns_header, struct udphdr *udp) {
     // check whether a non standard port is used for dns query and dns payload 
     
-    struct dns_flags  flags;
-    flags = get_dns_flags(dns_header);
+    struct dns_flags flags = get_dns_flags(dns_header);
     
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
@@ -1551,8 +1565,10 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 } 
 
 static 
-__always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb) {
-    skb->mark = redirect_skb_mark;
+__always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
+    if (skb_redir_hash == 0) skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
+    else
+        skb->mark = skb_redir_hash;
 }
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
@@ -1760,8 +1776,11 @@ int classify(struct __sk_buff *skb){
 
                     __handle_kernel_map_redirection_drop_count();
 
-                    __mark_skb_packet_buffer(skb);
-
+                    if (!config) {
+                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                    }else {
+                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                    }
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
@@ -1811,8 +1830,12 @@ int classify(struct __sk_buff *skb){
 
                 __handle_kernel_map_redirection_count();
 
-                __mark_skb_packet_buffer(skb);
-
+                if (!config) {
+                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                }else {
+                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                }
+                
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
@@ -1911,7 +1934,11 @@ int classify(struct __sk_buff *skb){
 
                     __handle_kernel_map_redirection_drop_count();
 
-                    __mark_skb_packet_buffer(skb);
+                    if (!config) {
+                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                    }else {
+                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                    }
                     
                     if (config) 
                         return bpf_redirect(config->BridgeIndexId, BPF_F_INGRESS);
@@ -1985,7 +2012,11 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 }
 
-                __mark_skb_packet_buffer(skb);
+                if (!config) {
+                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                }else {
+                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                }
 
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS);
@@ -2080,8 +2111,12 @@ int classify(struct __sk_buff *skb){
                     #endif
                     // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
                     __handle_kernel_map_redirection_drop_count();
-
-                    __mark_skb_packet_buffer(skb);
+                    if (!config) {
+                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                    }else {
+                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                    }
+                    
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
@@ -2111,7 +2146,11 @@ int classify(struct __sk_buff *skb){
 
                 __handle_kernel_map_redirection_count();
 
-                __mark_skb_packet_buffer(skb);
+                if (!config) {
+                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                }else {
+                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                }
                 
                 ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
 
@@ -2180,7 +2219,13 @@ int classify(struct __sk_buff *skb){
                 else if (result.drop) {
 
                     __handle_kernel_map_redirection_drop_count();
-                    __mark_skb_packet_buffer(skb);
+                    
+                    if (!config) {
+                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                    }else {
+                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                    }
+    
                     
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, BPF_F_INGRESS);
@@ -2207,7 +2252,11 @@ int classify(struct __sk_buff *skb){
                 }
 
                 __handle_kernel_map_redirection_count();
-                __mark_skb_packet_buffer(skb);
+                if (!config) {
+                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
+                }else {
+                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
+                }
 
                 __u32 tcp_payload_len = bpf_ntohs(ipv6->payload_len) - (tcp->doff * 4);
                 if (result.deep_scan_mirror) {
