@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"errors"
-	"fmt"
 	"log"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -77,7 +75,7 @@ func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
 	var evict bool
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
-		return errors.New(fmt.Sprintf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld))
+		log.Printf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld)
 	} else {
 		value, _ := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 		if fqdn == "" {

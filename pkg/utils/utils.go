@@ -116,6 +116,7 @@ type NodeAgentConfig struct {
 	EnhancedFeatures struct {
 		Dns struct {
 			EnableNxFloodPrevention bool
+			EnableIngressSniff      bool
 		} `yaml:"dns" reflect:"dns"`
 	} `yaml:"enhancedFeatures" reflect:"enhancedFeatures"`
 }

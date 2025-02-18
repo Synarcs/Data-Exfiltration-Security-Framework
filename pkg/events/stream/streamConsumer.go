@@ -94,12 +94,18 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
 						statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 				}
-				if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-					utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
-				}
 
-				if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
-					utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
+				if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
+					if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
+						utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+					}
+
+					if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
+						utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
+					}
+				} else {
+					utils.DeleteDomainBlackListInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+					utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
 				}
 
 				if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {

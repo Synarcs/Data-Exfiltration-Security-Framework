@@ -34,7 +34,7 @@ type RemoteStreamInferenceControllerAnalyzed struct {
 	Fqdn            string `json:"fqdn"`
 	Tld             string `json:"tld"`
 	RecordType      string `json:"recordType"`
-	IsFprcedUnblock bool   `json:"isForcedUnBlocked"`
+	IsForcedUnblock bool   `json:"isForcedUnBlocked"`
 	// node ip or endpoint where data breach occured for other nodes to loga and event source
 	DetectedThreadNodeIpv4           string   `json:"detectedThreadNodeIpv4"`
 	DetectedThreadNodeIpv6           string   `json:"detectedThreadNodeIpv6"`

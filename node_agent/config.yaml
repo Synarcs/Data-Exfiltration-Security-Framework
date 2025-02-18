@@ -40,4 +40,5 @@ disableExporters:
 enhancedFeatures:
   dns:
     enableNxFloodPrevention: false 
+    enableIngressSniff: true 
     

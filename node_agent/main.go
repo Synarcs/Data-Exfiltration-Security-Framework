@@ -193,8 +193,11 @@ func main() {
 		}
 	}
 
-	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
-	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
+	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
+		// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
+		ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
+		go ingress.SniffIgressForC2C()
+	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
 	kprobe := kprobe.GenerateKprobeEventFactory()
@@ -217,8 +220,6 @@ func main() {
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(globalConfig)
-
-	go ingress.SniffIgressForC2C()
 
 	go func(tc tcl.TCHandler) {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
