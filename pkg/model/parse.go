@@ -146,7 +146,7 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 
 		currProcessTime := time.Now().Nanosecond()
 
-		roundProcessTime := float64(currProcessTime-int(KernelPacketRedirectTimeEgress)) / 1000000.0
+		roundProcessTime := float64(currProcessTime-int(KernelPacketRedirectTimeEgress)) / 1_000_000.0
 
 		if !utils.DEBUG {
 			log.Printf("The round trip time for the dns packet %fms", roundProcessTime)
@@ -212,7 +212,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			}
 			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer
 		}
-		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet")
+		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet", features)
 		// add the tld and domain information in packet malicious map for local cache
 		if len(features) > 1 {
 			for _, feature := range features {

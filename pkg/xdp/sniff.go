@@ -104,6 +104,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 
 		for index, resp := range inferenceResponse.ThreatType {
 			if resp {
+				log.Println("raw feature for malicious payload is ::", rawFeatures[index])
 				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
 				// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
 				// the same port as used for egrres will be used as src port for response from remote c2c malware
@@ -165,8 +166,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 			panic(fmt.Errorf("the packet is malformed"))
 		}
 		payload := tcpPacket.Payload
-
-		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
 
 		if len(payload) < 2 {
 			log.Println("errror ", len(payload))

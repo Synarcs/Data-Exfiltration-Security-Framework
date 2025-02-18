@@ -77,8 +77,12 @@ const (
 	EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP             = "exfil_security_egress_redirect_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP = "exfil_security_egress_redirect_drop_count_map"
 	EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME             = "exfil_security_egress_redirect_loop_time"
-	EXFIL_VXLAN_BLOCK_EGRESS_PORT                         = "exfil_vxlan_block_egress_port"
-	EXFIL_TC_BRIDGE_CONFIG_MAP                            = "exfil_security_tc_bridge_config_map"
+
+	EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP             = "exfil_security_egress_clone_redirect_count_map"
+	EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP = "exfil_security_egress_clone_redirect_drop_kernel_count_map"
+
+	EXFIL_VXLAN_BLOCK_EGRESS_PORT = "exfil_vxlan_block_egress_port"
+	EXFIL_TC_BRIDGE_CONFIG_MAP    = "exfil_security_tc_bridge_config_map"
 
 	// controller aware l3, proxy maps for all maps kernel will drop traffic
 	EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter"

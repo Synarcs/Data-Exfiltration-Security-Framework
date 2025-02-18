@@ -41,8 +41,8 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     // if (skb->mark != redirect_skb_mark)  {
     //     return TC_ACT_SHOT;
     // }
- 
-    return TC_ACT_OK;
+    
+    return TC_DROP;
 }
 
 

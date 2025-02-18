@@ -7,9 +7,7 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Node;
 
-import com.synarcs.controller.protocols.IFeatureTransportProtocol;
 import com.synarcs.controller.protocols.ProtocolEnums;
 
 public class NodeCache<T> implements Serializable {

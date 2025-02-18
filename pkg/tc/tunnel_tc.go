@@ -86,6 +86,36 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 	}
 }
 
+func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool, ebpfMaps [4]*ebpf.Map) error {
+	var redirCountKey uint32 = 0
+	if !isCloneRedirectedAndMalicious {
+		cloneredirectMap := ebpfMaps[2]
+		if cloneredirectMap != nil {
+			var currCt uint32 = 0
+			if err := cloneredirectMap.Lookup(&redirCountKey, &currCt); err != nil {
+				log.Printf("Error while reading the clone redirect count from the map %+v", err)
+			}
+			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionCountEvent](events.PacketDPICloneRedirectionCountEvent{
+				KernelCloneRedirectPacketCount: currCt,
+				EvenTime:                       time.Now().GoString(),
+			})
+		}
+	} else {
+		cloneredirectDropMap := ebpfMaps[3]
+		if cloneredirectDropMap != nil {
+			var currCt uint32 = 0
+			if err := cloneredirectDropMap.Lookup(&redirCountKey, &currCt); err != nil {
+				log.Printf("Error while reading the clone redirect count from the map %+v", err)
+			}
+			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionDropCountEvent](events.PacketDPICloneRedirectionDropCountEvent{
+				KernelCloneRedirectPacketDropCount: currCt,
+				EvenTime:                           time.Now().GoString(),
+			})
+		}
+	}
+	return nil
+}
+
 func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	runtime.LockOSThread()
 
@@ -121,9 +151,11 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 		}
 	}()
 
-	var tunnelTrafficEBPFMaps [2]*ebpf.Map = [2]*ebpf.Map{
+	var tunnelTrafficEBPFMaps [4]*ebpf.Map = [4]*ebpf.Map{
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN],
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT],
+		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP],
+		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
 	}
 
 	for packet := range packetSource.Packets() {
@@ -219,7 +251,8 @@ func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPor
 	return &potentialMalicious, nil
 }
 
-func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, ebpfMaps [2]*ebpf.Map, errorChannel chan interface{}) {
+// TODO: fix global collection spec for this with associated eBPF maps
+func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, ebpfMaps [4]*ebpf.Map, errorChannel chan interface{}) {
 	if utils.DEBUG {
 		log.Println("called the sniffer for packet")
 	}
@@ -308,6 +341,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 	udpPack := packet.Layer(layers.LayerTypeUDP)
 	tcpPack := packet.Layer(layers.LayerTypeTCP)
 
+	go tun.UpdateExportMetricsCountForDnsExfilRandomPort(false, ebpfMaps)
 	transportPayload := packetTransportLayer.LayerPayload()
 	if len(transportPayload) < 12 {
 		if utils.DEBUG {
@@ -410,6 +444,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destTransportPort)) // (wont overflow (1 << 16))
 					}
 
+					go tun.UpdateExportMetricsCountForDnsExfilRandomPort(true, ebpfMaps)
 					go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
 						Src_port:       int(event.SrcPort),
 						Dest_port:      int(event.DstPort),

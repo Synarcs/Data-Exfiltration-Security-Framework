@@ -211,13 +211,29 @@ struct exfil_security_egress_redirect_loop_time {
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redirect_loop_time  SEC(".maps");
 
-// count the number of packets 
+// count the number of packets redirected from kernel over standard port 
 struct exfil_security_egress_redirect_count_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16);     // dns dest target ip over redirection  // usually the host subnet cidr gateway
     __type(value, __u32);   // count of hte packet for multiple redirection 
     __uint(max_entries, 1);
 } exfil_security_egress_redirect_count_map SEC(".maps");
+
+// count the number of packets clone redirected from kernel over potential non_standard Port Exfiltration 
+struct exfil_security_egress_clone_redirect_count_map {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u16);     // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(value, __u32);   // count of hte packet for multiple redirection 
+    __uint(max_entries, 1);
+} exfil_security_egress_clone_redirect_count_map SEC(".maps");
+
+// count the number of packets clone redirected from kernel over potential non_standard Port Exfiltration, post user space deep scan and dropped by kernel over egress 
+struct exfil_security_egress_clone_redirect_drop_kernel_count_map {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u16);     // dns dest target ip over redirection  // usually the host subnet cidr gateway
+    __type(value, __u32);   // count of hte packet for multiple redirection 
+    __uint(max_entries, 1);
+} exfil_security_egress_clone_redirect_drop_kernel_count_map SEC(".maps");
 
 // count the number of packets over reidrect to drop linux ns
 struct exfil_security_egress_redirect_drop_count_map {
@@ -987,6 +1003,33 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
     return 0;
 }
 
+static 
+__always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirectedDropped) {
+    #ifdef DEBUG
+        if (DEBUG) {
+            bpf_printk("Updating the kernel maps for clone redirection from kernel ");
+        }
+    #endif 
+    __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
+    if (isRedirectedDropped) {
+        __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key);
+        if (ct_val) 
+            __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
+        else {
+            const __u32 init_map_redirect_count = 1;
+            bpf_map_update_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+        }
+    }else {
+        __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key);
+        if (ct_val) 
+            __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
+        else {
+            const __u32 init_map_redirect_count = 1;
+            bpf_map_update_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+        }
+    }
+}
+
 
 static 
 __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
@@ -1018,6 +1061,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
         return -1;
     }        
 
+    __handle_kernel_map_clone_redirected_count(false);
     return 0;
 }
 
@@ -1114,6 +1158,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                     if(DEBUG) bpf_printk("Tunnelled c2c dns traffic over other standard port for dns transfer ... ");
                 #endif 
             }
+            __handle_kernel_map_clone_redirected_count(true);
             return 0;
         }else {
             raw_pack->isPacketRescanedAndMalicious = (__u8)0;

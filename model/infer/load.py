@@ -34,8 +34,7 @@ def raw_inference(domain: str) -> bool:
      
      predict = session.run([output_name], {input_name: input_features})
      print("Mal" if predict[0][0][0] > 0.5 else "Benign")
-     return True if predict[0][0][0] > 0.5 else False
 
 
 if __name__ == '__main__':
-    print(raw_inference('paaae14y.t.bleed.io'))
+    raw_inference('t.bleed.io')

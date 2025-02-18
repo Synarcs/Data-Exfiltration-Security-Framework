@@ -29,6 +29,16 @@ type PacketDPIRedirectionCountEvent struct {
 	EvenTime                  string
 }
 
+type PacketDPICloneRedirectionCountEvent struct {
+	KernelCloneRedirectPacketCount uint32
+	EvenTime                       string
+}
+
+type PacketDPICloneRedirectionDropCountEvent struct {
+	KernelCloneRedirectPacketDropCount uint32
+	EvenTime                           string
+}
+
 type PacketDPIKernelDropCountEvent struct {
 	KernelDropPacketCount uint32
 	EvenTime              string
@@ -78,8 +88,9 @@ const (
 	SMTP Protocol = "SMTP"
 )
 
+// TODO Make nested generic service interfaces
 type KernelPacketDropRedirectInterface interface {
-	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent |
+	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent | PacketDPICloneRedirectionCountEvent | PacketDPICloneRedirectionDropCountEvent |
 		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer | VxlanEncapKenrelEvent
 }
 
@@ -122,6 +133,8 @@ var (
 		},
 		// []string{"drop_count", "time"},
 	)
+
+	// redirect for non standard DNS port transfer
 	redirect_event_metric = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "kernel_packet_redirect_event",
@@ -134,6 +147,38 @@ var (
 		prometheus.CounterOpts{
 			Name: "kernel_packet_redirect_event_count",
 			Help: "The kernel packet  redirect event",
+		},
+	)
+
+	// clone redirect for non standard DNS port transfer
+	clone_redirect_event_metric = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "kernel_packet_clone_redirect_event",
+			Help: "Kernel packet clone redirect events for potential malicious exfiltration traffic over non-standard ports",
+		},
+		[]string{"clone_redirect_count", "time"},
+	)
+
+	// out of all the clone redirected packets denotes how many of them where actually dropped from kernel
+	clone_redirect_event_metric_count = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kernel_packet_clone_redirect_event_count",
+			Help: "Total count of kernel packet clone redirect events for potential malicious exfiltration traffic over non-standard ports",
+		},
+	)
+
+	clone_redirect_event_drop_metric = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "kernel_packet_clone_redirect_drop_event",
+			Help: "Kernel packet clone redirect drop events for potential malicious exfiltration traffic over non-standard ports",
+		},
+		[]string{"clone_redirect_drop_count", "time"},
+	)
+
+	clone_redirect_event_drop_metric_count = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kernel_packet_clone_redirect_drop_count",
+			Help: "Total count of malicious packets dropped after clone redirect and deep analysis",
 		},
 	)
 
@@ -214,6 +259,8 @@ const (
 func init() {
 	prometheus.MustRegister(drop_event_metric, drop_event_metric_count,
 		redirect_event_metric, redirect_event_metric_count,
+		clone_redirect_event_metric, clone_redirect_event_metric_count,
+		clone_redirect_event_drop_metric, clone_redirect_event_drop_metric_count,
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
 		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer,
@@ -281,6 +328,29 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 				"time":           e.EvenTime,
 			},
 		).Set(float64(e.KernelRedirectPacketCount))
+
+	case PacketDPICloneRedirectionCountEvent:
+		if exportCount {
+			clone_redirect_event_metric_count.Inc()
+		}
+
+		clone_redirect_event_metric.With(
+			prometheus.Labels{
+				"clone_redirect_count": fmt.Sprintf("%d", e.KernelCloneRedirectPacketCount),
+				"time":                 e.EvenTime,
+			},
+		).Set(float64(e.KernelCloneRedirectPacketCount))
+
+	case PacketDPICloneRedirectionDropCountEvent:
+		if exportCount {
+			clone_redirect_event_drop_metric_count.Inc()
+		}
+		clone_redirect_event_drop_metric.With(
+			prometheus.Labels{
+				"clone_redirect_drop_count": fmt.Sprintf("%d", e.KernelCloneRedirectPacketDropCount),
+				"time":                      e.EvenTime,
+			},
+		).Set(float64(e.KernelCloneRedirectPacketDropCount))
 
 	case RawDnsEvent:
 		sniffedDnsEvent.With(prometheus.Labels{

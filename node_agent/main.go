@@ -192,6 +192,7 @@ func main() {
 			log.Printf("Error Attach the XDP to physical link %+v", err)
 		}
 	}
+
 	// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
 	ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
 
