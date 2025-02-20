@@ -9,7 +9,6 @@ import (
 	"os"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -39,23 +38,25 @@ func exfil_client() {
 	var reader chan os.Signal = make(chan os.Signal)
 
 	go func() {
-		stream, err := client.DomainStream(context.Background(), &pb.ExfilDomainsLength{Len: int64(*clientId)})
+		var domains []string = []string{"google.com", "apple.com"}
+		stream, err := client.GetExfilDomains(context.Background(), &pb.ExfilDomains{Domain: domains[0]})
 		if err != nil {
 			panic(err.Error())
 		}
 		for {
+
 			val, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				log.Println("error receive froms erver side stream ")
+				log.Println("error receive froms erver side stream ", err)
 				return
 			}
 			if val != nil {
-				utils.UpdateDomainBlacklistInEgressCache(val.Tld, val.GetDomain())
+				log.Println(val.Domain, val.Tld)
 			}
-			fmt.Println("got stream ", val)
+			fmt.Println(val.Status)
 		}
 	}()
 

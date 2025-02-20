@@ -9,3 +9,8 @@ protoc-gen:
 	--go-grpc_out=$(go_out) \
 	--go-grpc_opt=paths=source_relative,require_unimplemented_servers=false \
 	exfil_sec.proto
+
+.PHONY: dep
+dep:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest

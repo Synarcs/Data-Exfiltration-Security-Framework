@@ -7,9 +7,10 @@ import logging, signal, threading
 import socketserver
 import onnxruntime as ort , onnx 
 import http.server
-import consts, infer 
+import consts 
 import datetime 
 from argparse import ArgumentParser
+from pathlib import Path 
 from multiprocessing import cpu_count 
 from queue import Queue 
 
@@ -17,29 +18,32 @@ log = logging.getLogger(__name__)
 DEBUG: bool = False 
 log.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
 
-class OnnxInference(object): 
-    model = None 
-    model_path = "../dns_sec.onnx"
-    def __init__(self) -> None:
-        pass 
 
-    def load(self) -> NoReturn: 
-        print('[x] Loading the Onnx Inferencing Serialized Model ...')
-        if os.path.isfile(self.model_path): 
-            self.model = onnx.load(self.model_path) 
+parser = ArgumentParser() 
+parser.add_argument('-c', '--controller', type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
+parser.add_argument('-m', '--model_path', type=str, required=True, help="Path to the ONNX model")
+args = parser.parse_args()
+model = Path('../model/dns_sec.onnx' if not os.path.exists(args.model_path) else args.model_path).absolute()
+session = ort.InferenceSession(model) 
 
-        print('The onnx inference Model loaded successfully') 
+if not os.path.exists(model):
+    print('the required trained onnx model not found')
+    os.exit(signal.SIGKILL) 
 
-    def verifyOnnxGraph(self) -> bool:
-        return onnx.checker.check_model(self.model, full_check=True) 
+input_name = session.get_inputs()[0].name
+output_name = session.get_outputs()[0].name
+
 
 class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
     def __init__(self, request: socket.socket, client_address: tuple[str, int], server: socketserver.BaseServer) -> None:
         super().__init__(request, client_address, server)
-        global onnxInferenceServer
         
-    def infer(self, feature) -> bool:
-        return infer.Inference.predict(input_features=np.array(feature, dtype=np.float32).reshape(1, -1)) 
+    def infer(self, input_features) -> bool:
+        feature_vec = np.array(input_features, dtype=np.float32).reshape(1, -1)
+        if feature_vec.shape != (1, 8):
+            log.error('cannot infer a broken vector tensor for model inference')
+            return 
+        return True if session.run([output_name], {input_name: feature_vec})[0][0][0] > 0.5 else False 
 
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
@@ -123,7 +127,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 self.send_error(http.HTTPStatus.INTERNAL_SERVER_ERROR, f"Internal server error: {str(e)}")
                 return 
         else:
-            self.send_error(http.HTTPStatus.BAD_REQUEST, "The inference server cannot process the request")
+            self.send_error(http.HTTPStatus.BAD_REQUEST, "The ference server cannot process the request")
 
 class UnixSocketHttpServer(socketserver.UnixStreamServer):
     def get_request(self):
@@ -219,15 +223,11 @@ def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) 
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
-    parser = ArgumentParser() 
-    parser.add_argument('-c', '--controller', type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
-    args = parser.parse_args()
+
 
     ingressQueue: Queue = Queue()
     egressQueue: Queue = Queue() 
 
-    onnxInferenceServer: OnnxInference = OnnxInference()
-    onnxInferenceServer.load()
 
     executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=cpu_count())
 

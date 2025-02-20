@@ -1,0 +1,3 @@
+sliver.bleed.io A 
+t.bleed.io A
+dnscat.bleed.io A

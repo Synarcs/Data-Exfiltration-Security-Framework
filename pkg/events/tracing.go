@@ -115,7 +115,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "dns_round_trip_seconds",
 			Help:    "DNS query round-trip time in seconds",
-			Buckets: []float64{.1, .2, .4, .6, .8, 1, 2},
+			Buckets: []float64{100, 200, 300, 400, 500, 900, 1200},
 		},
 	)
 
@@ -362,6 +362,9 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 		}).Set(float64(time.Now().Unix()))
 
 	case KernelNetlinkSocket:
+		if exportCount {
+			malicious_detected_event_userspace.Inc()
+		}
 		malicious_tunnel_socket.With(prometheus.Labels{
 			"process_id":      strconv.Itoa(int(e.ProcessId)),
 			"user_id":         strconv.Itoa(int(e.Uid)),

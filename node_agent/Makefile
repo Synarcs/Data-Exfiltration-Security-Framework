@@ -41,13 +41,12 @@ build-x86:
 .PHONY: run-inference
 run-inference:
 	@echo "Running the Remote unix socket inference server" 
-	sudo python3 ../model/infer/inference.py
+	sudo python3 ../model/infer/inference.py  -m "../dns_sec.onnx"
 
 .PHONY: run-inference-controller
 run-inference-controller:
 	@echo "Running the Remote unix socket inference server on controller server"
-	python3 ../model/infer/inference.py -c true && chmod 777 /etc/powerdns/onnx-inference-out.sock && chmod 777 /etc/powerdns/onnx-inference-in.sock
-
+	python3 ../model/infer/inference.py -m /opt/dns_sec.onnx -c true && chmod 777 /etc/powerdns/onnx-inference-out.sock && chmod 777 /etc/powerdns/onnx-inference-in.sock
 
 .PHONY: netinet
 netinet:

@@ -80,6 +80,7 @@ func ReadTldDomainsData() (*TopDomains, error) {
 	}
 
 	file, _ := os.Open(fd)
+	defer file.Close()
 	fileInfo, _ := file.Stat()
 
 	fileSize := fileInfo.Size()
@@ -87,7 +88,6 @@ func ReadTldDomainsData() (*TopDomains, error) {
 	topDomains := &TopDomains{
 		TopDomains: &sync.Map{},
 	}
-	defer file.Close()
 
 	workers := GetCPUCores()
 	chunkRanges := getFileChunks(fileSize, workers)

@@ -4,10 +4,17 @@ package exfil_kernel;
 
 option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework";
 
+enum DNS_MALICIOUS_FLAGS {
+    MALICIOUS  = 0;
+    SUSPICIOUS = 1;
+}
+
 message ExfilDomains {
     string domain = 1;
     string tld = 2;
     int64 totalLength = 3;
+    repeated uint32 featureVectors = 4;
+    map<string, DNS_MALICIOUS_FLAGS> status = 5;
 };
 
 message ExfillSecurityLengthLimits { 
@@ -19,9 +26,7 @@ message ExfilDomainsLength {
 }
 
 service NodeAgentService {
-    rpc GetExfilDomains(ExfilDomains) returns (ExfilDomains);
+    rpc GetExfilDomains(ExfilDomains) returns (stream ExfilDomains);
     rpc GenExfilDomainsLength(ExfilDomains) returns (ExfilDomainsLength);
-
-    // returns the count of the stream events 
-    rpc DomainStream(ExfilDomainsLength) returns (stream ExfilDomains);
+    rpc BidirstreamLimits(stream ExfillSecurityLengthLimits) returns (stream ExfillSecurityLengthLimits);
 };

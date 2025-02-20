@@ -1,6 +1,16 @@
+model_path ?= model/dns_sec.onnx
+DEBUG ?= false 
+
 .PHONY: build 
 build:
 	bash build.sh 
+
+.PHONY: run_node_agent
+run_node_agent:
+	@echo "Booting up the node agent"
+	echo "starting unix sock inference server $(model_path)"
+	sudo python3 model/infer/inference.py -m $(model_path) &
+	cd node_agent && sudo ./main
 
 .PHONY: build-controller
 build-controller:
@@ -23,6 +33,13 @@ build-framework:
 	@echo "building the framework"
 	make build
 	make build-controller
+
+QPS ?= 20000
+DURATION ?= 20
+
+.PHONY: bench
+bench:
+	cd scripts/bench  && bash bench.sh dnsperf $(QPS) $(DURATION)
 
 .PHONY: gazelle-update-repos
 gazelle-update-repos:

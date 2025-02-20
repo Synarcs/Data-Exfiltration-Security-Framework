@@ -4,11 +4,12 @@ import (
 	"context"
 	"log"
 	"net"
-	"strings"
 	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type NodeAgentService struct {
@@ -17,29 +18,28 @@ type NodeAgentService struct {
 	Ctx           context.Context
 }
 
-func (s *NodeAgentService) GetExfilDomains(context.Context, *pb.ExfilDomains) (*pb.ExfilDomains, error) {
-	maliciousDomain := "google.com"
-	return &pb.ExfilDomains{
-		Domain:      maliciousDomain,
-		Tld:         strings.Split(maliciousDomain, ".")[1],
-		TotalLength: int64(len(maliciousDomain)),
-	}, nil
-}
-
-func (s *NodeAgentService) GenExfilDomainsLength(ctx context.Context, req *pb.ExfilDomains) (*pb.ExfilDomainsLength, error) {
-	return &pb.ExfilDomainsLength{Len: int64(len(req.Domain))}, nil
-}
-
-func (s *NodeAgentService) DomainStream(req *pb.ExfilDomainsLength, stream grpc.ServerStreamingServer[pb.ExfilDomains]) error {
-	maliciousDomain := "sample.com"
+func (s *NodeAgentService) GetExfilDomains(domain *pb.ExfilDomains, stream pb.NodeAgentService_GetExfilDomainsServer) error {
 	for {
-		stream.Send(&pb.ExfilDomains{
-			Domain:      time.Now().GoString(),
-			Tld:         strings.Split(maliciousDomain, ".")[1],
-			TotalLength: req.Len,
-		})
+		if err := stream.Send(&pb.ExfilDomains{
+			Domain:         domain.Domain,
+			Tld:            domain.Tld,
+			FeatureVectors: []uint32{},
+			Status: map[string]pb.DNS_MALICIOUS_FLAGS{
+				domain.Domain: pb.DNS_MALICIOUS_FLAGS_MALICIOUS,
+			},
+		}); err != nil {
+			return err
+		}
 		time.Sleep(time.Second)
 	}
+}
+
+func (s *NodeAgentService) BidirstreamLimits(stream pb.NodeAgentService_BidirstreamLimitsServer) error {
+	return status.Errorf(codes.Unimplemented, "method BidirstreamLimits not implemented")
+}
+
+func (s *NodeAgentService) GenExfilDomainsLength(ctx context.Context, domain *pb.ExfilDomains) (*pb.ExfilDomainsLength, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GenExfilDomainsLength not implemented")
 }
 
 func (rpc *NodeAgentService) Server() {
@@ -48,7 +48,7 @@ func (rpc *NodeAgentService) Server() {
 		panic(err.Error())
 	}
 
-	log.Println("Node Agent RPC Server Listen on POrt :: ", 33333)
+	log.Println("Node Agent RPC Server Listen on POrt :: ", 3200)
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
 	pb.RegisterNodeAgentServiceServer(s, &NodeAgentService{})

@@ -1,4 +1,5 @@
 
+set -e 
 pass=$1 
 
 # ################# Iodine DNS Tunnel Remote Exfil tunnel ##########################

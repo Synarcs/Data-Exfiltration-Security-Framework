@@ -78,6 +78,25 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 * Enhance support for DOT (DNS over TLS). 
 * Add support for XDP ingress NXDOMAIN flood prevention to break DNS woter torture flood attacks. 
 
+
+## Building 
+
+### Data Plane (eBPF Node Agent)
+```
+    bash infrastructure/compile.sh
+    make build 
+    make run_node_agent
+```
+### Control Plane 
+```
+    bash infrastructure/controller.sh 
+    make build-controller
+```
+
+## Dependencies
+* Data Plane (eBPF Node Agent): ``` infrastructure/compile.sh ```
+* Control Plane: ``` infrastructure/controller.sh ```
+
 ## Authors
 - [Vedang Parasnis](https://github.com/Synarcs/)
 
