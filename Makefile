@@ -34,7 +34,7 @@ build-framework:
 	make build
 	make build-controller
 
-QPS ?= 20000
+QPS ?= 100000
 DURATION ?= 20
 
 .PHONY: bench

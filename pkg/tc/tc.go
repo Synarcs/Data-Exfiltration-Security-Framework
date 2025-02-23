@@ -562,6 +562,10 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
 	errorChannel chan<- error, isStandardPort bool) error {
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
 		fmt.Println("error opening packet capture over hz,te interface from kernel")

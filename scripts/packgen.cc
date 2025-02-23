@@ -15,7 +15,7 @@
 #include <queue>
 #include <signal.h>
 
-typedef u_int32_t __u32; 
+using u_int32_t = __u32; 
 
 typedef struct PacketProcessHeader {
     __u32 packet_class;
@@ -28,7 +28,7 @@ class PacketHandler {
         std::vector<__u32> watchpolledFd;
         const int capQueueSize = (int) 1e5;
     protected:
-        struct PacketProcessHeader *packet; 
+        struct PacketProcessHeader *packet;
     public:
         __u32 fd;
         std::queue<__u32> submissionWatchQueue;

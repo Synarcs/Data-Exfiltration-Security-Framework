@@ -320,7 +320,7 @@ function preresolve(dq)
         if quer_res['threat_type'] then
             insertMaliciousDomains(qname)
             dq.rcode = pdns.NXDOMAIN
-            return true
+            return true 
         end 
     end
 
