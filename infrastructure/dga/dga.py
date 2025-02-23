@@ -14,7 +14,7 @@ exfil_tools: List[str] = ['dnscat', 'sliver', 'iodine', 'nuages']
 DNS_C2_EXFIL_SERVER: str = '10.158.82.53'
 DEBUG: bool = False 
 
-DEFAULT_FORWARD_ZONE = 'forward-zones=t.bleed.io=10.158.82.55:5353,bleed.io=10.158.82.55:5353,sliver.bleed.io=10.158.82.53:53,dnscat.bleed.io=10.158.82.55:5353,weasel.bleed.io=10.158.82.55:53,strive.io=10.158.82.55:5353,dnscat.strive.io=10.158.82.55:5353'
+DEFAULT_FORWARD_ZONE = 't.bleed.io=10.158.82.55:5353,bleed.io=10.158.82.55:5353,sliver.bleed.io=10.158.82.53:53,dnscat.bleed.io=10.158.82.55:5353,weasel.bleed.io=10.158.82.55:53,strive.io=10.158.82.55:5353,dnscat.strive.io=10.158.82.55:5353'
 
 def gen_exil_domain(charsAllowed, vis, mxLen, i, charSet: List, tld: str, exfil_host_domains: List[str]):
     if i == mxLen:  
@@ -68,24 +68,16 @@ def gen_exil_forward_zones(dga: List[str]) -> None:
                 ss += ","
                 vis.add(f'{labels[1]}.{labels[2]}')
     ss = ss[:len(ss) - 1] 
-    return ss 
+    print(ss) 
+    zones_file = ss.split(',') 
+    with open('forward-zones.conf', 'w', encoding='utf-8') as ff:
+        ff.writelines([zone+'\n' for zone in zones_file])
 
-def replace_aoth_forward_zone_pdns_recursor(forward_path: str) -> None:
-    path: str = "/etc/powerdns/recursor.conf"
-    if not os.path.exists(path):
-        print('pdns recursor file not found ', path)
-        return RuntimeError('pdns recursor file not found')
-    with open(path, 'r') as file:
-        lines = file.readlines()
+def replace_aoth_forward_zone_pdns_recursor() -> None:
+    path: str = "/etc/powerdns/forward-zones.conf"
+    with open('forward-zones.conf', 'w', encoding='utf-8') as ff:
+        ff.writelines([zone +'\n' for zone in DEFAULT_FORWARD_ZONE.split(',')])
     
-    for i, line in enumerate(lines):
-        if line.startswith('forward-zones='):
-            lines[i] = forward_path + '\n'
-            break 
-    
-    with open(path, 'w') as file:
-        file.writelines(lines)
-
 
 def append_zone_data_in_zoneFiles(dga: List[str]) -> None:
     vis = set() 
@@ -148,7 +140,7 @@ def clean_zones() -> bool:
                 for cmd in clean_command:
                     subprocess.run(cmd.split(), check=True) 
         
-        replace_aoth_forward_zone_pdns_recursor(DEFAULT_FORWARD_ZONE)
+        replace_aoth_forward_zone_pdns_recursor()
 
         res = ['service', 'pdns-recursor', 'restart']
         subprocess.run(res, check=True)
@@ -160,6 +152,7 @@ def clean_zones() -> bool:
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-c', '--clean', type=bool,required=False, default=False, help="clean the exfil domain from dga file")
+    parser.add_argument('-d', '--count', type=int, required=False, default=1, help="Require TLD to be used for DGA will be used with exfil toold for delegated subdomains and NS resulting in (1 << count) * 3 totoal DNS records")
     args = parser.parse_args()
 
     conn = pg.connect(host ='cssvlab08.uwb.edu',database='pdns', user='pdns', password='pdns_exfil')
@@ -182,7 +175,7 @@ if __name__ == "__main__":
                                             #    for _ in range(1 << 16)], 
                                     # c2_tool_domains=exfil_tools)
         dga = gen_c2_exfil_domains(tldDomains=[r.word() + ".io" 
-                                       for _ in range(1 << 0)], 
+                                       for _ in range(1 << int(args.count))], 
                             c2_tool_domains=exfil_tools)
         ff = open(DGA_FILE, 'w', encoding='utf-8')
         ff.write('\n'.join(dga))
@@ -193,7 +186,6 @@ if __name__ == "__main__":
         print(ffw)
 
         append_zone_data_in_zoneFiles(dga)
-        replace_aoth_forward_zone_pdns_recursor(ffw)
 
         # print(ffw[:20])
 
