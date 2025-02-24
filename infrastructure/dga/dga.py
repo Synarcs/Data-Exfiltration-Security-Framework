@@ -10,6 +10,8 @@ DGA_FILE: str = 'dga.txt'
 PDNS_AUTH_DOMAIN_SERVER: str = '10.158.82.55' # ip where pdns auth server runs 
 PDNS_AUTH_DOMAIN_SERVER_PORT:str = '5353' # ip where pdns auth server forward port runs 
 exfil_tools: List[str] = ['dnscat', 'sliver', 'iodine', 'nuages']
+RANDOM_TLD = ['live','com','de','io']
+IMPLANT_PORT = '53'
 
 DNS_C2_EXFIL_SERVER: str = '10.158.82.53'
 DEBUG: bool = False 
@@ -68,7 +70,6 @@ def gen_exil_forward_zones(dga: List[str]) -> None:
                 ss += ","
                 vis.add(f'{labels[1]}.{labels[2]}')
     ss = ss[:len(ss) - 1] 
-    print(ss) 
     zones_file = ss.split(',') 
     with open('forward-zones.conf', 'w', encoding='utf-8') as ff:
         ff.writelines([zone+'\n' for zone in zones_file])
@@ -88,16 +89,16 @@ def append_zone_data_in_zoneFiles(dga: List[str]) -> None:
         root_zone = [  # for now keep only one server cssvlab06 to carry out data breaches 
             f"pdnsutil create-zone {zone}.",
             f"pdnsutil set-kind {zone}. NATIVE",
-            f"pdnsutil add-record {zone}. @ A 300 10.158.82.53",
+            f"pdnsutil add-record {zone}. @ A 300 {DNS_C2_EXFIL_SERVER}",
             f"pdnsutil add-record {zone}. {exfil_tool} NS 3600 ns1.{exfil_tool}.{zone}",
-            f"pdnsutil add-record {zone}. ns1.{exfil_tool} A 3600 10.158.82.53"
+            f"pdnsutil add-record {zone}. ns1.{exfil_tool} A 3600 {DNS_C2_EXFIL_SERVER}"
         ]         
         exfil_zone_commands  = [
             f"pdnsutil create-zone {exfil_tool}.{zone}.",
             f"pdnsutil set-kind {exfil_tool}.{zone}. NATIVE",
-            f"pdnsutil add-record {exfil_tool}.{zone}. @ A 3600 10.158.82.53",
+            f"pdnsutil add-record {exfil_tool}.{zone}. @ A 3600 {DNS_C2_EXFIL_SERVER}",
             f"pdnsutil add-record {exfil_tool}.{zone}. @ NS 3600 ns1.{exfil_tool}.{zone}",
-            f"pdnsutil add-record {exfil_tool}.{zone}. ns1 A 3600 10.158.82.53"
+            f"pdnsutil add-record {exfil_tool}.{zone}. ns1 A 3600 {DNS_C2_EXFIL_SERVER}"
         ]     
 
         if DEBUG:
@@ -155,8 +156,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--count', type=int, required=False, default=1, help="Require TLD to be used for DGA will be used with exfil toold for delegated subdomains and NS resulting in (1 << count) * 3 totoal DNS records")
     args = parser.parse_args()
 
-    conn = pg.connect(host ='cssvlab08.uwb.edu',database='pdns', user='pdns', password='pdns_exfil')
-    cursor = conn.cursor()
+ 
     if args.clean is not None and args.clean:
         if clean_zones():
             if os.path.exists(DGA_FILE):
@@ -164,9 +164,17 @@ if __name__ == "__main__":
         else:
             print('the local zone file canot be cleaned until zones are cleaned on pdns recursor')
 
-        cursor.execute('select * from malicious_domain')
-        for row in cursor.fetchall():
-            print(row)
+        try:
+            conn = pg.connect(host ='cssvlab08.uwb.edu',database='pdns', user='pdns', password='pdns_exfil')
+            cursor = conn.cursor()
+            cursor.execute("select * from domains") 
+            for rows in cursor.fetchall():
+                print(rows) 
+            cursor.close()
+            conn.close()
+        except Exception as err:
+            pass 
+
     else:
         r = RandomWord()
         # max tld + sld + exil_dom (label 1) == 2 + 6 + 9 + = 15 --> (255 - 15) = 240 exfil entropy
@@ -174,21 +182,20 @@ if __name__ == "__main__":
         # dga = gen_c2_exfil_domains(tldDomains=[RandomWord(max_word_size=9, constant_word_size=True, include_digits=False, include_special_chars=False).generate() + ".io" 
                                             #    for _ in range(1 << 16)], 
                                     # c2_tool_domains=exfil_tools)
-        dga = gen_c2_exfil_domains(tldDomains=[r.word() + ".io" 
+        dga = gen_c2_exfil_domains(tldDomains=[r.word() + "." + random.choice(RANDOM_TLD)
                                        for _ in range(1 << int(args.count))], 
                             c2_tool_domains=exfil_tools)
         ff = open(DGA_FILE, 'w', encoding='utf-8')
         ff.write('\n'.join(dga))
 
-        print(dga) 
+        if DEBUG:
+            print(dga) 
         ffw = gen_exil_forward_zones(dga) # get the exfil ports and forward zone val 
 
-        print(ffw)
 
         append_zone_data_in_zoneFiles(dga)
 
         # print(ffw[:20])
 
-    cursor.close()
-    conn.close()
-
+        
+  

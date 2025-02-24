@@ -33,7 +33,7 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     __u32 out = skb->ifindex;
     __u32 mark = skb->mark;
 
-    if (!DEBUG) {
+    if (DEBUG) {
         bpf_printk("Bridge TC: received packet on ifindex=%d mark=%u\n", 
             skb->ifindex, skb->mark);
     }

@@ -87,7 +87,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool, ebpfMaps [4]*ebpf.Map) error {
-	var redirCountKey uint32 = 0
+	var redirCountKey uint16 = 0
 	if !isCloneRedirectedAndMalicious {
 		cloneredirectMap := ebpfMaps[2]
 		if cloneredirectMap != nil {
@@ -164,7 +164,6 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 }
 
 func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) {
-
 	runtime.LockOSThread()
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
@@ -175,6 +174,9 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	defer ringBuffer.Close()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return
+		}
 		if utils.DEBUG {
 			log.Println("polling the ring buffer", "using th map", ebpfEvents)
 		}

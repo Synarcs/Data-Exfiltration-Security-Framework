@@ -575,13 +575,27 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         if (add_count > 1) return SUSPICIOUS;
 
         // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
-        __u32 label_key_subdomain_per_label_min = 2;  __u32 label_key_subdomain_per_label_max = 3;
+        // each kernel config limit value internally stores (priority | value) --> (0x100 + priority) | limit
+
+        // subdomain label count inference based on the state 
+        __u32 label_key_subdomain_per_label_min = 2; __u32 label_key_subdomain_per_label_max = 3;
+        __u32 label_key_subdomain_length_exclude_tld_min = 6; __u32 label_key_subdomain_length_exclude_tld_max = 7;
+
+        // label count inference based on the configured state 
         __u32 label_key_label_count_min = 4; __u32 label_key_label_count_max = 5;
+        __u32 label_key_total_domain_length_min = 0; __u32 label_key_total_domain_length_max = 1;
         
+        // values 
         __u32 * MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_min);
         __u32 * MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_per_label_max);
+        __u32 * MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_length_exclude_tld_min);
+        __u32 * MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_subdomain_length_exclude_tld_max);
+
+        // label count for domain 
         __u32 * MIN_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_min);
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
+        __u32 * MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_total_domain_length_min);
+        __u32 * MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_total_domain_length_max);
 
         __u8 total_domain_length = 0;
         __u8 total_domain_length_exclude_tld = 0;
@@ -616,7 +630,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             }
 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
-            
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
@@ -642,23 +655,57 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
             
+
+            __u8 dns_query_labels =  parse_dns_qeury_type_section(skb, query_class, qtypes);
+                
+            if (dns_query_labels == MALICIOUS) return MALICIOUS;
+
+            __u32 prio_features_suspicious = 0x00; // match the features which user space enforce in kernel 
+
+            // subdomain length per label (min | max)
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
-                    if (mx_label_ln >= *MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP && mx_label_ln <= *MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) return SUSPICIOUS;
-            }else if (mx_label_ln >= DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL && mx_label_ln <= DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL){
-                    return SUSPICIOUS;
+                    if (mx_label_ln >= (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff) && mx_label_ln <= (*MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff)) {
+                        prio_features_suspicious += 1;
+            }
+            }else if (mx_label_ln >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL & 0xff) && 
+                            mx_label_ln <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL & 0xff)){
+                                prio_features_suspicious++;
             }
 
+            // label count (min | max)
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
-                if (label_count >= *MIN_LABEL_COUNT_KERNEL_MAP && label_count <= *MAX_LABEL_COUNT_KERNEL_MAP) return SUSPICIOUS;
-            }else if (label_count > DNS_RECORD_LIMITS.MIN_LABEL_COUNT && label_count <= DNS_RECORD_LIMITS.MAX_LABEL_COUNT){
-                // bpf_printk("invoked on  label_count %d", label_count);
-                return SUSPICIOUS;
+                if (label_count >= (*MIN_LABEL_COUNT_KERNEL_MAP & 0xff) && label_count <= (*MAX_LABEL_COUNT_KERNEL_MAP & 0xff)) {
+                        prio_features_suspicious++;
+                }
+            }else if (label_count >= (DNS_RECORD_LIMITS.MIN_LABEL_COUNT & 0xff) && label_count <= (DNS_RECORD_LIMITS.MAX_LABEL_COUNT & 0xff)){
+                    prio_features_suspicious++;
             }
-            
-            if (total_domain_length_exclude_tld >= DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH && total_domain_length_exclude_tld <= DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH){
-                // bpf_printk("invoked on  total domain length %d", total_domain_length_exclude_tld);
-                return SUSPICIOUS;
+
+            // total domain length (min | max) 
+            if (MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL && MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL) {
+                if (total_domain_length >= (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff) && 
+                total_domain_length <= (*MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff)) {
+                    prio_features_suspicious++;
+                }
+            } else if (total_domain_length >= (DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH & 0xff) && 
+                total_domain_length <= (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH & 0xff)) {
+                    prio_features_suspicious++;
             }
+
+            // subdomain length excludes tld (min | max)
+            if (MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL) {
+                if (total_domain_length_exclude_tld >= (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff) && 
+                    total_domain_length_exclude_tld <= (*MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff)) {
+                        prio_features_suspicious++;
+                }
+            } else if (total_domain_length_exclude_tld >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff) && 
+                       total_domain_length_exclude_tld <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff)) {
+                        prio_features_suspicious++;
+            }
+
+
+            if (prio_features_suspicious > 0) 
+                return SUSPICIOUS;
 
             if (c2c_check.isC2c) {
                 if (c2c_check.deep_scan_mirror) return SUSPICIOUS;
@@ -666,7 +713,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (!c2c_check.deep_scan_mirror && !c2c_check.drop) return BENIGN;
             }
 
-            return parse_dns_qeury_type_section(skb, query_class, qtypes);
+            return BENIGN;
         }
      }else return SUSPICIOUS;
    }else {

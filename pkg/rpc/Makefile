@@ -1,5 +1,5 @@
-proto_path = proto
-go_out = pb 
+proto_path ?= proto
+go_out ?= pb 
 
 .PHONY: protoc-gen
 protoc-gen:

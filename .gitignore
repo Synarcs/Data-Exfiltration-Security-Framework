@@ -14,4 +14,7 @@ package/*
 *.rpm 
 *.osx 
 
+infrastructure/dga/*.txt
+infrastructure/dga/*.conf 
+
 

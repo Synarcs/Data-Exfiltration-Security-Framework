@@ -219,18 +219,18 @@ struct dns_record_limits_malicious {
     __u32 MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;
 
 } __attribute__((packed)) DNS_RECORD_LIMITS = {
-        130,
-        255, 
-
-        17,
-        63,
-
-        3,
-        127, 
-
-        3,  // (5 - (tld + root) == 3)
-        125, // (127 - (tld - root) == 125) 
+    (3 << 0x8) | 130, // MIN_DOMAIN_LENGTH
+    (3 << 0x8) | 255, // MAX_DOMAIN_LEN
+    (2 << 0x8) | 5,  // MIN_SUBDOMAIN_LENGTH_PER_LABEL
+    (2 << 0x8) | 63, // MAX_SUBDOMAIN_LENGTH_PER_LA
+    (1 << 0x8) | 15,  // MIN_LABEL_COUNT
+    (1 << 0x8) | 128, // MAX_LABEL_CO
+    (4 << 0x8) | 8,   // (5 - (tld + root) == 3) // MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD
+    (4 << 0x8) | 125, // (127 - (tld - root) == 125) // MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD
 };
+
+#define MAX_DNS_FEATURES_KERNEL 8
+#define MAX_DNS_FEATURES_PRIO_KEYS 4
 
 
 struct dns_non_standard_transport_event {
