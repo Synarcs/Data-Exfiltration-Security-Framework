@@ -2,7 +2,7 @@
 
 set -eo
 
-echo "[x] Installing LLVM, Clang, and kernel bindings for eBPF"
+echo "[✅] Installing LLVM, Clang, and kernel bindings for eBPF"
 
 sudo apt update -y && sudo apt install -y \
     build-essential \
@@ -80,4 +80,29 @@ sudo apt install -y \
     python3-wheel \
     python3-virtualenv
 
-echo "[✔] Installation completed successfully!"
+
+# Install GVM and Go 1.23.2
+echo "[✅] Installation gvm for go!"
+echo "[x] Installing GVM (Go Version Manager)"
+bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
+source ~/.gvm/scripts/gvm
+echo "[x] Installing Go 1.23.2"
+gvm install go1.23.2 -B
+gvm use go1.23.2 --default
+source /home/vedpar/.gvm/scripts/gvm
+
+# installing the python dependecnies for onnx runtime inference server 
+sudo pip3 install -r model/infer/requirements.txt --break-system-packages
+
+# install fpm for debian package build 
+sudo apt-get install -y ruby-dev build-essential && sudo gem i fpm -f
+
+echo "[✅] Installation completed successfully!"
+
+
+# install node exporter 
+wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-amd64.tar.gz
+tar -xvf node_exporter-1.9.0.linux-amd64.tar.gz && sudo mv node_exporter-1.9.0.linux-amd64 /opt 
+
+
+

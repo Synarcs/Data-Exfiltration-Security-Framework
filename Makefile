@@ -20,7 +20,7 @@ build-controller:
 .PHONY: run-controller
 run-controller:
 	@echo "Running the controller"
-	cd controller && java -jar target/node-agent-controller-1.0-SNAPSHOT.jar
+	cd controller && java -jar target/node-agent-controller-1.0-SNAPSHOT.jar &
 
 .PHONY: controller 
 controller:
@@ -33,6 +33,12 @@ build-framework:
 	@echo "building the framework"
 	make build
 	make build-controller
+
+.PHONY: install-dep-build
+install-dep:
+	@echo "install kernel and user space dep and headers"
+	bash infrastructure/agent.sh
+	bash infrastructure/monitor.sh 
 
 QPS ?= 100000
 DURATION ?= 20
