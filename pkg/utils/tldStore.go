@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 	"sync"
 )
 
@@ -112,4 +113,18 @@ func ReadTldDomainsData() (*TopDomains, error) {
 	log.Println("File exists and Read via Parallel I/O for file stats", fileInfo.Name(), fileInfo.Size()/(1<<10)*3)
 
 	return topDomains, nil
+}
+
+func (t *TopDomains) UpdateDomainDomainTLDCache(domain string) {
+	if _, fd := t.TopDomains.Load(domain); fd {
+		log.Println("the Required domain already present as safe TLD in Node Agent Cache ", domain)
+		return
+	}
+	
+	if len(domain) == 0 || strings.Count(domain, ".") != 1 || len(strings.Split(domain, ".")) != 2 {
+		log.Println("cannot unblock an malformed SLD in the cache")
+		return
+	}
+
+	t.TopDomains.Store(domain, true)
 }

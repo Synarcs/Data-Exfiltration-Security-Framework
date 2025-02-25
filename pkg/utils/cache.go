@@ -93,6 +93,10 @@ func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
 	return nil
 }
 
+func DeleteAllBlacklistforSLDInEgressCache(tld string) {
+	NODE_AGENT_BLACKLISTED_DOMAINS.Remove(tld) // remove all the fqdn detected malicious on the specific node in the node agent cache
+}
+
 // Get the blacklisted domains from the  egress cache
 func GetBlaclistedDomainsEgressCache() []string {
 	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")

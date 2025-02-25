@@ -1,6 +1,7 @@
 #ifndef __UTILS_H_ 
 #define __UTILS_H_ 
 
+#include <stdbool.h>
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))

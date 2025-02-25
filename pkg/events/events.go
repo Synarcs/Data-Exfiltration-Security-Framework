@@ -41,6 +41,11 @@ type RemoteStreamInferenceControllerAnalyzed struct {
 	ResolveAddressMaliciousC2Domains []string `json:"resolveAddressMaliciousC2Domains"`
 }
 
+type RemoteSLDNodeCacheUpdate struct {
+	SLD   string
+	IsTld bool
+}
+
 type ExfilRawPacketMirror struct {
 	DstPort                      uint16
 	SrcPort                      uint16

@@ -20,7 +20,7 @@ enum MALICIOUS_FLAGS {
 } flags;
 
 
-#define SUBDOMAIN_RANGE_LABEL_FILTER false 
+#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN false 
 
 
 //   0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15

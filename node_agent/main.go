@@ -164,6 +164,7 @@ func main() {
 
 	streamConsumer := &stream.StreamConsumer{
 		KafkaBrokerConfig: globalKakfBrokerConfig,
+		TopDomainsCache:   topDomains,
 	}
 
 	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {

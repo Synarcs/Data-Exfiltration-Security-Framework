@@ -271,7 +271,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		// grab the fd from the kernel process to load the egress filter map limit
 
 		for index, limit := range events.DNS_LIMITS_CONFIG {
-			log.Println("Injecting the limit for features in kernel ", index, limit)
 			err := dnsLimitsMap.Put(
 				index, limit)
 			if err != nil {

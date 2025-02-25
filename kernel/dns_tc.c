@@ -278,7 +278,7 @@ struct exfil_security_egress_rate_limit_map {
     } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
 
-#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+#ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
     struct ipv6_address {
         __u8 u6_addr8[16];
         __u8 u6_addr16[8];
@@ -531,8 +531,6 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
         return resuult;
 }
 
-
-
 static 
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
                 struct dns_header *dns_header){
@@ -612,10 +610,28 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
                 mx_label_ln = max(mx_label_ln, label_len);
 
-                // check for the max label len compare 
-                __u32 iter_label_chars_ln =  label_len;
-                if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
-                
+                #ifdef SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                    if (SUBDOMAIN_RANGE_LABEL_CHAR_SCAN) {
+                             // check for the max label len compare 
+                        __u32 iter_label_chars_ln =  label_len;
+                        if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
+                        int k = 1;
+                        for (; k < iter_label_chars_ln; k++){
+                            if ((void *)(dns_payload_buffer + offset + 1 + k) > skb->data_end){
+                                bpf_printk("cannot parse labels exceed limit return skb");
+                                return SUSPICIOUS;
+                            }
+                            __u8 *ptr = (__u8 *)(dns_payload_buffer + offset + 1 + k);
+                            if (ptr + 1 > skb->data_end) {
+                                return SUSPICIOUS;
+                            }
+                        
+                            char char_buffer_value = (char) ( __u8) *ptr;
+                            return char_buffer_value;
+                        }
+                    }
+                #endif
+
                 if (label_len == 0x00) break;
                 label_count++;
 
@@ -643,13 +659,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
             
-            #ifdef SUBDOMAIN_RANGE_LABEL_FILTER
-                if (SUBDOMAIN_RANGE_LABEL_FILTER) {
-                    __u32 subdmoain_label_count_config_min_key = 6; // min subdmains exclude the tld filter based on subdmain count
-                    __u32 subdmoain_label_count_config_max_key = 7; // max subdmains exclude the tld filter based on subdmain count
-                    SUBDOMAIN_RANGE_FILTER(subdmoain_label_count, subdmoain_label_count_config_min_key, subdmoain_label_count_config_max_key)
-                }
-            #endif
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
@@ -1658,7 +1667,8 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 
 static 
 __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
-    if (skb_redir_hash == 0) skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
+    if (skb_redir_hash == 0) 
+        skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
     else
         skb->mark = skb_redir_hash;
 }

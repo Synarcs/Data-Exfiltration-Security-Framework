@@ -15,24 +15,37 @@ import (
 
 type StreamConsumer struct {
 	KafkaBrokerConfig                     *StreamBrokerConfig
-	Consumers                             []*kafka.Reader
+	Consumers                             map[string]*kafka.Reader
 	EgresseBPFKernelSockCollection        *ebpf.Collection
 	EgresseBPFKernelSockCollectionProgram *ebpf.Program
+	TopDomainsCache                       *utils.TopDomains
 }
 
 func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context) error {
 
+	// all the malicious domains transfering over UDP to be blacklisted in local cache of LRU fo rnude agent
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
 		Topic:   STREAM_THREAT_TOPIC_INFER,
 	})
+
+	// all the malicious domains transfering over TCP to be blacklisted in local cache of LRU fo rnude agent
 	streamReaderTcpRecursorInfer := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
 		Topic:   STREAM_THREAT_TOPIC_INFER_TCP,
 	})
-	consumer.Consumers = []*kafka.Reader{
-		streamReader, streamReaderTcpRecursorInfer,
-	}
+
+	// process the topic which are meant for controller to update node agent caches for benign TLD domains
+	streamReaderSldBenignTopic := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: consumer.KafkaBrokerConfig.Brokers,
+		Topic:   STREAM_BENIGN_SLD_TOPIC,
+	})
+
+	consumer.Consumers = make(map[string]*kafka.Reader)
+	consumer.Consumers[STREAM_THREAT_TOPIC_INFER] = streamReader
+	consumer.Consumers[STREAM_THREAT_TOPIC_INFER_TCP] = streamReaderTcpRecursorInfer
+	consumer.Consumers[STREAM_BENIGN_SLD_TOPIC] = streamReaderSldBenignTopic
+
 	return nil
 }
 
@@ -68,51 +81,78 @@ func (consumer *StreamConsumer) AddL3FilterForTraffic(ctx context.Context, consu
 
 func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
 	errorChan := make(chan error)
-	for _, consumer := range c.Consumers {
-		go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
-			for {
-				if err := ctx.Err(); err != nil {
-					return ctx.Err()
-				}
-				msg, err := consumer.ReadMessage(ctx)
-				if err != nil {
+	for topic, consumer := range c.Consumers {
+		if topic != STREAM_BENIGN_SLD_TOPIC {
+			go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
+				for {
+					if err := ctx.Err(); err != nil {
+						return ctx.Err()
+					}
+					msg, err := consumer.ReadMessage(ctx)
+					if err != nil {
+						if utils.DEBUG {
+							log.Printf("Error reading message for remote kafka broker %+v", err)
+						}
+						return err
+					}
+
+					// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
+					var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
+
+					if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
+						log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
+						return err
+					}
+
 					if utils.DEBUG {
-						log.Printf("Error reading message for remote kafka broker %+v", err)
-					}
-					return err
-				}
-
-				// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
-				var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
-
-				if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
-					log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
-					return err
-				}
-
-				if utils.DEBUG {
-					log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
-						statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
-				}
-
-				if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
-					if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-						utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+						log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
+							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 					}
 
-					if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
-						utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
-					}
-				} else {
-					utils.DeleteDomainBlackListInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
-					utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
-				}
+					if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
+						if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
+							utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+						}
 
-				if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
-					c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
+						if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
+							utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
+						}
+					} else {
+						utils.DeleteDomainBlackListInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+						utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
+					}
+
+					if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
+						c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
+					}
 				}
-			}
-		}(consumer, errorChan, ctx)
+			}(consumer, errorChan, ctx)
+		} else {
+			go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
+				// for all the benign domains
+				for {
+					if err := ctx.Err(); err != nil {
+						return ctx.Err()
+					}
+					msg, err := consumer.ReadMessage(ctx)
+					if err != nil {
+						if utils.DEBUG {
+							log.Printf("Error reading message for remote kafka broker %+v", err)
+						}
+						return err
+					}
+					var sldEvent events.RemoteSLDNodeCacheUpdate
+					if err := json.Unmarshal(msg.Value, &sldEvent); err != nil {
+						log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
+						return err
+					}
+
+					c.TopDomainsCache.UpdateDomainDomainTLDCache(sldEvent.SLD)
+					utils.IngDeleteDomainBlackListInCache(sldEvent.SLD)
+					utils.DeleteAllBlacklistforSLDInEgressCache(sldEvent.SLD)
+				}
+			}(consumer, errorChan, ctx)
+		}
 	}
 
 	for {
