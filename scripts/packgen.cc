@@ -15,13 +15,14 @@
 #include <queue>
 #include <signal.h>
 
-using u_int32_t = __u32; 
-
 typedef struct PacketProcessHeader {
     __u32 packet_class;
     __u32 protocol;
     void * GetHandler();
 } PacketProcessHeader __attribute__((packed));
+
+using u_int32_t = __u32;
+using packet = struct PacketProcessHeader;
 
 class PacketHandler {
     private:

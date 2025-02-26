@@ -571,8 +571,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         }
 
         if (add_count > 1) return SUSPICIOUS;
-
-        // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
         // each kernel config limit value internally stores (priority | value) --> (0x100 + priority) | limit
 
         // subdomain label count inference based on the state 
@@ -600,7 +598,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
-            // \ln asasasa \0, \ln sdsds d \0
 
             __u8 root_domain  = 0;
 
@@ -616,9 +613,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         __u32 iter_label_chars_ln =  label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
                         int k = 1;
-                        for (; k < iter_label_chars_ln; k++){
+                        for (; k < iter_label_chars_ln; ++k){
                             if ((void *)(dns_payload_buffer + offset + 1 + k) > skb->data_end){
-                                bpf_printk("cannot parse labels exceed limit return skb");
                                 return SUSPICIOUS;
                             }
                             __u8 *ptr = (__u8 *)(dns_payload_buffer + offset + 1 + k);
@@ -670,23 +666,40 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (dns_query_labels == MALICIOUS) return MALICIOUS;
 
             __u32 prio_features_suspicious = 0x00; // match the features which user space enforce in kernel 
+            __u8 prio_violate_count[MAX_DNS_PRIO_KEYS] = {0};
 
             // subdomain length per label (min | max)
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
                     if (mx_label_ln >= (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff) && mx_label_ln <= (*MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff)) {
+                        __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) >> 8; // consider any key since min and max range has same prio in kernel eBPF map 
+                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        prio_violate_count[feature_prio]++;
                         prio_features_suspicious += 1;
             }
             }else if (mx_label_ln >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL & 0xff) && 
                             mx_label_ln <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL & 0xff)){
-                                prio_features_suspicious++;
+                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL) >> 8;
+                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        prio_violate_count[feature_prio]++;
+                        prio_features_suspicious++;
             }
 
             // label count (min | max)
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
                 if (label_count >= (*MIN_LABEL_COUNT_KERNEL_MAP & 0xff) && label_count <= (*MAX_LABEL_COUNT_KERNEL_MAP & 0xff)) {
+                        __u8 feature_prio = (*MIN_LABEL_COUNT_KERNEL_MAP) >> 8;
+                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        prio_violate_count[feature_prio]++;
                         prio_features_suspicious++;
                 }
             }else if (label_count >= (DNS_RECORD_LIMITS.MIN_LABEL_COUNT & 0xff) && label_count <= (DNS_RECORD_LIMITS.MAX_LABEL_COUNT & 0xff)){
+                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_LABEL_COUNT) >> 8;
+                    if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    prio_violate_count[feature_prio]++;
                     prio_features_suspicious++;
             }
 
@@ -694,10 +707,18 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL && MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL) {
                 if (total_domain_length >= (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff) && 
                 total_domain_length <= (*MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff)) {
+                    __u8 feature_prio = (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP) >> 8;
+                    if (feature_prio > MAX_DNS_PRIO_KEYS)
+                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    prio_violate_count[feature_prio]++;
                     prio_features_suspicious++;
                 }
             } else if (total_domain_length >= (DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH & 0xff) && 
                 total_domain_length <= (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH & 0xff)) {
+                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH) >> 8;
+                    if (feature_prio > MAX_DNS_PRIO_KEYS)
+                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    prio_violate_count[feature_prio]++;
                     prio_features_suspicious++;
             }
 
@@ -705,16 +726,32 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL) {
                 if (total_domain_length_exclude_tld >= (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff) && 
                     total_domain_length_exclude_tld <= (*MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff)) {
+                        __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP) >> 8;
+                        if (feature_prio > MAX_DNS_PRIO_KEYS)
+                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        prio_violate_count[feature_prio]++;
                         prio_features_suspicious++;
                 }
             } else if (total_domain_length_exclude_tld >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff) && 
                        total_domain_length_exclude_tld <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff)) {
+                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) >> 8;
+                        if (feature_prio > MAX_DNS_PRIO_KEYS)
+                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        prio_violate_count[feature_prio]++;
                         prio_features_suspicious++;
             }
 
 
-            if (prio_features_suspicious > 0) 
+            if (prio_features_suspicious > 0) {
+                bool isHighPrioMarkFeatureViolated = false;
+                for (int i =0; i < MAX_DNS_PRIO_KEYS; i++) {
+                    if ( i > 0) {
+                        isHighPrioMarkFeatureViolated = prio_violate_count[i] > 0 ? true : false;
+                    }else if (prio_violate_count[i] > 0 && isHighPrioMarkFeatureViolated) 
+                        return SUSPICIOUS;
+                }
                 return SUSPICIOUS;
+            }
 
             if (c2c_check.isC2c) {
                 if (c2c_check.deep_scan_mirror) return SUSPICIOUS;

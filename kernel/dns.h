@@ -13,6 +13,10 @@
 
 #define DEBUG false 
 
+#define MAX_DNS_FEATURES 8
+#define MAX_DNS_PRIO_KEYS 4
+
+
 enum MALICIOUS_FLAGS {
     BENIGN = 0,
     SUSPICIOUS,

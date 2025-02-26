@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
 	"google.golang.org/grpc"
@@ -37,9 +38,11 @@ func exfil_client() {
 
 	var reader chan os.Signal = make(chan os.Signal)
 
-	go func() {
+	ctx := context.Background()
+	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second*30))
+	go func(ctx context.Context, cancel context.CancelFunc) {
 		var domains []string = []string{"google.com", "apple.com"}
-		stream, err := client.GetExfilDomains(context.Background(), &pb.ExfilDomains{Domain: domains[0]})
+		stream, err := client.GetExfilDomains(ctx, &pb.ExfilDomains{Domain: domains[0]})
 		if err != nil {
 			panic(err.Error())
 		}
@@ -58,7 +61,7 @@ func exfil_client() {
 			}
 			fmt.Println(val.Status)
 		}
-	}()
+	}(ctx, cancel)
 
 	<-reader
 	fmt.Println(val)
