@@ -33,14 +33,16 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     __u32 out = skb->ifindex;
     __u32 mark = skb->mark;
 
-    if (DEBUG) {
-        bpf_printk("Bridge TC: received packet on ifindex=%d mark=%u\n", 
-            skb->ifindex, skb->mark);
-    }
+    #ifdef DEBUG
+        if (DEBUG) {
+            bpf_printk("Bridge TC: received packet on ifindex=%d mark=%u\n", 
+                skb->ifindex, skb->mark);
+        }
+    #endif
 
-    // if (skb->mark != redirect_skb_mark)  {
-    //     return TC_ACT_SHOT;
-    // }
+    if (skb->mark != redirect_skb_mark)  {
+        return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
+    }
     
     return TC_DROP;
 }
