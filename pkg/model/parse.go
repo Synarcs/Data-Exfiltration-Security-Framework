@@ -148,7 +148,7 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 
 		roundProcessTime := float64(currProcessTime-int(KernelPacketRedirectTimeEgress)) / 1_000_000.0
 
-		if !utils.DEBUG {
+		if utils.DEBUG {
 			log.Printf("The round trip time for the dns packet %fms", roundProcessTime)
 		}
 		events.UpdateLatencyMetricEvents(roundProcessTime)

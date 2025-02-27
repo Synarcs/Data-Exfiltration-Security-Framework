@@ -1,3 +1,10 @@
+// <!---------------------------
+// Name: DNSObelisk
+// File: bridge_tc_egress.c
+// -----------------------------
+// Author: Synarcs
+// ---------------------------->
+
 #include <linux/pkt_cls.h>
 #include <linux/bpf.h>
 
@@ -15,7 +22,7 @@
 // allow only traffic having the custom mark and stop any other packets over the bridge 
 SEC("tc")
 int bridge_egress_filter(struct __sk_buff *skb) {
-	return TC_DROP;
+	return bpf_redirect(0, BPF_F_INGRESS); // let kernel gc over the rx queue in kernel for the netdev link 
 }
 
 

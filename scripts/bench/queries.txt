@@ -1,3 +1,4 @@
-sliver.bleed.io A 
-t.bleed.io A
-dnscat.bleed.io A
+www.google.com A 
+www.amazon.com AAAA 
+www.apple.com AAAA 
+www.cloudflare.com A

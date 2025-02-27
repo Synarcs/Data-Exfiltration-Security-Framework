@@ -1,3 +1,11 @@
+// <!---------------------------
+// Name: Data Exfiltration Security Framework
+// File: dns_xdp.c
+// -----------------------------
+// Author: Synarcs
+// Data:   10/25/2024, 2:59:15 AM
+// ---------------------------->
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/tcp.h>

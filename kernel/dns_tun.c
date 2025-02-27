@@ -1,6 +1,6 @@
 // <!---------------------------
 // Name: Data Exfiltration Security Framework
-// File: dns_tc.c
+// File: dns_tun.c
 // -----------------------------
 // Author: Synarcs
 // Data:   10/25/2024, 2:59:15 AM

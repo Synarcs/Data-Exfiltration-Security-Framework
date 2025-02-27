@@ -24,7 +24,7 @@ type BridgeTCFilters struct {
 	Interfaces        *netinet.NetIface
 }
 
-func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
+func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
 
 	for _, link := range btc.Interfaces.BridgeLinks {
 		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
@@ -45,10 +45,9 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			panic(err.Error())
 		}
 
-		ingressFilter := netlink.BpfFilter{
+		tcBridgeFilter := netlink.BpfFilter{
 			FilterAttrs: netlink.FilterAttrs{
 				LinkIndex: link.Attrs().Index,
-				Parent:    netlink.HANDLE_MIN_INGRESS,
 				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
 				Protocol:  unix.ETH_P_ALL,
 			},
@@ -57,7 +56,13 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			DirectAction: true,
 		}
 
-		if err := netlink.FilterReplace(&ingressFilter); err != nil {
+		if isEgress {
+			tcBridgeFilter.FilterAttrs.Parent = netlink.HANDLE_MIN_EGRESS
+		} else {
+			tcBridgeFilter.FilterAttrs.Parent = netlink.HANDLE_MIN_INGRESS
+		}
+
+		if err := netlink.FilterReplace(&tcBridgeFilter); err != nil {
 			panic(err.Error())
 		}
 	}
@@ -103,7 +108,12 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 
 	defer spec.Close()
 
-	if err := btc.AttachTcHandler(ctx, prog); err != nil {
+	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
+		log.Println("Error attaching the clsact bpf qdisc for netdev")
+		panic(err.Error())
+	}
+
+	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
 		log.Println("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
