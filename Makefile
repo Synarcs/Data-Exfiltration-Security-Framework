@@ -17,6 +17,12 @@ build-controller:
 	@echo "Building the controller"
 	cd controller && mvn clean package  
 
+.PHONY: build-controller-image
+build-controller-image:
+	@echo "Building the controller docker image"
+	cd controller && docker build -t controller . 
+
+
 .PHONY: run-controller
 run-controller:
 	@echo "Running the controller"
