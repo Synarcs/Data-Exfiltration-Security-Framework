@@ -67,8 +67,11 @@ Threat Event Stream Message Analysis Control Plane Server
 
 
 ## Future Plans 
-* Started Integration with Kubernetes as sidecar or gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops), feature to inherently support killing malicious pods carrying data breaches throughout k8s cluster.
-* Dynamic Injection of Cilium L7 DNS Network Policiy, and L3 Network Policity for Cilium agent and DNS proxy to block DNS and l3 ipv4 and ipv6 exfiltrated traffic bidirectionally to remote malicious C2 servers carried through compromised k8s pods relying on cilium L7, L3, L4 filter proxies to filter in user space, before it reaches 
+* Kubernetes Operator and CNI Integration
+    * Started Integration with Kubernetes as sidecar or gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops), feature to inherently support killing malicious pods carrying data breaches throughout k8s cluster.
+    * Dynamic Injection of Cilium L7 DNS Network Policiy, and L3 Network Policity for Cilium agent and DNS proxy to block DNS and l3 ipv4 and ipv6 exfiltrated traffic bidirectionally to remote malicious C2 servers carried through compromised k8s pods relying on cilium L7, L3, L4 filter proxies to filter in user space, before it reaches 
+* Cloud Providers Infrastructure Integration 
+    * Integration with Public Cloud providers for dynamic NACL, Security groups, firewall rules creation over VPC for DNS exfiltration security
 eBPF node agent rinning over host ns, to fully thwart data breach by killing malicious C2 implants.
 * Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP). 
 * Integration with Kubernetes mutation webhooks for dynamic exfiltration guard security containers to be injected on pods matching required security labels.

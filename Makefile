@@ -22,6 +22,10 @@ build-controller-image:
 	@echo "Building the controller docker image"
 	cd controller && docker build -t controller . 
 
+.PHONY: run-controller-image
+run-controller-image:
+	@echo "Running the controller"
+	docker run --name controller -p 9000:9000 -d controller:latest 
 
 .PHONY: run-controller
 run-controller:

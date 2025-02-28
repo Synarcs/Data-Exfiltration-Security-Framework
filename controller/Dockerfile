@@ -8,7 +8,7 @@ RUN mvn clean package
 
 FROM openjdk:24-ea-17-slim as run
 COPY --from=build /app/target/*.jar app.jar
-EXPOSE 8080
+EXPOSE 9000
 CMD ["java", "-jar", "app.jar"]
 
 
