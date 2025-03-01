@@ -613,20 +613,26 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         __u32 iter_label_chars_ln =  label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
                         int k = 1;
-                        for (; k < iter_label_chars_ln; ++k){
-                            if ((void *)(dns_payload_buffer + offset + 1 + k) > skb->data_end){
-                                return SUSPICIOUS;
+                        void * dns_label_offset_char = (void *) (dns_payload_buffer + offset + 1);
+                        while (true) {
+                            if ((void *)(dns_label_offset_char + k) > skb->data_end){
+                                goto parsed_label_queryHandler;
                             }
-                            __u8 *ptr = (__u8 *)(dns_payload_buffer + offset + 1 + k);
-                            if (ptr + 1 > skb->data_end) {
-                                return SUSPICIOUS;
-                            }
+                            __u8 *ptr = (__u8 *)(dns_label_offset_char + k);
+                            if (ptr + 1 > skb->data_end) 
+                                goto parsed_label_queryHandler;
                         
                             char char_buffer_value = (char) ( __u8) *ptr;
-                            return char_buffer_value;
+                            #ifdef DEBUG
+                                if (DEBUG)
+                                    bpf_printk("the label is %c", char_buffer_value);
+                            #endif
+                            k++;
                         }
                     }
                 #endif
+
+                parsed_label_queryHandler:
 
                 if (label_len == 0x00) break;
                 label_count++;

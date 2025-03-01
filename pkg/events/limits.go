@@ -7,7 +7,7 @@ var DNS_LIMITS_CONFIG map[uint32]uint32 = map[uint32]uint32{
 	2: (2 << 0x8) | 5,  // MIN_SUBDOMAIN_LENGTH_PER_LABEL
 	3: (2 << 0x8) | 63, // MAX_SUBDOMAIN_LENGTH_PER_LABEL
 
-	4: (1 << 0x8) | 15,  // MIN_LABEL_COUNT
+	4: (1 << 0x8) | 3,   // MIN_LABEL_COUNT
 	5: (1 << 0x8) | 128, // MAX_LABEL_COUNT
 
 	6: (4 << 0x8) | 8,   // (5 - (tld + root) == 3) // MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD

@@ -15,6 +15,5 @@ else
     echo "$tool not supported"
 fi
 
-
 plot(){
 }
