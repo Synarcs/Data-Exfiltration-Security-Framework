@@ -595,12 +595,15 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
         __u8 total_domain_length = 0;
         __u8 total_domain_length_exclude_tld = 0;
+        // Iter through the Questions Count
         for (__u8 i=0; i < qd_count; i++){
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
             __u8 root_domain  = 0;
 
+            // parse the QNAME
+            // iter over the char labels in QNAME
             for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
@@ -608,8 +611,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 mx_label_ln = max(mx_label_ln, label_len);
 
                 #ifdef SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                    // parse the characters across each label in the QNAME
                     if (SUBDOMAIN_RANGE_LABEL_CHAR_SCAN) {
-                             // check for the max label len compare 
                         __u32 iter_label_chars_ln =  label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
                         int k = 1;
@@ -650,12 +653,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+
+            // parse the QTYPE
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
-
+             // parse the QCLASS
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
@@ -802,10 +807,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
     // the size of char containing the dns payload char size 
     __u8 *dns_payload_buffer = (__u8 *) dns_payload;
     /*
-        Usually a dns resolvert sends 1 requestt query for a single request to the remote DNS server 
-        The clsact qdisc is only meant for egress traffic and tc control flow system after fa_codel and default tc action from kernel
+        Usually a dns resolver sends 1 request query for a single request to the remote DNS server 
+        The clsact qdisc is only meant for egress traffic and tc control flow system after fa_codel or any non-leaf classfull qdisc
+                 default tc action from kernel
         Direct action appled over the egress traffic 
-        DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections, making it more flexible and stealthy
+        DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections,
+                 making it more flexible and stealthy
     */
 
    if (qd_count == 1) {
@@ -836,6 +843,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
             __u8 root_domain  = 0;
 
+            // parse the QNAME
             for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
@@ -852,15 +860,16 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
                 offset += label_len + 1; 
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
-        
+            
             __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+            // parse the QTYPE
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
-
+            // parse the QCLASS
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 

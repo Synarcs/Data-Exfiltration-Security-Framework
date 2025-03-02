@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"log"
 	"os"
 	"runtime"
 	"testing"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -59,6 +62,35 @@ func TestNetworkInterfaces(t *testing.T) {
 	}
 
 	assert.True(true)
+}
+
+func TestRequireNodeAgentConfig(t *testing.T) {
+	if _, err := os.Stat("config.yaml"); err != nil {
+		assert.Fail(t, "Error the Node Agent cannot be booted without loadable config ...")
+	}
+	assert.True(t, true)
+}
+
+func TestNodeAgentStreamProducerConn(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+	globalConfig, err := ReadGlobalNodeAgentConfig()
+	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	streamProducer := &stream.StreamProducer{
+		KafkaBrokerConfig: globalKakfBrokerConfig,
+	}
+
+	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {
+		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+		assert.Fail(err.Error())
+	}
+
+	assert.True(true)
+
 }
 
 func TestMain(t *testing.T) {
