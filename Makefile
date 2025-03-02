@@ -44,6 +44,15 @@ build-framework:
 	make build
 	make build-controller
 
+.PHONY: test-framework
+test-framework:
+	@echo "testing the framework"
+	@echo "testing the eBPF node agent User space code"
+	cd node_agent && go test 
+	
+	@echo "testing the controller"
+	cd controller && mvn test 
+
 .PHONY: install-dep-build
 install-dep:
 	@echo "install kernel and user space dep and headers"

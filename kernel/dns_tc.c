@@ -2194,6 +2194,8 @@ int classify(struct __sk_buff *skb){
 
             __u32 total_offset = nhoff + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
             if (total_offset > skb->len) return TC_DROP;
+
+            bpf_printk("a valid ipv6 udp packet egress kernel tc");
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
