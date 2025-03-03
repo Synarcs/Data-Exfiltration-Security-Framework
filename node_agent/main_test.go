@@ -4,22 +4,47 @@ import (
 	"context"
 	"log"
 	"os"
-	"runtime"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
+var linkHandler netinet.NetIface
+
+// cover most of the integration test with kernel netlink sockets / interfaces and ebpf  compiled programs loader to be inject into the kernel network stack
 type KernelEbpfMockInjectors struct {
+	mock.Mock
+}
+
+type NodeAgentMockInjectors struct {
 	mock.Mock
 }
 
 func (k *KernelEbpfMockInjectors) TestKernelTCEbpfInject(prog string) error {
 	k.Called(prog)
 	return nil
+}
+
+func (conf *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
+	args := conf.Called()
+	return args.Get(0).(*utils.NodeAgentConfig), args.Error(1)
+}
+
+func TestMain(t *testing.M) {
+	log.Println("Starting the test for kernel netlink sockets and interfaces  ....")
+
+	linkHandler = netinet.NetIface{}
+	linkHandler.ReadInterfaces(false)
+	linkHandler.ReadRoutes()
+	linkHandler.InitconnTrackSockHandles()
+
+	os.Exit(t.Run())
 }
 
 func TestKernelEbpfProgPath(t *testing.T) {
@@ -52,16 +77,31 @@ func TestKernelEbpfProgPath(t *testing.T) {
 func TestNetworkInterfaces(t *testing.T) {
 	assert := assert.New(t)
 
-	iface := netinet.NetIface{}
-	iface.ReadInterfaces(false)
-	iface.ReadRoutes()
-	iface.InitconnTrackSockHandles()
-
-	if len(iface.PhysicalLinks) == 0 {
+	if len(linkHandler.PhysicalLinks) == 0 {
 		assert.Fail("Error the node agent cannot boot and inject kernel programs until the required netlink links are found")
 	}
-
 	assert.True(true)
+}
+
+func TestBridgeInterfaces(t *testing.T) {
+	assert := assert.New(t)
+
+	requiredNodeAgentBridgeLinks := map[string]bool{
+		"br0": true, "nx-br0": true,
+	}
+
+	if len(linkHandler.BridgeLinks) > 0 {
+		for _, link := range linkHandler.BridgeLinks {
+			if _, ok := requiredNodeAgentBridgeLinks[link.Attrs().Name]; ok {
+				delete(requiredNodeAgentBridgeLinks, link.Attrs().Name)
+			}
+		}
+		if len(requiredNodeAgentBridgeLinks) == 0 {
+			assert.True(true)
+			return
+		}
+	}
+	assert.Fail("Error Required Kernel Bridge interfaces not found managed by the node agent")
 }
 
 func TestRequireNodeAgentConfig(t *testing.T) {
@@ -74,6 +114,7 @@ func TestRequireNodeAgentConfig(t *testing.T) {
 func TestNodeAgentStreamProducerConn(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
+	ctx, _ = context.WithTimeout(ctx, time.Second*3)
 	globalConfig, err := ReadGlobalNodeAgentConfig()
 	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig)
 	if err != nil {
@@ -90,10 +131,17 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	}
 
 	assert.True(true)
-
 }
 
-func TestMain(t *testing.T) {
-	assert.Equal(t, runtime.GOARCH, "arm64", "Architecture should match")
-	t.Log("Runnign tests for main eBPF node Agent in user space")
+func TestAgentConfigLoader(t *testing.T) {
+	nodeAgentLoaderMock := new(NodeAgentMockInjectors)
+	nodeAgentLoaderMock.IsMethodCallable(t, "ReadGlobalNodeAgentConfig")
+
+	nodeAgentLoaderMock.On("ReadGlobalNodeAgentConfig").Return(&utils.NodeAgentConfig{}, nil)
+
+	config, err := nodeAgentLoaderMock.ReadGlobalNodeAgentConfig()
+
+	assert.Nil(t, err)
+	assert.Equal(t, reflect.DeepEqual(config, &utils.NodeAgentConfig{}), true)
+	nodeAgentLoaderMock.AssertExpectations(t)
 }

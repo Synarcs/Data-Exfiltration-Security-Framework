@@ -1,7 +1,7 @@
 
 
 node_agent := main.go 
-output := node_agent 
+output ?= main 
 debug ?= false 
 
 .PHONY: compile 
@@ -23,6 +23,11 @@ compile-kernel-x86:
 build-cli:
 	@echo "Building eBPF Node Agent CLI for unix IPC"
 	cd ../cmd && make build 
+
+.PHONY: test
+test:
+	@echo "Running the eBPF Node Agent Unit Tests"
+	go test --timeout 10s
 
 .PHONY: build
 build:

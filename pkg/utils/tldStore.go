@@ -120,7 +120,7 @@ func (t *TopDomains) UpdateDomainDomainTLDCache(domain string) {
 		log.Println("the Required domain already present as safe TLD in Node Agent Cache ", domain)
 		return
 	}
-	
+
 	if len(domain) == 0 || strings.Count(domain, ".") != 1 || len(strings.Split(domain, ".")) != 2 {
 		log.Println("cannot unblock an malformed SLD in the cache")
 		return

@@ -48,7 +48,7 @@ build-framework:
 test-framework:
 	@echo "testing the framework"
 	@echo "testing the eBPF node agent User space code"
-	cd node_agent && go test 
+	cd node_agent && make test
 	
 	@echo "testing the controller"
 	cd controller && mvn test 
