@@ -58,7 +58,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                 self.end_headers()
 
                 request_body = json.loads(post_data)
-                if not DEBUG:
+                if DEBUG:
                     log.debug(f'Received request for inference {request_body}')
                 # True if benign else False 
                 # TODO: Run onnx evaluation for the model to process the data against trained deep learning model 
