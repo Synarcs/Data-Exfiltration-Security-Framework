@@ -32,6 +32,7 @@
 #include "dns.h"
 #include "consts.h"
 #include "utils.h" 
+#include "log.h"
 #include "raw_proc.h"
 #include "vxlan.h"
 
@@ -632,6 +633,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                             #endif
                             k++;
                         }
+                        // log to find the  shannon's entropy in kernel for the feature using Netwon-Raphson approx for sampling of bitwise log
+                        __u32 ln_val =  (float) (__approx_log(label_count) / (__u32) 1000.0);
+                        bpf_printk("the approx log from netwon raphson approx is %f", ln_val);
                     }
                 #endif
 
