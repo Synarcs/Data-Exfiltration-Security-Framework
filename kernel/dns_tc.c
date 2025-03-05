@@ -635,7 +635,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         }
                         // log to find the  shannon's entropy in kernel for the feature using Netwon-Raphson approx for sampling of bitwise log
                         __u32 ln_val =  (float) (__approx_log(label_count) / (__u32) 1000.0);
-                        bpf_printk("the approx log from netwon raphson approx is %f", ln_val);
+                        #ifdef DEBUG
+                            if (DEBUG)
+                                bpf_printk("the approx log from netwon raphson approx is %f", ln_val);
+                        #endif
                     }
                 #endif
 
@@ -1183,7 +1186,7 @@ static
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
 
-    __u32 br_index = 5;
+    __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_CLONE_FORWARD_REDIRECT;
     __u32 out = skb->ifindex;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
@@ -1884,7 +1887,7 @@ int classify(struct __sk_buff *skb){
                 __u32 out = skb->ifindex;
 
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4; 
+                __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT; 
 
                 if (config) {
                     __be32 redirect_address_from_config = config->RedirectIpv4;
@@ -2048,7 +2051,7 @@ int classify(struct __sk_buff *skb){
 
                 __u32 out = skb->ifindex;
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4; 
+                __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT; 
 
                 if (config) {
                     __be32 redirect_address_from_config = config->RedirectIpv4;
@@ -2066,7 +2069,7 @@ int classify(struct __sk_buff *skb){
                     return TC_FORWARD;
                 else if (result.drop) {
 
-                    __u32 br_index = 4;
+                    __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT;
                     struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
                     
                     
@@ -2246,7 +2249,7 @@ int classify(struct __sk_buff *skb){
                 __u32 out = skb->ifindex;
 
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4;  // loa  the redirection from the kernel 
+                __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT;  // loa  the redirection from the kernel 
 
                 if (config) {
                     br_index = config->BridgeIndexId;
@@ -2366,7 +2369,7 @@ int classify(struct __sk_buff *skb){
                 __u32 out = skb->ifindex;
 
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4;  // loa  the redirection from the kernel 
+                __u32 br_index = RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT;  // loa  the redirection from the kernel 
 
                 if (config) {
                     br_index = config->BridgeIndexId;

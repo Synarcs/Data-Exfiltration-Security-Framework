@@ -10,8 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.synarcs.controller.protocols.ProtocolEnums;
 
-public class NodeCache<T> implements Serializable {
-
+public class NodeCache<T extends String> implements Serializable {
 
     // preserve ordering for insertion 
     private Map<T, Integer> ct = new LinkedHashMap<>();
@@ -24,6 +23,7 @@ public class NodeCache<T> implements Serializable {
     Logger log = LoggerFactory.getLogger(NodeCache.class);
 
     public NodeCache() {
+        super();
     }
 
     public void addSldCountPerNode(T sld, T nodeIp) {
