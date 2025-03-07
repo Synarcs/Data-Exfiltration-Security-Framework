@@ -182,7 +182,7 @@ if __name__ == "__main__":
         # dga = gen_c2_exfil_domains(tldDomains=[RandomWord(max_word_size=9, constant_word_size=True, include_digits=False, include_special_chars=False).generate() + ".io" 
                                             #    for _ in range(1 << 16)], 
                                     # c2_tool_domains=exfil_tools)
-        dga = gen_c2_exfil_domains(tldDomains=[r.word() + "." + random.choice(RANDOM_TLD)
+        dga = gen_c2_exfil_domains(tldDomains=[base64.b64encode(r.word()).lower() + "." + random.choice(RANDOM_TLD)
                                        for _ in range(1 << int(args.count))], 
                             c2_tool_domains=exfil_tools)
         ff = open(DGA_FILE, 'w', encoding='utf-8')
