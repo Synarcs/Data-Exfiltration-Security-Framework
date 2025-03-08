@@ -197,4 +197,9 @@ struct result_parse_dns_labels {
     #define WIN_PHYSICAL_HYPERVISOR 0 
 #endif 
 
+// default kernel Birdge If_indexes , kernel internally does DNAT, SNAT
+#define RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_CLONE_FORWARD_REDIRECT 5
+#define RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT 4
+
+
 #endif /* __EXFIL_SECURITY_H */

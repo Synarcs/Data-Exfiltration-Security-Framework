@@ -74,6 +74,8 @@ public class BlacklistDomain {
             );
             sendDNSCacheAddDataplane(maliciousEvent, 
                     dnsResolver.getAddresses(maliciousEvent.getTld()));
+        }else {
+            log.error("Error the consumed event from the data plane node ",  maliciousEvent.getPhysicalNodeIpv4() + " is not valid");
         }
     }
 

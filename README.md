@@ -33,6 +33,7 @@ UserLand
     * ONNX (Open Neural Network Exchange)
     * Tensorflow
     * Dense Neural Networks
+* Unix Domain Sockets ONNX Inference servers 
 
 ## Distributed Infrastructure
 DNS Network Topologies
@@ -73,12 +74,12 @@ Threat Event Stream Message Analysis Control Plane Server
 * Cloud Providers Infrastructure Integration 
     * Integration with Public Cloud providers for dynamic NACL, Security groups, firewall rules creation over VPC for DNS exfiltration security
 eBPF node agent rinning over host ns, to fully thwart data breach by killing malicious C2 implants.
-* Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP). 
+* Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP) at endpoint itself, supporting conntrack state mapping in eBPF map for TCP handshake prior DNS transfer and stopping DNS data transfer over TCP socket via kernel TC.
 * Integration with Kubernetes mutation webhooks for dynamic exfiltration guard security containers to be injected on pods matching required security labels.
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orcehstrated environments.
 * Support prometheus metrics endpoints integrated inside the sidecar. 
 * Enhance framework for safeguarding enterprises from exfiltration over other protocols (ICMP, FTP) etc. 
-* Enhance support for DOT (DNS over TLS). 
+* Enhance support for DOT (DNS over TLS), eBPF based TLS fingerprinting interception in kernel. 
 * Add support for XDP ingress NXDOMAIN flood prevention to break DNS woter torture flood attacks. 
 
 
@@ -86,7 +87,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 
 ### Data Plane (eBPF Node Agent)
 ```
-    bash infrastructure/compile.sh
+    bash infrastructure/agent.sh
     make build 
     make run_node_agent
 ```
@@ -97,11 +98,12 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 ```
 
 ## Dependencies
-* Data Plane (eBPF Node Agent): ``` infrastructure/compile.sh ```
+* Data Plane (eBPF Node Agent): ``` infrastructure/agent.sh ```
 * Control Plane: ``` infrastructure/controller.sh ```
 
 ## Authors
 - [Vedang Parasnis](https://github.com/Synarcs/)
+
 
 ## Support 
 <a href="https://www.buymeacoffee.com/vedangparan" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>

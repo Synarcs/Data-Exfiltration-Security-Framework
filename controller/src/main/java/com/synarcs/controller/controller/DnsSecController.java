@@ -1,5 +1,6 @@
 package com.synarcs.controller.controller;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,7 @@ import com.synarcs.controller.service.MaliciousNsResolve;
 // later fix and move all business logic inside the dedicated blacklist service 
 
 @RestController
-public class DnsSecController {
+public class DnsSecController implements Serializable {
 
     private Logger logger = LoggerFactory.getLogger(DnsSecController.class);
 

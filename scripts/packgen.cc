@@ -60,7 +60,7 @@ bool PacketHandler::submitTasksWatchQueue(__u32 * fd) {
     return true;
 } 
 
-std::vector<__u32> PacketHandler::FilterWatcherPolFd(const std::vector<__u32> &pollFd) {
+std::vector<__u32> PacketHandler::FilterWatcherPolFd(const std::vector<__u32>& pollFd) {
     return pollFd;
 }
 

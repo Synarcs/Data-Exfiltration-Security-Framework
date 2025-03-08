@@ -206,12 +206,12 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_ROOT_NETIFACE_INT)
-
 	if errors.Is(ctx.Err(), context.Canceled) {
 		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
 		return
 	}
+
+	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
 		panic(err.Error())
