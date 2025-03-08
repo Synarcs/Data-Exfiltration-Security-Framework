@@ -458,7 +458,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum_kernel_ts)
 		if err != nil {
-			fmt.Println("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
+			log.Println("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
 		} else {
 			if utils.DEBUG {
 				log.Println("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))

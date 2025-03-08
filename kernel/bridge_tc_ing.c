@@ -47,6 +47,8 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
         }
     #endif
 
+    // TODO: Fix the node agent kernel random map for sk_buff guard work 
+    
     if (skb->mark != redirect_skb_mark)  {
         return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
     }

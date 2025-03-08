@@ -2213,7 +2213,7 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
-            if (udp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
 
                 if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;
@@ -2339,7 +2339,7 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
-            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+            if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)) {
 
                 struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
