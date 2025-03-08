@@ -2,9 +2,7 @@ package utils
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -200,19 +198,4 @@ func CpuArch() string {
 
 func GetCPUCores() int {
 	return runtime.NumCPU()
-}
-
-func GetRandomBootSkbMark() uint32 {
-	var randomNuonceSkbMarkBoot []byte = make([]byte, 24)
-	_, err := rand.Read(randomNuonceSkbMarkBoot)
-	if err != nil {
-		return DEFAULT_SK_BUFF_NUONCE
-	}
-
-	if !DEBUG {
-		log.Printf("The eBPF Node Agent uses the current random SKB mark for secure redirection %s",
-			hex.EncodeToString(randomNuonceSkbMarkBoot))
-	}
-
-	return binary.LittleEndian.Uint32(randomNuonceSkbMarkBoot)
 }

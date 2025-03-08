@@ -15,6 +15,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/cilium/ebpf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -35,6 +36,8 @@ type TCHandler struct {
 	GlobalErrorKernelHandlerChannel chan bool      // handles all control channel created by main to kill any kernel code if found runtime panics
 
 	IsEgressXdpSupport bool
+
+	Hash *rand.Hash // skb agent crypto hash for agent integrity with kernel
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -78,7 +81,7 @@ func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan bool) TCHandler {
+	globalErrorKernelHandlerChannel chan bool, agentHash *rand.Hash) TCHandler {
 	dnsPacketGen := GenerateDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
 	handler := TCHandler{
@@ -86,6 +89,7 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		DnsPacketGen:                    dnsPacketGen,
 		OnnxLoadedModel:                 onnxModel,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
+		Hash:                            agentHash,
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
 		handler.IsEgressXdpSupport = true
@@ -254,7 +258,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				NfNdpBridgeIndexId:      uint32(iface.BridgeLinks[1].Attrs().Index),
 				RedirectIpv4:            utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
 				NfNdpBridgeRedirectIpv4: utils.GenerateBigEndianIpv4(utils.BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP),
-				KernelTCSKBMark:         utils.GetRandomBootSkbMark(),
+				KernelTCSKBMark:         tc.Hash.SkbHash,
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {

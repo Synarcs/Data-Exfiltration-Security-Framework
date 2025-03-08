@@ -9,6 +9,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
@@ -22,6 +23,7 @@ import (
 type BridgeTCFilters struct {
 	TCBridgeSocketMap *ebpf.Map
 	Interfaces        *netinet.NetIface
+	Hash              *rand.Hash
 }
 
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
@@ -90,6 +92,14 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 	spec, err := ebpf.NewCollection(handler)
 	if err != nil {
 		panic(err)
+	}
+
+	tcBridgeSkHash := spec.Maps[events.EXFIL_TC_BRIDGE_CONFIG_MAP]
+	var tc_bridge_hash_key uint32 = 0
+
+	if err := tcBridgeSkHash.Put(&tc_bridge_hash_key, &btc.Hash.SkbHash); err != nil {
+		var defaultHash uint32 = utils.DEFAULT_SK_BUFF_NUONCE
+		tcBridgeSkHash.Put(&tc_bridge_hash_key, &defaultHash)
 	}
 
 	var prog *ebpf.Program

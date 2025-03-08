@@ -23,6 +23,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"gopkg.in/yaml.v2"
 )
@@ -98,6 +99,10 @@ func main() {
 	iface.ReadRoutes()
 	iface.GetRootGateway()
 	iface.InitconnTrackSockHandles()
+
+	// init the hash for skb and entire node agent, the hash should be always unique per agent boot and injecttion in kernel
+	hash := &rand.Hash{}
+	hash.GetRandomBootSkbMark()
 
 	// io Disk Cache Inodes for Node agent
 	utils.InitCache()
@@ -185,7 +190,7 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
+	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash)
 
 	if globalConfig.EnhancedFeatures.Dns.EnableNxFloodPrevention {
 		xdpHandler := xdp.NewXdpHandler(&iface)
@@ -209,6 +214,7 @@ func main() {
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := bridgetc.BridgeTCFilters{
 		Interfaces: &iface,
+		Hash: hash,
 	}
 	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
 

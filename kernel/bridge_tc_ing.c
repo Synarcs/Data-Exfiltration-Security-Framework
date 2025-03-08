@@ -21,15 +21,11 @@
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
 
-struct br_net_filter_config_map { 
-    __u32 Bridge_if_index; // holds and process the if_index for bridge of linux ns 
-    __u32  SKB_Mark;
-}; 
 
 struct exfil_security_tc_bridge_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32); // constant kernel key 
-    __type(value, struct br_net_filter_config_map);   // layer ifindex for the kenrle bridge route;
+    __type(value, __u32);   // layer ifindex for the kenrle bridge route;
     __uint(max_entries, 1);
 } exfil_security_tc_bridge_config_map SEC(".maps");
 
@@ -48,12 +44,18 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     #endif
 
     // TODO: Fix the node agent kernel random map for sk_buff guard work 
-    
-    if (skb->mark != redirect_skb_mark)  {
-        return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
+    __u32 skb_mark_key = 0;
+    __u32 * skb_hash = bpf_map_lookup_elem(&exfil_security_tc_bridge_config_map, &skb_mark_key);
+    if (!skb_hash) {
+        if (skb->mark != redirect_skb_mark)  {
+            return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
+        }
+    }else {
+        if (skb->mark != *skb_hash)  {
+            return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
+        }
+        return TC_FORWARD;
     }
-    
-    return TC_DROP;
 }
 
 
