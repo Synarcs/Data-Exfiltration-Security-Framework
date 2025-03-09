@@ -102,6 +102,12 @@ type NodeAgentConfig struct {
 		Port string `yaml:"port" reflect:"port"`
 	} `yaml:"metricServer" reflect:"metricServer"`
 
+	GrafanaServer struct {
+		Host string `yaml:"host" reflect:"host"`
+		Ip   string `yaml:"ip" reflect:"ip"`
+		Port string `yaml:"port" reflect:"port"`
+	} `yaml:"grafanaServer" reflect:"grafanaServer"`
+
 	MetricsExporter struct {
 		Port string `yaml:"port" reflect:"port"`
 		Ip   string `yaml:"ip" reflect:"ip"`

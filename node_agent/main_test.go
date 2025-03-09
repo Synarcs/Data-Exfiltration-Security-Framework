@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -109,6 +111,35 @@ func TestRequireNodeAgentConfig(t *testing.T) {
 		assert.Fail(t, "Error the Node Agent cannot be booted without loadable config ...")
 	}
 	assert.True(t, true)
+}
+
+func TestEachNodeAgentConfigAddress(t *testing.T) {
+	assert := assert.New(t)
+	config, err := ReadGlobalNodeAgentConfig()
+	if err != nil {
+		assert.Error(err)
+	}
+
+	// verify connection upstream dns server
+	_, err = net.Dial("udp", fmt.Sprintf("%s:%d", config.DNSServer.Ip, 53))
+	if err != nil {
+		assert.Error(err)
+	}
+
+	// verify connection upstream metric server (prometheus)
+	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", config.MetricServer.Ip, config.MetricServer.Port))
+	if err != nil {
+		assert.Error(err)
+	}
+
+	// verify connection upstream metric explore server (grafana)
+	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", config.GrafanaServer.Ip, config.MetricServer.Port))
+	if err != nil {
+		assert.Error(err)
+	}
+
+	assert.True(true)
+
 }
 
 func TestNodeAgentStreamProducerConn(t *testing.T) {
