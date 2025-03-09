@@ -51,7 +51,7 @@ run-inference:
 .PHONY: run-inference-controller
 run-inference-controller:
 	@echo "Running the Remote unix socket inference server on controller server"
-	sudo python3 ../model/infer/inference.py -c true &
+	sudo python3 ../model/infer/inference.py  -m "../dns_sec.onnx" -c true &
 	@echo "Configure the Unix socket permissions and ownership  for inference"
 	sleep 1.5 && sudo chmod 777 /etc/powerdns/onnx-inference-out.sock && sudo chmod 777 /etc/powerdns/onnx-inference-in.sock
 

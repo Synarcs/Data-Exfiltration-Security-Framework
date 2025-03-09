@@ -206,5 +206,9 @@ func (nc *NodeDaemonCli) CleanRemoteSock() error {
 		return err
 	}
 
+	if err := os.Remove(string(nc.Unixsock)); err != nil {
+		return err
+	}
+
 	return nil
 }

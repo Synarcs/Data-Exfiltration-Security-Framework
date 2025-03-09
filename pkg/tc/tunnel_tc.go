@@ -191,13 +191,13 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 
 		var event events.DnsEvent
 		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-			log.Println("Polling the ring buffer for the arm arch")
+			log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 		} else {
-			log.Println("Polling the ring buffer for the x86 big endian systems")
+			log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)

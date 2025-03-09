@@ -162,7 +162,10 @@ def run_egress_server(controllerMode: bool = False, threadQueue: Queue = None) -
     if threadQueue is None:
         threadQueue = Queue()
     
-    print('[x] Running the Egress Unix socket server on thread', threading.current_thread().name)
+    log.info('[x] Running the Egress Unix socket server on thread {threading.current_thread().name}')
+    if controllerMode:
+        log.info(f'[x] Running Egress server in controller mode')
+    
     inferSock: str = consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS
 
     if os.path.exists(inferSock):
@@ -193,7 +196,10 @@ def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) 
     if threadQueue is None:
         threadQueue = Queue()
 
-    print('[x] Running the Ingress Unix socket server on thread', threading.current_thread().name)
+    log.info(f'[x] Running the Ingress Unix socket server on thread {threading.current_thread().name}')
+    if controllerMode:
+        log.info(f'[x] Running Ingress server in controller mode')
+    
     inferSock: str = consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not controllerMode else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS
 
     if os.path.exists(inferSock):
