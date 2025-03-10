@@ -147,6 +147,7 @@ struct exfil_raw_packet_mirror {
     __u16 src_port;
     __u8 isUdp;
     __u8 isPacketRescanedAndMalicious;
+    __u32 procId;
 };
 
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
@@ -1221,6 +1222,17 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.src_port = __transport_src_port;
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
         pack.isPacketRescanedAndMalicious = (__u8)0;
+
+        #ifdef LINUX_VERSION_CODE
+            if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+                __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+                pack.procId = (__u32) proc_id;
+            }else {
+                pack.procId = (__u32) 0;
+            }
+        #endif
+
+
         if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
             #ifdef DEBUG 
                 if (!DEBUG) {
@@ -1299,6 +1311,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
 
         __u32 udp_dest_port = bpf_ntohs(udp->dest);
         __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+
         if (userspace_vxlan_flag_val) {
             #ifdef DEBUG 
                 if (DEBUG) 
@@ -1619,7 +1632,7 @@ __always_inline struct checkSum_redirect_struct_value * __update_kernel_task_str
         checksum_map->threadId = threadId;
     }else {
         checksum_map->procId = 0; // keep this the helper in libbpf was added post kernel version 6.11.0 
-        checksum_map->threadId = 0; 
+        checksum_map->threadId = 0;
     }
     #endif 
     return checksum_map;

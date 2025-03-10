@@ -205,14 +205,14 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	if !isBenign {
 		if isEgress {
-			log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
 			if processInfo.ProcessId != 0 && processInfo.ThreadId != 0 {
+				log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
 				// handle the sock layer inc for local cache, only track the egress filter, for xdp over ingress no sock layer needed required process can be sigkilled in egress path
 				go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
 			}
 			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer
 		}
-		log.Println("Malicious DNS Exfiltrated Qeury Found Dropping the packet", features)
+		log.Println("Malicious DNS Exfiltrated Query Found Dropping the packet", features)
 		// add the tld and domain information in packet malicious map for local cache
 		if len(features) > 1 {
 			for _, feature := range features {
