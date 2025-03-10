@@ -88,6 +88,12 @@ static
 __always_inline void __configure_l3_filter_options() {
 }
 
+struct __kernel_proc_struct_info {
+    __u32 procId;
+    __u32 threadId;
+} __attribute__((packed));
+
+
 // 10.200.0.1 this is only for testing in kernel while parsing the process 
 #ifndef BRIDGE_REDIRECT_ADDRESS_IPV4
     #define BRIDGE_REDIRECT_ADDRESS_IPV4 0x0AC80001 

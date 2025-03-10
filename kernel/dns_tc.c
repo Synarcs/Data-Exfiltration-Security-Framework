@@ -295,18 +295,6 @@ struct exfil_security_egress_rate_limit_map {
 #endif 
 
 
-// TODO: add macros for some DPI scans 
-#define HANDLE_MULTICAST_PORT_DPI(transport_dest, DEBUG_FLAG)                               \
-    do {                                                                                    \
-        if ((transport_dest == bpf_ntohs(DNS_EGRESS_MULTICAST_PORT)) ||                     \
-            (transport_dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT))) {             \
-            if (DEBUG) {                                                                    \
-                bpf_printk("Detected a possible multicast local link NS resolution request"); \
-            }                                                                               \
-            return TC_FORWARD;                                                              \
-        }                                                                                   \
-    } while (0)
-
 // Parse the RAW SKB for query classes 
 #define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)      \ 
         switch ((dns_query_class)){                 \
@@ -1064,6 +1052,28 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
 }
 
 
+/*
+    Rely on kernel task comm for the tc running on whichever CPU handles and retrieve the process name and associated task struct
+*/
+static 
+__always_inline struct __kernel_proc_struct_info * __get_process_info() {
+    struct __kernel_proc_struct_info proc_info;
+
+    #ifdef LINUX_VERSION_CODE
+        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+            __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+            __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
+            proc_info.procId = proc_id;
+            proc_info.threadId = thread_id;
+        }else {
+            proc_info.procId = 0;
+            proc_info.threadId = 0;
+        }
+    #endif
+    return &proc_info;
+}
+
+
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, struct __sk_buff *raw_skb, void * dns_payload, 
                 struct dns_header_tcp *dns_header) {
@@ -1223,15 +1233,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
         pack.isPacketRescanedAndMalicious = (__u8)0;
 
-        #ifdef LINUX_VERSION_CODE
-            if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
-                __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-                pack.procId = (__u32) proc_id;
-            }else {
-                pack.procId = (__u32) 0;
-            }
-        #endif
 
+        struct __kernel_proc_struct_info * proc_info = __get_process_info();
+        pack.procId = proc_info->procId;
 
         if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
             #ifdef DEBUG 
@@ -1249,20 +1253,34 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             #endif
             // only work for clone on ipv4 for now 
         }
+        return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
     }else {
         // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
         __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
+        struct __kernel_proc_struct_info * proc_info = __get_process_info();
+        raw_pack->procId = proc_info->procId; // update the process id for the packet for the map 
         if (re_scanned_packed_and_malicious == 1) {
             // no need to clone the packet has to be dropped now;
             // continuosly monitor with the clone of the packet from the kernel to DPI in userspace to make sure the port is safe sanatized and no malicious DPI tunnel traffic 
             // transfer on this port 
-            if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
-                #ifdef DEBUG
-                    if (DEBUG) {
-                        bpf_printk("kernel cannot clone the packet for the redirect"); 
-                    }
-                #endif 
+
+
+            bool isNewProcessTransferOverSamePort = false;
+            if (raw_pack->procId != 0) {
+                if (raw_pack->procId != proc_info->procId) {
+                    // a new process transfer packets over the same port, make sure kernel frees and does not drop the packet on new transfer over the port
+                    isNewProcessTransferOverSamePort = true;
+                }
+                if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+                    #ifdef DEBUG
+                        if (DEBUG) {
+                            bpf_printk("kernel cannot clone the packet for the redirect"); 
+                        }
+                    #endif 
+                    // should not update anything in map since this is malicious and other process sending this packet from user-space, must 
+                }
             }
+            // an inferred id with the currentl kernel not supporting the task comm from task struct for process control handling to get process ID.
             if (bpf_map_delete_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key) < 0) {
                 #ifdef DEBUG
                     if (DEBUG) {
@@ -1279,7 +1297,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                 #endif 
             }
             __handle_kernel_map_clone_redirected_count(true);
-            return 0;
+            return isNewProcessTransferOverSamePort ? 1 : 0;
         }else {
             raw_pack->isPacketRescanedAndMalicious = (__u8)0;
             if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, raw_pack, 0) < 0){
@@ -1292,12 +1310,14 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         }
    
         if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
-            if (DEBUG) {
-                bpf_printk("kernel cannot clone the packet for the redirect"); 
-            }
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("kernel cannot clone the packet for the redirect"); 
+                }
+            #endif
         }
+        return 1;
     }
-    return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
 }
 
 static 
@@ -1865,7 +1885,9 @@ int classify(struct __sk_buff *skb){
             #endif
             
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
-            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
+            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
+                || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
+                || udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
 
                 if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;
@@ -2006,13 +2028,7 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
-            }
-            #ifdef DEEP_SCAN_DNS_UDP_OVERLAY 
-                if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
-                    HANDLE_MULTICAST_PORT_DPI(udp->dest, DEBUG);
-                }
-            #endif
-            else {
+            }else {
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
                                     udp_data, udp_payload_len, udp, true) == 1)
@@ -2033,7 +2049,10 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
             #endif
             
-            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)) {
+            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)
+                || tcp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
+                || tcp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
+            ) {
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header_tcp);
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
@@ -2188,11 +2207,6 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS);
             }
-            #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
-                if (!DEEP_SCAN_DNS_TCP_OVERLAY) {
-                    HANDLE_MULTICAST_PORT_DPI(tcp->dest, DEBUG);
-                }
-            #endif
             else {
 
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
@@ -2226,7 +2240,10 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
-            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)) {
+            if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
+                || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
+                || udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
+        ) {
 
                 if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;
@@ -2328,11 +2345,6 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
 
             }
-            #ifdef DEEP_SCAN_DNS_UDP_OVERLAY 
-                if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
-                    HANDLE_MULTICAST_PORT_DPI(udp->dest, DEBUG);
-                }
-            #endif
             else {
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;
@@ -2352,7 +2364,10 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
-            if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)) {
+            if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)
+                || tcp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
+                || tcp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
+        ) {
 
                 struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
@@ -2440,11 +2455,6 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(dns->transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS);
             }
-            #ifdef DEEP_SCAN_DNS_TCP_OVERLAY 
-                if (!DEEP_SCAN_DNS_TCP_OVERLAY) {
-                    HANDLE_MULTICAST_PORT_DPI(tcp->dest, DEBUG);
-                }
-            #endif
             else {
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, false) == 1) 
                     return TC_FORWARD;

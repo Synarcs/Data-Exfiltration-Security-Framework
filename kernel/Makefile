@@ -75,6 +75,11 @@ tc:
 	sudo tc qdisc add dev br0 clsact
 	sudo tc qdisc show 
 
+.PHONY: tc-remove-vm
+tc-remove-vm:
+	sudo tc qdisc del dev enp0s1 clsact
+
+
 .PHONY: tc-remove
 tc-remove:
 	sudo tc qdisc del dev enp0s1 clsact

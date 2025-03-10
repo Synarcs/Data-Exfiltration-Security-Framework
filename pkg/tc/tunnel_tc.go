@@ -213,10 +213,14 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	}
 }
 
+var KernelTransferPortUpdate sync.RWMutex = sync.RWMutex{}
+
 func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map,
 	destPort uint16, fetchEvent *events.ExfilRawPacketMirror,
 	erroChannel chan interface{}, isBenign bool) {
 
+	KernelTransferPortUpdate.Lock()
+	defer KernelTransferPortUpdate.Unlock()
 	if isBenign {
 		fetchEvent.IsPacketRescanedAndMalicious = uint8(0)
 		if err := tunnelMap.Put(uint16(destPort), fetchEvent); err != nil {
@@ -490,7 +494,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 				errorChannel <- struct {
 					Err string
 				}{
-					Err: "The kernel has not cloned the packet from tc layer",
+					Err: fmt.Sprintf("The kernel has not cloned the packet from tc layer %s", err.Error()),
 				}
 			}
 			return
