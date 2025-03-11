@@ -83,6 +83,12 @@ const (
 	NODE_CONFIG_FILE = "config.yaml"
 )
 
+// works as a bridge between kernel netdev (tc) layer and kernel syscall layer eBPF hooks to kill if multiple malicious count found
+type MaliciousKernelTaskCommExportedProcInfo struct {
+	ProcessId uint32
+	ThreadId  uint32
+}
+
 type NodeAgentConfig struct {
 	StreamServers struct {
 		Host string `yaml:"host" reflect:"host"`
@@ -204,4 +210,8 @@ func CpuArch() string {
 
 func GetCPUCores() int {
 	return runtime.NumCPU()
+}
+
+func VerifyKernelSupportTaskComms(processId uint32, threadId uint32) bool {
+	return processId != 0 && threadId != 0
 }

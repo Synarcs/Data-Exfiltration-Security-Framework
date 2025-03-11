@@ -51,7 +51,6 @@ type ExfilRawPacketMirror struct {
 	SrcPort                      uint16
 	IsUdp                        uint8
 	IsPacketRescanedAndMalicious uint8
-	ProcessId                    uint32
 }
 
 // load the kernel config inside the kernel

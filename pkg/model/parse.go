@@ -39,12 +39,6 @@ type DnsPacketGen struct {
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
-// works as a bridge between kernel netdev (tc) layer and kernel syscall layer eBPF hooks to kill if multiple malicious count found
-type ProcessInfo struct {
-	ProcessId uint32
-	ThreadId  uint32
-}
-
 type CombinedFeatures []DNSFeatures
 
 func IncrementMaliciousProcCountLocalCache(procId uint32) {
@@ -158,7 +152,7 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 // only use for l3 -> ipv4 and l4 -> udp
 func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
-	processInfo *ProcessInfo) error {
+	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -205,39 +199,35 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	if !isBenign {
 		if isEgress {
-			if processInfo.ProcessId != 0 && processInfo.ThreadId != 0 {
+			if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
 				log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
-				// handle the sock layer inc for local cache, only track the egress filter, for xdp over ingress no sock layer needed required process can be sigkilled in egress path
+				// used as a metric to interact with kernel syscall layer if supported the implant will be terminated at the endpoing if it exceeds the threshold limit for malicious
 				go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
 			}
 			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer
 		}
 		log.Println("Malicious DNS Exfiltrated Query Found Dropping the packet", features)
 		// add the tld and domain information in packet malicious map for local cache
-		if len(features) > 1 {
-			for _, feature := range features {
-				if isUdp {
+		for _, feature := range features {
+			if isUdp {
+				if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
 					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
-						events.DNS, int(udpPacket.DstPort))
+						events.DNS, int(udpPacket.DstPort), processInfo)
 				} else {
 					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
-						events.DNS, int(tcpPacket.DstPort))
+						events.DNS, int(udpPacket.DstPort), nil)
 				}
-				go d.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
-					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
-					Protocol:         string(events.DNS),
-					PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
-					PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
-				})
-			}
-		} else if len(features) == 1 {
-			if isUdp {
-				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(udpPacket.DstPort))
 			} else {
-				events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(features[0]), &d.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, int(tcpPacket.DstPort))
+				if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+						events.DNS, int(tcpPacket.DstPort), processInfo)
+				} else {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+						events.DNS, int(udpPacket.DstPort), nil)
+				}
 			}
-			d.StreamClient.MarshallStreamThreadEvent(features[0], stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT), // keep this as it until more kernele xfil control is added
+			go d.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),

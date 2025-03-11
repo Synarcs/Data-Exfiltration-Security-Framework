@@ -199,7 +199,7 @@ var (
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
 			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers", "PhysicalNodeIpv4",
-			"Protocol", "ExfilPort",
+			"Protocol", "ExfilPort", "ProcessId",
 		},
 	)
 	// dns event for bengin traffic transfer
@@ -419,7 +419,7 @@ func SanatizeRune(value []byte) string {
 }
 
 func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T,
-	exfilPort int) error {
+	exfilPort int, procInfo *utils.MaliciousKernelTaskCommExportedProcInfo) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
 	}
@@ -454,6 +454,11 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 	}
 
 	labels["ExfilPort"] = strconv.Itoa(exfilPort)
+
+	// the kernel tc filter layer provides this to user space via task comm shared with user space via maps or ring buffers
+	if procInfo != nil {
+		labels["ProcessId"] = strconv.Itoa(int(procInfo.ProcessId))
+	}
 
 	switch protocol {
 	case T(DNS):

@@ -439,7 +439,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 				if inferenceResponse.ThreatType {
 
 					if ev != nil {
-						if ev.ProcessId != 0 && ev.ThreadId != 0 {
+						if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
 							tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
 						} else {
 							// older kernel version use kernel proc fs mount to ge process Information
@@ -447,7 +447,16 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					}
 
 					for _, feature := range features {
-						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destTransportPort)) // (wont overflow (1 << 16))
+						if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+							go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
+								int(destTransportPort), &utils.MaliciousKernelTaskCommExportedProcInfo{
+									ProcessId: ev.ProcessId,
+									ThreadId:  ev.ThreadId,
+								})
+						} else {
+							go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
+								int(destTransportPort), nil)
+						}
 					}
 
 					go tun.UpdateExportMetricsCountForDnsExfilRandomPort(true, ebpfMaps)
@@ -463,7 +472,16 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			// mark the packet transfered over non standard port to be benigns
 			tun.EnsureTransportTunnelPortMapUpdate(ebpfMaps[0], destTransportPort, event, errorChannel, true)
 			for _, feature := range features {
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destTransportPort)) // (wont overflow (1 << 16))
+				if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+						"DNS", int(destTransportPort), &utils.MaliciousKernelTaskCommExportedProcInfo{
+							ProcessId: ev.ProcessId,
+							ThreadId:  ev.ThreadId,
+						}) // (wont overflow (1 << 16))
+				} else {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+						"DNS", int(destTransportPort), nil) //
+				}
 			}
 
 			go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
@@ -532,7 +550,16 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		// check for the netbios local samba lookup for ns resoultion with NB reocrd for queries
 		if !isNetBiosTunnelNSLookUp(dns) {
 			for _, feature := range features {
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS", int(destPort))
+				if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+						"DNS", int(destPort), &utils.MaliciousKernelTaskCommExportedProcInfo{
+							ProcessId: ev.ProcessId,
+							ThreadId:  ev.ThreadId,
+						})
+				} else {
+					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+						"DNS", int(destPort), nil)
+				}
 
 				go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
 					ExfilPort:        strconv.Itoa(int(destPort)),

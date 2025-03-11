@@ -94,8 +94,6 @@ struct packet_actions {
     __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , struct __sk_buff *, void *, struct dns_header_tcp *);
 };
 
-__u32 INSECURE = 0;
-
 /* ***************************************** Event ring buffeers for kernel detected DNS events ***************************************** */
 
 // non standard port DPI for enhanced c2c channels with remote c2c server for malware exfil over udp 
@@ -141,13 +139,19 @@ struct exfil_security_egress_vxlan_encap_drop {
 } exfil_security_egress_vxlan_encap_drop SEC(".maps");
 
 
+// submits malicious DNS exfiltrated events to be exported provind processID information carrying out breaches
+struct exfil_security_egress_malicious_dns_events {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 12);
+} exfil_security_egress_malicious_dns_events SEC(".maps"); 
+
+
 // 
 struct exfil_raw_packet_mirror {
     __u16 dst_port;
     __u16 src_port;
     __u8 isUdp;
     __u8 isPacketRescanedAndMalicious;
-    __u32 procId;
 };
 
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
@@ -1059,8 +1063,9 @@ static
 __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
-    #ifdef LINUX_VERSION_CODE
-        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
+   #ifdef LINUX_VERSION_CODE
+        // TODO: Fix the version and match the kernel patch level  
+        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)){
             __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
             __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
             proc_info.procId = proc_id;
@@ -1094,10 +1099,8 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
     if (ans_count == 0) {
         // a potential question section embed inside deep for the __sk_buff processing;
-        // if (parse_dns_payload_memsafet_payload() == SUSPICIOUS) {
         
         // verify header opcodes and return types 
-
         __u16 raw_dns_flags = dns_header->flags;
         #ifdef DEBUG
             if (DEBUG) {
@@ -1234,8 +1237,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.isPacketRescanedAndMalicious = (__u8)0;
 
 
-        struct __kernel_proc_struct_info * proc_info = __get_process_info();
-        pack.procId = proc_info->procId;
+        struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
 
         if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
             #ifdef DEBUG 
@@ -1258,28 +1260,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
         __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
         struct __kernel_proc_struct_info * proc_info = __get_process_info();
-        raw_pack->procId = proc_info->procId; // update the process id for the packet for the map 
         if (re_scanned_packed_and_malicious == 1) {
-            // no need to clone the packet has to be dropped now;
-            // continuosly monitor with the clone of the packet from the kernel to DPI in userspace to make sure the port is safe sanatized and no malicious DPI tunnel traffic 
-            // transfer on this port 
 
-
-            bool isNewProcessTransferOverSamePort = false;
-            if (raw_pack->procId != 0) {
-                if (raw_pack->procId != proc_info->procId) {
-                    // a new process transfer packets over the same port, make sure kernel frees and does not drop the packet on new transfer over the port
-                    isNewProcessTransferOverSamePort = true;
-                }
-                if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
-                    #ifdef DEBUG
-                        if (DEBUG) {
-                            bpf_printk("kernel cannot clone the packet for the redirect"); 
-                        }
-                    #endif 
                     // should not update anything in map since this is malicious and other process sending this packet from user-space, must 
-                }
-            }
             // an inferred id with the currentl kernel not supporting the task comm from task struct for process control handling to get process ID.
             if (bpf_map_delete_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key) < 0) {
                 #ifdef DEBUG
@@ -1297,7 +1280,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                 #endif 
             }
             __handle_kernel_map_clone_redirected_count(true);
-            return isNewProcessTransferOverSamePort ? 1 : 0;
+            return 0;
         }else {
             raw_pack->isPacketRescanedAndMalicious = (__u8)0;
             if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, raw_pack, 0) < 0){
@@ -1392,6 +1375,38 @@ __always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
     return 0;
 }
 
+/*
+    Emits ring buffer events to user space for malicious transfer for  potential malicious transfer over random ports
+    Right now only support for transfer over UDP 
+    Use this to be extended for any dynamic dptr events to be emitted to kernel 
+*/
+static
+__always_inline void __submit_ring_buff_events_malicious_transfers(bool isStandardPortTransfer, struct udphdr *udp, struct dns_header *dns) {
+
+    struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+    struct bpf_dynptr dptr;
+
+    if (!isStandardPortTransfer) {
+        struct dns_non_standard_transport_event  random_port_event = (struct dns_non_standard_transport_event) {
+            .dest_port = bpf_ntohs(udp->dest),
+            .src_port = bpf_ntohs(udp->source),
+            .dns_transaction_id = bpf_ntohs(dns->transaction_id),
+            .isTcp = (__u8)0,
+            .isUdp = (__u8)1,
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        };
+
+        if (bpf_ringbuf_reserve_dynptr(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port, sizeof(struct dns_non_standard_transport_event), 0, &dptr) < 0){
+            bpf_ringbuf_discard_dynptr(&dptr, 0);
+            return;
+        }
+        long _ = bpf_dynptr_write(&dptr, 0, &random_port_event, sizeof(struct dns_non_standard_transport_event), 0);
+
+        bpf_ringbuf_submit_dynptr(&dptr, 0);
+    }
+}
+
 
 static 
 __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
@@ -1441,38 +1456,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                             dns_payload, dns, udp);
         if (__non_standard_port_dpi == 0) {
             // emit the ring buff from kernel as a transport event 
-            if (DEBUG)
-                bpf_printk("Non standard transport DPI found for exfil remote c2c server %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
-            void *res = bpf_ringbuf_reserve(&exfil_security_egrees_clone_redirect_ring_buff_non_standard_port, 
-                            sizeof(struct dns_non_standard_transport_event), 0);
-            if (!res) {
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        bpf_printk("Error reserve kernel memroy for the event");
-                    }
-                #endif
-                return 1;
-            }
             
-            struct dns_non_standard_transport_event *event = res;
-            event->dest_port = bpf_ntohs(udp->dest);
-            event->src_port = bpf_ntohs(udp->source);
-            event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
-            event->isTcp = (__u8)0;
-            event->isUdp = (__u8)1;
-
-            #ifdef LINUX_VERSION_CODE
-                if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
-                    __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-                    __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
-                    event->processId = (__u32)proc_id; 
-                    event->threadId = (__u32)threadId; 
-                }else {
-                    event->processId = (__u32)0;
-                    event->threadId = (__u32)0;
-                }
-            #endif 
-
             if (__update_non_stand_port_map(bpf_ntohs(udp->source)) == 0) {
                 #ifdef DEBUG 
                     if (DEBUG) {
@@ -1481,7 +1465,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
                 #endif
             }
 
-            bpf_ringbuf_submit(event, 0);
+            __submit_ring_buff_events_malicious_transfers(false, udp, dns);
 
             // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
            return __process_packet_clone_redirection_non_standard_port(
@@ -1644,17 +1628,11 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
 
 static 
 __always_inline struct checkSum_redirect_struct_value * __update_kernel_task_struct_checksum_maps(struct checkSum_redirect_struct_value *checksum_map)  {
-    #ifdef LINUX_VERSION_CODE
-    if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)) {
-        __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-        __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
-        checksum_map->procId = proc_id; 
-        checksum_map->threadId = threadId;
-    }else {
-        checksum_map->procId = 0; // keep this the helper in libbpf was added post kernel version 6.11.0 
-        checksum_map->threadId = 0;
-    }
-    #endif 
+
+    struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+    checksum_map->procId = proc_info->procId;
+    checksum_map->threadId = proc_info->threadId;
+
     return checksum_map;
 }
 
@@ -2367,7 +2345,7 @@ int classify(struct __sk_buff *skb){
             if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)
                 || tcp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
                 || tcp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
-        ) {
+            ){
 
                 struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 
                 if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
