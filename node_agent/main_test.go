@@ -164,6 +164,23 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	assert.True(true)
 }
 
+func TestNetworkNamespaceCreation(t *testing.T) {
+	assert := assert.New(t)
+	requiredLabeledNamespaces := map[string]bool{
+		"sx1": true,
+		"sx2": true,
+		"sx3": true,
+	}
+	if nsMounts, err := os.ReadDir("/run/netns/"); err != nil {
+		assert.Fail("Error the required network namespaces not found, eBPF TC kernel require it for TC_forward and DNAT ")
+	} else {
+		for _, file := range nsMounts {
+			delete(requiredLabeledNamespaces, file.Name())
+		}
+		assert.Equal(len(requiredLabeledNamespaces), 0)
+	}
+}
+
 func TestAgentConfigLoader(t *testing.T) {
 	nodeAgentLoaderMock := new(NodeAgentMockInjectors)
 	nodeAgentLoaderMock.IsMethodCallable(t, "ReadGlobalNodeAgentConfig")
