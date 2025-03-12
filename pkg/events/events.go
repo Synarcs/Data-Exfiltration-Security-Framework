@@ -46,11 +46,17 @@ type RemoteSLDNodeCacheUpdate struct {
 	IsTld bool
 }
 
+// will be removed due to race condition issue
 type ExfilRawPacketMirror struct {
 	DstPort                      uint16
 	SrcPort                      uint16
 	IsUdp                        uint8
 	IsPacketRescanedAndMalicious uint8
+}
+
+type ExfilNSPDportPayload struct {
+	Processid uint32
+	Dport     uint16
 }
 
 // load the kernel config inside the kernel
@@ -96,8 +102,11 @@ const (
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
 
+	// all maps for deep scan from kernel maps
 	EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN                = "exfil_security_egress_reconnisance_map_scan"
 	EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_map_non_standard_port"
+	EXFIL_SECURITY_EGRESS_PROC_MAL                             = "exfil_security_egress_proc_mal"
+	EXFIL_SECURITY_EGRESS_NSP_MAP                              = "exfil_security_egress_nsp_map"
 )
 
 // kernel eBPF ring buffers over kernel network stack

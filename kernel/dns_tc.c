@@ -179,12 +179,12 @@ struct exfil_security_egrees_clone_redirect_map_non_standard_port {
     __type(value, struct proc_info_non_standard_port); // task struct for the process comm 
 } exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
 
-struct exfil_security_egress_port_mal {
+struct exfil_security_egress_proc_mal {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u32); // process id 
     __type(value, __u8);  // whether this process malicious transfer happened and all packets over this process must be dropped
     __uint(max_entries, 1 << 10);
-} exfil_security_egress_port_mal SEC(".maps");
+} exfil_security_egress_proc_mal SEC(".maps");
 
 
 /* ***************************************** Event maps for kernel ***************************************** */
@@ -479,16 +479,12 @@ static
 __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp) {
     // verify the dns header payload from root of the skbuff 
 
-
-    /*
-        TODO: Need to think about other layer 7 protocols and their memory safety for size
-    */
     if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
     }
 
-    return 1;
+    return 0;
 }
 
 
@@ -1174,6 +1170,30 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
     }
 }
 
+static 
+__always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
+    struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
+    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+
+    if (!val) {
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        };
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
+        return 1;
+    }else {
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        }; // make sure on conflict user space gets the most recent port 
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0;
+        return 1;
+    }
+    return 0;
+}
 
 static 
 __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
@@ -1214,16 +1234,14 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     Process and handles nested map handling from kernel for stopping data breaches over DNS via any random DNS port 
 */
 static 
-__always_inline __u8 __handle_nested_maps_malicious_egress_dns_port_random(struct udphdr *udp, void *dns_payload) {
-    __u16 dest_transport_port = bpf_ntohs(udp->dest);
-    __u16 src_transport_port = bpf_ntohs(udp->source); 
-
+__always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transport_port, __u16 src_transport_port) {
+    bpf_printk("updating the new changed map structure to prevent race conditions ");
     struct __kernel_proc_struct_info * proc_info =  __get_process_info();
     __u32 transfer_proc_id = proc_info->procId;
 
     // chcek if current process is termed malicious 
     // should be fixed if multiple process are forked for exfil c2 over the same port (right now no c2 tool implant support fork pool exec for exfiltrated data)
-    __u8 * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_port_mal, &transfer_proc_id);
+    __u8 * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
     if (!curr_malicious_proc_mark) {
         goto process_mark_sport_transfer;
     }else {
@@ -1293,6 +1311,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
+
+    __handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port);
+
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
         struct exfil_raw_packet_mirror pack;
@@ -1407,30 +1428,6 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
     return 1;
 }
 
-static 
-__always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
-    struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
-    struct __kernel_proc_struct_info * proc_info = __get_process_info();
-
-    if (!val) {
-        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-            .processId = proc_info->procId,
-            .threadId = proc_info->threadId
-        };
-        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
-        return 1;
-    }else {
-        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-            .processId = proc_info->procId,
-            .threadId = proc_info->threadId
-        }; // make sure on conflict user space gets the most recent port 
-        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
-        return 1;
-    }
-    return 0;
-}
 
 /*
     Emits ring buffer events to user space for malicious transfer for  potential malicious transfer over random ports

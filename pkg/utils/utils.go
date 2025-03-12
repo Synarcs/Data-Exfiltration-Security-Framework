@@ -255,11 +255,7 @@ func VerifyKernelEgressTCClsactTaskCommSuppert(release string) bool {
 	if err != nil {
 		return false
 	}
-	sublevel, err := strconv.Atoi(release_patches[2])
-	if err != nil {
-		return false
-	}
-	if majorRelease >= 6 && patchRelease >= 10 && sublevel >= 0 {
+	if majorRelease >= 6 && patchRelease >= 10 {
 		return true
 	}
 	return false

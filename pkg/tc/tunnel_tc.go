@@ -56,22 +56,98 @@ func isNetBiosTunnelNSLookUp(dnsPacket *layers.DNS) bool {
 	return false
 }
 
+// dont use spin lock user space write a map, and kernel always read it, and never write,
+var KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
+var KernelMaliciousTransferPortDelete sync.Mutex = sync.Mutex{}
+
+// map 3  (proc --> isMal (bool))
+var UpdateMapMaliciousProcId sync.Mutex = sync.Mutex{}
+var CleanMapMaliciousProcId sync.Mutex = sync.Mutex{}
+
+func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
+
+	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is syncrhonized
+	KernelMaliciousTransferPortDelete.Lock()
+	defer KernelMaliciousTransferPortDelete.Unlock()
+
+	var potentialMaliciousTaskComm events.DnsMapPayloadNonOverlayPort
+	if err := tunnelMap.LookupAndDelete(srcPort, &potentialMaliciousTaskComm); err != nil {
+		if errors.Is(err, ebpf.ErrKeyNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &potentialMaliciousTaskComm, nil
+}
+
+func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDrop(procId uint32) {
+	UpdateMapMaliciousProcId.Lock()
+	defer UpdateMapMaliciousProcId.Unlock()
+	var maliciousFlag uint8 = 1
+
+	malProcMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
+	if malProcMap == nil {
+		return
+	}
+	// block the kernel read across different CPU until user space update to the map has released spin lock on it
+	if err := malProcMap.Update(&procId, &maliciousFlag, ebpf.UpdateLock); err != nil {
+		log.Println(err.Error())
+	}
+}
+
+func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procId uint32, dport uint16) {
+	// will be called since the process was sigkilled from node agent in user space or via kernel syscall layer all entries for this must be cleaned
+	CleanMapMaliciousProcId.Lock()
+	defer CleanMapMaliciousProcId.Unlock()
+
+	// aligned with memory pages
+	var nsp_map_dport events.ExfilNSPDportPayload = events.ExfilNSPDportPayload{
+		Processid: procId,
+		Dport:     dport,
+	}
+
+	malProcMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
+	if malProcMap == nil {
+		return
+	}
+
+	deepScanCloneProcPortMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP]
+	if deepScanCloneProcPortMap != nil {
+		return
+	}
+
+	// remove the proc info from the thrid map for kernel re init pack flow
+	if err := malProcMap.Delete(&procId); err != nil {
+		log.Println(err.Error()) // no need to process this as this may never happen since user space has guard rails for mutex in uapi
+	}
+
+	// remove from map 2 deepScanCloneProcPortMap (a process port and process id) can never collide over each clock cycle from CPU
+	if err := deepScanCloneProcPortMap.Delete(&nsp_map_dport); err != nil {
+		if utils.DEBUG {
+			log.Println(err.Error()) // EONET does not care for removel
+		}
+	}
+}
+
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var previousPreventedMaliciousProcessRawExfil map[uint32]bool = make(map[uint32]bool)
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
 func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort) {
 	maliciousProcCountguard.Lock()
 	defer maliciousProcCountguard.Unlock()
 
-	if mapField == nil {
-		return
-	}
 	if ct, fd := maliciousExfilProcessCount[mapField.ProcessId]; !fd {
 		maliciousExfilProcessCount[mapField.ProcessId] = 1
 	} else {
+		if utils.DEBUG {
+			log.Println("Inc maliciosu count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
+		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", mapField.ProcessId)
 			var sigKillStdoutBuffer bytes.Buffer
+			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))
 			cmd.Stderr = &sigKillStdoutBuffer
 			if err := cmd.Run(); err != nil {
@@ -79,11 +155,16 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			}
 			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", mapField.ProcessId)
 			delete(maliciousExfilProcessCount, mapField.ProcessId)
-			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
+
+			// the process is sigkill and associated map information for the proess should be freed
+			delete(previousPreventedMaliciousProcessRawExfil, mapField.ProcessId)
 			return
 		}
 		maliciousExfilProcessCount[mapField.ProcessId]++
 	}
+
+	// track the sniff process trying breack over random intervals
+	previousPreventedMaliciousProcessRawExfil[mapField.ProcessId] = true
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool, ebpfMaps [4]*ebpf.Map) error {
@@ -213,9 +294,6 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	}
 }
 
-var KernelMaliciousTransferPortUpdate sync.Mutex = sync.Mutex{}
-var KernelMaliciousTransferPortDelete sync.Mutex = sync.Mutex{}
-
 // will be removed there are high chances of race condition with user space synchronized via pcap guard sniffers
 //
 //	and kernel space  not with concurrent connection over same port running across multiple CPU in SMP
@@ -223,8 +301,8 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map
 	destPort uint16, fetchEvent *events.ExfilRawPacketMirror,
 	erroChannel chan interface{}, isBenign bool) {
 
-	KernelMaliciousTransferPortUpdate.Lock()
-	defer KernelMaliciousTransferPortUpdate.Unlock()
+	KernelMaliciousTransferPortUpdateLock.Lock()
+	defer KernelMaliciousTransferPortUpdateLock.Unlock()
 	if isBenign {
 		fetchEvent.IsPacketRescanedAndMalicious = uint8(0)
 		if err := tunnelMap.Put(uint16(destPort), fetchEvent); err != nil {
@@ -247,23 +325,6 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map
 			}
 		}
 	}
-}
-
-func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
-
-	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is syncrhonized
-	KernelMaliciousTransferPortDelete.Lock()
-	defer KernelMaliciousTransferPortDelete.Unlock()
-
-	var potentialMalicious events.DnsMapPayloadNonOverlayPort
-	if err := tunnelMap.LookupAndDelete(srcPort, &potentialMalicious); err != nil {
-		if errors.Is(err, ebpf.ErrKeyNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return &potentialMalicious, nil
 }
 
 // TODO: fix global collection spec for this with associated eBPF maps
@@ -447,14 +508,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 				// detected malicious exfiltrated object
 				if inferenceResponse.ThreatType {
 
-					if ev != nil {
-						if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-							tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
-						} else {
-							// older kernel version use kernel proc fs mount to ge process Information
-						}
-					}
-
 					for _, feature := range features {
 						if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
 							go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
@@ -476,7 +529,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 					})
 				}
 			}
-			return nil
 		} else {
 			// mark the packet transfered over non standard port to be benigns
 			tun.EnsureTransportTunnelPortMapUpdate(ebpfMaps[0], destTransportPort, event, errorChannel, true)
@@ -502,9 +554,15 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			for _, feature := range features {
 				utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 			}
-
-			return nil
 		}
+		if ev != nil {
+			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+				tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+			} else {
+				// older kernel version use kernel proc fs mount to ge process Information
+			}
+		}
+		return nil
 	}
 
 	if udpPack != nil {
@@ -587,16 +645,14 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		// process nothing in userspace
 		// just cehck and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
 		// standard go packet does not parse any NB query records
-
 		if err := processMaliciousInferenceNonStandardPort(features, destPortGenType, srcPortGenType, &event, ev); err != nil {
 			if utils.DEBUG {
 				log.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
-
-				errorChannel <- struct {
-					Err string
-				}{
-					Err: fmt.Sprintf("Error in streaming the threat event for exfiltration attempt happened over non standard port Transport TCP:: %+v", err),
-				}
+			}
+			errorChannel <- struct {
+				Err string
+			}{
+				Err: fmt.Sprintf("Error in streaming the threat event for exfiltration attempt happened over non standard port Transport TCP:: %+v", err),
 			}
 		}
 
