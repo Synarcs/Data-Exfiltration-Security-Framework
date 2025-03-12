@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/cilium/ebpf"
@@ -139,6 +140,15 @@ type Limites struct {
 	MIN_LABEL_COUNT                int
 }
 
+type Utsname struct {
+	Sysname    [65]int8
+	Nodename   [65]int8
+	Release    [65]int8
+	Version    [65]int8
+	Machine    [65]int8
+	Domainname [65]int8
+}
+
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
 const (
 	MAX_NODE_AGENT_CACHE_SIZE = 1000
@@ -214,4 +224,43 @@ func GetCPUCores() int {
 
 func VerifyKernelSupportTaskComms(processId uint32, threadId uint32) bool {
 	return processId != 0 && threadId != 0
+}
+
+func int8ToStr(arr []int8) string {
+	b := make([]byte, 0, len(arr))
+	for _, v := range arr {
+		if v == 0x00 {
+			break
+		}
+		b = append(b, byte(v))
+	}
+	return string(b)
+}
+
+func GetKernelRelease() (string, error) {
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err != nil {
+		return "", err
+	}
+	return int8ToStr(uname.Release[:]), nil
+}
+
+func VerifyKernelEgressTCClsactTaskCommSuppert(release string) bool {
+	release_patches := strings.Split(release, ".")
+	majorRelease, err := strconv.Atoi(release_patches[0])
+	if err != nil {
+		return false
+	}
+	patchRelease, err := strconv.Atoi(release_patches[1])
+	if err != nil {
+		return false
+	}
+	sublevel, err := strconv.Atoi(release_patches[2])
+	if err != nil {
+		return false
+	}
+	if majorRelease >= 6 && patchRelease >= 10 && sublevel >= 0 {
+		return true
+	}
+	return false
 }

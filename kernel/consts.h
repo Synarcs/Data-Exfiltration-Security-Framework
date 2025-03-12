@@ -80,6 +80,8 @@ struct exfil_security_egress_dns_limites {
 
 #define IPV6_ROUTE 1 
 
+#define DETECTED_MALICIOUS_COUNT_DNS_RANDOM_PORT_DROP_LIMIT 1
+
 __u32 redirect_skb_mark = 0xFF;
 
 

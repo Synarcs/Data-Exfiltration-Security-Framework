@@ -314,7 +314,14 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	if INIT_KERNEL_SOCKET {
-
+		kernel_release, err := utils.GetKernelRelease()
+		if err != nil {
+			return // dont inject if cant find the kernel release check
+		}
+		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert(kernel_release) {
+			log.Println("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan")
+			return
+		}
 		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
 			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel)
 		tc.TcTunnelNonStandardPortScan = tc_tunnel

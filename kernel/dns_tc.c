@@ -103,19 +103,6 @@ struct exfil_security_egrees_clone_redirect_ring_buff_non_standard_port {
     __uint(max_entries, 1 << 24);
 } exfil_security_egrees_clone_redirect_ring_buff_non_standard_port SEC(".maps");
 
-// process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
-struct proc_info_non_standard_port {
-    __u32 processId; 
-    __u32 threadId;
-} __attribute__((packed));
-
-struct exfil_security_egrees_clone_redirect_map_non_standard_port { 
-    __uint(type, BPF_MAP_TYPE_HASH); 
-    __uint(max_entries, 1 << 10);
-    __type(key, __u16);  // src port 
-    __type(value, struct proc_info_non_standard_port);
-} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
-
 // vxlan encap from kernel the src port and the dest port used to detect any vxlan encap channels 
 struct exfil_vxlan_exfil_event {
     __u16 transport_dest_port;
@@ -154,14 +141,51 @@ struct exfil_raw_packet_mirror {
     __u8 isPacketRescanedAndMalicious;
 };
 
+
 // kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
 // use the kernel bpf_clone for packet clone to an non host bridge for enhanced deep packet scan since the kernel cannot process the raw packet 
+
+// remove this due a huge possibility of race condition with kernel thread for TC running over each CPU 
 struct exfil_security_egress_reconnisance_map_scan {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16);
     __type(value, struct exfil_raw_packet_mirror);
     __uint(max_entries, 1 << 16);
 } exfil_security_egress_reconnisance_map_scan SEC(".maps");
+
+
+struct exfil_security_egress_nsp_map_key {
+    __u32 processId;
+    __u16 dport;
+};
+
+struct exfil_security_egress_nsp_map {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 1 << 10);
+    __type(key, struct exfil_security_egress_nsp_map_key); // dport, procId count malicious transfer over the unqieu key fd detected from user space added in kernel over first transfer
+    __type(value, __u32); // detected malicious count of packets on the dport
+} exfil_security_egress_nsp_map SEC(".maps");
+
+// process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
+struct proc_info_non_standard_port {
+    __u32 processId; 
+    __u32 threadId;
+} __attribute__((packed));
+
+struct exfil_security_egrees_clone_redirect_map_non_standard_port { 
+    __uint(type, BPF_MAP_TYPE_HASH); 
+    __uint(max_entries, 1 << 10);
+    __type(key, __u16);  // src port 
+    __type(value, struct proc_info_non_standard_port); // task struct for the process comm 
+} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
+
+struct exfil_security_egress_port_mal {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __type(key, __u32); // process id 
+    __type(value, __u8);  // whether this process malicious transfer happened and all packets over this process must be dropped
+    __uint(max_entries, 1 << 10);
+} exfil_security_egress_port_mal SEC(".maps");
+
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -1063,18 +1087,16 @@ static
 __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
-   #ifdef LINUX_VERSION_CODE
-        // TODO: Fix the version and match the kernel patch level  
-        if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)){
-            __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-            __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
-            proc_info.procId = proc_id;
-            proc_info.threadId = thread_id;
-        }else {
-            proc_info.procId = 0;
-            proc_info.threadId = 0;
-        }
-    #endif
+    // TODO: Fix the version and match the kernel patch level  
+    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_PATCHLEVEL >= 10 && LINUX_VERSION_SUBLEVEL >= 0) {
+        __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
+        __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
+        proc_info.procId = proc_id;
+        proc_info.threadId = thread_id;
+    }else {
+        proc_info.procId = 0;
+        proc_info.threadId = 0;
+    }
     return &proc_info;
 }
 
@@ -1188,6 +1210,49 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
 }
 
 
+/*
+    Process and handles nested map handling from kernel for stopping data breaches over DNS via any random DNS port 
+*/
+static 
+__always_inline __u8 __handle_nested_maps_malicious_egress_dns_port_random(struct udphdr *udp, void *dns_payload) {
+    __u16 dest_transport_port = bpf_ntohs(udp->dest);
+    __u16 src_transport_port = bpf_ntohs(udp->source); 
+
+    struct __kernel_proc_struct_info * proc_info =  __get_process_info();
+    __u32 transfer_proc_id = proc_info->procId;
+
+    // chcek if current process is termed malicious 
+    // should be fixed if multiple process are forked for exfil c2 over the same port (right now no c2 tool implant support fork pool exec for exfiltrated data)
+    __u8 * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_port_mal, &transfer_proc_id);
+    if (!curr_malicious_proc_mark) {
+        goto process_mark_sport_transfer;
+    }else {
+        return 1;
+    }
+
+    // handle the root port handling mal c2 count for user space 
+    struct exfil_security_egress_nsp_map_key nsp_map_key = (struct exfil_security_egress_nsp_map_key) {
+        .processId = transfer_proc_id,
+        .dport = dest_transport_port,
+    };
+    __u32 * mp_val = bpf_map_lookup_elem(&exfil_security_egress_nsp_map, &nsp_map_key);
+    if (!mp_val) {
+        __u32 init_deep_scap_proc_port = 0;
+        bpf_map_update_elem(&exfil_security_egress_nsp_map, &nsp_map_key, &init_deep_scap_proc_port, BPF_NOEXIST);
+    }else {
+        __sync_fetch_and_add(mp_val, 1); // ensure the lock are synchronized with user space lock processing;
+    }
+
+    process_mark_sport_transfer:
+    // update the kernel map for transfer and hold of information over src_port -> process for each packet transfer consumed in user space 
+    __update_non_stand_port_map(src_transport_port);
+
+    // allow the packet to be forwarded to user space for a same process to be detected again if any malicious transfer happen on the same port
+    return 0; 
+}
+
+
+
 // process the skb_clone redirect to user space to perform deep scan over the DNS packet for possible tunnel over this non standard port 
 static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
@@ -1203,11 +1268,11 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         br_index = config->NfNdpBridgeIndexId;
         dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
      }else {
-         #ifdef DEBUG
+        #ifdef DEBUG
           if (!DEBUG) {
              bpf_printk("kernel cannot find the requred kernel config redirect map");
           }
-         #endif
+        #endif
     }
 
 
@@ -1235,7 +1300,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.src_port = __transport_src_port;
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
         pack.isPacketRescanedAndMalicious = (__u8)0;
-
 
         struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
 
@@ -1270,9 +1334,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                         bpf_printk("Error the kernel cannot update the malicious found packet");
                     }
                 #endif 
-            }
-            if (DEBUG) {
-                bpf_printk("the kernel dected a malicious tunnel traffic for dns over the non standard port for kernel traffic transfer, kernel start dropping ......"); 
             }
             if (isTunnelC2CStandardUdpTransport) {
                 #ifdef DEBUG 
@@ -1349,28 +1410,24 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
 static 
 __always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
     struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
+    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+
     if (!val) {
-        #ifdef LINUX_VERSION_CODE
-            if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
-                __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-                __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
-                struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-                    .processId = proc_id,
-                    .threadId = threadId
-                };
-                if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                                    &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0;
-                return 1;
-            }else {
-                struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-                    .processId = (__u32)0,
-                    .threadId = (__u32)0,
-                };
-                if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                                    &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0; 
-                return 1;
-            }
-        #endif 
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        };
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
+        return 1;
+    }else {
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        }; // make sure on conflict user space gets the most recent port 
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
+        return 1;
     }
     return 0;
 }
@@ -1460,7 +1517,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             if (__update_non_stand_port_map(bpf_ntohs(udp->source)) == 0) {
                 #ifdef DEBUG 
                     if (DEBUG) {
-                        bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic");
+                        bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic redirect to user-space");
                     }
                 #endif
             }
@@ -2221,7 +2278,7 @@ int classify(struct __sk_buff *skb){
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
                 || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
                 || udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
-        ) {
+            ) {
 
                 if (actions.parse_dns_header_size(&cursor, true, true) == 0)
                     return TC_DROP;

@@ -213,14 +213,18 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	}
 }
 
-var KernelTransferPortUpdate sync.RWMutex = sync.RWMutex{}
+var KernelMaliciousTransferPortUpdate sync.Mutex = sync.Mutex{}
+var KernelMaliciousTransferPortDelete sync.Mutex = sync.Mutex{}
 
+// will be removed there are high chances of race condition with user space synchronized via pcap guard sniffers
+//
+//	and kernel space  not with concurrent connection over same port running across multiple CPU in SMP
 func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map,
 	destPort uint16, fetchEvent *events.ExfilRawPacketMirror,
 	erroChannel chan interface{}, isBenign bool) {
 
-	KernelTransferPortUpdate.Lock()
-	defer KernelTransferPortUpdate.Unlock()
+	KernelMaliciousTransferPortUpdate.Lock()
+	defer KernelMaliciousTransferPortUpdate.Unlock()
 	if isBenign {
 		fetchEvent.IsPacketRescanedAndMalicious = uint8(0)
 		if err := tunnelMap.Put(uint16(destPort), fetchEvent); err != nil {
@@ -246,6 +250,11 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map
 }
 
 func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
+
+	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is syncrhonized
+	KernelMaliciousTransferPortDelete.Lock()
+	defer KernelMaliciousTransferPortDelete.Unlock()
+
 	var potentialMalicious events.DnsMapPayloadNonOverlayPort
 	if err := tunnelMap.LookupAndDelete(srcPort, &potentialMalicious); err != nil {
 		if errors.Is(err, ebpf.ErrKeyNotExist) {
