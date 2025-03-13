@@ -16,6 +16,11 @@ type DnsMapPayloadNonOverlayPort struct {
 	ThreadId  uint32
 }
 
+type DnsMapPayloadNonOverlayPortValue struct {
+	MalDetectedCount uint32
+	DestPort         uint32
+}
+
 type DPIRedirectionKernelMap struct {
 	Checksum      uint16
 	_             [6]byte // padding to align memory for cpu to fetch data

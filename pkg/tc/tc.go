@@ -49,7 +49,10 @@ var (
 )
 
 var (
-	mapsToPinSharedProcKillMap = []string{"exfil_security_egress_proc_mal"}
+	mapsToPinSharedProcKillMap = []string{
+		"exfil_security_egress_proc_mal",
+		"exfil_security_egress_nsp_map",
+	}
 )
 
 func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,

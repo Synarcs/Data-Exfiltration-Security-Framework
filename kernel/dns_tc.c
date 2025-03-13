@@ -155,18 +155,6 @@ struct exfil_security_egress_reconnisance_map_scan {
 } exfil_security_egress_reconnisance_map_scan SEC(".maps");
 
 
-struct exfil_security_egress_nsp_map_key {
-    __u32 processId;
-    __u16 dport;
-};
-
-struct exfil_security_egress_nsp_map {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 1 << 10);
-    __type(key, struct exfil_security_egress_nsp_map_key); // dport, procId count malicious transfer over the unqieu key fd detected from user space added in kernel over first transfer
-    __type(value, __u32); // detected malicious count of packets on the dport
-} exfil_security_egress_nsp_map SEC(".maps");
-
 // process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
 struct proc_info_non_standard_port {
     __u32 processId; 
@@ -1249,9 +1237,9 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
 
     // chcek if current process is termed malicious 
     // should be fixed if multiple process are forked for exfil c2 over the same port (right now no c2 tool implant support fork pool exec for exfiltrated data)
-    struct proc_is_mal_ct * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
+    struct kill_proc_mal_payload * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
     if (curr_malicious_proc_mark) {
-        // user space has killed this process and removed entries 
+        // user space has killed this process and removed entries from the maps with proper spin lock over the kerenl entry 
         return 1;
     }
 
@@ -1281,7 +1269,6 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
 static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
-
     __u32 br_index = 5;
     __u32 out = skb->ifindex;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
@@ -1314,6 +1301,12 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                 }
             }
         #endif 
+    }
+
+    if ( verify_kernel_version_support_task_comm()) {
+
+    }else {
+
     }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;

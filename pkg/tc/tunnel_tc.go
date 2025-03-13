@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -82,21 +81,6 @@ func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPor
 	return &potentialMaliciousTaskComm, nil
 }
 
-func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDrop(procId uint32) {
-	UpdateMapMaliciousProcId.Lock()
-	defer UpdateMapMaliciousProcId.Unlock()
-	var maliciousFlag uint8 = 1
-
-	malProcMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
-	if malProcMap == nil {
-		return
-	}
-	// block the kernel read across different CPU until user space update to the map has released spin lock on it
-	if err := malProcMap.Update(&procId, &maliciousFlag, ebpf.UpdateLock); err != nil {
-		log.Println(err.Error())
-	}
-}
-
 func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procId uint32, dport uint16) {
 	// will be called since the process was sigkilled from node agent in user space or via kernel syscall layer all entries for this must be cleaned
 	CleanMapMaliciousProcId.Lock()
@@ -135,13 +119,17 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 Update a process as malicious , and should be sigkilled or dropped prior threshold kernel kprobe else sigkill from userspace
 */
 func (tun *TCCloneTunnel) UpdateProcessOverPortTransferMalicious(procComm *events.DnsMapPayloadNonOverlayPort) error {
+	UpdateMapMaliciousProcId.Lock()
+	defer UpdateMapMaliciousProcId.Unlock()
+
 	// no need of mutex use atomic update to map values to control concurrent go routines
 	if _, fd := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]; fd {
 		exfil_mal_proc_map := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
-		var curr_detected_proc_mal_count uint32 = 0
+		var curr_detected_proc_mal_count events.DnsMapPayloadNonOverlayPortValue
+		curr_detected_proc_mal_count.MalDetectedCount++
 		if err := exfil_mal_proc_map.Lookup(&procComm.ProcessId, &curr_detected_proc_mal_count); err != nil {
-			curr_detected_proc_mal_count_inc := atomic.AddUint32(&curr_detected_proc_mal_count, 1)
-			exfil_mal_proc_map.Update(&procComm.ProcessId, &curr_detected_proc_mal_count_inc, ebpf.UpdateAny) // user space is only updating hence alwys synchronized for any map updates in kernel
+			exfil_mal_proc_map.Update(&procComm.ProcessId, &curr_detected_proc_mal_count, ebpf.UpdateAny) // user space is only updating guarded with user synchronize lock or mutex
+			// 	 hence alwys synchronized for any map updates in kernel
 		}
 	}
 	return nil
@@ -460,15 +448,15 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 	processMaliciousInferenceNonStandardPort := func(features []model.DNSFeatures, destTransportPort uint16, srcTransportPort uint16,
 		event *events.ExfilRawPacketMirror, ev *events.DnsMapPayloadNonOverlayPort) error {
 
-		isAnySectionMal := false
+		isAnySectionMalInCache := false
 		for _, feature := range features {
 			if utils.GetKeyPresentInEgressCache(feature.Tld) {
-				isAnySectionMal = true
+				isAnySectionMalInCache = true
 				break
 			}
 		}
 
-		if !isAnySectionMal {
+		if !isAnySectionMalInCache {
 
 			/// used as a processing input for standard tensor vectors for the deep learning model
 			featureVectorsFloat := model.GenerateFloatVectors(features, tun.Onnx)
@@ -533,16 +521,26 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 						}
 					}
 
-					go tun.UpdateExportMetricsCountForDnsExfilRandomPort(true, ebpfMaps)
+					tun.UpdateProcessOverPortTransferMalicious(ev)
+					tun.UpdateExportMetricsCountForDnsExfilRandomPort(true, ebpfMaps)
 					go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
 						Src_port:       int(event.SrcPort),
 						Dest_port:      int(event.DstPort),
 						IsUDPTransport: false,
 					})
+
+					if ev != nil {
+						if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+							tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+						} else {
+							// older kernel version use kernel proc fs mount to ge process Information
+						}
+					}
 				}
 			}
 		} else {
 			// mark the packet transfered over non standard port to be benigns
+			tun.UpdateProcessOverPortTransferMalicious(ev)
 			tun.EnsureTransportTunnelPortMapUpdate(ebpfMaps[0], destTransportPort, event, errorChannel, true)
 			for _, feature := range features {
 				if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
@@ -566,12 +564,12 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 			for _, feature := range features {
 				utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 			}
-		}
-		if ev != nil {
-			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-				tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
-			} else {
-				// older kernel version use kernel proc fs mount to ge process Information
+			if ev != nil {
+				if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
+					tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+				} else {
+					// older kernel version use kernel proc fs mount to ge process Information
+				}
 			}
 		}
 		return nil

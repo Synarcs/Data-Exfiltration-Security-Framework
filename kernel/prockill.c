@@ -10,6 +10,7 @@
 #include "raw_proc.h"
 #include "utils.h"
 #include "pinmaps.h"
+#include "dns.h"
 
 
 static
@@ -18,11 +19,32 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
     __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
 
     
-    __u32 * mal_detected_count = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
+    struct kill_proc_mal_payload * mal_detected_count = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
     if (mal_detected_count) {
-       if (mal_detected_count <= EGRESS_MAL_PROC_EXFIL_SCHED) {
-          bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id);       
-       }
+        if (mal_detected_count < EGRESS_MAL_PROC_EXFIL_SCHED) {
+            // 3 proc map kill free 
+            if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id) < 0) {
+                #ifdef DEBUG 
+                    if (DEBUG) 
+                        bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
+                #endif
+            }
+            // 1 map kernel free 
+            struct exfil_security_egress_nsp_map_key mal_proc_redir_key = (struct exfil_security_egress_nsp_map_key) {
+                .dport = mal_detected_count->dest_port,
+                .processId = proc_id,
+            };
+            // count of time rescan kernel redirected to user space for malicious rescan of exfil packet via clone redirect's 
+            __u32 * mal_proc_redir_ct = bpf_map_lookup_elem(&exfil_security_egress_nsp_map, &mal_proc_redir_key);
+            if (mal_proc_redir_ct) {
+                if (bpf_map_delete_elem(&exfil_security_egress_nsp_map, &mal_proc_redir_key) < 0) {
+                    #ifdef DEBUG 
+                        if (DEBUG) 
+                            bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
+                    #endif
+                }
+            }
+        }
     }
 }
 
