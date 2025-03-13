@@ -351,6 +351,9 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 
 		go tc_tunnel.SniffPacketsForTunnelDPI() // start the packet sniffing for non standard ports bpf_redirect_clone from kernel space
 
+		tracepoint_sched := tracepoint.GenerateTracePointHandlers()
+		tracepoint_sched.AttachTracePointHandlers(ctx, iface)
+
 		tc.ProcessSniffDPIPacketCapture(ctx, iface, nil)
 		INIT_KERNEL_SOCKET = false
 	}
@@ -673,6 +676,7 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 			log.Println("No Matching clsact desc found to delete")
 		}
 	}
+	tc.DetachTCLinkedTracepointHookHandlers()
 	for _, pinMaps := range mapsToPinSharedProcKillMap {
 		if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
 			if tc.TcCollection.Maps[pinMaps].IsPinned() {

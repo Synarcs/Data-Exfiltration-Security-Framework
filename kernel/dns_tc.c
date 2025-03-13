@@ -178,7 +178,8 @@ struct exfil_security_egrees_clone_redirect_map_non_standard_port {
     __uint(max_entries, 1 << 10);
     __type(key, __u16);  // src port 
     __type(value, struct proc_info_non_standard_port); // task struct for the process comm 
-} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps");
+} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
+
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -472,13 +473,18 @@ static
 __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp) {
     // verify the dns header payload from root of the skbuff 
 
+
+    /*
+        TODO: Need to think about other layer 7 protocols and their memory safety for size
+    */
     if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
     }
 
-    return 0;
+    return 1;
 }
+
 
 static 
 __always_inline __u8 parse_dns_payload_udp(struct skb_cursor *skb, void * dns_payload, 
@@ -1085,7 +1091,8 @@ static
 __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
-    if (verify_kernel_version_support_task_comm()) {
+    // TODO: Fix the version and match the kernel patch level  
+    if (verify_kernel_version_support_task_comm) {
         __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
         __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
         proc_info.procId = proc_id;
@@ -1171,30 +1178,6 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
     }
 }
 
-static 
-__always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
-    struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
-    struct __kernel_proc_struct_info * proc_info = __get_process_info();
-
-    if (!val) {
-        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-            .processId = proc_info->procId,
-            .threadId = proc_info->threadId
-        };
-        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
-        return 1;
-    }else {
-        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
-            .processId = proc_info->procId,
-            .threadId = proc_info->threadId
-        }; // make sure on conflict user space gets the most recent port 
-        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
-                            &suspicious_tunnel_port_transfer, BPF_ANY) < 0) return 0;
-        return 1;
-    }
-    return 0;
-}
 
 static 
 __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
@@ -1230,13 +1213,37 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     return 0;
 }
 
+static 
+__always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
+    struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
+    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+
+    if (!val) {
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        };
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
+        return 1;
+    }else {
+        struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
+            .processId = proc_info->procId,
+            .threadId = proc_info->threadId
+        }; // make sure on conflict user space gets the most recent port 
+        if (bpf_map_update_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port,
+                            &suspicious_tunnel_port_transfer, BPF_NOEXIST) < 0) return 0;
+        return 1;
+    }
+    return 0;
+}
+
 
 /*
     Process and handles nested map handling from kernel for stopping data breaches over DNS via any random DNS port 
 */
 static 
 __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transport_port, __u16 src_transport_port) {
-    bpf_printk("updating the new changed map structure to prevent race conditions ");
     struct __kernel_proc_struct_info * proc_info =  __get_process_info();
     __u32 transfer_proc_id = proc_info->procId;
 
@@ -1310,13 +1317,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
-
-    if (verify_kernel_version_support_task_comm()) {
-        __handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port);
-    }else {
-
-    }
-
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
         struct exfil_raw_packet_mirror pack;
