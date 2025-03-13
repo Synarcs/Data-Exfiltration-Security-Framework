@@ -214,7 +214,7 @@ func main() {
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := bridgetc.BridgeTCFilters{
 		Interfaces: &iface,
-		Hash: hash,
+		Hash:       hash,
 	}
 	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
 

@@ -16,7 +16,7 @@ type IpamBlock struct {
 
 func (ipam *NetIface) LookUpdiscreteIpv4(ctx context.Context) (*IpamBlock, error) {
 	routes := ipam.AddrV4
-	for _, route := range routes {
+	for _, route := range routes { 
 		log.Println(route)
 	}
 	return nil, nil

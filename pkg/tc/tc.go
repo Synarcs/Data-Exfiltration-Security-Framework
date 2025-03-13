@@ -14,6 +14,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/cilium/ebpf"
@@ -35,7 +36,8 @@ type TCHandler struct {
 	TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
 	GlobalErrorKernelHandlerChannel chan bool      // handles all control channel created by main to kill any kernel code if found runtime panics
 
-	IsEgressXdpSupport bool
+	IsEgressXdpSupport   bool
+	TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
 
 	Hash *rand.Hash // skb agent crypto hash for agent integrity with kernel
 }
@@ -44,6 +46,10 @@ type TCHandler struct {
 var (
 	INIT_KERNEL_SOCKET        = true
 	INIT_LIMITS_KERNEL_CONFIG = false
+)
+
+var (
+	mapsToPinSharedProcKillMap = []string{"exfil_security_egress_proc_mal"}
 )
 
 func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
@@ -221,7 +227,17 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		panic(err.Error())
 	}
 
-	spec, err := ebpf.NewCollection(handler)
+	for name, mapSpec := range handler.Maps {
+		if strings.Contains(mapsToPinSharedProcKillMap[0], name) {
+			mapSpec.Pinning = ebpf.PinByName
+		}
+	}
+
+	spec, err := ebpf.NewCollectionWithOptions(handler, ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			PinPath: utils.PINPATH,
+		},
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -314,12 +330,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	if INIT_KERNEL_SOCKET {
-		kernel_release, err := utils.GetKernelRelease()
-		if err != nil {
-			return // dont inject if cant find the kernel release check
-		}
-		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert(kernel_release) {
-			log.Println("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan")
+		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+			log.Println("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan will use port  for mal process monitor in kernel")
 			return
 		}
 		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
@@ -639,6 +651,14 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHand
 	return nil
 }
 
+func (tc *TCHandler) DetachTCLinkedTracepointHookHandlers() {
+	if tc.TcTracepointHandlers == nil {
+		return
+	}
+
+	tc.TcTracepointHandlers.RemoveTracepoints()
+}
+
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 	// used for removal of tc qdisc and all nested filters to parent qdisc class/ classless filter form all the host interfacee
 	for _, link := range tc.Interfaces.PhysicalLinks {
@@ -651,6 +671,13 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		})
 		if err != nil {
 			log.Println("No Matching clsact desc found to delete")
+		}
+	}
+	for _, pinMaps := range mapsToPinSharedProcKillMap {
+		if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
+			if tc.TcCollection.Maps[pinMaps].IsPinned() {
+				tc.TcCollection.Maps[pinMaps].Unpin()
+			}
 		}
 	}
 	return nil

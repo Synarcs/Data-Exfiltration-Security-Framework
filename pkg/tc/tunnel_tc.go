@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -128,6 +129,22 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 			log.Println(err.Error()) // EONET does not care for removel
 		}
 	}
+}
+
+/*
+Update a process as malicious , and should be sigkilled or dropped prior threshold kernel kprobe else sigkill from userspace
+*/
+func (tun *TCCloneTunnel) UpdateProcessOverPortTransferMalicious(procComm *events.DnsMapPayloadNonOverlayPort) error {
+	// no need of mutex use atomic update to map values to control concurrent go routines
+	if _, fd := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]; fd {
+		exfil_mal_proc_map := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
+		var curr_detected_proc_mal_count uint32 = 0
+		if err := exfil_mal_proc_map.Lookup(&procComm.ProcessId, &curr_detected_proc_mal_count); err != nil {
+			curr_detected_proc_mal_count_inc := atomic.AddUint32(&curr_detected_proc_mal_count, 1)
+			exfil_mal_proc_map.Update(&procComm.ProcessId, &curr_detected_proc_mal_count_inc, ebpf.UpdateAny) // user space is only updating hence alwys synchronized for any map updates in kernel
+		}
+	}
+	return nil
 }
 
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
@@ -294,9 +311,7 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	}
 }
 
-// will be removed there are high chances of race condition with user space synchronized via pcap guard sniffers
-//
-//	and kernel space  not with concurrent connection over same port running across multiple CPU in SMP
+// need to find an alternative way for older kernel not supporting task_comm struct in traffic control
 func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map,
 	destPort uint16, fetchEvent *events.ExfilRawPacketMirror,
 	erroChannel chan interface{}, isBenign bool) {
@@ -327,11 +342,8 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(tunnelMap *ebpf.Map
 	}
 }
 
-// TODO: fix global collection spec for this with associated eBPF maps
 func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, ebpfMaps [4]*ebpf.Map, errorChannel chan interface{}) {
-	if utils.DEBUG {
-		log.Println("called the sniffer for packet")
-	}
+	_ = utils.VerifyKernelEgressTCClsactTaskCommSuppert()
 
 	// add more eBPF kernel maps if multiple traffic DPI for xfil events is required
 	for _, ebpfMap := range ebpfMaps {
@@ -588,7 +600,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		ev, err := tun.EnsureCleanUpTunnelPortMap(ebpfMaps[1], srcPortGenType)
 
 		if err != nil {
-			log.Println("Error in deleting the map for this benign found packet", err)
+			log.Println("Error in deleting the map for this kernel clone redirected suspicious  packet", err)
 		}
 
 		if isPackEncapsulated(dns, transportPayload) {
@@ -603,8 +615,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, eb
 		features, err := model.ProcessDnsFeatures(dns, true)
 
 		if err != nil {
-			log.Println("err is ", err)
-
 			errorChannel <- struct {
 				Err string
 			}{

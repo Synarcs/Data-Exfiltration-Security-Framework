@@ -23,7 +23,8 @@ const (
 	TC_CONTROL_PROG_BRIDGE_INGRESS = "bridge_ingress_filter" // CLSACT  QDISC
 	TC_CONTROL_PROG_BRIDGE_EGRESS  = "bridge_ingress_filter" // CLSACT  QDISC
 
-	XDP_CONTROL_PROG = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
+	TRACEPOINT_PROC_KILL_TRACEPOINT = "handle_mal_c2_proc_exit"
+	XDP_CONTROL_PROG                = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 	DEFAULT_SK_BUFF_NUONCE        = 0xff
@@ -237,7 +238,7 @@ func int8ToStr(arr []int8) string {
 	return string(b)
 }
 
-func GetKernelRelease() (string, error) {
+func getKernelRelease() (string, error) {
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err != nil {
 		return "", err
@@ -245,7 +246,13 @@ func GetKernelRelease() (string, error) {
 	return int8ToStr(uname.Release[:]), nil
 }
 
-func VerifyKernelEgressTCClsactTaskCommSuppert(release string) bool {
+func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
+	release, err := getKernelRelease()
+	if err != nil {
+		log.Println("Error getting the kernel release version ", err.Error())
+		return false
+	}
+
 	release_patches := strings.Split(release, ".")
 	majorRelease, err := strconv.Atoi(release_patches[0])
 	if err != nil {

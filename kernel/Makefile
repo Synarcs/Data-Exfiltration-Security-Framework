@@ -13,6 +13,9 @@ xdp_kernel_out := xdp.o
 netlink_kernel := nf_sock.c
 netlink_kernel_out := netlink.o
 
+tracepoint_kernel := prockill.c 
+tracepoint_kernel_out := tracepoint.o
+
 p2p_kernel := dns_tun.c
 p2p_kernel_out := tun.o
 
@@ -28,6 +31,7 @@ compile:
 	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	make netlink 
 	make tc_tun 
+	make tracepoints
 	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
@@ -62,6 +66,7 @@ compile-x86:
 	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	make netlink-x86  
 	make tc_tun-x86
+	make tracepoints-x86
 	make xdp-x86
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
@@ -90,7 +95,7 @@ tc-remove:
 
 .PHONY: tc-filter 
 tc-filter:
-	# sudo tc filter add dev enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
+	sudo tc filter add dev enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
 	sudo tc filter add dev br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
 	# sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
@@ -149,6 +154,18 @@ netlink-x86:
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for x86" 
 	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
+
+.PHONY: tracepoints
+tracepoints:
+	@echo "Compiling the ebpf tracepoints for arm64"
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
+	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
+
+.PHONY: tracepoints-x86
+tracepoints-x86:
+	@echo "Compiling the ebpf tracepoints for x86"
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc_tun 
 tc_tun:

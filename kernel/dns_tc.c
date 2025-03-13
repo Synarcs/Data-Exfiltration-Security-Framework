@@ -34,6 +34,7 @@
 #include "utils.h" 
 #include "raw_proc.h"
 #include "vxlan.h"
+#include "pinmaps.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
@@ -177,15 +178,7 @@ struct exfil_security_egrees_clone_redirect_map_non_standard_port {
     __uint(max_entries, 1 << 10);
     __type(key, __u16);  // src port 
     __type(value, struct proc_info_non_standard_port); // task struct for the process comm 
-} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps"); 
-
-struct exfil_security_egress_proc_mal {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u32); // process id 
-    __type(value, __u8);  // whether this process malicious transfer happened and all packets over this process must be dropped
-    __uint(max_entries, 1 << 10);
-} exfil_security_egress_proc_mal SEC(".maps");
-
+} exfil_security_egrees_clone_redirect_map_non_standard_port SEC(".maps");
 
 /* ***************************************** Event maps for kernel ***************************************** */
 // make the map struct more fine grained to prevent timing attacks from user space malware 
@@ -486,7 +479,6 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
     return 0;
 }
-
 
 static 
 __always_inline __u8 parse_dns_payload_udp(struct skb_cursor *skb, void * dns_payload, 
@@ -1075,6 +1067,16 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     return 0;
 }
 
+/*
+    Verify does kernel support task_comm for task struct 
+*/
+static 
+__always_inline bool verify_kernel_version_support_task_comm() {
+    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_PATCHLEVEL >= 10 && LINUX_VERSION_SUBLEVEL >= 0) 
+        return true;
+    return false;
+}
+
 
 /*
     Rely on kernel task comm for the tc running on whichever CPU handles and retrieve the process name and associated task struct
@@ -1083,8 +1085,7 @@ static
 __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
-    // TODO: Fix the version and match the kernel patch level  
-    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_PATCHLEVEL >= 10 && LINUX_VERSION_SUBLEVEL >= 0) {
+    if (verify_kernel_version_support_task_comm()) {
         __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
         __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
         proc_info.procId = proc_id;
@@ -1241,10 +1242,9 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
 
     // chcek if current process is termed malicious 
     // should be fixed if multiple process are forked for exfil c2 over the same port (right now no c2 tool implant support fork pool exec for exfiltrated data)
-    __u8 * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
-    if (!curr_malicious_proc_mark) {
-        goto process_mark_sport_transfer;
-    }else {
+    struct proc_is_mal_ct * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
+    if (curr_malicious_proc_mark) {
+        // user space has killed this process and removed entries 
         return 1;
     }
 
@@ -1261,7 +1261,6 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
         __sync_fetch_and_add(mp_val, 1); // ensure the lock are synchronized with user space lock processing;
     }
 
-    process_mark_sport_transfer:
     // update the kernel map for transfer and hold of information over src_port -> process for each packet transfer consumed in user space 
     __update_non_stand_port_map(src_transport_port);
 
@@ -1312,7 +1311,11 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
 
-    __handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port);
+    if (verify_kernel_version_support_task_comm()) {
+        __handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port);
+    }else {
+
+    }
 
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){

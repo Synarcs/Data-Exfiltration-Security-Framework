@@ -82,6 +82,9 @@ struct exfil_security_egress_dns_limites {
 
 #define DETECTED_MALICIOUS_COUNT_DNS_RANDOM_PORT_DROP_LIMIT 1
 
+// defines the mal threshold kill proc 
+ #define EGRESS_MAL_PROC_EXFIL_SCHED 3 
+
 __u32 redirect_skb_mark = 0xFF;
 
 
