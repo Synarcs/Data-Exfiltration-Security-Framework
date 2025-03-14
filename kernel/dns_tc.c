@@ -1168,10 +1168,21 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
 
 
 static 
-__always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, __be32 dest_addr_route) {
+__always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, 
+        __be32 dest_addr_route, bool isMarkRandSkb) {
 
     __be32 current_dest_addr; 
+    
+    if (isMarkRandSkb) {
+        __u32 out = skb->ifindex;
+        struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
 
+        if (!config) {
+            skb->mark = redirect_skb_mark;
+        }else {
+            skb->mark = config->KernelTCSKBMark;
+        }
+    }
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
         bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
         return TC_DROP;
@@ -1313,10 +1324,10 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             __handle_kernel_map_clone_redirected_count(true);
             // let the malware keep retrying and kernel stopping it and user space record the count the packet detected as malicious to eventually let the malware strive suffocate and user space kill it
             // if the malware sabotage and mask process via kernel syscall layer and hide with mutating proc id in kernel proper sig kill threshold below certain values will kill it  and free map 
-            __clone_redirect_packet(skb, br_index, dest_addr_route); 
+            __clone_redirect_packet(skb, br_index, dest_addr_route, true); 
             return 0;
         }
-        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             #ifdef DEBUG
                 if (DEBUG) {
                     bpf_printk("kernel cannot clone the packet for the redirect"); 
@@ -1341,7 +1352,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             #endif 
         }
 
-        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             #ifdef DEBUG
                 if (DEBUG) {
                     bpf_printk("kernel cannot clone the packet for the redirect"); 
@@ -1382,7 +1393,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             }
         }
    
-        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             #ifdef DEBUG
                 if (DEBUG) {
                     bpf_printk("kernel cannot clone the packet for the redirect"); 

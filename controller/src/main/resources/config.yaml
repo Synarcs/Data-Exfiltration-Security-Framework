@@ -4,6 +4,15 @@ controller:
   # use this to further expose the stream controller api endpoints for dynamic threat inferencing 
   port: 8080
 
+k8s:
+  enabled: false
+  k8sAdvertisedHostServiceAddress: ""
+  cni:
+    name: ""
+    l7FilterSupport: "" # envoy
+    l3FilterSupport: ""  # ipvs, iptables, ebpf over vxlan host 
+
+
 streamConfig:
   host: "10.158.82.6"
   brokerPort: 9092 

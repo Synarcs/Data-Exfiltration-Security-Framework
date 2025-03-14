@@ -1,5 +1,7 @@
 package com.synarcs.controller.config.yaml;
 
+import com.synarcs.controller.config.yaml.k8s.CloudOrchestration;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,4 +16,5 @@ import lombok.Setter;
 public class Config {
     private Controller controller;
     private KafkaBrokerConfig streamConfig;
+    private CloudOrchestration k8s;
 }
