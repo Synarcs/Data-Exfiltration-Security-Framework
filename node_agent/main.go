@@ -14,6 +14,7 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/bridgetc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
@@ -32,20 +33,7 @@ func initGlobalErrorControlChannel() chan bool {
 	return make(chan bool)
 }
 
-type EbpfNodeAgentOptions struct {
-	CliFlag                  bool
-	Debug                    bool
-	StreamClient             bool
-	Sdr                      bool
-	K8sControllerWebhookPort int
-	ContainerRuntime         bool
-	// support for the eBPF ndoe agent running over host net_device dynamically reconfigure netpools for k8s CNI stop exfiltration from pod in user space or kernel sock layer, before it even reaches kernel host net_device traffic control
-	Cni bool
-	// used for sigkill with threshold limit for maslicious exfil detection
-	SigKill int
-}
-
-func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
+func ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
 	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			log.Println("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
@@ -55,7 +43,7 @@ func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
 		return nil, err
 	}
 
-	var config *utils.NodeAgentConfig = &utils.NodeAgentConfig{}
+	var config *conf.NodeAgentConfig = &conf.NodeAgentConfig{}
 
 	ff, _ := os.ReadFile(utils.NODE_CONFIG_FILE)
 
@@ -68,22 +56,22 @@ func ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
 
 func main() {
 	runtime.LockOSThread()
-	var nodeAgentOptions EbpfNodeAgentOptions
+	var nodeAgentCliOptions conf.NodeAgentCliOptions
 	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
-	flag.BoolVar(&nodeAgentOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
-	flag.BoolVar(&nodeAgentOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
-	flag.BoolVar(&nodeAgentOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
+	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
+	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
+	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
 
-	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods configured by POD  by kubelet on the ndoe
-	flag.BoolVar(&nodeAgentOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
+	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods virtual net_device in kernel attached to either the host cni vxlan / bgp net_device or internal node to node communication on same pod
+	flag.BoolVar(&nodeAgentCliOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
 
-	// CNi support, need some the eBPF controller guard to be running as daemonset and pod to handle traffic mutation for dynamic network policies creation
-	flag.BoolVar(&nodeAgentOptions.Cni, "cni", false, "Instructs current configured CNI")
-	flag.IntVar(&nodeAgentOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
+	// integrates with existing CNI's based on the availaible netfilter in user space via envoy for cilium (l7 filters) or iptables, ipvs (l3, l4) filters
+	flag.BoolVar(&nodeAgentCliOptions.Cni, "cni", false, "Instructs current configured CNI")
+	flag.IntVar(&nodeAgentCliOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
 
 	// kernel syscall layer interaction , needs kernel to support ring buffer emission for
-	flag.IntVar(&nodeAgentOptions.SigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
-	flag.BoolVar(&nodeAgentOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
+	flag.IntVar(&nodeAgentCliOptions.SigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
+	flag.BoolVar(&nodeAgentCliOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
 	flag.Usage = func() {
 		fmt.Println("Usage: node_agent [options]")
@@ -95,7 +83,7 @@ func main() {
 
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}
-	iface.ReadInterfaces(nodeAgentOptions.ContainerRuntime || nodeAgentOptions.Sdr)
+	iface.ReadInterfaces(nodeAgentCliOptions.ContainerRuntime || nodeAgentCliOptions.Sdr)
 	iface.ReadRoutes()
 	iface.GetRootGateway()
 	iface.InitconnTrackSockHandles()
@@ -109,13 +97,17 @@ func main() {
 	topDomains, err := utils.ReadTldDomainsData()
 
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
-	if nodeAgentOptions.Sdr || nodeAgentOptions.Cni {
+	if nodeAgentCliOptions.Sdr && nodeAgentCliOptions.Cni {
 		/*
 			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
-			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering
+			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering over the pod internal virtual phsycial link attach to the host vhost (for example cilium vxlan over cilium_host)
 		*/
+		panic(fmt.Errorf("Cannot inject sidecar guards on the pod physical link with enabled CNI filter , please select either CNI or Sdr mode"))
+	}
+
+	if nodeAgentCliOptions.Sdr || nodeAgentCliOptions.Cni {
 		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
-		mutationHookService := containers.NewMutationWebHook(nodeAgentOptions.K8sControllerWebhookPort, ":")
+		mutationHookService := containers.NewMutationWebHook(nodeAgentCliOptions.K8sControllerWebhookPort, ":")
 		mutationHookService.InitMutationServer()
 		// configure the k8s Admission mutation webhook to inject k8s eBPF DNS as a sidecar for all pods labelled as security required for eBPF node agent
 		return
@@ -131,16 +123,16 @@ func main() {
 	log.Println("The Node Agent booted with global config", globalConfig)
 
 	cliSock := cli.GenerateRemoteCliSocketServer()
-	if nodeAgentOptions.CliFlag {
+	if nodeAgentCliOptions.CliFlag {
 		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
 		go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
 	}
 
-	if nodeAgentOptions.Debug {
-		utils.DEBUG = nodeAgentOptions.CliFlag
+	if nodeAgentCliOptions.Debug {
+		utils.DEBUG = nodeAgentCliOptions.CliFlag
 	}
 
-	if nodeAgentOptions.StreamClient {
+	if nodeAgentCliOptions.StreamClient {
 		config := make(chan interface{})
 		rpcServer := rpc.NodeAgentService{
 			ConfigChannel: config,
@@ -161,7 +153,7 @@ func main() {
 	}
 
 	// holds kafka brokers and other kafka cluster related config
-	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig)
+	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, &nodeAgentCliOptions)
 	// eBPF node-agent kafka stream producer for dns threat events streaming
 	streamProducer := &stream.StreamProducer{
 		KafkaBrokerConfig: globalKakfBrokerConfig,
@@ -259,7 +251,7 @@ func main() {
 			openConnSocks.CloseConntrackNetlinkSock()
 		}
 
-		if nodeAgentOptions.CliFlag {
+		if nodeAgentCliOptions.CliFlag {
 			cliSock.CleanRemoteSock()
 		}
 	}

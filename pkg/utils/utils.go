@@ -91,49 +91,6 @@ type MaliciousKernelTaskCommExportedProcInfo struct {
 	ThreadId  uint32
 }
 
-type NodeAgentConfig struct {
-	StreamServers struct {
-		Host string `yaml:"host" reflect:"host"`
-		Ip   string `yaml:"ip" reflect:"ip"`
-		Port string `yaml:"port" reflect:"port"`
-	} `yaml:"streamServers" reflect:"streamServers"`
-
-	DNSServer struct {
-		Host string `yaml:"host" reflect:"host"`
-		Ip   string `yaml:"ip" reflect:"ip"`
-		Port string `yaml:"port" reflect:"port"`
-	} `yaml:"dnsServer" reflect:"dnsServer"`
-
-	MetricServer struct {
-		Host string `yaml:"host" reflect:"host"`
-		Ip   string `yaml:"ip" reflect:"ip"`
-		Port string `yaml:"port" reflect:"port"`
-	} `yaml:"metricServer" reflect:"metricServer"`
-
-	GrafanaServer struct {
-		Host string `yaml:"host" reflect:"host"`
-		Ip   string `yaml:"ip" reflect:"ip"`
-		Port string `yaml:"port" reflect:"port"`
-	} `yaml:"grafanaServer" reflect:"grafanaServer"`
-
-	MetricsExporter struct {
-		Port string `yaml:"port" reflect:"port"`
-		Ip   string `yaml:"ip" reflect:"ip"`
-	} `yaml:"metricsExporter" reflect:"metricsExporter"`
-
-	DisableExporters struct {
-		Streaming bool `yaml:"streaming" reflect:"streaming"`
-		Metrics   bool `yaml:"metrics" reflect:"metrics"`
-	} `yaml:"disableExporters" reflect:"disableExporters"`
-
-	EnhancedFeatures struct {
-		Dns struct {
-			EnableNxFloodPrevention bool
-			EnableIngressSniff      bool
-		} `yaml:"dns" reflect:"dns"`
-	} `yaml:"enhancedFeatures" reflect:"enhancedFeatures"`
-}
-
 type Limites struct {
 	MIN_DOMAIN_LENGTH              int
 	MAX_DOMAIN_LENGTH              int
@@ -175,6 +132,11 @@ func ParseIpV6(saddr uint32) string {
 	var s5 uint16 = (uint16)(saddr>>8) & 0xFF
 	var s6 uint16 = (uint16)(saddr & 0xFF)
 	return fmt.Sprintf("%x.%x.%x.%x.%x.%x", s1, uint16(s2), uint16(s3), uint16(s4), uint16(s5), uint8(s6))
+}
+
+// generate the required channesl for controller to stream those remote ipv4 / ipv6 c2 server addressses
+func GenerateC2BlacklistAddressChannels() (chan net.IP, chan net.IP) {
+	return make(chan net.IP), make(chan net.IP)
 }
 
 func GenerateBigEndianIpv4(ipv4 string) uint32 {

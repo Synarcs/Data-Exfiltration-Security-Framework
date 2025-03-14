@@ -28,11 +28,12 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
     
     struct kill_proc_mal_payload * mal_detected_count = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
     if (mal_detected_count) {
+        // remove if the proc was SIGTERM before reaching malicious threshold, otherwise will be SIGKILL if it exceed the malicious threshold 
         if (mal_detected_count < EGRESS_MAL_PROC_EXFIL_SCHED) {
             // 3 proc map kill free 
             if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id) < 0) {
                 #ifdef DEBUG 
-                    if (DEBUG) 
+                    if (!DEBUG) 
                         bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
                 #endif
             }

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -267,7 +268,7 @@ func init() {
 		malicious_vxlan_encap_dns_vtep_tunnel_transfer)
 }
 
-func StartPrometheusMetricExporterServer(config *utils.NodeAgentConfig) error {
+func StartPrometheusMetricExporterServer(config *conf.NodeAgentConfig) error {
 
 	var metricsExporterPort int
 	if config == nil {

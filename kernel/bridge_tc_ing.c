@@ -19,7 +19,7 @@
 #include "dns.h"
 #include "raw_proc.h" 
 
-#define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
+#define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/cbpf/exfil_security_config_map"
 
 struct exfil_security_tc_bridge_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -51,7 +51,6 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
         }
     }else {
         if (skb->mark != *skb_hash)  {
-            bpf_printk("the skb pack hash is %d", skb_hash);
             return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
         }
         return TC_FORWARD;

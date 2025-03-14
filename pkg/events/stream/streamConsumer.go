@@ -122,6 +122,22 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 						utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
 					}
 
+					// check for l3 filtering over malicious ipv4, ipv6 c2 tunnel server Ip's
+					if len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains) > 0 {
+						if c.KafkaBrokerConfig.GlobalConfig.EnhancedFeatures.L3Filters.EnabledL3Filtering && (!c.KafkaBrokerConfig.NodeAgentCliConfig.Sdr && !c.KafkaBrokerConfig.NodeAgentCliConfig.Cni) {
+							// inject l3 address for remote c2 address to block packets for both egress and ingress TC, only inject if not running orchestrated workloads and for purely bare-metal environments
+							for _, nodeAddress := range statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains {
+								if net.ParseIP(nodeAddress).To4() == nil {
+
+								} else {
+									if net.ParseIP(nodeAddress).To16() == nil {
+										log.Println("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
+									}
+								}
+							}
+						}
+					}
+
 					if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
 						c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
 					}

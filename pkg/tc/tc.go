@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"runtime"
 	"strings"
 	"time"
@@ -40,6 +41,10 @@ type TCHandler struct {
 	TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
 
 	Hash *rand.Hash // skb agent crypto hash for agent integrity with kernel
+
+	// the node agent consumer will ensure to send malicious ip address over this channel for node agent to inject them in kernel
+	GlobalMalC2L3addressChannelIpv4 chan net.IP
+	GlobalMalC2L3addressChannelIpv6 chan net.IP
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -104,7 +109,26 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		handler.IsEgressXdpSupport = true
 	}
 
+	ipv4c2mal, ipv6c2mal := utils.GenerateC2BlacklistAddressChannels()
+	handler.GlobalMalC2L3addressChannelIpv4 = ipv4c2mal
+	handler.GlobalMalC2L3addressChannelIpv6 = ipv6c2mal
 	return handler
+}
+
+func (tc *TCHandler) PollMaliciousControllerAwareC2Address(errorChannel <-chan error) {
+	// ipv4
+	go func() {
+		for ipv4 := range tc.GlobalMalC2L3addressChannelIpv4 {
+			getIpv4BigEndianAddr := utils.GenerateBigEndianIpv4(ipv4.String())
+			log.Println("Injecting the malicious C2 address into the kernel", getIpv4BigEndianAddr)
+		}
+	}()
+	go func() {
+		for ipv6 := range tc.GlobalMalC2L3addressChannelIpv6 {
+			getIpv6BigEndianAddrOc1, getIpv6BigEndianAddrOc2 := utils.GenerateBigEndianIpv6(ipv6.String())
+			log.Println("Injecting the malicious C2 address into the kernel", getIpv6BigEndianAddrOc1, getIpv6BigEndianAddrOc2)
+		}
+	}()
 }
 
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {

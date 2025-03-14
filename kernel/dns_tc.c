@@ -329,13 +329,13 @@ struct exfil_security_egress_rate_limit_map {
             }                                       
 
 // custom range order filtering for the DNS domains over the labels queries ssections 
-#define SUBDOMAIN_RANGE_FILTER(subdmoain_label_count,subdmoain_label_count_config_min_key,subdmoain_label_count_config_max_key)                           \
+#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count,subdomain_label_count_config_min_key,subdomain_label_count_config_max_key)                           \
     if (!DEBUG)                                                                                                                                             \
-        bpf_printk("subdomain count %d ", subdmoain_label_count);                                                                                           \
-    __u32 * subdmoain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdmoain_label_count_config_min_key);          \
-    if (!subdmoain_label_count_config_min_map) *subdmoain_label_count_config_min_map = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
-    __u32 * subdmoain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdmoain_label_count_config_max_key);          \
-    if (!subdmoain_label_count_config_max_map) *subdmoain_label_count_config_max_map = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
+        bpf_printk("subdomain count %d ", subdomain_label_count);                                                                                           \
+    __u32 * subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key);          \
+    if (!subdomain_label_count_config_min_map) *subdomain_label_count_config_min_map = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
+    __u32 * subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key);          \
+    if (!subdomain_label_count_config_max_map) *subdmoain_label_count_config_max_map = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
     if (subdmoain_label_count >= subdmoain_label_count_config_min_map && subdmoain_label_count <= subdmoain_label_count_config_max_map) return SUSPICIOUS;  \
     if (subdmoain_label_count > subdmoain_label_count_config_max_map) return MALICIOUS;                                                                     \
 

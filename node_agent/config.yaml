@@ -34,10 +34,11 @@ metricsExporter:
 
 disableExporters:
   streaming: false
-  metrics: false 
-
+  metrics:: false
 
 enhancedFeatures:
+  l3: # for l3 filtering to stop exfiltration over other protocols which c2 server remote server ip can be used to exftract data via other tunnel protocols 
+    enabledL3Filtering: false 
   dns:
     enableNxFloodPrevention: false 
     enableIngressSniff: true 

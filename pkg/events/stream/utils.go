@@ -3,23 +3,25 @@ package stream
 import (
 	"fmt"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 )
 
 type StreamBrokerConfig struct {
-	Brokers      []string
-	GlobalConfig *utils.NodeAgentConfig
+	Brokers            []string
+	GlobalConfig       *conf.NodeAgentConfig
+	NodeAgentCliConfig *conf.NodeAgentCliOptions
 }
 
-func InitBrokerConfig(globalConfig *utils.NodeAgentConfig) *StreamBrokerConfig {
+func InitBrokerConfig(globalConfig *conf.NodeAgentConfig, cliConfig *conf.NodeAgentCliOptions) *StreamBrokerConfig {
 	return &StreamBrokerConfig{
-		Brokers:      LoadKafkaBrokersConfig(globalConfig),
-		GlobalConfig: globalConfig,
+		Brokers:            LoadKafkaBrokersConfig(globalConfig),
+		GlobalConfig:       globalConfig,
+		NodeAgentCliConfig: cliConfig,
 	}
 }
 
 // TODO: Apply config creation pattern to load broker config with different input configuration
-func LoadKafkaBrokersConfig(globalConfig *utils.NodeAgentConfig) []string {
+func LoadKafkaBrokersConfig(globalConfig *conf.NodeAgentConfig) []string {
 	// TODO: Repalce with broker list for multi broker Kafka cluster for HA, and topic replication more than 1
 
 	return []string{
