@@ -164,7 +164,7 @@ tracepoints:
 .PHONY: tracepoints-x86
 tracepoints-x86:
 	@echo "Compiling the ebpf tracepoints for x86"
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
 	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc_tun 

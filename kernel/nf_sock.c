@@ -1,5 +1,5 @@
 // <!---------------------------
-// Name: Data Exfiltration Security Framework
+// Name: DNSObelisk
 // File: nf_sock.c
 // -----------------------------
 // Author: Synarcs

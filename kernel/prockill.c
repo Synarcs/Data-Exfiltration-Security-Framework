@@ -1,3 +1,10 @@
+// <!---------------------------
+// Name: DNSObelisk
+// File: prockill.c
+// -----------------------------
+// Author: Synarcs
+// ---------------------------->
+
 #include <linux/bpf.h>
 #include <linux/sched.h>
 

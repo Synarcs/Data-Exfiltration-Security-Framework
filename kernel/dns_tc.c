@@ -1,5 +1,5 @@
 // <!---------------------------
-// Name: Data Exfiltration Security Framework
+// Name: DNSObselisk 
 // File: dns_tc.c
 // -----------------------------
 // Author: Synarcs
@@ -1080,7 +1080,7 @@ __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
     // TODO: Fix the version and match the kernel patch level  
-    if (verify_kernel_version_support_task_comm) {
+    if (verify_kernel_version_support_task_comm()) {
         __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
         __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
         proc_info.procId = proc_id;
@@ -1231,8 +1231,8 @@ __always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
     Process and handles nested map handling from kernel for stopping data breaches over DNS via any random DNS port 
 */
 static 
-__always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transport_port, __u16 src_transport_port) {
-    struct __kernel_proc_struct_info * proc_info =  __get_process_info();
+__always_inline bool __handle_malicious_egress_dns_port_random(__u16 dest_transport_port, 
+                __u16 src_transport_port, struct __kernel_proc_struct_info * proc_info) {
     __u32 transfer_proc_id = proc_info->procId;
 
     // chcek if current process is termed malicious 
@@ -1240,7 +1240,8 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
     struct kill_proc_mal_payload * curr_malicious_proc_mark = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &transfer_proc_id);
     if (curr_malicious_proc_mark) {
         // user space has killed this process and removed entries from the maps with proper spin lock over the kerenl entry 
-        return 1;
+        // let the malware keep retrying and user space should sigkill it
+        return true;
     }
 
     // handle the root port handling mal c2 count for user space 
@@ -1260,7 +1261,7 @@ __always_inline __u8 __handle_malicious_egress_dns_port_random(__u16 dest_transp
     __update_non_stand_port_map(src_transport_port);
 
     // allow the packet to be forwarded to user space for a same process to be detected again if any malicious transfer happen on the same port
-    return 0; 
+    return false;
 }
 
 
@@ -1272,6 +1273,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     __u32 br_index = 5;
     __u32 out = skb->ifindex;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+
+    struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
 
     // populate the br_index handler clone for skb from kernel over the packet bridge 
     struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
@@ -1302,14 +1305,26 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             }
         #endif 
     }
-
-    if ( verify_kernel_version_support_task_comm()) {
-
-    }else {
-
-    }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
+   
+    if (verify_kernel_version_support_task_comm()) {
+        if (__handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port, proc_info)) {
+            __handle_kernel_map_clone_redirected_count(true);
+            // let the malware keep retrying and kernel stopping it and user space record the count the packet detected as malicious to eventually let the malware strive suffocate and user space kill it
+            // if the malware sabotage and mask process via kernel syscall layer and hide with mutating proc id in kernel proper sig kill threshold below certain values will kill it  and free map 
+            __clone_redirect_packet(skb, br_index, dest_addr_route); 
+            return 0;
+        }
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route) < 0) {
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("kernel cannot clone the packet for the redirect"); 
+                }
+            #endif
+        }
+        goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
+    }
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
         struct exfil_raw_packet_mirror pack;
@@ -1317,8 +1332,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         pack.src_port = __transport_src_port;
         pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
         pack.isPacketRescanedAndMalicious = (__u8)0;
-
-        struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
 
         if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
             #ifdef DEBUG 
@@ -1340,7 +1353,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }else {
         // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
         __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
-        struct __kernel_proc_struct_info * proc_info = __get_process_info();
         if (re_scanned_packed_and_malicious == 1) {
 
                     // should not update anything in map since this is malicious and other process sending this packet from user-space, must 
@@ -1377,8 +1389,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                 }
             #endif
         }
-        return 1;
     }
+    SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM:
+    return 1;
 }
 
 static 

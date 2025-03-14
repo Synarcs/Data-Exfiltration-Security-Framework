@@ -21,7 +21,6 @@
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
 
-
 struct exfil_security_tc_bridge_config_map {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, __u32); // constant kernel key 

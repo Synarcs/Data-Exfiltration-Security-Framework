@@ -7,7 +7,6 @@ struct kill_proc_mal_payload {
     __u32 dest_port;
 };
 
-
 struct exfil_security_egress_proc_mal {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u32); // process id 

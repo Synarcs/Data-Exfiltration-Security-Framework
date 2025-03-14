@@ -1,5 +1,5 @@
 // <!---------------------------
-// Name: Data Exfiltration Security Framework
+// Name: DNSObelisk
 // File: dns_xdp.c
 // -----------------------------
 // Author: Synarcs
