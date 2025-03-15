@@ -125,7 +125,7 @@ func main() {
 	cliSock := cli.GenerateRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
 		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
-		go cliSock.ConfigureUnixSocket(globalErrorKernelHandlerChannel)
+		go cliSock.ConfigureUnixSocket()
 	}
 
 	if nodeAgentCliOptions.Debug {
@@ -252,7 +252,8 @@ func main() {
 		}
 
 		if nodeAgentCliOptions.CliFlag {
-			cliSock.CleanRemoteSock()
+			log.Println("Cleaning the mounted unix socket")
+			cliSock.CloseChan <- true
 		}
 	}
 

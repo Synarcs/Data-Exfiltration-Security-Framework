@@ -9,8 +9,8 @@ import (
 
 // limitscliCmd represents the limitscli command
 var limitscliCmd = &cobra.Command{
-	Use:   "limitscli",
-	Short: "Reutrn the current configured limits for the node agent over DNS protocol",
+	Use:   "limits",
+	Short: "Returns the current configured limits for the node agent over DNS protocol",
 	Run: func(cmd *cobra.Command, args []string) {
 		GetCurrentBootedNodeAgentConfigLimits()
 	},

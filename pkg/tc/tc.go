@@ -709,9 +709,11 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		tc.DetachTCLinkedTracepointHookHandlers()
 	}
 	for _, pinMaps := range mapsToPinSharedProcKillMap {
-		if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
-			if tc.TcCollection.Maps[pinMaps].IsPinned() {
-				tc.TcCollection.Maps[pinMaps].Unpin()
+		if tc.TcCollection != nil {
+			if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
+				if tc.TcCollection.Maps[pinMaps].IsPinned() {
+					tc.TcCollection.Maps[pinMaps].Unpin()
+				}
 			}
 		}
 	}

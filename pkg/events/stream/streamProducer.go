@@ -29,6 +29,9 @@ type HostNetworkExfilFeatures struct {
 
 func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) error {
 
+	connContext, _ := context.WithTimeout(ctx, time.Second*2)
+	connErrorChan := make(chan error)
+
 	prod.Writer = &kafka.Writer{
 		Addr:         kafka.TCP(prod.KafkaBrokerConfig.Brokers...),
 		Topic:        STREAM_THREAT_TOPIC,
@@ -42,32 +45,52 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 		},
 	}
 
-	// dial to kraft enbaled leader kafka broker
-	connLeader, err := kafka.Dial("tcp", net.JoinHostPort(prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Ip,
-		prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Port))
+	go func(erroChan chan error) error {
+		// dial to kraft enbaled leader kafka broker
+		connLeader, err := kafka.Dial("tcp", net.JoinHostPort(prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Ip,
+			prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Port))
 
-	if err != nil {
-		log.Printf("Error connecting to remote stream client, node daemon booted without it .. %+v", err)
-		return err
-	}
-	prod.conn = connLeader
-
-	topic := []kafka.TopicConfig{
-		{
-			Topic:             STREAM_THREAT_TOPIC,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-		},
-	}
-
-	if err := connLeader.CreateTopics(topic...); err != nil {
-		if errors.Is(err, kafka.TopicAlreadyExists) {
-			log.Printf("Topic already exists %+v", err)
+		if err != nil {
+			erroChan <- err
 		}
-		panic(err.Error())
+		prod.conn = connLeader
+
+		topic := []kafka.TopicConfig{
+			{
+				Topic:             STREAM_THREAT_TOPIC,
+				NumPartitions:     1,
+				ReplicationFactor: 1,
+			},
+		}
+
+		if err := connLeader.CreateTopics(topic...); err != nil {
+			if errors.Is(err, kafka.TopicAlreadyExists) {
+				log.Printf("Topic already exists %+v", err)
+			}
+			erroChan <- err
+		}
+
+		return nil
+	}(connErrorChan)
+
+	for {
+		select {
+		case <-connContext.Done():
+			// channel is closed to ensure there is a timeout connect to remote kafka broker, since the kafka uses background context blocking node agent
+			log.Println("Error connecting to the remote Kafka broker ", connContext.Err())
+			return nil
+		case err := <-connErrorChan:
+			if connContext.Err(); err != nil {
+				// there is other error before the connection context with timeout has closed
+				log.Println("Error connecting to remote kafka broker ", err.Error())
+			}
+			return err
+		default:
+			log.Println("Trying to connect to remote Kafka broker ...", prod.KafkaBrokerConfig.Brokers)
+			time.Sleep(time.Second)
+		}
 	}
 
-	return nil
 }
 
 func (prod *StreamProducer) StreamThreadEvent(event []byte) error {

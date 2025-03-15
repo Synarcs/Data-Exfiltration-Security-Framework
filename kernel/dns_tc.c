@@ -1185,22 +1185,22 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     }
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
         bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
-        return TC_DROP;
+        return -1;
     } 
     // change the ipv4 layer 3 for redirect of the entire tcp packet over the other ns bridge 
     __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
 
 
     if (IP_DST_OFF > skb->len) {
-        return TC_DROP;  // Check if offset is within bounds
+        return -1;  // Check if offset is within bounds
     }
 
     if (bpf_l3_csum_replace(skb, IP_CHECK_FF, 0, csum_diff_drop, 0) < 0) {
-            return TC_FORWARD;
+            return -1;
     }
     
     if (bpf_skb_store_bytes(skb, IP_DST_OFF, &dest_addr_route, sizeof(dest_addr_route), 0) < 0) {
-        return TC_FORWARD;
+        return -1;
     }
 
     if (bpf_clone_redirect(skb, br_index, BPF_F_INGRESS) < 0){
@@ -1324,7 +1324,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             __handle_kernel_map_clone_redirected_count(true);
             // let the malware keep retrying and kernel stopping it and user space record the count the packet detected as malicious to eventually let the malware strive suffocate and user space kill it
             // if the malware sabotage and mask process via kernel syscall layer and hide with mutating proc id in kernel proper sig kill threshold below certain values will kill it  and free map 
-            __clone_redirect_packet(skb, br_index, dest_addr_route, true); 
+            if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
+                return 1;
+            }
             return 0;
         }
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {

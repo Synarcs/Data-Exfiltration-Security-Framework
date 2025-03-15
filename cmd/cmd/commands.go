@@ -6,14 +6,17 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/cmd/consts"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 )
 
 func GeteBPFAgentRemoteSockConn() (net.Conn, *http.Client, error) {
@@ -52,6 +55,7 @@ func GetCurrentBootedNodeAgentConfigLimits() error {
 	}
 
 	defer resp.Body.Close()
+	var limits events.OrderEvents
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -59,7 +63,22 @@ func GetCurrentBootedNodeAgentConfigLimits() error {
 		return err
 	}
 
-	log.Println(string(body))
+	if err := json.Unmarshal(body, &limits); err != nil {
+		log.Println(err.Error())
+		return err
+	}
+
+	log.Println(reflect.TypeOf(limits))
+
+	val := reflect.ValueOf(limits)
+	t := reflect.TypeOf(limits)
+
+	for i := 0; i < val.NumField(); i++ {
+		if val.Field(i).CanUint() {
+			log.Println(t.Field(i).Name, " --> ", val.Field(i).Uint()&0xff)
+		}
+	}
+
 	return nil
 }
 

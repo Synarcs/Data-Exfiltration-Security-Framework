@@ -212,11 +212,17 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 		}
 	}()
 
-	var tunnelTrafficEBPFMaps [4]*ebpf.Map = [4]*ebpf.Map{
-		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN],
-		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT],
+	var tunnelTrafficEBPFMaps []*ebpf.Map = []*ebpf.Map{
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP],
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
+	}
+
+	if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
+		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
+	} else {
+		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN])
+		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT])
 	}
 
 	// add more eBPF kernel maps if multiple traffic DPI for xfil events is required

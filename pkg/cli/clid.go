@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -25,14 +24,17 @@ const (
 
 // remote config from the centralized server broker
 type NodeDaemonCli struct {
-	Unixsock       unixSockPath
-	UnixSocketConn net.Listener
+	Unixsock  unixSockPath
+	CloseChan chan interface{}
+	ErorCHan  chan error
 }
 
 // used for ipv on local node via  unxi domain socket AF_UNIX
 func GenerateRemoteCliSocketServer() *NodeDaemonCli {
 	return &NodeDaemonCli{
-		Unixsock: unixSockPath(LocalCliUnixSockPath),
+		Unixsock:  unixSockPath(LocalCliUnixSockPath),
+		CloseChan: make(chan interface{}), // signal to close the cli server when node agent gracefully shutdowns
+		ErorCHan:  make(chan error),
 	}
 }
 
@@ -162,17 +164,13 @@ func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request)
 	)
 }
 
-func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) {
-
+func (nc *NodeDaemonCli) ConfigureUnixSocket() {
 	listener, err := net.Listen("unix", string(nc.Unixsock))
-	nc.UnixSocketConn = listener
 
 	if err != nil {
 		log.Println("Error opening a local unix socket connection ... ")
-		globalNodeDErrorChannel <- true
-		return
+		nc.ErorCHan <- err
 	}
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/limits", configureStreamLimits)
 	mux.HandleFunc("/blacklist/ingress", blacklistIngressDomains)
@@ -189,26 +187,32 @@ func (nc *NodeDaemonCli) ConfigureUnixSocket(globalNodeDErrorChannel chan bool) 
 		},
 	}
 
-	server.Serve(listener)
+	defer func() {
+		log.Println("Shutting down Node Agent CLI socket...")
+		listener.Close()
+		server.Close()
+		if _, err := os.Stat(string(nc.Unixsock)); err == nil {
+			if err := os.Remove(string(nc.Unixsock)); err != nil {
+				log.Println("Error removing mounted CLI socket:", err)
+			}
+		}
+	}()
 
-}
+	go func() {
+		// http l7 overlay over the unix socket
+		// TODO: all the l7 should be converted to grpc overlay same way most of cli socket for almost all CNI's
+		if err := server.Serve(listener); err != nil {
+			nc.ErorCHan <- err
+		}
+	}()
 
-func (nc *NodeDaemonCli) CleanRemoteSock() error {
-	if nc.UnixSocketConn == nil {
-		return nil
+	for {
+		select {
+		case err := <-nc.ErorCHan:
+			log.Println("error creating L7 http overlay over unix socket", err.Error())
+			return
+		case <-nc.CloseChan:
+			return
+		}
 	}
-	_, err := os.Stat(LocalCliUnixSockPath)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	if err := nc.UnixSocketConn.Close(); err != nil {
-		return err
-	}
-
-	if err := os.Remove(string(nc.Unixsock)); err != nil {
-		return err
-	}
-
-	return nil
 }
