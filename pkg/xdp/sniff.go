@@ -1,17 +1,12 @@
 package xdp
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"strconv"
 	"time"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -27,7 +22,6 @@ type IngressSniffHandler struct {
 	Ctx          context.Context
 	OnnxModel    *model.OnnxModel
 	DnsFeatures  *model.DNSFeatures
-	DnsPacketGen *model.DnsPacketGen
 	StreamClient *stream.StreamProducer
 
 	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
@@ -35,22 +29,14 @@ type IngressSniffHandler struct {
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
-func GenerateXDPIngressFactory(iface netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan bool) IngressSniffHandler {
+func GenerateIngressSnifferFactory(iface *netinet.NetIface,
+	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan bool) *IngressSniffHandler {
 
 	// only use  for ingress support for the link (net_device) in kernel
 	// Ingress sniff and process neither need AF_XDP not AF_PACKET
-	dnsPacketGenInferenceIngress := &model.DnsPacketGen{
-		IfaceHandler:        &iface,
-		SockSendFdInterface: iface.PhysicalLinks,
-		XdpSocketSendFd:     nil,
-		SocketSendFd:        nil,
-		OnnxModel:           onnxModel,
-		StreamClient:        streamClient,
-	}
-	return IngressSniffHandler{
-		IfaceHandler:                    &iface,
-		DnsPacketGen:                    dnsPacketGenInferenceIngress,
+
+	return &IngressSniffHandler{
+		IfaceHandler:                    iface,
 		OnnxModel:                       onnxModel,
 		StreamClient:                    streamClient,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
@@ -61,63 +47,7 @@ func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 	rawFeatures []model.DNSFeatures) error {
 
 	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING {
-		// process deep lexical analysis from remote unix transport inference server
-		inferRequest := model.InferenceRequest{
-			// pass all the 8 features which define the input layer for the inference in the onnx model
-			Features: features,
-		}
-		// layer 7 markup over layer 4 unix transport
-		ingressClient, _, err := model.GetInferenceUnixClient(false)
-
-		if err != nil {
-			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
-			return err
-		}
-
-		// need this over multiplex transport layer 7 transport
-		requestPayload, err := json.Marshal(inferRequest)
-		if err != nil {
-			log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
-		}
-		resp, err := ingressClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
-		if err != nil {
-			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
-			return err
-		}
-		defer resp.Body.Close()
-		payload, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("Error while evaluating the onnx model for the dns features %v", err)
-			return err
-		}
-		var inferenceResponse model.InferenceResponseIngress
-		err = json.Unmarshal(payload, &inferenceResponse)
-
-		if err != nil {
-			log.Printf("Error while unmarshalling the onnx inference response %v", err)
-			return err
-		}
-
-		if utils.DEBUG {
-			log.Println("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
-		}
-
-		for index, resp := range inferenceResponse.ThreatType {
-			if resp {
-				log.Println("raw feature for malicious payload is ::", rawFeatures[index])
-				utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
-				// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
-				// the same port as used for egrres will be used as src port for response from remote c2c malware
-				// dont monitro task comm and process struct over ingress traffic
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]), &ing.IfaceHandler.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT, nil)
-				go ing.StreamClient.MarshallStreamThreadEvent(rawFeatures[index], stream.HostNetworkExfilFeatures{
-					ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
-					Protocol:         string(events.DNS),
-					PhysicalNodeIpv4: ing.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
-					PhysicalNodeIpv6: ing.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
-				})
-			}
-		}
+		IngressRemoteInferHandler(features, rawFeatures, ing.IfaceHandler, ing.StreamClient)
 	}
 	return nil
 }
@@ -219,29 +149,18 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 			return err
 		}
 
-		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
-
-		if isIpv4 && !isUdp {
-			// ipv4 and tcp
-			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, false, isIpv4, isUdp, nil, nil)
-		}
-		if !isIpv4 && !isUdp {
-			// ipv6 and tcp
-			ing.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum, handler, false, isIpv4,
-				isUdp, nil, nil)
-		}
+		// TODO: Support deep parsing for parsing Ingress  TCP traffic
 	}
 	return nil
 }
 
-func (ing *IngressSniffHandler) SniffIgressForC2C() error {
+func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPPort uint16) error {
 	var errorChannel chan error = make(chan error)
 	log.Println("Sniffing Ingress traffic for potential malicious remote C2C commands")
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
-		errorChannel chan<- error, isUdp bool, isStandardPort bool) error {
+		errorChannel chan<- error) error {
 		cap, err := ing.IfaceHandler.GetPcapHandleoverNetDev(linkInterface)
 		if err != nil {
 			fmt.Println("error opening packet capture over hz,te interface from kernel")
@@ -249,30 +168,28 @@ func (ing *IngressSniffHandler) SniffIgressForC2C() error {
 		}
 		defer cap.Close()
 
-		if (isUdp || !isUdp) && isStandardPort {
-			// runs over br netfilter layer on iptables
-			if isUdp {
-				log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the UDP Layer")
-			} else {
-				log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the TCP Layer")
-			}
-			if err := cap.SetBPFFilter("udp src port 53 or tcp src port 53"); err != nil {
-				log.Fatalf("Error setting BPF filter: %v", err)
-			}
-		} else if !isUdp && !isStandardPort {
-			err := "Not Implemented for non stard port DPI for DNS with no support for ebpf from kernel"
-			return fmt.Errorf("err %s", err)
+		// runs over br netfilter layer on iptables
+		log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the UDP Layer")
+		log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the TCP Layer")
+		if err := cap.SetBPFFilter(fmt.Sprintf("udp src port %s or tcp src port %s", sniffUDPPort, sniffUDPPort)); err != nil {
+			log.Fatalf("Error setting BPF filter: %v", err)
+			return err
 		}
 
 		packets := gopacket.NewPacketSource(cap, cap.LinkType())
-		for pack := range packets.Packets() {
-			go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent")
+				return nil
+			case pack := <-packets.Packets():
+				go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
+			}
 		}
-		return nil
 	}
 
 	for _, link := range ing.IfaceHandler.PhysicalLinks {
-		go processPcapFilterHandlerIngress(link, errorChannel, true, true)
+		go processPcapFilterHandlerIngress(link, errorChannel)
 	}
 
 	go func() {

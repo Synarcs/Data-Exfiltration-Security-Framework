@@ -22,6 +22,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
@@ -36,12 +37,15 @@ type TCCloneTunnel struct {
 	Onnx                     *model.OnnxModel
 
 	TaskCommTCEgressKernelSupport bool
+	IngressTunnelSniffer          *xdp.IngressSniffHandler
 }
 
 func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan bool,
 	streamClient *stream.StreamProducer, onnx *model.OnnxModel) *TCCloneTunnel {
 
-	return &TCCloneTunnel{
+	// sniff for random port traffic when detected to be malicious until other wise suspended and terminated
+
+	tccloneTunnel := &TCCloneTunnel{
 		IfaceHandler:                  iface,
 		GlobalKernelErrorChannel:      globalErrorChannel,
 		PhysicalTcInterface:           tc,
@@ -49,6 +53,18 @@ func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalError
 		Onnx:                          onnx,
 		TaskCommTCEgressKernelSupport: utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
 	}
+
+	if utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD {
+		tccloneTunnel.IngressTunnelSniffer = xdp.GenerateIngressSnifferFactory(
+			iface, onnx, streamClient, globalErrorChannel,
+		)
+	}
+	return tccloneTunnel
+}
+
+func GenerateCancellableSniffCtx() (context.Context, context.CancelFunc) {
+	ctx := context.Background()
+	return context.WithTimeout(ctx, time.Second*30)
 }
 
 // dont use spin lock user space write a map, and kernel always read it, and never write,
@@ -110,13 +126,28 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 	}
 }
 
+type maliciousExfilPortIngressSniffCtx struct {
+	ctx         context.Context
+	cancelSniff context.CancelFunc
+}
+
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
-var previousPreventedMaliciousProcessRawExfil map[uint32]bool = make(map[uint32]bool)
+var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx // sniff ctx port --> cancel ctx for cancel sniffing over port
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
-func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort) {
+func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort, maliciousDestPort uint16) {
 	maliciousProcCountguard.Lock()
 	defer maliciousProcCountguard.Unlock()
+
+	// the sniff context uses same mutex for node agent to track detected malicous process and associated port
+	if _, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; !fd {
+		ctx, cancel := GenerateCancellableSniffCtx()
+		maliciousExfilPortIngressSniffCtxMap[maliciousDestPort] = &maliciousExfilPortIngressSniffCtx{
+			ctx:         ctx,
+			cancelSniff: cancel,
+		}
+		go tun.IngressTunnelSniffer.SniffIgressForC2C(ctx, maliciousDestPort)
+	}
 
 	if ct, fd := maliciousExfilProcessCount[mapField.ProcessId]; !fd {
 		maliciousExfilProcessCount[mapField.ProcessId] = 1
@@ -136,15 +167,16 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", mapField.ProcessId)
 			delete(maliciousExfilProcessCount, mapField.ProcessId)
 
-			// the process is sigkill and associated map information for the proess should be freed
-			delete(previousPreventedMaliciousProcessRawExfil, mapField.ProcessId)
+			// stop sniffing PCAP over this port since the node SIGKILL the process
+			// since the process is exfiltrating be parallel proc fd or the port would always be there in map to kill the process unless kernel traps the process to reach threshold configured in userspace
+			if sniffCtx, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; fd {
+				sniffCtx.cancelSniff()
+			}
 			return
 		}
 		maliciousExfilProcessCount[mapField.ProcessId]++
 	}
 
-	// track the sniff process trying breack over random intervals
-	previousPreventedMaliciousProcessRawExfil[mapField.ProcessId] = true
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {
@@ -217,7 +249,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
 	}
 
-	if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+	if tun.TaskCommTCEgressKernelSupport {
 		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
 		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
 	} else {
@@ -456,7 +488,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 				if ev != nil {
 					// only support sigkill if the kernel can emit process id from tc
 					if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destTransportPort)
 					}
 				}
 			}
@@ -496,7 +528,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 
 		if ev != nil {
 			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-				tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+				tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destTransportPort)
 			}
 			// older kernel version use kernel proc fs mount to ge process Information
 		}
@@ -700,8 +732,9 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			log.Println("Error in deleting the map for this benign found packet", err)
 		}
 
-		if ev != nil && ev.ProcessId != 0 && ev.ThreadId != 0 {
-			tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev)
+		// verify kernel support task comm to access kernel task struct over kernel TC layer
+		if tun.TaskCommTCEgressKernelSupport {
+			tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destPortGenType)
 		}
 
 		features, err := model.ProcessDnsFeatures(dns, true)

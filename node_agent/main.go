@@ -193,8 +193,8 @@ func main() {
 
 	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
 		// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
-		ingress := xdp.GenerateXDPIngressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel)
-		go ingress.SniffIgressForC2C()
+		ingress := xdp.GenerateIngressSnifferFactory(&iface, model, streamProducer, globalErrorKernelHandlerChannel)
+		go ingress.SniffIgressForC2C(ctx, 53)
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent

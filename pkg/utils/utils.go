@@ -71,8 +71,9 @@ const (
 )
 
 const (
-	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL  = time.Second * 10 // use to prune the map which ensure the required
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL                              = time.Second * 10 // use to prune the map which ensure the required
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD                             = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+	EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD = 5
 )
 
 // user space remote inferencing support for unix domain sockets
