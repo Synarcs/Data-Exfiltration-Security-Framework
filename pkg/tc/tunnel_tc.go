@@ -153,7 +153,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 		maliciousExfilProcessCount[mapField.ProcessId] = 1
 	} else {
 		if utils.DEBUG {
-			log.Println("Inc maliciosu count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
+			log.Println("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
 		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", mapField.ProcessId)

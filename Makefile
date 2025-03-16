@@ -15,7 +15,9 @@ run_node_agent:
 .PHONY: build-controller
 build-controller:
 	@echo "Building the controller"
-	cd controller && mvn clean package  
+	cd controller && mvn clean package && cp target/node-agent-controller-1.0-SNAPSHOT.jar bin/ && mvn clean 
+	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
+	cd controller/cmd && go build -o ../bin/main main.go 
 
 .PHONY: build-controller-image
 build-controller-image:

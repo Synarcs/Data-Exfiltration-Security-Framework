@@ -3,6 +3,8 @@
 deps.bzl
 kernel/vmlinux.h
 controller/target/* 
+controller/bin/* 
+
 
 exfil-sec-operator/* 
 node_agent/dist/

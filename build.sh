@@ -47,7 +47,7 @@ buildpackage
 
 
 if [ $build_controller ]; then 
-  bash controller.sh 
+  make build-controller 
 fi 
 
 

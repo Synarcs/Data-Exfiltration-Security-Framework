@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -33,9 +33,9 @@ func (k *KernelEbpfMockInjectors) TestKernelTCEbpfInject(prog string) error {
 	return nil
 }
 
-func (conf *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*utils.NodeAgentConfig, error) {
+func (conf *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
 	args := conf.Called()
-	return args.Get(0).(*utils.NodeAgentConfig), args.Error(1)
+	return args.Get(0).(*conf.NodeAgentConfig), args.Error(1)
 }
 
 func TestMain(t *testing.M) {
@@ -147,7 +147,7 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, time.Second*3)
 	globalConfig, err := ReadGlobalNodeAgentConfig()
-	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig)
+	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -185,11 +185,11 @@ func TestAgentConfigLoader(t *testing.T) {
 	nodeAgentLoaderMock := new(NodeAgentMockInjectors)
 	nodeAgentLoaderMock.IsMethodCallable(t, "ReadGlobalNodeAgentConfig")
 
-	nodeAgentLoaderMock.On("ReadGlobalNodeAgentConfig").Return(&utils.NodeAgentConfig{}, nil)
+	nodeAgentLoaderMock.On("ReadGlobalNodeAgentConfig").Return(&conf.NodeAgentConfig{}, nil)
 
 	config, err := nodeAgentLoaderMock.ReadGlobalNodeAgentConfig()
 
 	assert.Nil(t, err)
-	assert.Equal(t, reflect.DeepEqual(config, &utils.NodeAgentConfig{}), true)
+	assert.Equal(t, reflect.DeepEqual(config, &conf.NodeAgentConfig{}), true)
 	nodeAgentLoaderMock.AssertExpectations(t)
 }

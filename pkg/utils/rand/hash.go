@@ -27,5 +27,5 @@ func (h *Hash) GetRandomBootSkbMark() {
 			hex.EncodeToString(randomNuonceSkbMarkBoot))
 	}
 
-	h.SkbHash = binary.LittleEndian.Uint32(randomNuonceSkbMarkBoot)
+	h.SkbHash = binary.BigEndian.Uint32(randomNuonceSkbMarkBoot)
 }

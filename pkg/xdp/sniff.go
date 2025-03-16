@@ -169,9 +169,8 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		defer cap.Close()
 
 		// runs over br netfilter layer on iptables
-		log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the UDP Layer")
-		log.Println("Generated Ingress Packet Listener to parse DNS packets from kernel over the TCP Layer")
-		if err := cap.SetBPFFilter(fmt.Sprintf("udp src port %s or tcp src port %s", sniffUDPPort, sniffUDPPort)); err != nil {
+		log.Println("Generated Ingress Packet Listener to sniff DNS packets over the UDP and TCP Transport Layer")
+		if err := cap.SetBPFFilter(fmt.Sprintf("udp src port %d or tcp src port %d", sniffUDPPort, sniffUDPPort)); err != nil {
 			log.Fatalf("Error setting BPF filter: %v", err)
 			return err
 		}
@@ -180,7 +179,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent")
+				log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent in user-space")
 				return nil
 			case pack := <-packets.Packets():
 				go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
