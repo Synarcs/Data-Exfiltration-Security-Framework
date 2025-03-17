@@ -1,0 +1,19 @@
+package conf
+
+// only extreact what the controller unix cni netpool handler needs from root controller
+type GlobalControllerConfig struct {
+	StreamConfig struct {
+		Host                               string `json:"host"`
+		BrokerPort                         int    `json:"brokerPort"`
+		StreamThreatTopic                  string `json:"streamThreatTopic"`
+		StreamThreatTopicInferState        string `json:"streamThreatTopicInferState"`
+		RecursorTCPTransportMaliciousTopic string `json:"recursorTCPTransportMaliciousTopic"`
+		ConsumerGroupName                  string `json:"consumerGroupName"`
+	} `json:"streamConfig"`
+	K8sCniConfig struct {
+		K8sAdvertisedHostServiceAddress string `json:"k8sAdvertisedHostServiceAddress"`
+		Cni                             struct {
+			Name string `json:"name"`
+		} `json:"cni"`
+	} `json:"k8s"`
+}

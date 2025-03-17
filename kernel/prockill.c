@@ -33,7 +33,7 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
             // 3 proc map kill free 
             if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id) < 0) {
                 #ifdef DEBUG 
-                    if (!DEBUG) 
+                    if (DEBUG) 
                         bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
                 #endif
             }

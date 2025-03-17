@@ -58,7 +58,7 @@ func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(
 	consumer.EgresseBPFKernelSockCollectionProgram = tcProgram
 }
 
-func (consumer *StreamConsumer) AddL3FilterForTraffic(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
+func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
 	configMapIpv4 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER]
 	// TODO Add support for ipv6 filter routing in kernel
 	// configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
@@ -139,7 +139,7 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					}
 
 					if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
-						c.AddL3FilterForTraffic(ctx, &statefulAnalyzedStreeamEvent)
+						c.AddL3FilterForTrafficOverKernelTC(ctx, &statefulAnalyzedStreeamEvent)
 					}
 				}
 			}(consumer, errorChan, ctx)

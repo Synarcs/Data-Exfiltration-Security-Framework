@@ -37,7 +37,6 @@ public class BlacklistDomain {
     @Autowired
     private KafkaTemplate<String, DnsdataplaneBlk> kafkaTemplate;
 
-
     @Autowired
     public BlacklistDomain(Config config) {
         this.controllerConfig = config;

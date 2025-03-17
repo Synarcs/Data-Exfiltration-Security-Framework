@@ -1,5 +1,12 @@
 package cni
 
+import (
+	"log"
+
+	"github.com/Synarcs/DNSObelisk/controller/conf"
+	"github.com/Synarcs/DNSObelisk/controller/k8s"
+)
+
 /*
 	The eBPF Node Agent runs over Host bridges deep inside the kernel Traffic control direct action qdisc
 	CNI works most for l7 proxy over envoy based on filter chains all in user space.
@@ -13,14 +20,20 @@ package cni
 */
 
 type CiliumNetworkPolicy struct {
-	Cni     string
-	Version string
+	Cni          string
+	Version      string
+	K8sClientSet *k8s.K8sClientSet
 }
 
-func NewCiliunNetworkPolicy() *CiliumNetworkPolicy {
+func NewCiliunNetworkPolicy(clientSet *k8s.K8sClientSet) *CiliumNetworkPolicy {
+	if clientSet == nil {
+		log.Println("the required clientset to target K8s cluster is not provided")
+	}
+
 	return &CiliumNetworkPolicy{
-		Cni:     "cilium",
-		Version: "v1",
+		Cni:          "cilium",
+		Version:      "v1",
+		K8sClientSet: clientSet,
 	}
 }
 
@@ -44,10 +57,10 @@ func (cni *CiliumNetworkPolicy) CreateL7NetworkPolicy([]string) error {
 	return nil
 }
 
-func (cni *CiliumNetworkPolicy) GetCniVersion() string {
-	return ""
+func (cni *CiliumNetworkPolicy) GetK8sClusterHost(conf *conf.GlobalControllerConfig) string {
+	return conf.K8sCniConfig.K8sAdvertisedHostServiceAddress
 }
 
-func (cni *CiliumNetworkPolicy) GetCniName() string {
-	return ""
+func (cni *CiliumNetworkPolicy) GetCniName(conf *conf.GlobalControllerConfig) string {
+	return conf.K8sCniConfig.Cni.Name
 }
