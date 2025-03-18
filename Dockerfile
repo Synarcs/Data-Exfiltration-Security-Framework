@@ -22,21 +22,21 @@ RUN echo "Required Kernel dependencies for eBPF kernel programs" && apt update -
     libbpf-tools \
     libelf-dev \
     libbpf-dev \
-    # linux-headers-$(uname -r) \
+    linux-headers-$(uname -r) \
     cmake \
     zlib1g-dev \
     pkg-config \
     bpfcc-tools \
-    # linux-tools-$(uname -r) \
-    # linux-tools-common \
+    linux-tools-$(uname -r) \
+    linux-tools-common \
     xdp-tools \
     bpftrace \
     strace \
     git \
     autoconf \
     libcap-dev \
-    vim  \
-    curl \ 
+    vim \
+    curl \
     libdebuginfod-dev \
     bison \
     flex \
@@ -44,11 +44,25 @@ RUN echo "Required Kernel dependencies for eBPF kernel programs" && apt update -
     protobuf-compiler \
     libcurl4-openssl-dev \
     libedit-dev \
-    libsasl2-dev  \
+    libsasl2-dev \
     librdkafka-dev \
     inetutils-ping \
-    bsdmainutils \ 
-    liburing-dev
+    bsdmainutils \
+    liburing-dev \
+    iptables \
+    iproute2 \
+    libssl-dev \
+    libncurses5-dev \
+    libsqlite3-dev \
+    libreadline-dev \
+    libtk8.6 \
+    libgdbm-dev \
+    libpcap-dev \
+    libffi-dev \
+    libncursesw5-dev \
+    tk-dev \
+    libc6-dev \
+    libbz2-dev
 
 RUN echo "installing kernel network utilities and userspace eBPF go bindings" && \ 
                 apt install -y iproute2 iptables bison conntrack 

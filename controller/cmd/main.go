@@ -48,6 +48,17 @@ func LoadConfigFromController() (*conf.GlobalControllerConfig, *consumer.StreamC
 	return globalControllerConfig, streamConsumerConfig
 }
 
+func CreateCniClientSet(globalControllerConfig *conf.GlobalControllerConfig, k8sClientSet *k8s.K8sClientSet) cni.NetworkPolicies {
+	var cniNetworkPolicyHandler cni.NetworkPolicies
+	switch globalControllerConfig.K8sCniConfig.Cni.Name {
+	case "cilium":
+		cniNetworkPolicyHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
+	default:
+		cniNetworkPolicyHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
+	}
+	return cniNetworkPolicyHandler
+}
+
 func main() {
 	log.Println("Add the required network policies enforced by the eBPF Node Agent to controller for dynamic network policies for remote c2 servers")
 	sock, err := net.Listen("unix", CNI_CONTROLLER_SOCK)
@@ -80,19 +91,12 @@ func main() {
 
 	k8sClientSet, err := k8s.InitK8sClientSet("")
 
-	if err != nil {
+	if err != nil || k8sClientSet == nil {
 		log.Println("the cni netpool handler for controller cannot load without valid k8ss client set provided")
 	} else {
 
-		var cniNetPoolHandler cni.NetworkPolicies
-		switch globalControllerConfig.K8sCniConfig.Cni.Name {
-		case "cilium":
-			cniNetPoolHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
-		default:
-			cniNetPoolHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
-		}
-
 		log.Println("the broker config for unix sock server consume events from controller ", streamConsumer.KafkaBrokerConfig.Brokers)
+		var cniNetworkPolicyHandler cni.NetworkPolicies = CreateCniClientSet(globalControllerConfig, k8sClientSet)
 
 		go func() {
 			if err := server.Serve(sock); err != nil && err != http.ErrServerClosed {
@@ -102,7 +106,7 @@ func main() {
 		}()
 
 		go func() {
-			if err := streamConsumer.ConsumeStreamControllerTopic(ctx, cniNetPoolHandler); err != nil {
+			if err := streamConsumer.ConsumeStreamControllerTopic(ctx, cniNetworkPolicyHandler); err != nil {
 				errChan <- err
 				return
 			}

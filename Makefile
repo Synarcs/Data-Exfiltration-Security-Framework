@@ -19,6 +19,16 @@ build-controller:
 	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
 	cd controller/cmd && go build -o ../bin/main main.go 
 
+.PHONY: build-controller-cni-sec
+build-controller-cni-sec:
+	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
+	cd controller/cmd && go build -o ../bin/main main.go 
+
+.PHONY: run-controller-cni-sec
+run-controller-cni-sec:
+	@echo "Running the controller UNIX stream Inference NetworkPolicyHandlers"
+	cd controller/bin && ./main
+
 .PHONY: build-controller-image
 build-controller-image:
 	@echo "Building the controller docker image"

@@ -1,10 +1,13 @@
 package cni
 
 import (
+	"context"
 	"log"
 
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/k8s"
+	ciliumv2 "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 /*
@@ -20,9 +23,10 @@ import (
 */
 
 type CiliumNetworkPolicy struct {
-	Cni          string
-	Version      string
-	K8sClientSet *k8s.K8sClientSet
+	Cni             string
+	Version         string
+	K8sClientSet    *k8s.K8sClientSet
+	CiliumClientSet *ciliumv2.Clientset
 }
 
 func NewCiliunNetworkPolicy(clientSet *k8s.K8sClientSet) *CiliumNetworkPolicy {
@@ -49,11 +53,36 @@ type CiliumL7NetworkPolicyRequest struct {
 	Fqdn []string
 }
 
-func (cni *CiliumNetworkPolicy) CreateL3NetworkPolicy([]string) error {
+func (cni *CiliumNetworkPolicy) InitCiliumClientSet(ctx context.Context) error {
+
+	ciliumClient, err := ciliumv2.NewForConfig(cni.K8sClientSet.Config)
+
+	if err != nil {
+		return err
+	}
+
+	cni.CiliumClientSet = ciliumClient
+
 	return nil
 }
 
-func (cni *CiliumNetworkPolicy) CreateL7NetworkPolicy([]string) error {
+func (cni *CiliumNetworkPolicy) CreateL3NetworkPolicy(ctx context.Context, l3filterIpv4Addr []string) error {
+	netFilters, err := cni.CiliumClientSet.CiliumV2().CiliumClusterwideNetworkPolicies().List(ctx, v1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, netPool := range netFilters.Items {
+		if len(netPool.Spec.Egress) > 0 {
+			for _, egressFilter := range netPool.Spec.Egress {
+				log.Println(egressFilter.ToFQDNs)
+			}
+		}
+	}
+	return nil
+}
+
+func (cni *CiliumNetworkPolicy) CreateL7NetworkPolicy(ctx context.Context, malC2Fqdn []string) error {
 	return nil
 }
 

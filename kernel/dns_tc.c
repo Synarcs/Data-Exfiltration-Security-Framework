@@ -1066,8 +1066,11 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
 */
 static 
 __always_inline bool verify_kernel_version_support_task_comm() {
-    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_PATCHLEVEL >= 10 && LINUX_VERSION_SUBLEVEL >= 0) 
+    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_SUBLEVEL >= 10) {
+        if (LINUX_VERSION_MAJOR == 6 && LINUX_VERSION_SUBLEVEL == 10) 
+            return LINUX_VERSION_PATCHLEVEL >= 0;
         return true;
+    }
     return false;
 }
 
@@ -1283,6 +1286,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
     __u32 br_index = 5;
     __u32 out = skb->ifindex;
+    __u32 tc_class_id = skb->tc_classid;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
     struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
