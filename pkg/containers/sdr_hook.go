@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers/sock"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 )
 
@@ -32,7 +33,8 @@ func podSidecarMutateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return injecteBPfSockFilterResp
 	}
-	if err := InjectKernelSocketFilters(); err != nil {
+	if err := sock.InjectKernelSocketFilters(POD_EBPF_PROGRAM_MOUNT_PATH, SOCK_SKB_FILTER,
+		true); err != nil {
 		resp := sendResponse(
 			"Error injecting the eBPF sock filter via the sidecar for the pod networking err :" + err.Error(),
 		)

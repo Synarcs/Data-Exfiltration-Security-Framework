@@ -33,8 +33,8 @@ func (k *KernelEbpfMockInjectors) TestKernelTCEbpfInject(prog string) error {
 	return nil
 }
 
-func (conf *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
-	args := conf.Called()
+func (mock *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
+	args := mock.Called()
 	return args.Get(0).(*conf.NodeAgentConfig), args.Error(1)
 }
 

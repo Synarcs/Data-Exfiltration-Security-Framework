@@ -9,6 +9,7 @@ const (
 	SOCK_TUNNEL_CODE_EBPF          = "ebpf/netlink.o"
 	TRACEPOINT_KERNEL_PROG         = "ebpf/tracepoint.o"
 
+	SOCK_SKB_OP_CODE_EBPF = "ebpf/sockops.o"
 	// sdr sock_ops and sock_filter for skb_buff
 	SDR_SOCK_NETIFACT_FILTER = "ebpf/sock.o"
 )

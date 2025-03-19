@@ -19,7 +19,7 @@ package containers
 
 */
 const (
-	SOCK_SKB_FILTER = "sock.o" // root skb_filter for egress
+	SOCK_SKB_FILTER = "sockops.o" // root skb sock BPF_SKB_SOCK_OP to monitor all UDP process using DNS and configuring sockets
 )
 
 const (

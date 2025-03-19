@@ -16,6 +16,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers/sock"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
@@ -111,6 +112,13 @@ func main() {
 		mutationHookService.InitMutationServer()
 		// configure the k8s Admission mutation webhook to inject k8s eBPF DNS as a sidecar for all pods labelled as security required for eBPF node agent
 		return
+	}
+
+	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
+		if err := sock.InjectKernelSocketFilters(utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF, false); err != nil {
+			log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
+		}
 	}
 
 	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()

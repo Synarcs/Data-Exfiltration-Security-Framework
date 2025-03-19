@@ -80,6 +80,11 @@ struct exfil_security_egress_dns_limites {
 
 #define IPV6_ROUTE 1 
 
+#ifndef TC_TASK_COMM_EGRESS_CLSACT_SUPPORT 
+    #define LINUX_MAJOR_RELEASE_SUPPORT 6 
+    #define LINUX_SUBRELEASE_SUPPORT 10 
+#endif
+
 #define DETECTED_MALICIOUS_COUNT_DNS_RANDOM_PORT_DROP_LIMIT 1
 
 // defines the mal threshold kill proc 
@@ -92,12 +97,6 @@ __u32 redirect_skb_mark = 0xFF;
 static 
 __always_inline void __configure_l3_filter_options() {
 }
-
-struct __kernel_proc_struct_info {
-    __u32 procId;
-    __u32 threadId;
-} __attribute__((packed));
-
 
 // 10.200.0.1 this is only for testing in kernel while parsing the process 
 #ifndef BRIDGE_REDIRECT_ADDRESS_IPV4
@@ -211,6 +210,11 @@ struct result_parse_dns_labels {
 // default kernel Birdge If_indexes , kernel internally does DNAT, SNAT
 #define RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_CLONE_FORWARD_REDIRECT 5
 #define RE_SCAN_BRIDGE_IF_INDEX_DEFAULT_FORWARD_REDIRECT 4
+
+
+#ifndef MAX_PROC_COMM_SIZE
+    #define MAX_PROC_COMM_SIZE 200 
+#endif 
 
 
 #endif /* __EXFIL_SECURITY_H */

@@ -19,7 +19,7 @@ tracepoint_kernel_out := tracepoint.o
 p2p_kernel := dns_tun.c
 p2p_kernel_out := tun.o
 
-sock_sdr := dns_sock.c 
+sock_sdr := dns_sock_ops.c 
 sock_sdr_out := sock.o
 
 # for arm compilation of cpu 
@@ -32,6 +32,7 @@ compile:
 	make netlink 
 	make tc_tun 
 	make tracepoints
+	make sock 
 	make xdp 
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
@@ -180,9 +181,9 @@ tc_tun-x86:
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ \
 
 
-.PHONY: sock_sdr
-sock_sdr:
-	echo "Compiling the ebpf kprobe for sock_sdr for kernel socket layer as sidecar over k8s pods for exfiltration security"
+.PHONY: sock
+sock:
+	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket"
 	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
 	cp $(sock_sdr_out) ../node_agent/ebpf/
 

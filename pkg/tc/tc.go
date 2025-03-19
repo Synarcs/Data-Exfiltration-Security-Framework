@@ -57,6 +57,7 @@ var (
 	mapsToPinSharedProcKillMap = []string{
 		"exfil_security_egress_proc_mal",
 		"exfil_security_egress_nsp_map",
+		"exfil_sock_udp_conn_map",
 	}
 )
 

@@ -35,6 +35,7 @@
 #include "raw_proc.h"
 #include "vxlan.h"
 #include "pinmaps.h"
+#include "sockpin.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
@@ -269,14 +270,28 @@ struct dns_volume_stats {
 };
 
 // exfil rate limiter 
-// follows leaky bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window 
+
+
+// follows leaky bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing volume of traffic over a fixed 1 sec window
 // the packet does not matter (dns + tcpv4 / tcpv6) or (dns + udpv4 + udpv6)
-struct exfil_security_egress_rate_limit_map {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u16);
-    __type(value, struct dns_volume_stats);
-    __uint(max_entries, 1);
-} exfil_security_egress_rate_limit_map SEC(".maps");
+#ifdef DNS_RATE_LIMIT_VOLUME 
+    struct exfil_security_egress_volume_rate_limit_map {
+        __uint(type, BPF_MAP_TYPE_LRU_HASH);
+        __type(key, __u16);
+        __type(value, struct dns_volume_stats);
+        __uint(max_entries, 1);
+    } exfil_security_egress_volume_rate_limit_map SEC(".maps");
+#endif
+
+// follows token bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing dns rps over reaching the egress kernel TC 
+#ifdef DNS_RATE_LIMIT_TOCKEN_BUCKET
+    struct exfil_security_egress_tb_rate_limit_map {
+        __uint(type, BPF_MAP_TYPE_LRU_HASH);
+        __type(key, __u16);
+        __type(value, struct dns_volume_stats);
+        __uint(max_entries, 1);
+    } exfil_security_egress_tb_rate_limit_map SEC(".maps");
+#endif 
 
 
 // dynamic netpool l3 ipv4 filtering for any malicious traffic found to upstream servers 
@@ -1061,40 +1076,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     return 0;
 }
 
-/*
-    Verify does kernel support task_comm for task struct 
-*/
-static 
-__always_inline bool verify_kernel_version_support_task_comm() {
-    if (LINUX_VERSION_MAJOR >= 6 && LINUX_VERSION_SUBLEVEL >= 10) {
-        if (LINUX_VERSION_MAJOR == 6 && LINUX_VERSION_SUBLEVEL == 10) 
-            return LINUX_VERSION_PATCHLEVEL >= 0;
-        return true;
-    }
-    return false;
-}
-
-
-/*
-    Rely on kernel task comm for the tc running on whichever CPU handles and retrieve the process name and associated task struct
-*/
-static 
-__always_inline struct __kernel_proc_struct_info * __get_process_info() {
-    struct __kernel_proc_struct_info proc_info;
-
-    // TODO: Fix the version and match the kernel patch level  
-    if (verify_kernel_version_support_task_comm()) {
-        __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-        __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
-        proc_info.procId = proc_id;
-        proc_info.threadId = thread_id;
-    }else {
-        proc_info.procId = 0;
-        proc_info.threadId = 0;
-    }
-    return &proc_info;
-}
-
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, struct __sk_buff *raw_skb, void * dns_payload, 
@@ -1663,13 +1644,13 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
     __u64 ts = bpf_ktime_get_ns();
 
 
-    struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_rate_limit_map, &key);
+    struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_volume_rate_limit_map, &key);
     if (!dns_volume_stats) {
         struct dns_volume_stats stats = {
             .packet_size = (__u64) dns_payload_size,
             .last_timestamp = ts
         };
-        bpf_map_update_elem(&exfil_security_egress_rate_limit_map, &key, &stats, BPF_ANY);
+        bpf_map_update_elem(&exfil_security_egress_volume_rate_limit_map, &key, &stats, BPF_ANY);
         return 1;
     }
 
