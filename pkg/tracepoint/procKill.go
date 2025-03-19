@@ -15,7 +15,7 @@ import (
 type ExfilSecTreacePoint struct {
 	SecurityKernelTracePoints []*ebpf.Program
 	SecurityKernelMaps        []*ebpf.Map
-	TracePointLink            []link.Link
+	TracePointLink            []*link.Link
 }
 
 func GenerateTracePointHandlers() *ExfilSecTreacePoint {
@@ -55,14 +55,14 @@ func (exf *ExfilSecTreacePoint) AttachTracePointHandlers(ctx context.Context, if
 	}
 
 	// Store links for cleanup
-	exf.TracePointLink = append(exf.TracePointLink, tp)
+	exf.TracePointLink = append(exf.TracePointLink, &tp)
 }
 
 func (exf *ExfilSecTreacePoint) RemoveTracepoints() {
 	// clean tracepoint attached to kernel raw tracepoints
 	for _, link := range exf.TracePointLink {
 		if link != nil {
-			link.Close()
+			(*link).Close()
 		}
 	}
 

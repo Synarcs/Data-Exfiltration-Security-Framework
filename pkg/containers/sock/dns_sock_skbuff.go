@@ -1,5 +1,8 @@
 package sock
 
+/*
+	Use bpf links to inject all kernel sock op programs from kernel skb_filter to kernel skb_ops cgroups etc
+*/
 import (
 	"fmt"
 	"log"
@@ -7,6 +10,8 @@ import (
 	"path"
 	"sync"
 
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
 )
 
@@ -14,13 +19,19 @@ import (
 var isInjectedKernelHooks bool = false
 var injectKernelHookGaurd sync.Mutex
 
-func InjectKernelSockOps(bpfMountPath, sockeBPFProg string) error {
+type SockKernelProgs struct {
+	Progs []*ebpf.Program
+	Maps  []*ebpf.Map
+	Links []*link.Link
+}
+
+func (sock *SockKernelProgs) InjectKernelSockOps(bpfMountPath, sockeBPFProg string) error {
 	return nil
 }
 
 // add the sock filters for the pod called by k8s mutation webhook on pod-create to ensure proper DNS security and DPI in kernel
 // only injects all the sock_skb, sock_sock_ops, eBPF kernel programs inside the pod networking running all on the phsyical net_device
-func InjectKernelSocketFilters(bpfMountPath string, sockeBPFProg string, isContainers bool) error {
+func (sock *SockKernelProgs) InjectKernelSocketFilters(bpfMountPath string, sockeBPFProg string, isContainers bool) error {
 	// check if this running over the older kernel
 
 	log.Println("Received Pod Mutation request Kernel Exfiltration guard eBPf sock programs in kernel")
@@ -46,13 +57,21 @@ func InjectKernelSocketFilters(bpfMountPath string, sockeBPFProg string, isConta
 	return fmt.Errorf("SK_BUFF sock eBPF filters can be only injected once")
 }
 
-func DetachSockOpsProg() error {
-	return nil
-}
+// removes all the sock filters over sock and cgroup attached in kernel
+func (sock *SockKernelProgs) DetachKernelSockProg() error {
+	for _, link := range sock.Links {
+		if link != nil {
+			(*link).Close()
+		}
+	}
 
-// remove the sock filters for the pod called by k8s mutation webhook on pod-delete to ensure proper cleanup
-// filters sock runs in kernel and applies to all the container inside the pod, managed by single network ns in kernel
-func DetachKernelSockFilters() error {
+	// Close all programs
+	for _, prog := range sock.Progs {
+		if prog != nil {
+			prog.Close()
+		}
+	}
 
+	// the root kernel tc filter over egress unpin all the kernel maps to release all the fd over bpf fs
 	return nil
 }

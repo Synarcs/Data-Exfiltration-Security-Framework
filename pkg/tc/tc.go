@@ -713,7 +713,9 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		if tc.TcCollection != nil {
 			if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
 				if tc.TcCollection.Maps[pinMaps].IsPinned() {
-					tc.TcCollection.Maps[pinMaps].Unpin()
+					if err := tc.TcCollection.Maps[pinMaps].Unpin(); err != nil {
+						return err
+					}
 				}
 			}
 		}

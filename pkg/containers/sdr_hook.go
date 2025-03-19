@@ -33,7 +33,8 @@ func podSidecarMutateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return injecteBPfSockFilterResp
 	}
-	if err := sock.InjectKernelSocketFilters(POD_EBPF_PROGRAM_MOUNT_PATH, SOCK_SKB_FILTER,
+	var sockProg sock.SockKernelProgs = sock.SockKernelProgs{}
+	if err := sockProg.InjectKernelSocketFilters(POD_EBPF_PROGRAM_MOUNT_PATH, SOCK_SKB_FILTER,
 		true); err != nil {
 		resp := sendResponse(
 			"Error injecting the eBPF sock filter via the sidecar for the pod networking err :" + err.Error(),
