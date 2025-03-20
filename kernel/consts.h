@@ -5,15 +5,6 @@
 #include <linux/in6.h>
 #include <stdbool.h>
 
-
-#ifndef DNS_EGRESS_PORT
-    #define DNS_EGRESS_PORT 53 
-    #define DOT_EGRESS_PORT 853
-    #define DNS_EGRESS_MULTICAST_PORT 5353
-    #define LLMNR_EGRESS_LOCAL_MULTICAST_PORT 5355
-    #define NETBIOS_EGRESS_MULTICAST_PORT 137
-#endif
-
 // kernel actions for tc susbsytem for all traffic control action forward 
 #ifndef tc 
     #define TC_FORWARD TC_ACT_OK

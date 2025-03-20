@@ -24,6 +24,7 @@ const (
 	TC_CONTROL_PROG_BRIDGE_EGRESS  = "bridge_ingress_filter" // CLSACT  QDISC
 
 	TRACEPOINT_PROC_KILL_TRACEPOINT = "handle_mal_c2_proc_exit"
+	SOCK_OPS_PROC_UDP_TRACEPOINT    = "dns_udp_sock_ops"
 	XDP_CONTROL_PROG                = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
@@ -50,7 +51,8 @@ var (
 
 // map pin vfs for bpf to mount pinned maps
 const (
-	PINPATH = "/sys/fs/bpf"
+	PINPATH  = "/sys/fs/bpf"
+	CGROUPFS = "/sys/fs/cgroup"
 )
 
 // kernel skb makr from tc qdisc over netns filter or netfilter chain
@@ -201,7 +203,7 @@ func int8ToStr(arr []int8) string {
 	return string(b)
 }
 
-func getKernelRelease() (string, error) {
+func GetKernelRelease() (string, error) {
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err != nil {
 		return "", err
@@ -210,7 +212,7 @@ func getKernelRelease() (string, error) {
 }
 
 func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
-	release, err := getKernelRelease()
+	release, err := GetKernelRelease()
 	if err != nil {
 		log.Println("Error getting the kernel release version ", err.Error())
 		return false

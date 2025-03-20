@@ -1259,6 +1259,34 @@ __always_inline bool __handle_malicious_egress_dns_port_random(__u16 dest_transp
     return false;
 }
 
+/*
+    Used for older kernel not supporting task comm over kernel tc layer added in 6.10 
+    The cgroup gets mounted and it loads the required sock op program to monitor all udp socket handling only for UDP 
+*/
+static 
+__always_inline struct exfil_sock_udp_conn_map * __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__u16 src_port, struct __sk_buff *skb) {
+
+    struct exfil_sock_udp_conn_map * udp_tran_dns_raw_sock = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_port);
+    if (!udp_tran_dns_raw_sock) 
+        return NULL;
+    
+    return udp_tran_dns_raw_sock;
+}
+
+
+static 
+__always_inline bool __update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(struct sock_proc_conn_info *sock_conf,struct __sk_buff *skb, __u16 transport_src_port, __u16 transport_dest_port) {
+    struct __kernel_proc_struct_info  proc_info = (struct __kernel_proc_struct_info) {
+        .procId = sock_conf->pid,
+        .threadId = sock_conf->threadId,
+    };
+
+    if (!__handle_malicious_egress_dns_port_random(transport_dest_port, transport_src_port, &proc_info)) {
+        return false;
+    }
+
+    return true;
+}
 
 
 // process the skb_clone redirect to user space to perform deep scan over the DNS packet for possible tunnel over this non standard port 
@@ -1323,6 +1351,27 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         }
         goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
     }
+
+    // fetched from kernel sock layer via kernel cgroup root for sock operations 
+    struct sock_proc_conn_info *sock_proc_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__transport_src_port, skb);
+    if (!sock_proc_info) {
+        if (DEBUG)
+            bpf_printk("kernel cannot find the sock ifrom sock layer %d",__transport_src_port);
+        goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
+    }else {
+        if (__update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sock_proc_info, skb, __transport_src_port, __transport_dest_port))
+            return 0;
+        
+        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("kernel cannot clone the packet for the redirect"); 
+                }
+            #endif
+        }
+        return 1;
+    }
+        
     struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
     if (!raw_pack){
         struct exfil_raw_packet_mirror pack;

@@ -117,8 +117,9 @@ func main() {
 	var sockProgs *sock.SockKernelProgs = new(sock.SockKernelProgs)
 	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
 		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
-		if err := sockProgs.InjectKernelSockOps(utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
+		if err := sockProgs.InjectKernelSockOps(ctx, utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
 			log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
+			panic(err.Error())
 		}
 	}
 
@@ -267,7 +268,7 @@ func main() {
 
 		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
 			// clean the kernel sock op for attached filter over init kernel sock prog
-			if err := sockProgs.DetachKernelSockProg(); err != nil {
+			if err := sockProgs.DetachKernelSockProg(ctx); err != nil {
 				log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
 			}
 		}
