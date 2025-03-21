@@ -3,9 +3,11 @@ package stream
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -14,30 +16,34 @@ import (
 )
 
 type StreamConsumer struct {
-	KafkaBrokerConfig                     *StreamBrokerConfig
-	Consumers                             map[string]*kafka.Reader
-	EgresseBPFKernelSockCollection        *ebpf.Collection
-	EgresseBPFKernelSockCollectionProgram *ebpf.Program
-	TopDomainsCache                       *utils.TopDomains
+	KafkaBrokerConfig                   *StreamBrokerConfig
+	Consumers                           map[string]*kafka.Reader
+	EgresseBPFKernelTCCollection        *ebpf.Collection
+	EgresseBPFKernelTCCollectionProgram *ebpf.Program
+	TopDomainsCache                     *utils.TopDomains
+	ConsumerErroChan                    chan error
 }
 
-func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context) error {
+func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context) {
 
 	// all the malicious domains transfering over UDP to be blacklisted in local cache of LRU fo rnude agent
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
+		GroupID: "dataplane-controller-infer" + utils.GenerateUniqueConsumerGroupId(),
 		Topic:   STREAM_THREAT_TOPIC_INFER,
 	})
 
 	// all the malicious domains transfering over TCP to be blacklisted in local cache of LRU fo rnude agent
 	streamReaderTcpRecursorInfer := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
+		GroupID: "dataplane-controller-infer-tcp" + utils.GenerateUniqueConsumerGroupId(),
 		Topic:   STREAM_THREAT_TOPIC_INFER_TCP,
 	})
 
 	// process the topic which are meant for controller to update node agent caches for benign TLD domains
 	streamReaderSldBenignTopic := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: consumer.KafkaBrokerConfig.Brokers,
+		GroupID: "dataplane-controller-infer-sld-benign" + utils.GenerateUniqueConsumerGroupId(),
 		Topic:   STREAM_BENIGN_SLD_TOPIC,
 	})
 
@@ -45,8 +51,7 @@ func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context)
 	consumer.Consumers[STREAM_THREAT_TOPIC_INFER] = streamReader
 	consumer.Consumers[STREAM_THREAT_TOPIC_INFER_TCP] = streamReaderTcpRecursorInfer
 	consumer.Consumers[STREAM_BENIGN_SLD_TOPIC] = streamReaderSldBenignTopic
-
-	return nil
+	consumer.ConsumerErroChan = make(chan error)
 }
 
 // used as a bridge from controller provided l3 dynamic ipv4/ ipv6 addresses used to dynamically reconfigure eBPF maps in kernel to blacklist the l3 remote c2 servers
@@ -54,12 +59,12 @@ func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context)
 // Controller also reprograms the data plane, to ensure any other protocols traffic to such remote ip's is blocked with controller dynamically resolving soch l3 ip addreses to kill any potential future breach attempts to these remote c2 server ip via different protocl
 func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx context.Context, tcCollection *ebpf.Collection, tcProgram *ebpf.Program) {
 	// configure the injected eBPF egress program in kernel over TC
-	consumer.EgresseBPFKernelSockCollection = tcCollection
-	consumer.EgresseBPFKernelSockCollectionProgram = tcProgram
+	consumer.EgresseBPFKernelTCCollection = tcCollection
+	consumer.EgresseBPFKernelTCCollectionProgram = tcProgram
 }
 
 func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
-	configMapIpv4 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER]
+	configMapIpv4 := consumer.EgresseBPFKernelTCCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER]
 	// TODO Add support for ipv6 filter routing in kernel
 	// configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
 
@@ -68,45 +73,46 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 		return
 	}
 
+	// controller will always stream a valid ipv4, ipv6 l3 address to data plane
 	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
-		isIpv4 := net.IP(remoteIpAddressInferedMaliciousController).To4()
-		if isIpv4 == nil {
-			continue
-		}
 		// convert to network order
-		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(isIpv4.String())
-		configMapIpv4.Put(ipv4BigEndianAddress, ipv4BigEndianAddress)
+		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
+		configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateNoExist)
 	}
 }
 
+// TODO: fix the global context handler for proper cancellation and error handling
 func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
-	errorChan := make(chan error)
 	for topic, consumer := range c.Consumers {
-		if topic != STREAM_BENIGN_SLD_TOPIC {
-			go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
+		if topic != STREAM_BENIGN_SLD_TOPIC && topic == STREAM_THREAT_TOPIC_INFER {
+			go func(consumer *kafka.Reader, ctx context.Context) {
 				for {
+					// log.Printf("Consuming thread events from topic %s", topic)
+					// time.Sleep(time.Second)
 					if err := ctx.Err(); err != nil {
-						return ctx.Err()
+						if errors.Is(err, io.EOF) {
+							time.Sleep(time.Second)
+						} else {
+							c.ConsumerErroChan <- err
+							return
+						}
 					}
 					msg, err := consumer.ReadMessage(ctx)
 					if err != nil {
-						if utils.DEBUG {
-							log.Printf("Error reading message for remote kafka broker %+v", err)
-						}
-						return err
+						c.ConsumerErroChan <- err
 					}
 
 					// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
 					var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
 
 					if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
-						log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
-						return err
+						c.ConsumerErroChan <- err
 					}
 
 					if utils.DEBUG {
+						log.Println("Consuming from the stream threat topic ", STREAM_THREAT_TOPIC_INFER)
 						log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
-							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv6, statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
+							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains), statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 					}
 
 					if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
@@ -123,12 +129,12 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					}
 
 					// check for l3 filtering over malicious ipv4, ipv6 c2 tunnel server Ip's
-					if len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains) > 0 {
-						if c.KafkaBrokerConfig.GlobalConfig.EnhancedFeatures.L3Filters.EnabledL3Filtering && (!c.KafkaBrokerConfig.NodeAgentCliConfig.Sdr && !c.KafkaBrokerConfig.NodeAgentCliConfig.Cni) {
+					if utils.DEBUG {
+						if len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains) > 0 {
 							// inject l3 address for remote c2 address to block packets for both egress and ingress TC, only inject if not running orchestrated workloads and for purely bare-metal environments
 							for _, nodeAddress := range statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains {
-								if net.ParseIP(nodeAddress).To4() == nil {
-
+								if net.ParseIP(nodeAddress).To4() != nil {
+									log.Println("Received a dynamic controller aware blacklist ipv4 l3 address to be injected for filtering from skb in tc egress and ingress", net.ParseIP(nodeAddress).To4().String())
 								} else {
 									if net.ParseIP(nodeAddress).To16() == nil {
 										log.Println("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
@@ -138,13 +144,14 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 						}
 					}
 
-					if consumer.Config().Topic == STREAM_THREAT_TOPIC_INFER_TCP {
+					// dynamically blacklist l3 in kernel egress tc
+					if topic == STREAM_THREAT_TOPIC_INFER_TCP || topic == STREAM_THREAT_TOPIC_INFER {
 						c.AddL3FilterForTrafficOverKernelTC(ctx, &statefulAnalyzedStreeamEvent)
 					}
 				}
-			}(consumer, errorChan, ctx)
+			}(consumer, ctx)
 		} else {
-			go func(consumer *kafka.Reader, errorChan chan error, ctx context.Context) error {
+			go func(consumer *kafka.Reader, ctx context.Context) error {
 				// for all the benign domains
 				for {
 					if err := ctx.Err(); err != nil {
@@ -152,32 +159,25 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					}
 					msg, err := consumer.ReadMessage(ctx)
 					if err != nil {
-						if utils.DEBUG {
-							log.Printf("Error reading message for remote kafka broker %+v", err)
-						}
-						return err
+						c.ConsumerErroChan <- err
 					}
 					var sldEvent events.RemoteSLDNodeCacheUpdate
 					if err := json.Unmarshal(msg.Value, &sldEvent); err != nil {
-						log.Printf("Erroring unmarshall the remote stream analyzed event %+v", err)
-						return err
+						c.ConsumerErroChan <- err
 					}
 
 					c.TopDomainsCache.UpdateDomainDomainTLDCache(sldEvent.SLD)
 					utils.IngDeleteDomainBlackListInCache(sldEvent.SLD)
 					utils.DeleteAllBlacklistforSLDInEgressCache(sldEvent.SLD)
 				}
-			}(consumer, errorChan, ctx)
+			}(consumer, ctx)
 		}
 	}
 
 	for {
 		select {
-		case err, ok := <-errorChan:
-			if !ok {
-				return nil
-			}
-			return fmt.Errorf("%s", err.Error())
+		case err := <-c.ConsumerErroChan:
+			return err
 		}
 	}
 }
@@ -187,7 +187,9 @@ func (c *StreamConsumer) CloseConsumer() error {
 		if consumer == nil {
 			continue
 		}
-		consumer.Close()
+		if err := consumer.Close(); err != nil {
+			log.Println("Error closing consumer ", err.Error())
+		}
 	}
 	return nil
 }

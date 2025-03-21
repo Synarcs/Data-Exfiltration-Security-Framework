@@ -24,13 +24,13 @@ type IngressSniffHandler struct {
 	DnsFeatures  *model.DNSFeatures
 	StreamClient *stream.StreamProducer
 
-	GlobalErrorKernelHandlerChannel chan bool // handles all control channel created by main to kill any kernel code if found runtime panics
+	GlobalErrorKernelHandlerChannel chan error // handles all control channel created by main to kill any kernel code if found runtime panics
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
 func GenerateIngressSnifferFactory(iface *netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan bool) *IngressSniffHandler {
+	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan error) *IngressSniffHandler {
 
 	// only use  for ingress support for the link (net_device) in kernel
 	// Ingress sniff and process neither need AF_XDP not AF_PACKET

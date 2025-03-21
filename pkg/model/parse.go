@@ -1,11 +1,13 @@
 package model
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"math/rand"
 	"net"
 	"net/netip"
+	"os/exec"
 	"strconv"
 	"sync"
 	"syscall"
@@ -47,26 +49,18 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	if ct, fd := maliciousExfilProcessCount[procId]; !fd {
 		maliciousExfilProcessCount[procId] = 1
 	} else {
-		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
-			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", procId)
+		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
+			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
+			cmd := exec.Command("kill", "-9", strconv.Itoa(int(procId)))
+			var sigKillStdoutBuffer bytes.Buffer
+			cmd.Stderr = &sigKillStdoutBuffer
+			if err := cmd.Run(); err != nil {
+				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, sigKillStdoutBuffer)
+			}
 			delete(maliciousExfilProcessCount, procId)
-		} else {
-			maliciousExfilProcessCount[procId]++
-		}
-	}
-}
-
-func LogMaliciousProcCountLocalCache() {
-	if utils.DEBUG {
-		maliciousProcCountguard.RLock()
-		defer maliciousProcCountguard.RUnlock()
-		if len(maliciousExfilProcessCount) == 0 {
 			return
 		}
-
-		for procId, count := range maliciousExfilProcessCount {
-			log.Println("The process trying to exfiltrate data detected with count ", procId, count)
-		}
+		maliciousExfilProcessCount[procId]++
 	}
 }
 
@@ -202,6 +196,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
 				log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
 				// used as a metric to interact with kernel syscall layer if supported the implant will be terminated at the endpoing if it exceeds the threshold limit for malicious
+				log.Println("Existing found a  th emalicious transfer for process over stanndard DNS port ", processInfo)
 				go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
 			}
 			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer

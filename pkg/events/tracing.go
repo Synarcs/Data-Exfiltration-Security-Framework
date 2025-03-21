@@ -459,6 +459,8 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 	// the kernel tc filter layer provides this to user space via task comm shared with user space via maps or ring buffers
 	if procInfo != nil {
 		labels["ProcessId"] = strconv.Itoa(int(procInfo.ProcessId))
+	} else {
+		labels["ProcessId"] = "Nan"
 	}
 
 	switch protocol {

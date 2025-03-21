@@ -22,6 +22,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -30,8 +31,29 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func initGlobalErrorControlChannel() chan bool {
-	return make(chan bool)
+type KernelCleanHooks struct {
+	tc        *tcl.TCHandler
+	nft       *bridgetc.BridgeTCFilters
+	kprobe    *kprobe.NetKProbes
+	sockProgs *sock.SockKernelProgs
+	iface     *netinet.NetIface
+	cliSock   *cli.NodeDaemonCli
+}
+
+func initGlobalErrorControlChannel() chan error {
+	return make(chan error)
+}
+
+// return a channel map for other events hook the node agent must inject post successfull injection of the required prog of interest
+func initKernelProgInjectComptionEvent() map[string]chan bool {
+	return map[string]chan bool{
+		progs.TC_PROG:        make(chan bool),
+		progs.NETFILTER_PROG: make(chan bool),
+		progs.SOCK_PROG:      make(chan bool),
+		progs.KPROBE:         make(chan bool),
+		progs.TRACEPOINT:     make(chan bool),
+		progs.XDP:            make(chan bool),
+	}
 }
 
 func ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
@@ -53,6 +75,42 @@ func ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
 	}
 
 	return config, nil
+}
+
+func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, cleanHooks *KernelCleanHooks) error {
+	if err := cleanHooks.tc.DetachHandler(&ctx); err != nil {
+		return err
+	} // kernel TC layer
+
+	if err := cleanHooks.nft.DetachKernelBridgeTCFilters(&ctx); err != nil {
+		return err
+	} // kernel Netfilter layer
+
+	cleanHooks.tc.IsLinkPppLinkAttached(&ctx)
+
+	if err := cleanHooks.kprobe.DetachKprobeHandlers(); err != nil {
+		return err
+	}
+
+	for _, openConnSocks := range cleanHooks.iface.ConnTrackNsHandles {
+		if err := openConnSocks.CloseConntrackNetlinkSock(); err != nil {
+			return err
+		}
+	}
+
+	if config.CliFlag {
+		log.Println("Cleaning the mounted unix socket")
+		cleanHooks.cliSock.CloseChan <- true
+	}
+
+	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		// clean the kernel sock op for attached filter over init kernel sock prog
+		if err := cleanHooks.sockProgs.DetachKernelSockProg(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
@@ -81,6 +139,8 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
+	ctx, agentCancelFunc := context.WithCancel(ctx)
+	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}
@@ -178,9 +238,7 @@ func main() {
 		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 	}
 
-	if err := streamConsumer.GenerateStreamKafkaConsumer(ctx); err != nil {
-		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
-	}
+	streamConsumer.GenerateStreamKafkaConsumer(ctx)
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
@@ -211,37 +269,44 @@ func main() {
 	kprobe := kprobe.GenerateKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface)
+	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
-	netfilter := bridgetc.BridgeTCFilters{
+	netfilter := &bridgetc.BridgeTCFilters{
 		Interfaces: &iface,
 		Hash:       hash,
 	}
 	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
 
 	// process pre default boot interfaces of type tunnels loaded pre in kernel
-	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, &tc, &iface)
+	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, tc, &iface)
 
 	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
-	go kprobe.ProcessTunnelEvent(ctx, &iface, tunnelSocketEventHandler, &tc)
+	go kprobe.ProcessTunnelEvent(ctx, &iface, tunnelSocketEventHandler, tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(globalConfig)
 
-	go func(tc tcl.TCHandler) {
+	detachKernelHooksOpts := &KernelCleanHooks{
+		tc:        tc,
+		nft:       netfilter,
+		kprobe:    kprobe,
+		sockProgs: sockProgs,
+		iface:     &iface,
+		cliSock:   cliSock,
+	}
+
+	go func(tc *tcl.TCHandler) {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
 		log.Println("Loading the consumer for consuming thrat events update from control plane")
-		streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog)
-		streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx)
-	}(tc)
-
-	if utils.DEBUG {
-		for _, val := range iface.Links {
-			fmt.Println(val.Attrs().Index, val.Attrs().Name)
+		for range globalEBPFProgInjectChan[progs.TC_PROG] {
+			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog)
+			if err := streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx); err != nil {
+				streamConsumer.CloseConsumer()
+			}
 		}
-	}
+	}(tc)
 
 	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
 
@@ -250,52 +315,10 @@ func main() {
 		term <- sig
 	}(term, tst)
 
-	kernelHooksCleanUp := func() {
-		tc.DetachHandler(&ctx)
-		netfilter.DetachKernelBridgeTCFilters(&ctx) // will be loaded and found at runtime since the node agent owns this netface within kernel
-		tc.IsLinkPppLinkAttached(&ctx)
-
-		kprobe.DetachSockHandler()
-
-		for _, openConnSocks := range iface.ConnTrackNsHandles {
-			openConnSocks.CloseConntrackNetlinkSock()
-		}
-
-		if nodeAgentCliOptions.CliFlag {
-			log.Println("Cleaning the mounted unix socket")
-			cliSock.CloseChan <- true
-		}
-
-		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-			// clean the kernel sock op for attached filter over init kernel sock prog
-			if err := sockProgs.DetachKernelSockProg(ctx); err != nil {
-				log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
-			}
-		}
-	}
-
-	// handle process log to log for now the processes which are detected malicious to send sigkill and kill them from kernel exec hooks
-	go func() {
-		cleanTicker := time.NewTicker(utils.EXFIL_PROCESS_CACHE_CLEAN_INTERVAL)
-		for {
-			select {
-			case <-cleanTicker.C:
-				onnx.LogMaliciousProcCountLocalCache()
-			default:
-				time.Sleep(time.Second)
-			}
-		}
-	}()
-
 	// global error channel for the kernel hooks
 	go func() {
-		for {
-			select {
-			case <-globalErrorKernelHandlerChannel:
-				kernelHooksCleanUp()
-			default:
-				time.Sleep(time.Second)
-			}
+		for range globalErrorKernelHandlerChannel {
+			kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
 		}
 	}()
 
@@ -315,8 +338,8 @@ func main() {
 				} else {
 					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
 				}
-				kernelHooksCleanUp()
-				os.Exit(1)
+				kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
+				os.Exit(int(syscall.SIGTERM))
 			}
 		}
 		for {
@@ -336,10 +359,11 @@ func main() {
 			log.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
-		kernelHooksCleanUp()
+		kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
+		agentCancelFunc()
 		streamProducer.CloseProducer()
 		streamConsumer.CloseConsumer()
-		os.Exit(int(syscall.SIGKILL)) // a graceful shutdown evict all the kernel hooks
+		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
 	}
 
 }

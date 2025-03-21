@@ -1,6 +1,7 @@
 package com.synarcs.controller.service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -29,6 +30,7 @@ public class MaliciousNsResolve {
     // used by control plane to add infer messgae in topic to instruct all nodes in data plane to blacklist them in cache and rehydrate cache, preventing reuse of unix socket for inference over ONNX  on node
     private final String internalRecursorerResolver = "10.158.82.55"; // use this since for test environment the server lookup for DNS over internal AUTH server 
     
+    private static final String internalMaliciousC2Server = "10.158.82.53";
     private Config controllerConfig;
 
     @Autowired
@@ -42,6 +44,11 @@ public class MaliciousNsResolve {
     */
     public List<String> getAddresses(String domain) {
         List<String> address = new ArrayList<>();
+
+        if (controllerConfig.getController().isLocalTestBench()) {
+            // return single ip used for malicious exfil test 
+            return Arrays.asList(internalMaliciousC2Server);
+        }
 
         try {
             Resolver r = new SimpleResolver(internalRecursorerResolver);

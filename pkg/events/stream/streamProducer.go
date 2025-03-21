@@ -52,6 +52,7 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 
 		if err != nil {
 			erroChan <- err
+			return err
 		}
 		prod.conn = connLeader
 
@@ -90,7 +91,6 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 			time.Sleep(time.Second)
 		}
 	}
-
 }
 
 func (prod *StreamProducer) StreamThreadEvent(event []byte) error {
@@ -146,7 +146,7 @@ func (prod *StreamProducer) CloseProducer() error {
 	}
 
 	if prod.Writer == nil {
-		return fmt.Errorf("kafka writer not initialized")
+		return nil
 	}
 
 	if err := prod.conn.Close(); err != nil {

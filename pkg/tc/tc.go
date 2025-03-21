@@ -15,6 +15,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
@@ -35,7 +36,7 @@ type TCHandler struct {
 	OnnxLoadedModel *model.OnnxModel
 
 	TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
-	GlobalErrorKernelHandlerChannel chan bool      // handles all control channel created by main to kill any kernel code if found runtime panics
+	GlobalErrorKernelHandlerChannel chan error     // handles all control channel created by main to kill any kernel code if found runtime panics
 
 	IsEgressXdpSupport   bool
 	TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
@@ -96,10 +97,10 @@ func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan bool, agentHash *rand.Hash) TCHandler {
+	globalErrorKernelHandlerChannel chan error, agentHash *rand.Hash) *TCHandler {
 	dnsPacketGen := GenerateDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
-	handler := TCHandler{
+	handler := &TCHandler{
 		Interfaces:                      &iface,
 		DnsPacketGen:                    dnsPacketGen,
 		OnnxLoadedModel:                 onnxModel,
@@ -242,7 +243,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 	}
 }
 
-func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface) {
+func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan bool) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
 	if errors.Is(ctx.Err(), context.Canceled) {
 		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
@@ -288,12 +289,13 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	if len(iface.BridgeLinks) != 2 {
 		log.Fatalf("The Node agen cannot be botted unless all the DPI linux veth bridges are added using netlink before exiting ....")
 		// TODO: Add a process global error channel for detach if any of the tc panic
-		tc.GlobalErrorKernelHandlerChannel <- true
+		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("The required bridge used for deep security scans not created, please make sure proper veth bridges exist and required linux ns")
 		return
 	}
 
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 
+	injectChan[progs.TC_PROG] <- true
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 
@@ -510,9 +512,9 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 	isIpv6 := !isIpv4
 
-	processVeifyKernelDnsTS := func(dns_packet_id uint16, ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap) error {
+	processVeifyKernelDnsTS := func(dns_packet_id uint16, ip_layer3_checksum_kernel_ts *events.DPIRedirectionKernelMap) error {
 
-		err := dnsMapRedirectMap.Lookup(&dns_packet_id, &ip_layer3_checksum_kernel_ts)
+		err := dnsMapRedirectMap.Lookup(&dns_packet_id, ip_layer3_checksum_kernel_ts)
 		if err != nil {
 			log.Println("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
 		} else {
@@ -523,7 +525,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			if isIpv6 {
 				// support for ipv6
 				if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
-					log.Println("Error in Ipv6 header checksum verification ipv6 has no default checksum")
+					return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
 				}
 			}
 
@@ -556,7 +558,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		var dns_packet_id uint16 = uint16(dns.ID)
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		if err := processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts); err != nil {
+		if err := processVeifyKernelDnsTS(dns_packet_id, &ip_layer3_checksum_kernel_ts); err != nil {
 			log.Printf("Error verify the UDP packet time from kernel %+v", err)
 		}
 
@@ -589,7 +591,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		var dns_packet_id uint16 = uint16(dns.ID)
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		if err := processVeifyKernelDnsTS(dns_packet_id, ip_layer3_checksum_kernel_ts); err != nil {
+		if err := processVeifyKernelDnsTS(dns_packet_id, &ip_layer3_checksum_kernel_ts); err != nil {
 			log.Printf("Error processing the dns packet over tcp stream %+v", err)
 		}
 
@@ -630,7 +632,6 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 	defer cap.Close()
 
 	if isStandardPort {
-		// runs over br netfilter layer on iptables
 		log.Println("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer and TCP Layer for the DNS protocol")
 		if err := cap.SetBPFFilter("udp dst port 53 or tcp dst port 53"); err != nil {
 			log.Fatalf("Error setting BPF filter: %v", err)
@@ -684,12 +685,12 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHand
 	return nil
 }
 
-func (tc *TCHandler) DetachTCLinkedTracepointHookHandlers() {
+func (tc *TCHandler) DetachTCLinkedTracepointHookHandlers() error {
 	if tc.TcTracepointHandlers == nil {
-		return
+		return nil
 	}
 
-	tc.TcTracepointHandlers.RemoveTracepoints()
+	return tc.TcTracepointHandlers.RemoveTracepoints()
 }
 
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
@@ -704,10 +705,13 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		})
 		if err != nil {
 			log.Println("No Matching clsact desc found to delete")
+			return err
 		}
 	}
 	if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-		tc.DetachTCLinkedTracepointHookHandlers()
+		if err := tc.DetachTCLinkedTracepointHookHandlers(); err != nil {
+			return err
+		}
 	}
 	for _, pinMaps := range mapsToPinSharedProcKillMap {
 		if tc.TcCollection != nil {

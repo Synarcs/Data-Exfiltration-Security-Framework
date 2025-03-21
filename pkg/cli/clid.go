@@ -39,6 +39,9 @@ func GenerateRemoteCliSocketServer() *NodeDaemonCli {
 }
 
 func configureStreamLimits(w http.ResponseWriter, r *http.Request) {
+	if err := r.Context().Err(); err != nil {
+		return
+	}
 	jsonString, err := json.Marshal(events.MarshallMapStruct())
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
@@ -48,6 +51,9 @@ func configureStreamLimits(w http.ResponseWriter, r *http.Request) {
 }
 
 func blacklistIngressDomains(w http.ResponseWriter, r *http.Request) {
+	if err := r.Context().Err(); err != nil {
+		return
+	}
 	info := struct {
 		Domains []string
 	}{
@@ -68,6 +74,9 @@ func blacklistIngressDomains(w http.ResponseWriter, r *http.Request) {
 }
 
 func blacklistEgressDomains(w http.ResponseWriter, r *http.Request) {
+	if err := r.Context().Err(); err != nil {
+		return
+	}
 	info := struct {
 		Domains []string
 	}{
@@ -88,6 +97,9 @@ func blacklistEgressDomains(w http.ResponseWriter, r *http.Request) {
 }
 
 func UnblockDomain(w http.ResponseWriter, r *http.Request) {
+	if err := r.Context().Err(); err != nil {
+		return
+	}
 	sld := r.URL.Query().Get("domain")
 
 	log.Println("The domain to be unblocked is .....", sld)

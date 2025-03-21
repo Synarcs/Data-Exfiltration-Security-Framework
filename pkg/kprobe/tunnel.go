@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -176,16 +175,15 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	}
 }
 
-func (k *NetKProbes) DetachSockHandler() error {
+func (k *NetKProbes) DetachKprobeHandlers() error {
 	if k.NetlinkSocket == nil {
 		log.Println("Cannot call raw detach before the required kprobe is first attached in kernel")
-		return fmt.Errorf("Delete of Kprobe from a non attached Kprobe Object over Tunner / io Driver")
+		return nil
 	}
 
 	if err := k.KprobelLink.Close(); err != nil {
 		log.Printf("Error detaching the Kprobe for Kernel hooks over netfilter %+v", err)
 		return err
-
 	}
 	return nil
 }

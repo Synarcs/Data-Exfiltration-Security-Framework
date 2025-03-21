@@ -37,7 +37,7 @@ verifyPingLookup() {
 
 while ff= read -r line; do
 	if [[ "$line" =~ ^#.* ||  "${#line}" -eq 0 ]]; then
-		continue
+    continue
 	else
 		server=$( echo "$line" | cut -d " " -f 2)
 		echo "runnin stress over eBPF Node agent agsinst DNS servers .." "${server:0:${#server}}"

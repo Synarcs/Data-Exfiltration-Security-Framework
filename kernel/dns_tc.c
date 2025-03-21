@@ -299,7 +299,7 @@ struct dns_volume_stats {
     struct exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter {
         __uint(type, BPF_MAP_TYPE_LRU_HASH);
         __type(key, __u32);
-        __type(value, __u32);
+        __type(value, __be32);
         __uint(max_entries, 1 << 10);
     } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
@@ -361,7 +361,7 @@ struct dns_volume_stats {
         do {                                                                            \
             if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
                 if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
-                    if (DEBUG) {                                                        \
+                    if (!DEBUG) {                                                        \
                         bpf_printk("dropping traffic for malicious c2 ipv4 remote c2"); \
                     }                                                                   \
                     return TC_DROP;                                                     \
@@ -636,7 +636,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                                 goto parsed_label_queryHandler;
                             }
                             __u8 *ptr = (__u8 *)(dns_label_offset_char + k);
-                            if (ptr + 1 > skb->data_end) 
+                            if ((void *)(ptr + 1) > skb->data_end) 
                                 goto parsed_label_queryHandler;
                         
                             char char_buffer_value = (char) ( __u8) *ptr;
@@ -841,7 +841,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
         if (add_count > 1) return SUSPICIOUS;
 
         // for EDNS servers the request can sedn auth OPT records allow to pass through the kernel 
-        int oc = 0;
         __u32 label_key_subdomain_per_label_min = 2;  __u32 label_key_subdomain_per_label_max = 3;
         __u32 label_key_label_count_min = 4; __u32 label_key_label_count_max = 5;
         
@@ -1033,8 +1032,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
                 struct dns_header *dns_header, struct udphdr *udp) {
     // check whether a non standard port is used for dns query and dns payload 
     
-    struct dns_flags flags = get_dns_flags(dns_header);
-    
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
     __u16 ans_count = bpf_ntohs(dns_header->ans_count);
@@ -1081,8 +1078,6 @@ static
 __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *skb, struct __sk_buff *raw_skb, void * dns_payload, 
                 struct dns_header_tcp *dns_header) {
                     
-
-    struct dns_flags flags = get_dns_flags_tcp(dns_header);
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
     __u16 ans_count = bpf_ntohs(dns_header->ans_count);
@@ -1174,7 +1169,6 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     // change the ipv4 layer 3 for redirect of the entire tcp packet over the other ns bridge 
     __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
 
-
     if (IP_DST_OFF > skb->len) {
         return -1;  // Check if offset is within bounds
     }
@@ -1264,9 +1258,9 @@ __always_inline bool __handle_malicious_egress_dns_port_random(__u16 dest_transp
     The cgroup gets mounted and it loads the required sock op program to monitor all udp socket handling only for UDP 
 */
 static 
-__always_inline struct exfil_sock_udp_conn_map * __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__u16 src_port, struct __sk_buff *skb) {
+__always_inline struct sock_proc_conn_info * __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__u16 src_port) {
 
-    struct exfil_sock_udp_conn_map * udp_tran_dns_raw_sock = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_port);
+    struct sock_proc_conn_info * udp_tran_dns_raw_sock = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_port);
     if (!udp_tran_dns_raw_sock) 
         return NULL;
     
@@ -1353,7 +1347,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
 
     // fetched from kernel sock layer via kernel cgroup root for sock operations 
-    struct sock_proc_conn_info *sock_proc_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__transport_src_port, skb);
+    struct sock_proc_conn_info *sock_proc_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__transport_src_port);
     if (!sock_proc_info) {
         if (DEBUG)
             bpf_printk("kernel cannot find the sock ifrom sock layer %d",__transport_src_port);
@@ -1686,46 +1680,48 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
 
 // performs high volume throughput based on rate limiting using the skb_buff size in payloads present in l7 for DNS 
 // usses fixed window counter algorithm 
-static 
-__always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u32 dns_payload_size){
-    
-    __u16 key = 0;
-    __u64 ts = bpf_ktime_get_ns();
+#ifdef DNS_RATE_LIMIT_VOLUME 
+    static 
+    __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buff *skb, __u32 dns_payload_size){
+        
+        __u16 key = 0;
+        __u64 ts = bpf_ktime_get_ns();
 
 
-    struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_volume_rate_limit_map, &key);
-    if (!dns_volume_stats) {
-        struct dns_volume_stats stats = {
-            .packet_size = (__u64) dns_payload_size,
-            .last_timestamp = ts
-        };
-        bpf_map_update_elem(&exfil_security_egress_volume_rate_limit_map, &key, &stats, BPF_ANY);
+        struct dns_volume_stats *dns_volume_stats = bpf_map_lookup_elem(&exfil_security_egress_volume_rate_limit_map, &key);
+        if (!dns_volume_stats) {
+            struct dns_volume_stats stats = {
+                .packet_size = (__u64) dns_payload_size,
+                .last_timestamp = ts
+            };
+            bpf_map_update_elem(&exfil_security_egress_volume_rate_limit_map, &key, &stats, BPF_ANY);
+            return 1;
+        }
+
+        if (ts - dns_volume_stats->last_timestamp > TIMEWINDOW) {
+            dns_volume_stats->last_timestamp = ts;
+            dns_volume_stats->packet_size = (__u64) dns_payload_size;
+        }else {
+            dns_volume_stats->packet_size += dns_payload_size;
+            #ifdef DEBUG
+                if (DEBUG) {
+                    bpf_printk("rate limiting current packet threshold is %u",  dns_volume_stats->packet_size);
+                }
+            #endif
+        }
+
+        if (ts - dns_volume_stats->last_timestamp <= TIMEWINDOW && dns_volume_stats->packet_size > MAX_VOLUME_THRESHOLD){
+            #ifdef DEBUG
+                if (!DEBUG) {
+                    bpf_printk("kernel started rate limiting the packets for egress");
+                }
+            #endif
+            return 0;
+        }else 
+            dns_volume_stats->last_timestamp = ts;
         return 1;
     }
-
-    if (ts - dns_volume_stats->last_timestamp > TIMEWINDOW) {
-        dns_volume_stats->last_timestamp = ts;
-        dns_volume_stats->packet_size = (__u64) dns_payload_size;
-    }else {
-        dns_volume_stats->packet_size += dns_payload_size;
-        #ifdef DEBUG
-            if (DEBUG) {
-                bpf_printk("rate limiting current packet threshold is %u",  dns_volume_stats->packet_size);
-            }
-        #endif
-    }
-
-    if (ts - dns_volume_stats->last_timestamp <= TIMEWINDOW && dns_volume_stats->packet_size > MAX_VOLUME_THRESHOLD){
-        #ifdef DEBUG
-            if (!DEBUG) {
-                bpf_printk("kernel started rate limiting the packets for egress");
-            }
-        #endif
-        return 0;
-    }else 
-        dns_volume_stats->last_timestamp = ts;
-    return 1;
-}
+#endif
 
 // TODO: Add the kernel Token bucket algorithm for rate limiting, for mass throughput time based exfiltration over standard DNS port only or any LLMNR, MDNS  based resolution.
 #ifdef DNS_RATE_LIMIT_TOCKEN_BUCKET 
@@ -1737,37 +1733,46 @@ __always_inline __u8 __dns_rate_limit(struct skb_cursor *cursor, struct __sk_buf
 
 
 static 
-__always_inline struct checkSum_redirect_struct_value * __update_kernel_task_struct_checksum_maps(struct checkSum_redirect_struct_value *checksum_map)  {
-
-    struct __kernel_proc_struct_info * proc_info  = __get_process_info();
-    checksum_map->procId = proc_info->procId;
-    checksum_map->threadId = proc_info->threadId;
-
-    return checksum_map;
-}
-
-
-static 
-__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id){
+__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id, __u16 sport){
     __u16 ip_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
     __u64 ip_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
         .checksum =  ip_checksum, 
         .kernel_timets = ip_kernel_time, 
     };
-    __update_kernel_task_struct_checksum_maps(&layer3_checksum_ipv6);
+    // update the task comm 
+
+    if (verify_kernel_version_support_task_comm()) {
+        struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+        layer3_checksum_ipv6.procId = proc_info->procId;
+        layer3_checksum_ipv6.threadId = proc_info->threadId;
+    }else {
+        struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
+        layer3_checksum_ipv6.procId = sock_proc_conn_info->pid;
+        layer3_checksum_ipv6.threadId = sock_proc_conn_info->threadId;
+    }
+
+ 
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }
 
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum){
+__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum, __u16 sport){
     __u64 ipv4_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv4 = { 
         .checksum =  ipv4_checksum, 
         .kernel_timets = ipv4_kernel_time,
     };
-    __update_kernel_task_struct_checksum_maps(&layer3_checksum_ipv4);
+    if (verify_kernel_version_support_task_comm()) {
+        struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+        layer3_checksum_ipv4.procId = proc_info->procId;
+        layer3_checksum_ipv4.threadId = proc_info->threadId;
+    }else {
+        struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
+        layer3_checksum_ipv4.procId = sock_proc_conn_info->pid;
+        layer3_checksum_ipv4.threadId = sock_proc_conn_info->threadId;
+    }
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv4, BPF_ANY);   
 }
 
@@ -1849,8 +1854,8 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 static 
 __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
-    __u32 dst_addr = bpf_ntohs(ip->daddr);
-    __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, (void *) &dst_addr);
+    __be32 dst_addr = ip->daddr; // user space inject l3 drop in kernel to be always in network byte order
+    __be32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
     if (isDynamicBlacklisted) {
         return true;
     }
@@ -1946,7 +1951,6 @@ int classify(struct __sk_buff *skb){
         hproto = eth->h_proto;
     }
 
-    bool isEncapL2 = skb->vlan_present == 1 ? true : false;
     // Parse IPv4 or IPv6 based on Ethernet protocol type
     if (hproto == bpf_htons(ETH_P_IP)) {
         if (actions.parse_ipv4(&cursor) == 0) return TC_DROP;
@@ -1967,9 +1971,8 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
-            #ifdef L3_UDP_IP_FILTER 
-                if (L3_UDP_IP_FILTER) 
-                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
             #endif
             
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
@@ -2064,9 +2067,10 @@ int classify(struct __sk_buff *skb){
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
                 __u16 ip_checksum = bpf_ntohs(ip->check);
+                __u16 sport = bpf_ntohs(udp->source);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum) < 0) { // kernel parsed dns query id within kernel 
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport) < 0) { // kernel parsed dns query id within kernel 
                         #ifdef DEBUG 
                             if (DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
@@ -2132,9 +2136,8 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
-            #ifdef L3_TCP_IP_FILTER
-                if (L3_TCP_IP_FILTER)
-                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
             #endif
             
             if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)
@@ -2221,9 +2224,11 @@ int classify(struct __sk_buff *skb){
 
                 __u32 transaction_id = bpf_ntohs(dns->transaction_id);
                 __u16 ip_checksum = bpf_ntohs(ip->check);
+                __u16 sport = bpf_ntohs(tcp->source);
+
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport) < 0) {
                         #ifdef DEBUG 
                             if (!DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
@@ -2323,9 +2328,8 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
-            #ifdef L3_UDP_IP_FILTER 
-                if (L3_UDP_IP_FILTER)
-                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+            #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
@@ -2399,10 +2403,11 @@ int classify(struct __sk_buff *skb){
                     bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+                __u16 sport = bpf_ntohs(udp->source);
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
                         #ifdef DEBUG 
                             if (!DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
@@ -2447,9 +2452,8 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
             
-            #ifdef L3_TCP_IP_FILTER
-                if (L3_TCP_IP_FILTER)
-                    EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+            #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
             if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)
@@ -2503,11 +2507,12 @@ int classify(struct __sk_buff *skb){
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
                 
-                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+                __u16 transaction_id = bpf_ntohs(dns->transaction_id);
+                __u16 sport = bpf_ntohs(tcp->source);
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
                         #ifdef DEBUG 
                             if (!DEBUG) {
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \

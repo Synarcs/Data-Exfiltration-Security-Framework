@@ -58,22 +58,28 @@ func (exf *ExfilSecTreacePoint) AttachTracePointHandlers(ctx context.Context, if
 	exf.TracePointLink = append(exf.TracePointLink, &tp)
 }
 
-func (exf *ExfilSecTreacePoint) RemoveTracepoints() {
+func (exf *ExfilSecTreacePoint) RemoveTracepoints() error {
 	// clean tracepoint attached to kernel raw tracepoints
 	for _, link := range exf.TracePointLink {
 		if link != nil {
-			(*link).Close()
+			if err := (*link).Close(); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Close all programs
 	for _, prog := range exf.SecurityKernelTracePoints {
 		if prog != nil {
-			prog.Close()
+			if err := prog.Close(); err != nil {
+				return err
+			}
 		}
 	}
 
 	exf.TracePointLink = nil
 	exf.SecurityKernelTracePoints = nil
 	exf.SecurityKernelMaps = nil
+
+	return nil
 }

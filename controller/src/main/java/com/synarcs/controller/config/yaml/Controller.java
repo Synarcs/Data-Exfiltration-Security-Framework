@@ -11,4 +11,5 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Controller {
     private int port;
+    private boolean localTestBench;
 }

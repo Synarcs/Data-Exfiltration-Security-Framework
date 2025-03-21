@@ -146,6 +146,7 @@ func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) er
 		})
 		if err != nil {
 			log.Println("No Matching clsact desc found to delete")
+			return err
 		}
 	}
 	return nil

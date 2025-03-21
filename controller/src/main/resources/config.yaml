@@ -3,6 +3,7 @@
 controller:
   # use this to further expose the stream controller api endpoints for dynamic threat inferencing 
   port: 8080
+  localTestBench: true # a local test set up for infrastructure with custom local zones use fixed static ipv4 addresses only 
 
 k8s:
   enabled: false

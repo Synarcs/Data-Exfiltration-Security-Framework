@@ -62,8 +62,6 @@ struct exfil_security_egress_dns_limites {
 #define L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true 
 #define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true
 
-#define L3_TCP_IP_FILTER true 
-#define L3_UDP_IP_FILTER false 
 
 // rate limit config
 #define DNS_RATE_LIMIT_VOLUME true

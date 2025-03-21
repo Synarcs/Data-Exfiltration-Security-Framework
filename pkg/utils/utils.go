@@ -2,7 +2,9 @@ package utils
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -73,8 +75,10 @@ const (
 )
 
 const (
-	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL                              = time.Second * 10 // use to prune the map which ensure the required
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD                             = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL              = time.Second * 10 // use to prune the map which ensure the required
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD             = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT = 6                // higher threshold compared to tunnelle c2 for random DNS tunnel which must be lower to stop breach asap
+
 	EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD = 5
 )
 
@@ -209,6 +213,15 @@ func GetKernelRelease() (string, error) {
 		return "", err
 	}
 	return int8ToStr(uname.Release[:]), nil
+}
+
+func GenerateUniqueConsumerGroupId() string {
+	var rd []byte = make([]byte, 6)
+	if _, err := rand.Read(rd); err != nil {
+		log.Println("Error generating the unique consumer group id ", err.Error())
+		return ""
+	}
+	return hex.EncodeToString(rd)
 }
 
 func VerifyKernelEgressTCClsactTaskCommSuppert() bool {

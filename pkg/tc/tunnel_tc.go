@@ -31,7 +31,7 @@ import (
 
 type TCCloneTunnel struct {
 	IfaceHandler             *netinet.NetIface
-	GlobalKernelErrorChannel chan bool
+	GlobalKernelErrorChannel chan error
 	PhysicalTcInterface      *TCHandler
 	StreamClient             *stream.StreamProducer
 	Onnx                     *model.OnnxModel
@@ -40,7 +40,11 @@ type TCCloneTunnel struct {
 	IngressTunnelSniffer          *xdp.IngressSniffHandler
 }
 
-func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan bool,
+func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
+	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
+}
+
+func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan error,
 	streamClient *stream.StreamProducer, onnx *model.OnnxModel) *TCCloneTunnel {
 
 	// sniff for random port traffic when detected to be malicious until other wise suspended and terminated
@@ -54,7 +58,7 @@ func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalError
 		TaskCommTCEgressKernelSupport: utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
 	}
 
-	if utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD {
+	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
 		tccloneTunnel.IngressTunnelSniffer = xdp.GenerateIngressSnifferFactory(
 			iface, onnx, streamClient, globalErrorChannel,
 		)
@@ -132,7 +136,7 @@ type maliciousExfilPortIngressSniffCtx struct {
 }
 
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
-var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx // sniff ctx port --> cancel ctx for cancel sniffing over port
+var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
 func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort, maliciousDestPort uint16) {
@@ -140,13 +144,15 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 	defer maliciousProcCountguard.Unlock()
 
 	// the sniff context uses same mutex for node agent to track detected malicous process and associated port
-	if _, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; !fd {
-		ctx, cancel := GenerateCancellableSniffCtx()
-		maliciousExfilPortIngressSniffCtxMap[maliciousDestPort] = &maliciousExfilPortIngressSniffCtx{
-			ctx:         ctx,
-			cancelSniff: cancel,
+	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
+		if _, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; !fd {
+			ctx, cancel := GenerateCancellableSniffCtx()
+			maliciousExfilPortIngressSniffCtxMap[maliciousDestPort] = &maliciousExfilPortIngressSniffCtx{
+				ctx:         ctx,
+				cancelSniff: cancel,
+			}
+			go tun.IngressTunnelSniffer.SniffIgressForC2C(ctx, maliciousDestPort)
 		}
-		go tun.IngressTunnelSniffer.SniffIgressForC2C(ctx, maliciousDestPort)
 	}
 
 	if ct, fd := maliciousExfilProcessCount[mapField.ProcessId]; !fd {
@@ -169,8 +175,10 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 
 			// stop sniffing PCAP over this port since the node SIGKILL the process
 			// since the process is exfiltrating be parallel proc fd or the port would always be there in map to kill the process unless kernel traps the process to reach threshold configured in userspace
-			if sniffCtx, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; fd {
-				sniffCtx.cancelSniff()
+			if IsTunnelSniffForLargeMaliciousThresholdRequired() {
+				if sniffCtx, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; fd {
+					sniffCtx.cancelSniff()
+				}
 			}
 			return
 		}
@@ -216,14 +224,14 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 
 	if err != nil {
 		log.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_RAW_NETLINK_BRIDGE_DPI)
-		tun.GlobalKernelErrorChannel <- true
+		tun.GlobalKernelErrorChannel <- err
 	}
 
 	defer handler.Close()
 
 	if err := handler.SetBPFFilter("udp or tcp"); err != nil {
 		log.Println("Error while setting the bpf filter")
-		tun.GlobalKernelErrorChannel <- true
+		tun.GlobalKernelErrorChannel <- err
 	}
 
 	packetSource := gopacket.NewPacketSource(handler, handler.LinkType())

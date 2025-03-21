@@ -72,7 +72,6 @@ static
 __always_inline struct __kernel_proc_struct_info * __get_process_info() {
     struct __kernel_proc_struct_info proc_info;
 
-    // TODO: Fix the version and match the kernel patch level  
     if (verify_kernel_version_support_task_comm()) {
         __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
         __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;

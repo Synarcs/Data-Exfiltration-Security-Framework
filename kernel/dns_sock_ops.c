@@ -72,7 +72,7 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
 SEC("cgroup_skb/egress")
 int dns_udp_sock_ops(struct __sk_buff *skb) {
     
-    if (verify_skb_for_egress_dns_sock_ops(skb)) 
+    if (verify_kernel_version_support_task_comm()) 
         return 1;
 
     void *data = (void *)(long)skb->data;
