@@ -144,7 +144,8 @@
         "bpf_core_read.h": "c",
         "types.h": "c",
         "ipc.h": "c",
-        "pinmaps.h": "c"
+        "pinmaps.h": "c",
+        "sockpin.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "disabled"

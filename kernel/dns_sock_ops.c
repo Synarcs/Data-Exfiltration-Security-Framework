@@ -22,25 +22,33 @@
 #include "utils.h"
 #include "dns.h"
 
-
 #define DEBUG false 
+
+static 
+__always_inline struct sock_proc_conn_info  __get_sock_proc_conn_info(__u16 dest_transport_port, struct __kernel_proc_struct_info *proc_info) {
+
+    struct sock_proc_conn_info sock_proc_conn_info = (struct sock_proc_conn_info) {
+        .pid = proc_info->procId,
+        .threadId = proc_info->threadId,
+        .dport = dest_transport_port
+    };
+
+    return sock_proc_conn_info;
+}
+
 
 static 
 __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct udphdr *udp) {
     __u16 src_transfer_port = bpf_ntohs(udp->source);
     __u16 dest_transport_port = bpf_ntohs(udp->dest);
-    
-    struct __kernel_proc_struct_info * proc_info = __get_process_info();
 
+    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+    
     if (dest_transport_port != DNS_EGRESS_PORT && dest_transport_port != DNS_EGRESS_MULTICAST_PORT && dest_transport_port != LLMNR_EGRESS_LOCAL_MULTICAST_PORT) {
             struct sock_proc_conn_info *curr_info = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_transfer_port);
             if (!curr_info) {
                 bpf_printk("the src port for transfer is %d", src_transfer_port);
-                struct sock_proc_conn_info sock_proc_conn_info = (struct sock_proc_conn_info) {
-                    .pid = proc_info->procId,
-                    .threadId = proc_info->threadId,
-                    .dport = dest_transport_port
-                };
+                struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
                 if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_ANY) < 0) {
                     #ifdef DEBUG 
                         if (DEBUG) {
@@ -52,11 +60,7 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
                 bpf_printk("the src port for transfer fd is  %d", src_transfer_port);
 
                 if (curr_info->pid != proc_info || curr_info->dport != dest_transport_port) {
-                    struct sock_proc_conn_info sock_proc_conn_info = (struct sock_proc_conn_info) {
-                        .pid = proc_info->procId,
-                        .threadId = proc_info->threadId,
-                        .dport = dest_transport_port
-                    };
+                    struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
                     if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_ANY) < 0) {
                         #ifdef DEBUG 
                             if (DEBUG) {
@@ -72,6 +76,7 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
 SEC("cgroup_skb/egress")
 int dns_udp_sock_ops(struct __sk_buff *skb) {
     
+    // if the task comm is supported for egress tc layer kernel traffic control will handle the task struct and other packet processing 
     if (verify_kernel_version_support_task_comm()) 
         return 1;
 

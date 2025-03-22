@@ -37,7 +37,7 @@ compile:
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
-	make clean-bpf 
+	make clean-bpf-build
 
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
@@ -72,7 +72,7 @@ compile-x86:
 	cp $(tc_kernel_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
 	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
-	make clean-bpf 
+	make clean-bpf-build
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc
@@ -187,6 +187,6 @@ sock:
 	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
 	cp $(sock_sdr_out) ../node_agent/ebpf/
 
-.PHONY: clean-bpf 
-clean-bpf: 
+.PHONY: clean-bpf-build
+clean-bpf-build: 
 	rm -rf *.o 

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream/actions"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/segmentio/kafka-go"
@@ -22,9 +24,18 @@ type StreamConsumer struct {
 	EgresseBPFKernelTCCollectionProgram *ebpf.Program
 	TopDomainsCache                     *utils.TopDomains
 	ConsumerErroChan                    chan error
+	EventAckKernelFilter                *actions.EventAckKernelFilter
 }
 
-func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context) {
+func (consumer *StreamConsumer) NewStreamAckEvents(iface *netinet.NetIface) {
+	consumer.EventAckKernelFilter = &actions.EventAckKernelFilter{
+		EgresseBPFKernelTCCollection:        consumer.EgresseBPFKernelTCCollection,
+		EgresseBPFKernelTCCollectionProgram: consumer.EgresseBPFKernelTCCollectionProgram,
+		NetIface:                            iface,
+	}
+}
+
+func (consumer *StreamConsumer) NewStreamKafkaConsumer(ctx context.Context) {
 
 	// all the malicious domains transfering over UDP to be blacklisted in local cache of LRU fo rnude agent
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
@@ -57,10 +68,11 @@ func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context)
 // used as a bridge from controller provided l3 dynamic ipv4/ ipv6 addresses used to dynamically reconfigure eBPF maps in kernel to blacklist the l3 remote c2 servers
 // Note the DGA domain mutation kernel will annyway prevent and control plane blacklist the domains on c2 servers as well as over the eBPF node agent LUR cache in user space andc kernel
 // Controller also reprograms the data plane, to ensure any other protocols traffic to such remote ip's is blocked with controller dynamically resolving soch l3 ip addreses to kill any potential future breach attempts to these remote c2 server ip via different protocl
-func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx context.Context, tcCollection *ebpf.Collection, tcProgram *ebpf.Program) {
+func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx context.Context, tcCollection *ebpf.Collection, tcProgram *ebpf.Program, iface *netinet.NetIface) {
 	// configure the injected eBPF egress program in kernel over TC
 	consumer.EgresseBPFKernelTCCollection = tcCollection
 	consumer.EgresseBPFKernelTCCollectionProgram = tcProgram
+	consumer.NewStreamAckEvents(iface)
 }
 
 func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
@@ -77,11 +89,11 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
 		// convert to network order
 		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
-		configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateNoExist)
+		log.Println("Updating the malicious l3 filter in kernel ", ipv4BigEndianAddress)
+		configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny)
 	}
 }
 
-// TODO: fix the global context handler for proper cancellation and error handling
 func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
 	for topic, consumer := range c.Consumers {
 		if topic != STREAM_BENIGN_SLD_TOPIC && topic == STREAM_THREAT_TOPIC_INFER {
@@ -174,12 +186,10 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 		}
 	}
 
-	for {
-		select {
-		case err := <-c.ConsumerErroChan:
-			return err
-		}
+	for err := range c.ConsumerErroChan {
+		return err
 	}
+	return nil
 }
 
 func (c *StreamConsumer) CloseConsumer() error {

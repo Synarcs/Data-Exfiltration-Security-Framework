@@ -30,7 +30,7 @@ const (
 	XDP_CONTROL_PROG                = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
-	DEFAULT_SK_BUFF_NUONCE        = 0xff
+	DEFAULT_SK_BUFF_NUONCE        = 0xffff
 )
 
 const (

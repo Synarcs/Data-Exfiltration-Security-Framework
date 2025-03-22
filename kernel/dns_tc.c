@@ -40,11 +40,11 @@
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;
 
-#define PRINT_DEBUG(fmt, ...) bpf_trace_printk(fmt, sizeof(fmt), ##__VA_ARGS__)
-
 
 #define IP_DST_OFF (ETH_HLEN + offsetof(struct iphdr, daddr))
+#define IP_SRC_OFF (ETH_HLEN + offsetof(struct iphdr, saddr))
 #define IP_CHECK_FF (ETH_HLEN + offsetof(struct iphdr, check))
+
 #define IP_CHECK_FF_V6 (ETH_HLEN + offsetof(struct ipv6hdr, check))
 
 #define UDP_CHECK_FF (ETH_HLEN + offsetof(struct udphdr, check))
@@ -476,10 +476,6 @@ static
 __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp) {
     // verify the dns header payload from root of the skbuff 
 
-
-    /*
-        TODO: Need to think about other layer 7 protocols and their memory safety for size
-    */
     if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
@@ -627,7 +623,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 #ifdef SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
                     // parse the characters across each label in the QNAME
                     if (SUBDOMAIN_RANGE_LABEL_CHAR_SCAN) {
-                        __u32 iter_label_chars_ln =  label_len;
+                        __u32 iter_label_chars_ln = label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
                         int k = 1;
                         void * dns_label_offset_char = (void *) (dns_payload_buffer + offset + 1);
@@ -1049,7 +1045,6 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         // if (parse_dns_payload_memsafet_payload() == SUSPICIOUS) {
         
         // verify header opcodes and return types 
-
         __u16 raw_dns_flags = dns_header->flags;
         #ifdef DEBUG
             if (DEBUG) {
@@ -1240,7 +1235,7 @@ __always_inline bool __handle_malicious_egress_dns_port_random(__u16 dest_transp
     };
     __u32 * mp_val = bpf_map_lookup_elem(&exfil_security_egress_nsp_map, &nsp_map_key);
     if (!mp_val) {
-        __u32 init_deep_scap_proc_port = 0;
+        __u32 init_deep_scap_proc_port = 1;
         bpf_map_update_elem(&exfil_security_egress_nsp_map, &nsp_map_key, &init_deep_scap_proc_port, BPF_NOEXIST);
     }else {
         __sync_fetch_and_add(mp_val, 1); // ensure the lock are synchronized with user space lock processing;

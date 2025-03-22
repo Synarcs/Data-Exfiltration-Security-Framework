@@ -7,9 +7,11 @@ build:
 
 .PHONY: run_node_agent
 run_node_agent:
-	@echo "Booting up the node agent"
-	echo "starting unix sock inference server $(model_path)"
+	@echo "Creating required Network Topology for node agent"
+	bash scripts/brctl.sh
+	@echo "starting unix sock inference server $(model_path)"
 	sudo python3 model/infer/inference.py -m $(model_path) &
+	@echo "Booting up the node agent"
 	cd node_agent && sudo ./main
 
 .PHONY: build-controller

@@ -1,6 +1,7 @@
 #include <linux/bpf.h>
 
 #include <bpf/bpf_helpers.h>
+#include <stdbool.h>
 
 struct kill_proc_mal_payload {
     __u32 MalDetectedCount;

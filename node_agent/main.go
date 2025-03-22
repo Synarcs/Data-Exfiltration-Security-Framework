@@ -238,7 +238,7 @@ func main() {
 		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 	}
 
-	streamConsumer.GenerateStreamKafkaConsumer(ctx)
+	streamConsumer.NewStreamKafkaConsumer(ctx)
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
@@ -301,7 +301,7 @@ func main() {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
 		log.Println("Loading the consumer for consuming thrat events update from control plane")
 		for range globalEBPFProgInjectChan[progs.TC_PROG] {
-			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog)
+			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog, &iface)
 			if err := streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx); err != nil {
 				streamConsumer.CloseConsumer()
 			}

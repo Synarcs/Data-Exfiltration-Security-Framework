@@ -14,7 +14,7 @@ var DNS_LIMITS_CONFIG map[uint32]uint32 = map[uint32]uint32{
 	7: (4 << 0x8) | 125, // (127 - (tld - root) == 125) // MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD
 }
 
-type OrderEvents struct {
+type DNSKernelFeatureLimits struct {
 	MIN_DOMAIN_LENGTH uint32
 	MAX_DOMAIN_LENGTH uint32
 
@@ -28,8 +28,8 @@ type OrderEvents struct {
 	MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD uint32
 }
 
-func MarshallMapStruct() *OrderEvents {
-	return &OrderEvents{
+func MarshallMapStruct() *DNSKernelFeatureLimits {
+	return &DNSKernelFeatureLimits{
 		MIN_DOMAIN_LENGTH:                  DNS_LIMITS_CONFIG[0],
 		MAX_DOMAIN_LENGTH:                  DNS_LIMITS_CONFIG[1],
 		MIN_SUBDOMAIN_LENGTH_PER_LABEL:     DNS_LIMITS_CONFIG[2],

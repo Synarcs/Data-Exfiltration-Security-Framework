@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -227,6 +228,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
 			})
+			go runtime.GC()
 		}
 		return nil
 	} else {

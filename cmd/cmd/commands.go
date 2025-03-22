@@ -34,6 +34,7 @@ func GeteBPFAgentRemoteSockConn() (net.Conn, *http.Client, error) {
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
+			MaxIdleConns: 100,
 		},
 		Timeout: time.Second * 5,
 	}
@@ -55,7 +56,7 @@ func GetCurrentBootedNodeAgentConfigLimits() error {
 	}
 
 	defer resp.Body.Close()
-	var limits events.OrderEvents
+	var limits events.DNSKernelFeatureLimits
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
