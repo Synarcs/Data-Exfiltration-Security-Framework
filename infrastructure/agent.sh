@@ -55,7 +55,7 @@ sudo apt update -y && sudo apt install -y \
 
 # Install x86_64 specific libraries
 arch=$(uname -m)
-if [ "$arch" = "x86_64" ]; then
+if [ "$arch" = "amd64" ]; then
     echo "[x] Installing x86_64 specific libraries"
     sudo apt install -y libc6-dev-i386
 fi
@@ -97,12 +97,9 @@ sudo pip3 install -r model/infer/requirements.txt --break-system-packages
 # install fpm for debian package build 
 sudo apt-get install -y ruby-dev build-essential && sudo gem i fpm -f
 
-echo "[✅] Installation completed successfully!"
-
-
 # install node exporter 
 wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-amd64.tar.gz
 tar -xvf node_exporter-1.9.0.linux-amd64.tar.gz && sudo mv node_exporter-1.9.0.linux-amd64 /opt 
 
 
-
+echo "[✅] Installation completed successfully!"

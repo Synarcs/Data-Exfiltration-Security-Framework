@@ -299,22 +299,17 @@ struct dns_volume_stats {
     struct exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter {
         __uint(type, BPF_MAP_TYPE_LRU_HASH);
         __type(key, __u32);
-        __type(value, __be32);
+        __type(value, __u32);
         __uint(max_entries, 1 << 10);
     } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
 
 #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-    struct ipv6_address {
-        __u8 u6_addr8[16];
-        __u8 u6_addr16[8];
-        __u32 u6_addr32[4];
-    } __attribute__((packed));
 
     struct exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter {
-        __uint(type, BPF_MAP_TYPE_LRU_HASH);
-        __type(key, struct ipv6_address);
-        __type(value, struct ipv6_address);
+        __uint(type, BPF_MAP_TYPE_LPM_TRIE);
+        __type(key, struct in6_addr);
+        __type(value, __u8);
         __uint(max_entries, 1 << 10);
     } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
@@ -1849,10 +1844,14 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 static 
 __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
-    __be32 dst_addr = ip->daddr; // user space inject l3 drop in kernel to be always in network byte order
-    __be32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
+    __u32 dst_addr = bpf_ntohl(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
+
+    __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
     if (isDynamicBlacklisted) {
-        return true;
+        if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {
+            bpf_printk("found a malicious transfer to a c2 server filter the l3 traffic");
+        }
+        return false;
     }
     return false;
 }
@@ -1861,6 +1860,11 @@ __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct ip
 // TODO: Add dynamic L3 IPv6 netpool c2 server filter over kernel tc layer, user space eBPF ndoe agent will create dynamic netpool for any k8s CNI to stop traffic over kernel sock (ebpf) or netfilter (ipv6) before it reach kernel traffic control 
 static 
 __always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
+
+    struct in6_addr dest_addr = ip->daddr;
+    __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
+    if (fd)
+        return true;
     return false;
 }
 
@@ -1898,8 +1902,7 @@ struct kernel_handler_map {
     __uint(map_flags, BPF_F_NO_PREALLOC);
 } maps SEC(".maps");
 
-static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff)
-{
+static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 	__u16 frag_off;
 
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);
@@ -1953,6 +1956,12 @@ int classify(struct __sk_buff *skb){
         if ((void *)(ip + 1) > cursor.data_end) return TC_DROP;
 
         if (ip_is_fragment(skb, nhoff)) return TC_DROP;
+            
+        // filter ay l3 traffic to prevent any l3 filter traffic to remote endpoint (security enforced from kernel)
+        #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS)
+                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+        #endif
 
         if (ip->protocol == IPPROTO_UDP) {
             if (actions.parse_udp(&cursor, true) == 0) return TC_DROP;
@@ -1965,11 +1974,7 @@ int classify(struct __sk_buff *skb){
             if (total_offset > skb->len) return TC_DROP;
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
-            
-            #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
-            #endif
-            
+      
             // its definitely a dns udp packet but make sure for deep scannign for mem safety
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
                 || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
@@ -2308,6 +2313,11 @@ int classify(struct __sk_buff *skb){
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
 
+        #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS)
+                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+        #endif
+        
         if (ipv6->nexthdr == IPPROTO_UDP) {
 
             if (actions.parse_udp(&cursor, false) == 0) return TC_DROP;
@@ -2323,9 +2333,6 @@ int classify(struct __sk_buff *skb){
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
-            #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
-            #endif
 
             if (udp->dest == bpf_htons(DNS_EGRESS_PORT)
                 || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 

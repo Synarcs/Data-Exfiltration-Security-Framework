@@ -29,30 +29,30 @@ type HostNetworkExfilFeatures struct {
 
 func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) error {
 
-	connContext, _ := context.WithTimeout(ctx, time.Second*2)
+	connContext, _ := context.WithTimeout(ctx, time.Second*15)
 	connErrorChan := make(chan error)
+	connDone := make(chan bool)
 
 	prod.Writer = &kafka.Writer{
 		Addr:         kafka.TCP(prod.KafkaBrokerConfig.Brokers...),
 		Topic:        STREAM_THREAT_TOPIC,
-		Balancer:     &kafka.LeastBytes{},
+		Balancer:     &kafka.RoundRobin{},
 		BatchSize:    1,
-		RequiredAcks: kafka.RequireAll,
-		Async:        false,
+		RequiredAcks: kafka.RequireOne,
+		Async:        true,
 		Transport: &kafka.Transport{
 			DialTimeout: time.Second * 10,
-			TLS:         nil,
 		},
 	}
 
-	go func(erroChan chan error) error {
+	go func(erroChan chan error, connDone chan bool) {
 		// dial to kraft enbaled leader kafka broker
 		connLeader, err := kafka.Dial("tcp", net.JoinHostPort(prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Ip,
 			prod.KafkaBrokerConfig.GlobalConfig.StreamServers.Port))
 
 		if err != nil {
 			erroChan <- err
-			return err
+			return
 		}
 		prod.conn = connLeader
 
@@ -71,8 +71,8 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 			erroChan <- err
 		}
 
-		return nil
-	}(connErrorChan)
+		connDone <- true
+	}(connErrorChan, connDone)
 
 	for {
 		select {
@@ -86,6 +86,9 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 				log.Println("Error connecting to remote kafka broker ", err.Error())
 			}
 			return err
+		case <-connDone:
+			log.Println("Connected to remote kafka broker ", prod.KafkaBrokerConfig.Brokers)
+			return nil
 		default:
 			log.Println("Trying to connect to remote Kafka broker ...", prod.KafkaBrokerConfig.Brokers)
 			time.Sleep(time.Second)
@@ -133,6 +136,9 @@ func (prod *StreamProducer) MarshallStreamThreadEvent(event interface{}, network
 		return err
 	}
 
+	if utils.DEBUG {
+		log.Println("Event Size (bytes):", len(marshalledEvent))
+	}
 	if err := prod.StreamThreadEvent(marshalledEvent); err != nil {
 		return err
 	}

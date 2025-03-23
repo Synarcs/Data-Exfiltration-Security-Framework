@@ -470,6 +470,13 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
 							int(destTransportPort), nil)
 					}
+
+					go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+						ExfilPort:        strconv.Itoa(int(destTransportPort)),
+						Protocol:         string(events.DNS),
+						PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+						PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+					})
 				}
 
 				// update as the clone redirect as this is found malicious a potential DNS tunnel in kernel
@@ -499,6 +506,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destTransportPort)
 					}
 				}
+
 			}
 		}
 	} else {
@@ -540,6 +548,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			}
 			// older kernel version use kernel proc fs mount to ge process Information
 		}
+
 	}
 	return nil
 }

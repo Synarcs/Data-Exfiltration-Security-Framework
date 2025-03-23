@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
@@ -23,7 +23,7 @@ import (
 type BridgeTCFilters struct {
 	TCBridgeSocketMap *ebpf.Map
 	Interfaces        *netinet.NetIface
-	Hash              *rand.Hash
+	Hash              *crypto.Hash
 }
 
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {

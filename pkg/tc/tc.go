@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
@@ -18,7 +19,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/cilium/ebpf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -41,7 +41,7 @@ type TCHandler struct {
 	IsEgressXdpSupport   bool
 	TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
 
-	Hash *rand.Hash // skb agent crypto hash for agent integrity with kernel
+	Hash *crypto.Hash // skb agent crypto hash for agent integrity with kernel
 
 	// the node agent consumer will ensure to send malicious ip address over this channel for node agent to inject them in kernel
 	GlobalMalC2L3addressChannelIpv4 chan net.IP
@@ -97,7 +97,7 @@ func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan error, agentHash *rand.Hash) *TCHandler {
+	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash) *TCHandler {
 	dnsPacketGen := GenerateDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
 	handler := &TCHandler{

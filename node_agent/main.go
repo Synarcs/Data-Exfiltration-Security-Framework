@@ -17,6 +17,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers/sock"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
@@ -26,7 +27,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/rand"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"gopkg.in/yaml.v2"
 )
@@ -150,7 +150,7 @@ func main() {
 	iface.InitconnTrackSockHandles()
 
 	// init the hash for skb and entire node agent, the hash should be always unique per agent boot and injecttion in kernel
-	hash := &rand.Hash{}
+	hash := &crypto.Hash{}
 	hash.GetRandomBootSkbMark()
 
 	// io Disk Cache Inodes for Node agent

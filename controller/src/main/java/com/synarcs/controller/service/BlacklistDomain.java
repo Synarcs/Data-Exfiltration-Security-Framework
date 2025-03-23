@@ -80,6 +80,7 @@ public class BlacklistDomain {
 
 
     public void sendDNSCacheAddDataplane(DnsFeatures maliciousEvent, List<String> resolveAddressMaliciousC2Domains) {
+        log.info("adding the controller gen blacklist " + maliciousEvent);
         kafkaTemplate.send(controllerInferenceTopic, DnsdataplaneBlk.builder().
                 fqdn(maliciousEvent.getFqdn())
                 .tld(maliciousEvent.getTld())

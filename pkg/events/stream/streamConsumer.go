@@ -90,7 +90,11 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 		// convert to network order
 		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
 		log.Println("Updating the malicious l3 filter in kernel ", ipv4BigEndianAddress)
-		configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny)
+		if err := configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny); err != nil {
+			if !errors.Is(err, ebpf.ErrKeyExist) {
+				log.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
+			}
+		}
 	}
 }
 
@@ -99,8 +103,6 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 		if topic != STREAM_BENIGN_SLD_TOPIC && topic == STREAM_THREAT_TOPIC_INFER {
 			go func(consumer *kafka.Reader, ctx context.Context) {
 				for {
-					// log.Printf("Consuming thread events from topic %s", topic)
-					// time.Sleep(time.Second)
 					if err := ctx.Err(); err != nil {
 						if errors.Is(err, io.EOF) {
 							time.Sleep(time.Second)
