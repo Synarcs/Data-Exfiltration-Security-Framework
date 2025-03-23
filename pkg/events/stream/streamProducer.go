@@ -14,6 +14,10 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+const (
+	KAFKA_BROKER_CONN_TIMEOUT = time.Second * 10
+)
+
 type StreamProducer struct {
 	KafkaBrokerConfig *StreamBrokerConfig
 	conn              *kafka.Conn
@@ -29,7 +33,7 @@ type HostNetworkExfilFeatures struct {
 
 func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) error {
 
-	connContext, _ := context.WithTimeout(ctx, time.Second*15)
+	connContext, _ := context.WithTimeout(ctx, KAFKA_BROKER_CONN_TIMEOUT)
 	connErrorChan := make(chan error)
 	connDone := make(chan bool)
 
@@ -85,9 +89,11 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 				// there is other error before the connection context with timeout has closed
 				log.Println("Error connecting to remote kafka broker ", err.Error())
 			}
+			close(connErrorChan)
 			return err
 		case <-connDone:
 			log.Println("Connected to remote kafka broker ", prod.KafkaBrokerConfig.Brokers)
+			close(connDone)
 			return nil
 		default:
 			log.Println("Trying to connect to remote Kafka broker ...", prod.KafkaBrokerConfig.Brokers)

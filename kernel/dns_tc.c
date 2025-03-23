@@ -310,6 +310,7 @@ struct dns_volume_stats {
         __uint(type, BPF_MAP_TYPE_LPM_TRIE);
         __type(key, struct in6_addr);
         __type(value, __u8);
+        __uint(map_flags, BPF_F_NO_PREALLOC);
         __uint(max_entries, 1 << 10);
     } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
 #endif 

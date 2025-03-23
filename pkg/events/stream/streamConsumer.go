@@ -14,6 +14,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -25,6 +26,7 @@ type StreamConsumer struct {
 	TopDomainsCache                     *utils.TopDomains
 	ConsumerErroChan                    chan error
 	EventAckKernelFilter                *actions.EventAckKernelFilter
+	L3NodeFilterCache                   *lru.Cache[string, uint32] // the cache is user space safes kernel bpf syscall and no need of locks in user space for concurrent reads from consumer
 }
 
 func (consumer *StreamConsumer) NewStreamAckEvents(iface *netinet.NetIface) {
@@ -35,7 +37,17 @@ func (consumer *StreamConsumer) NewStreamAckEvents(iface *netinet.NetIface) {
 	}
 }
 
-func (consumer *StreamConsumer) NewStreamKafkaConsumer(ctx context.Context) {
+func (consumer *StreamConsumer) InitLruUserSpaceL3Cache() error {
+	// for performance and log for malicious l3 filter cache address
+	cache, err := lru.New[string, uint32](1000)
+	if err != nil {
+		return err
+	}
+	consumer.L3NodeFilterCache = cache
+	return nil
+}
+
+func (consumer *StreamConsumer) NewStreamKafkaConsumer(ctx context.Context) error {
 
 	// all the malicious domains transfering over UDP to be blacklisted in local cache of LRU fo rnude agent
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
@@ -63,6 +75,11 @@ func (consumer *StreamConsumer) NewStreamKafkaConsumer(ctx context.Context) {
 	consumer.Consumers[STREAM_THREAT_TOPIC_INFER_TCP] = streamReaderTcpRecursorInfer
 	consumer.Consumers[STREAM_BENIGN_SLD_TOPIC] = streamReaderSldBenignTopic
 	consumer.ConsumerErroChan = make(chan error)
+
+	if err := consumer.InitLruUserSpaceL3Cache(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // used as a bridge from controller provided l3 dynamic ipv4/ ipv6 addresses used to dynamically reconfigure eBPF maps in kernel to blacklist the l3 remote c2 servers
@@ -89,10 +106,13 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
 		// convert to network order
 		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
-		log.Println("Updating the malicious l3 filter in kernel ", ipv4BigEndianAddress)
-		if err := configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny); err != nil {
-			if !errors.Is(err, ebpf.ErrKeyExist) {
-				log.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
+		if _, fd := consumer.L3NodeFilterCache.Get(remoteIpAddressInferedMaliciousController); !fd {
+			log.Println("Updating the malicious l3 filter in kernel ", utils.BigEndianToIPv4(ipv4BigEndianAddress))
+			consumer.L3NodeFilterCache.Add(remoteIpAddressInferedMaliciousController, ipv4BigEndianAddress)
+			if err := configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny); err != nil {
+				if !errors.Is(err, ebpf.ErrKeyExist) {
+					log.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
+				}
 			}
 		}
 	}

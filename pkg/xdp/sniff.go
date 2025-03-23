@@ -155,7 +155,8 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 }
 
 func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPPort uint16) error {
-	var errorChannel chan error = make(chan error)
+	var errorChannel chan error = make(chan error) // dedicated channel to sniff and process ingress sniff errors
+	var graceFulCloseSniff chan bool = make(chan bool)
 	log.Println("Sniffing Ingress traffic for potential malicious remote C2C commands")
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
@@ -179,7 +180,10 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent in user-space")
+				if sniffUDPPort != utils.DNS_EGRESS_PORT {
+					log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent in user-space")
+				}
+				graceFulCloseSniff <- true
 				return nil
 			case pack := <-packets.Packets():
 				go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
@@ -191,20 +195,22 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		go processPcapFilterHandlerIngress(link, errorChannel)
 	}
 
-	go func() {
-		for {
-			select {
-			case err, close := <-errorChannel:
-				if !close {
-					return
-				}
-				if err != nil {
-					panic(err.Error())
-				}
-			default:
-				time.Sleep(time.Second)
+	for {
+		select {
+		case err, isClosed := <-errorChannel:
+			if !isClosed {
+				return nil
 			}
+			close(errorChannel)
+			return err
+		case _, isClosed := <-graceFulCloseSniff:
+			if !isClosed {
+				return nil
+			}
+			close(graceFulCloseSniff)
+			return nil
+		default:
+			time.Sleep(time.Second)
 		}
-	}()
-	return nil
+	}
 }

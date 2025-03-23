@@ -141,6 +141,13 @@ func ParseIpV6(saddr uint32) string {
 	return fmt.Sprintf("%x.%x.%x.%x.%x.%x", s1, uint16(s2), uint16(s3), uint16(s4), uint16(s5), uint8(s6))
 }
 
+
+func BigEndianToIPv4(ipInt uint32) string {
+	ipBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(ipBytes, ipInt)
+	return net.IP(ipBytes).String()
+}
+
 // generate the required channesl for controller to stream those remote ipv4 / ipv6 c2 server addressses
 func GenerateC2BlacklistAddressChannels() (chan net.IP, chan net.IP) {
 	return make(chan net.IP), make(chan net.IP)

@@ -523,6 +523,14 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
 					"DNS", int(destTransportPort), nil) //
 			}
+
+			// even though found continous stream the events for any detected malicious events in the data plane for incident response and tracking every packet level  malicious activity
+			go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+				ExfilPort:        strconv.Itoa(int(destTransportPort)),
+				Protocol:         string(events.DNS),
+				PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+				PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+			})
 		}
 
 		go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{

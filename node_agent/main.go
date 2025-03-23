@@ -113,6 +113,30 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, c
 	return nil
 }
 
+/*
+The signed kernel keys which the node agent generate in data plane is always secured via the crypto keys ephemeral to the life time of agent
+*/
+func CleanCryptoDirs() error {
+	if err := crypto.CleanCryptoDir(); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+/*
+Init all the kernel crypto dir ephemeral to hold keyrings and signatures to secure bpf programs injections
+*/
+func InitKernelCryptoHooks() error {
+
+	if err := crypto.GenerateCryptoDir(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	runtime.LockOSThread()
 	var nodeAgentCliOptions conf.NodeAgentCliOptions
@@ -142,6 +166,13 @@ func main() {
 	ctx, agentCancelFunc := context.WithCancel(ctx)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
+	if err := InitKernelCryptoHooks(); err != nil {
+		log.Printf("the Node agent cannot boot without crypto validation ", err.Error())
+		panic(err.Error())
+	} else {
+		log.Println("Successfully generated all the crypto keys for node agent with LSM 2 way keyring for enhanced security")
+	}
+
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces(nodeAgentCliOptions.ContainerRuntime || nodeAgentCliOptions.Sdr)
@@ -154,7 +185,9 @@ func main() {
 	hash.GetRandomBootSkbMark()
 
 	// io Disk Cache Inodes for Node agent
-	utils.InitCache()
+	if err := utils.InitCache(); err != nil {
+		panic(err.Error())
+	}
 	topDomains, err := utils.ReadTldDomainsData()
 
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
@@ -238,7 +271,9 @@ func main() {
 		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 	}
 
-	streamConsumer.NewStreamKafkaConsumer(ctx)
+	if err := streamConsumer.NewStreamKafkaConsumer(ctx); err != nil {
+		log.Println("Error starting node agent data plane kafka consumer ", err.Error())
+	}
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
@@ -262,7 +297,7 @@ func main() {
 	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
 		// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
 		ingress := xdp.GenerateIngressSnifferFactory(&iface, model, streamProducer, globalErrorKernelHandlerChannel)
-		go ingress.SniffIgressForC2C(ctx, 53)
+		go ingress.SniffIgressForC2C(ctx, utils.DNS_EGRESS_PORT)
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
@@ -361,6 +396,7 @@ func main() {
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
 		agentCancelFunc()
+		CleanCryptoDirs()
 		streamProducer.CloseProducer()
 		streamConsumer.CloseConsumer()
 		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
