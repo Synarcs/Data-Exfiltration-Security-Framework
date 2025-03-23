@@ -7,8 +7,12 @@ controller/bin/*
 controller/bin/main
 
 
+
 exfil-sec-operator/* 
 node_agent/dist/
+node_agent/keys/*
+node_agent/keys/*
+
 
 build/*
 package/*

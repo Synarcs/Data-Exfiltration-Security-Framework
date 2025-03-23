@@ -1,14 +1,11 @@
 package crypto
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
-	"math/big"
 	"os"
 
 	"github.com/a5i/pkcs7"
@@ -25,27 +22,6 @@ const (
 	certPkcs7File          = KERNEL_BPF_CRYPTO_PATH + "/cert.p7b"
 	validityDays           = 365
 )
-
-// savePEMKey saves an RSA private key in PEM format
-func savePEMKey(filename string, key *rsa.PrivateKey) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	pemBlock := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	}
-
-	return pem.Encode(file, pemBlock)
-}
-
-func bigInt() *big.Int {
-	n, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	return n
-}
 
 // save the self sign cert for the agent
 func savePEMCert(filename string, certDER []byte) error {
@@ -64,7 +40,7 @@ func savePEMCert(filename string, certDER []byte) error {
 }
 
 // generateSelfSignedCert creates a self-signed X.509 certificate using CFSSL
-func generateSelfSignedCert(privKey *rsa.PrivateKey) ([]byte, []byte, error) {
+func generateSelfSignedCert() ([]byte, []byte, []byte, error) {
 	req := &csr.CertificateRequest{
 		CN: "dnsSecurity.bleed.io",
 		KeyRequest: &csr.KeyRequest{
@@ -75,25 +51,25 @@ func generateSelfSignedCert(privKey *rsa.PrivateKey) ([]byte, []byte, error) {
 
 	_, _, err := csr.ParseRequest(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	certPEM, _, _, err := initca.New(req)
+	certPEM, _, privateKey, err := initca.New(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		return nil, nil, fmt.Errorf("failed to decode PEM certificate")
+		return nil, nil, nil, fmt.Errorf("failed to decode PEM certificate")
 	}
 
 	certDER, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return certPEM, certDER.Raw, nil
+	return certPEM, certDER.Raw, privateKey, nil
 }
 
 // convertToPKCS7 converts a DER-encoded certificate to PKCS#7 format
@@ -123,6 +99,20 @@ func convertToPKCS7(certDER []byte, outputFile string) error {
 	return nil
 }
 
+func savePrivateKeyToPEM(privateKey []byte, outputFile string) error {
+	pemBlock := &pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privateKey,
+	}
+
+	pemData := pem.EncodeToMemory(pemBlock)
+	if err := os.WriteFile(outputFile, pemData, 0644); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func GenerateCryptoDir() error {
 	if err := os.MkdirAll(KERNEL_BPF_CRYPTO_PATH, 0777); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -131,19 +121,16 @@ func GenerateCryptoDir() error {
 		return err
 	}
 
-	// generate the private key
-	privKey, err := rsa.GenerateKey(rand.Reader, keySize)
+	certPEM, certDER, key, err := generateSelfSignedCert()
 	if err != nil {
-		fmt.Println("Error generating private key:", err)
 		return err
 	}
 
-	if err := savePEMKey(privateKey, privKey); err != nil {
+	if err := savePrivateKeyToPEM(key, privateKey); err != nil {
 		fmt.Println("Error saving private key:", err)
 		return err
 	}
 
-	certPEM, certDER, err := generateSelfSignedCert(privKey)
 	if err != nil {
 		fmt.Println("Error generating certificate:", err)
 		return err
