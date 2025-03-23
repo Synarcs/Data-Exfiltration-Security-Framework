@@ -15,17 +15,21 @@ Kernel
     * Netfilter
     * Kernel Probes
     * Kernel Functions
-    * Raw Tracepoints
+    * Raw Tracepoints (Kernel Sched)
+    * Kernel Socket layer (cgroup_egress)
+    * Kernel LSM (BPF Security Hooks BPF_PROG_LOAD, secured sign verification)
 * eBPF dynamic advanced maps and tracing for malicious events
     * BPF_MAP_TYPE_LRU_HASH
     * BPF_MAP_TYPE_RINGBUF
-    * BPF_MAP_TYPE_HASH 
+    * BPF_MAP_TYPE_HASH
+    * BPF_MAP_TYPE_LPM_TRIE
+    * BPF_MAP_TYPE_ARRAY
 
 
 UserLand 
 * Cilium eBPF 
 * Cilium CNI 
-* Envoy L7 Proxy, Filter chains 
+* Envoy L7 Proxy, Filter chains, OPA (Open Policy Agents for L7 Security)
 * Kubernetes Client
 * Kubernetes Sidecars, Kubernetes Mutating Webhooks 
 * Kafka Streams Producers
