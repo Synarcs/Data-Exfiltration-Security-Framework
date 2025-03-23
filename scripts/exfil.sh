@@ -26,3 +26,4 @@ sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=143,domain=dnscat.strive
 ./dnscat --dns server=cssvlab06.uwb.edu,port=143,domain=dnscat.strive.io --secret=
 
 
+

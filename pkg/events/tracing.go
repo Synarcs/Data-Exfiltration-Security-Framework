@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // metrics export for the prometheus ebpf kernel node exporter from egress tc traffic layer
@@ -110,6 +113,27 @@ type KernelNetlinkSocket struct {
 	ProcessInfo   [200]byte
 }
 
+// CPU and memory metrics for the process
+var (
+	// CPU and memory metrics for the process
+	cpuUsage = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "process_cpu_usage_percent",
+			Help: "CPU usage percentage of the process",
+		},
+		[]string{"state"}, // "user", "system", "idle"
+	)
+
+	// Memory usage gauge
+	memoryUsageGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "process_memory_usage_bytes",
+			Help: "Memory usage of the process in bytes",
+		},
+	)
+)
+
+// DNS security control metrics
 var (
 	// round trip latency effect for benigh traffic interaction from kernel to user space
 	dnsRoundTripTime_metric = prometheus.NewHistogram(
@@ -265,7 +289,40 @@ func init() {
 		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
 		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer,
-		malicious_vxlan_encap_dns_vtep_tunnel_transfer)
+		malicious_vxlan_encap_dns_vtep_tunnel_transfer, cpuUsage, memoryUsageGauge)
+}
+
+func ExportCpuProcessMetrics() error {
+	pid := os.Getpid()
+	cpuCount := float64(runtime.NumCPU())
+	for {
+		proc, err := process.NewProcess(int32(pid))
+
+		if err != nil {
+			return err
+		}
+
+		cpuPercent, err := proc.Percent(time.Second)
+		if err != nil {
+			log.Println("error get cpu percent ", err)
+			continue
+		}
+
+		memUsage, err := proc.MemoryInfo()
+		if err != nil {
+			continue
+		}
+
+		cpuPercent = cpuPercent / cpuCount
+		idlePercent := 100.0 - cpuPercent
+
+		cpuUsage.WithLabelValues("idle").Set(idlePercent)
+		cpuUsage.WithLabelValues("load").Set(cpuPercent)
+
+		memoryUsageGauge.Set(float64(memUsage.RSS))
+
+		time.Sleep(time.Second)
+	}
 }
 
 func StartPrometheusMetricExporterServer(config *conf.NodeAgentConfig) error {

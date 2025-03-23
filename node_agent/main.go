@@ -387,6 +387,9 @@ func main() {
 		}
 	}()
 
+	// export the cpu metrics for the node agent once booted to prometheus
+	go events.ExportCpuProcessMetrics()
+
 	sigType, done := <-term
 	if done {
 		switch sigType {
