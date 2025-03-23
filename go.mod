@@ -14,8 +14,10 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/prometheus/client_golang v1.20.5
 	github.com/segmentio/kafka-go v0.4.47
+	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
+	github.com/tetratelabs/proxy-wasm-go-sdk v0.24.0
 	github.com/ti-mo/conntrack v0.5.1
 	github.com/vishvananda/netlink v1.3.1-0.20241022031324-976bd8de7d81
 	github.com/vishvananda/netns v0.0.5
@@ -50,7 +52,6 @@ require (
 	github.com/prometheus/common v0.61.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
-	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect

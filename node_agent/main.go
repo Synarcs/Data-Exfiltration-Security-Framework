@@ -18,6 +18,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers/sock"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/envoy"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/kprobe"
@@ -167,11 +168,13 @@ func main() {
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
 	if err := InitKernelCryptoHooks(); err != nil {
-		log.Printf("the Node agent cannot boot without crypto validation ", err.Error())
+		log.Println("the Node agent cannot boot without crypto validation ", err.Error())
 		panic(err.Error())
 	} else {
 		log.Println("Successfully generated all the crypto keys for node agent with LSM 2 way keyring for enhanced security")
 	}
+
+	envoy.InitTCPWasmFilter()
 
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NetIface{}

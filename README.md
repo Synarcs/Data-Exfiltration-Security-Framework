@@ -73,15 +73,18 @@ Threat Event Stream Message Analysis Control Plane Server
 
 ## Future Plans 
 * Kubernetes Operator and CNI Integration
-    * Started Integration with Kubernetes as sidecar or gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops), feature to inherently support killing malicious pods carrying data breaches throughout k8s cluster.
-    * Dynamic Injection of Cilium L7 DNS Network Policiy, and L3 Network Policity for Cilium agent and DNS proxy to block DNS and l3 ipv4 and ipv6 exfiltrated traffic bidirectionally to remote malicious C2 servers carried through compromised k8s pods relying on cilium L7, L3, L4 filter proxies to filter in user space, before it reaches 
+    * Started Integration with Kubernetes as sidecar or gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops), feature to inherently support stopping breaches via malicious pods carrying data breaches throughout k8s cluster.
+    * Support for dynamic Injection of OPA auth policies for l3 filtering in userspace via sidecar or similar auth filter policies for Istio.
 * Cloud Providers Infrastructure Integration 
     * Integration with Public Cloud providers for dynamic NACL, Security groups, firewall rules creation over VPC for DNS exfiltration security
 eBPF node agent rinning over host ns, to fully thwart data breach by killing malicious C2 implants.
 * Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP) at endpoint itself, supporting conntrack state mapping in eBPF map for TCP handshake prior DNS transfer and stopping DNS data transfer over TCP socket via kernel TC.
-* Integration with Kubernetes mutation webhooks for dynamic exfiltration guard security containers to be injected on pods matching required security labels.
-* Harden security integrating with KubeArmor and other ACL policies for hardened security in orcehstrated environments.
-* Support prometheus metrics endpoints integrated inside the sidecar. 
+
+    1.  Integrate Envoy L7 TCP sock listener over user-space, for kernel to live forward TCP traffic from host netdev TC to envoy l7 socket listneer.
+    2.  Implement a envoy GO wasm filter for deep parsing DNS traffic over TCP over unix stream socket and shared as component of core node-agent.
+
+
+* Harden security integrating with KubeArmor and other ACL policies for hardened security in orchestrated environments.
 * Enhance framework for safeguarding enterprises from exfiltration over other protocols (ICMP, FTP) etc. 
 * Enhance support for DOT (DNS over TLS), eBPF based TLS fingerprinting interception in kernel. 
 * Add support for XDP ingress NXDOMAIN flood prevention to break DNS woter torture flood attacks. 
