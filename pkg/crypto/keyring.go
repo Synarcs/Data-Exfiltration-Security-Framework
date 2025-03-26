@@ -151,6 +151,6 @@ func CleanupKernelKeyRing() error {
 		return fmt.Errorf("failed to clear session keyring: %v", err)
 	}
 
-	log.Printf("Successfully cleaned up kernel keyring")
+	log.Println("Successfully cleaned up kernel session keyring", sessionID)
 	return nil
 }

@@ -18,7 +18,7 @@ const (
 	CERT_FILE     = KEY_DIR + "/cert.pem"
 	CERT_DER_FILE = KEY_DIR + "/cert.der"
 	VALIDITY_DAYS = 365
-	KEY_SIZE      = 4096
+	KEY_SIZE      = 1 << 8
 	CERT_SUBJECT  = "BPF Program Signing Key"
 	CUSTOM_OID    = "1.3.6.1.4.1.2312.19.1"
 )
@@ -42,13 +42,17 @@ func createKeyDir() error {
 
 // Generate a self-signed certificate for signing eBPF programs
 func generateSelfSignedCert() ([]byte, []byte, []byte, error) {
+
+	// for 256 key anway the curve is P256 which kerne keyring suport and also defualt in ECDSA for tls 1.2
+	key := &csr.KeyRequest{
+		A: "ecdsa",
+		S: KEY_SIZE,
+	}
+
 	// Define CSR template
 	req := &csr.CertificateRequest{
-		CN: CERT_SUBJECT,
-		KeyRequest: &csr.KeyRequest{
-			A: "rsa",
-			S: KEY_SIZE,
-		},
+		CN:         CERT_SUBJECT,
+		KeyRequest: key,
 		Names: []csr.Name{
 			{O: "BPF Security"},
 		},

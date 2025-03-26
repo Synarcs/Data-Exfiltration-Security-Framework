@@ -191,6 +191,7 @@ sock:
 .PHONY: clean-bpf-build
 clean-bpf-build: 
 	rm -rf *.o 
+	rm -rf hdrs/vmlinux.h 
 
 
 crypto_kernel ?= $(shell pwd)/crypto/lsm_bpf.c
