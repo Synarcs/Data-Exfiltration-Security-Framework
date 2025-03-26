@@ -5,7 +5,6 @@ go 1.23.0
 toolchain go1.23.2
 
 require (
-	github.com/a5i/pkcs7 v0.0.0-20200411230050-841a3d25b50c
 	github.com/asavie/xdp v0.3.3
 	github.com/cilium/ebpf v0.17.1
 	github.com/cloudflare/cfssl v1.6.5

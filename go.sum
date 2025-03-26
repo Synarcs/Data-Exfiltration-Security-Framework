@@ -1,5 +1,3 @@
-github.com/a5i/pkcs7 v0.0.0-20200411230050-841a3d25b50c h1:oWk55xMbPFtfY3oD2v/0BlQcJhs4xECsBr23mjcTySo=
-github.com/a5i/pkcs7 v0.0.0-20200411230050-841a3d25b50c/go.mod h1:u9azZx470XnyCDKQ8zXuhxyTum0uF+zpjeTiuy9F1ak=
 github.com/asavie/xdp v0.3.3 h1:b5Aa3EkMJYBeUO5TxPTIAa4wyUqYcsQr2s8f6YLJXhE=
 github.com/asavie/xdp v0.3.3/go.mod h1:Vv5p+3mZiDh7ImdSvdon3E78wXyre7df5V58ATdIYAY=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=

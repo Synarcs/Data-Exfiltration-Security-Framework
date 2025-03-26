@@ -26,8 +26,8 @@
 #include <stdbool.h>
 #include <signal.h>
 
-#include "consts.h"
-#include "dns.h"
+#include "hdrs/consts.h"
+#include "hdrs/dns.h"
 
 
 #ifndef tc

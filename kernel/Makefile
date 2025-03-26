@@ -42,7 +42,7 @@ compile:
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
 vmlinux-btf: 
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > vmlinux.h	
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > hdrs/vmlinux.h	
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:

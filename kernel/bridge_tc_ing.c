@@ -14,10 +14,10 @@
 
 #include <stdbool.h> 
 
-#include "consts.h"
-#include "utils.h"
-#include "dns.h"
-#include "raw_proc.h" 
+#include "hdrs/consts.h"
+#include "hdrs/utils.h" 
+#include "hdrs/dns.h"
+#include "hdrs/raw_proc.h"
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/cbpf/exfil_security_config_map"
 

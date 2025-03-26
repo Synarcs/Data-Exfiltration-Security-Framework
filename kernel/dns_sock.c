@@ -20,10 +20,12 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_core_read.h>
 
-#include "dns.h"
-#include "consts.h"
-#include "utils.h"
-#include "raw_proc.h"
+
+#include "hdrs/sockpin.h"
+#include "hdrs/consts.h"
+#include "hdrs/utils.h" 
+#include "hdrs/dns.h"
+#include "hdrs/raw_proc.h"
 
 #ifndef tc
     #define TC_FORWARD TC_ACT_OK

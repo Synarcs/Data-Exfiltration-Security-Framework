@@ -14,8 +14,8 @@
 
 #include <stdbool.h> 
 
-#include "consts.h"
-#include "utils.h"
+#include "hdrs/consts.h"
+#include "hdrs/utils.h"
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
 

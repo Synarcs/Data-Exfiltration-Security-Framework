@@ -20,9 +20,9 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#include "consts.h"
-#include "dns.h"
-#include "utils.h"
+#include "hdrs/consts.h"
+#include "hdrs/dns.h"
+#include "hdrs/utils.h"
 
 #ifndef XDP 
     #define XDP_MAX_PAYLOAD_SIZE 101111

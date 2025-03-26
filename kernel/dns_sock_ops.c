@@ -17,10 +17,10 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#include "sockpin.h"
-#include "consts.h"
-#include "utils.h"
-#include "dns.h"
+#include "hdrs/sockpin.h"
+#include "hdrs/consts.h"
+#include "hdrs/utils.h" 
+#include "hdrs/dns.h"
 
 #define DEBUG false 
 

@@ -13,11 +13,11 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
 
-#include "consts.h"
-#include "raw_proc.h"
-#include "utils.h"
-#include "pinmaps.h"
-#include "dns.h"
+#include "hdrs/consts.h"
+#include "hdrs/raw_proc.h"
+#include "hdrs/utils.h"
+#include "hdrs/pinmaps.h"
+#include "hdrs/dns.h"
 
 
 static

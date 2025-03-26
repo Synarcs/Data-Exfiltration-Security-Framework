@@ -29,13 +29,13 @@
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
 
-#include "dns.h"
-#include "consts.h"
-#include "utils.h" 
-#include "raw_proc.h"
-#include "vxlan.h"
-#include "pinmaps.h"
-#include "sockpin.h"
+#include "hdrs/dns.h"
+#include "hdrs/consts.h"
+#include "hdrs/utils.h" 
+#include "hdrs/raw_proc.h"
+#include "hdrs/vxlan.h"
+#include "hdrs/pinmaps.h"
+#include "hdrs/sockpin.h"
 
 #define SIZE_INFO(ptr, data, end) \
     if ((void *) ptr + sizeof(data) > end) return TC_ACT_SHOT;

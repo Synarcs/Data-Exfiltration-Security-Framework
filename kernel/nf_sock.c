@@ -16,8 +16,8 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#include "consts.h"
-#include "dns.h"
+#include "hdrs/consts.h"
+#include "hdrs/dns.h"
 
 
 // monitor all netlink events from kernel for AF_NETLINK 
