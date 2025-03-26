@@ -1,7 +1,7 @@
 /bazel-*
 /bin/* 
 deps.bzl
-kernel/vmlinux.h
+kernel/hdrs/vmlinux.h
 controller/target/* 
 controller/bin/*
 controller/bin/main

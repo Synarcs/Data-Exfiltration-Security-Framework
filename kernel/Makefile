@@ -29,6 +29,7 @@ compile:
 	make vmlinux-btf
 	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
 	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
+	make crypto
 	make netlink 
 	make tc_tun 
 	make tracepoints
@@ -190,3 +191,13 @@ sock:
 .PHONY: clean-bpf-build
 clean-bpf-build: 
 	rm -rf *.o 
+
+
+crypto_kernel ?= $(shell pwd)/crypto/lsm_bpf.c
+crypto_kernel_out ?= lsm_bpf.o 
+
+.PHONY: crypto 
+crypto:
+	@echo "Compiling the crypto LSM hooks"
+	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(crypto_kernel_out) -c $(crypto_kernel) 
+	cp $(crypto_kernel_out) ../node_agent/ebpf/ 
