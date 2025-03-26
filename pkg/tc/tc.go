@@ -62,8 +62,8 @@ var (
 	}
 )
 
-func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
-	streamClient *stream.StreamProducer) *model.DnsPacketGen {
+func NewDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
+	streamClient *stream.StreamProducer) (*model.DnsPacketGen, error) {
 	xdpSocketFd, err := interfaces.GetRootNamespaceRawSocketFdXDP()
 	if err == nil {
 		log.Println("[x] Using the raw packet with AF_PACKET Fd")
@@ -75,13 +75,13 @@ func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model
 			SocketSendFd:        nil,
 			OnnxModel:           onnxModel,
 			StreamClient:        streamClient,
-		}
+		}, nil
 	} else {
 		log.Println("Error Binding the XDP Socket Physical driver lacking support")
 		fd, err := interfaces.GetRootNamespaceRawSocketFd()
 
 		if err != nil {
-			panic(err.Error())
+			return nil, err
 		}
 		return &model.DnsPacketGen{
 			IfaceHandler:        interfaces,
@@ -90,17 +90,21 @@ func GenerateDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model
 			XdpSocketSendFd:     nil,
 			OnnxModel:           onnxModel,
 			StreamClient:        streamClient,
-		}
+		}, nil
 	}
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
+func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash) *TCHandler {
-	dnsPacketGen := GenerateDnsPacketResendUtils(&iface, onnxModel, streamClient)
+	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash) (*TCHandler, error) {
+	dnsPacketGen, err := NewDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
-	handler := &TCHandler{
+	if err != nil {
+		return nil, err
+	}
+
+	tcHandler := &TCHandler{
 		Interfaces:                      &iface,
 		DnsPacketGen:                    dnsPacketGen,
 		OnnxLoadedModel:                 onnxModel,
@@ -108,13 +112,13 @@ func GenerateTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		Hash:                            agentHash,
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
-		handler.IsEgressXdpSupport = true
+		tcHandler.IsEgressXdpSupport = true
 	}
 
 	ipv4c2mal, ipv6c2mal := utils.GenerateC2BlacklistAddressChannels()
-	handler.GlobalMalC2L3addressChannelIpv4 = ipv4c2mal
-	handler.GlobalMalC2L3addressChannelIpv6 = ipv6c2mal
-	return handler
+	tcHandler.GlobalMalC2L3addressChannelIpv4 = ipv4c2mal
+	tcHandler.GlobalMalC2L3addressChannelIpv6 = ipv6c2mal
+	return tcHandler, nil
 }
 
 func (tc *TCHandler) PollMaliciousControllerAwareC2Address(errorChannel <-chan error) {
@@ -253,7 +257,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
-		panic(err.Error())
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
 	}
 
 	for name, mapSpec := range handler.Maps {
@@ -276,14 +281,16 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
 
 	if prog == nil {
-		panic(fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG))
+		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG)
+		return
 	}
 	tc.Prog = prog
 	tc.TcCollection = spec
 
 	if err := tc.AttachTcHandler(ctx, prog); err != nil {
 		log.Println("Error attaching the clsact bpf qdisc for netdev")
-		panic(err.Error())
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
 	}
 
 	if len(iface.BridgeLinks) != 2 {
@@ -308,7 +315,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			}
 			err := configMap.Put(uint32(link.Attrs().Index), redirectIpv4)
 			if err != nil {
-				panic(err.Error())
+				tc.GlobalErrorKernelHandlerChannel <- err
+				return
 			}
 		}
 	}
@@ -353,6 +361,8 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 					log.Fatal("Channel closed for polling kernel events")
 				}
 				log.Println("Error polling kernel events", pollError)
+				tc.GlobalErrorKernelHandlerChannel <- pollError
+				return
 			default:
 				time.Sleep(time.Second)
 			}
@@ -720,6 +730,7 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 					if err := tc.TcCollection.Maps[pinMaps].Unpin(); err != nil {
 						return err
 					}
+					tc.TcCollection.Maps[pinMaps].Close()
 				}
 			}
 		}

@@ -38,7 +38,7 @@ type NetKProbes struct {
 	KprobelLink       link.Link
 }
 
-func GenerateKprobeEventFactory() *NetKProbes {
+func NewKprobeEventFactory() *NetKProbes {
 	return &NetKProbes{}
 }
 

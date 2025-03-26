@@ -59,7 +59,7 @@ func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalError
 	}
 
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
-		tccloneTunnel.IngressTunnelSniffer = xdp.GenerateIngressSnifferFactory(
+		tccloneTunnel.IngressTunnelSniffer = xdp.NewIngressSnifferFactory(
 			iface, onnx, streamClient, globalErrorChannel,
 		)
 	}
@@ -162,7 +162,6 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			log.Println("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
 		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
-			log.Printf("The exfiltration attempt by process %d exceed the limit sending sigkill", mapField.ProcessId)
 			var sigKillStdoutBuffer bytes.Buffer
 			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))

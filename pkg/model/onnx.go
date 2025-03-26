@@ -150,7 +150,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 	}
 }
 
-func ConnectRemoteInferenceSocket(t *utils.TopDomains) (*OnnxModel, error) {
+func NewRemoteInferenceSocket(t *utils.TopDomains) (*OnnxModel, error) {
 	return &OnnxModel{
 		TopDomainsDNSServer: t,
 	}, nil

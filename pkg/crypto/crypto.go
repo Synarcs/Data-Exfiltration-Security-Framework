@@ -8,50 +8,53 @@ import (
 	"log"
 	"os"
 
-	"github.com/a5i/pkcs7"
 	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/initca"
 )
 
 const (
-	KERNEL_BPF_CRYPTO_PATH = "keys" // used for kernel crypto security over keyrings ensuring security over injected kernel programs
-	keySize                = 1 << 12
-	privateKey             = KERNEL_BPF_CRYPTO_PATH + "/private.pem"
-	certFile               = KERNEL_BPF_CRYPTO_PATH + "/cert.pem"
-	certDERFile            = KERNEL_BPF_CRYPTO_PATH + "/cert.der"
-	certPkcs7File          = KERNEL_BPF_CRYPTO_PATH + "/cert.p7b"
-	validityDays           = 365
+	KEY_DIR       = "keys"
+	PRIVATE_KEY   = KEY_DIR + "/private.key"
+	CERT_FILE     = KEY_DIR + "/cert.pem"
+	CERT_DER_FILE = KEY_DIR + "/cert.der"
+	VALIDITY_DAYS = 365
+	KEY_SIZE      = 4096
+	CERT_SUBJECT  = "BPF Program Signing Key"
+	CUSTOM_OID    = "1.3.6.1.4.1.2312.19.1"
 )
 
-// save the self sign cert for the agent
-func savePEMCert(filename string, certDER []byte) error {
-	file, err := os.Create(filename)
-	if err != nil {
+/*
+Clean older crypto dir if any exists and ensure the keys are always ephemeral
+*/
+func CleanOlderCrypoDir() error {
+	if err := os.RemoveAll(KEY_DIR); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
-	defer file.Close()
-
-	pemBlock := &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certDER,
-	}
-
-	return pem.Encode(file, pemBlock)
+	return nil
 }
 
-// generateSelfSignedCert creates a self-signed X.509 certificate using CFSSL
+func createKeyDir() error {
+	return os.MkdirAll(KEY_DIR, 0700)
+}
+
+// Generate a self-signed certificate for signing eBPF programs
 func generateSelfSignedCert() ([]byte, []byte, []byte, error) {
+	// Define CSR template
 	req := &csr.CertificateRequest{
-		CN: "dnsSecurity.bleed.io",
+		CN: CERT_SUBJECT,
 		KeyRequest: &csr.KeyRequest{
 			A: "rsa",
-			S: keySize,
+			S: KEY_SIZE,
 		},
-	}
-
-	_, _, err := csr.ParseRequest(req)
-	if err != nil {
-		return nil, nil, nil, err
+		Names: []csr.Name{
+			{O: "BPF Security"},
+		},
+		CA: &csr.CAConfig{
+			Expiry: fmt.Sprintf("%dh", VALIDITY_DAYS*24),
+		},
 	}
 
 	certPEM, _, privateKey, err := initca.New(req)
@@ -72,33 +75,7 @@ func generateSelfSignedCert() ([]byte, []byte, []byte, error) {
 	return certPEM, certDER.Raw, privateKey, nil
 }
 
-// convertToPKCS7 converts a DER-encoded certificate to PKCS#7 format
-// kernel uses pkcs7 as keyring for LSM from over every kernel module to be injected in kernel to bpf load lsm security hooks to verify the security of the BPF-Loader kernel code
-func convertToPKCS7(certDER []byte, outputFile string) error {
-	// Parse the certificate from DER format
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return fmt.Errorf("failed to parse certificate: %v", err)
-	}
-
-	degenerateCert, err := pkcs7.DegenerateCertificate(cert.Raw)
-	if err != nil {
-		fmt.Println("Error creating degenerate certificate:", err)
-		return err
-	}
-
-	degenerateCertPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PKCS7",
-		Bytes: degenerateCert,
-	})
-
-	// Store the pkcs7 cert on disk
-	if err := os.WriteFile(outputFile, degenerateCertPEM, 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
+// Save the private key in PEM format
 func savePrivateKeyToPEM(privateKey []byte, outputFile string) error {
 	pemBlock := &pem.Block{
 		Type:  "PRIVATE KEY",
@@ -106,55 +83,47 @@ func savePrivateKeyToPEM(privateKey []byte, outputFile string) error {
 	}
 
 	pemData := pem.EncodeToMemory(pemBlock)
-	if err := os.WriteFile(outputFile, pemData, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(outputFile, pemData, 0600)
 }
 
-func GenerateCryptoDir() error {
-	if err := os.MkdirAll(KERNEL_BPF_CRYPTO_PATH, 0777); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return nil
-		}
+func savePEMCert(filename string, certPEM []byte) error {
+	return os.WriteFile(filename, certPEM, 0644)
+}
+
+func saveDerCert(filename string, certDER []byte) error {
+	return os.WriteFile(filename, certDER, 0644)
+}
+
+func GenerateBPFCert() error {
+	// Ensure key directory exists
+	if err := createKeyDir(); err != nil {
 		return err
 	}
 
+	// Generate certificate and key
 	certPEM, certDER, key, err := generateSelfSignedCert()
 	if err != nil {
 		return err
 	}
 
-	if err := savePrivateKeyToPEM(key, privateKey); err != nil {
-		fmt.Println("Error saving private key:", err)
-		return err
-	}
-
-	if err != nil {
-		fmt.Println("Error generating certificate:", err)
+	// Save private key
+	if err := savePrivateKeyToPEM(key, PRIVATE_KEY); err != nil {
+		log.Println("Error saving private key:", err)
 		return err
 	}
 
 	// Save certificate in PEM format
-	if err := savePEMCert(certFile, certPEM); err != nil {
-		fmt.Println("Error saving certificate:", err)
+	if err := savePEMCert(CERT_FILE, certPEM); err != nil {
+		log.Println("Error saving certificate:", err)
 		return err
 	}
 
-	// Convert to PKCS#7 for kernel keyring verifier
-	if err := convertToPKCS7(certDER, certPkcs7File); err != nil {
-		log.Println("Error converting to PKCS#7:", err.Error())
+	// Save certificate in DER format
+	if err := saveDerCert(CERT_DER_FILE, certDER); err != nil {
+		log.Println("Error saving DER certificate:", err)
 		return err
 	}
 
-	log.Println("Generate the eBPF Node Agent Inject Security Private Key stored at ", privateKey)
-	log.Println("Generate the eBPF Node Agent Inject Security Cert stored at ", certFile)
-	log.Println("Generate the eBPF Node Agent Inject Security Cert stored at ", certFile)
-
+	log.Println("Generated BPF Signing Certificate and stored in", KEY_DIR)
 	return nil
-}
-
-func CleanCryptoDir() error {
-	return os.RemoveAll(KERNEL_BPF_CRYPTO_PATH)
 }

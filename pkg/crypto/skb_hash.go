@@ -1,10 +1,12 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
 	"log"
+	"strconv"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
@@ -19,7 +21,14 @@ func (h *Hash) GetRandomBootSkbMark() {
 	var randomNuonceSkbMarkBoot []byte = make([]byte, 24)
 	_, err := rand.Read(randomNuonceSkbMarkBoot)
 	if err != nil {
-		h.SkbHash = utils.DEFAULT_SK_BUFF_NUONCE
+		var hash bytes.Buffer
+		_, err := hash.WriteString(strconv.Itoa(utils.DEFAULT_SK_BUFF_NUONCE))
+		if err != nil {
+			h.SkbHash = binary.BigEndian.Uint32([]byte{0xf, 0xf, 0xf, 0xf})
+			return
+		}
+		h.SkbHash = binary.BigEndian.Uint32(hash.Bytes())
+		return
 	}
 
 	if !utils.DEBUG {

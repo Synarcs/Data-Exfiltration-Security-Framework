@@ -118,7 +118,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, c
 The signed kernel keys which the node agent generate in data plane is always secured via the crypto keys ephemeral to the life time of agent
 */
 func CleanCryptoDirs() error {
-	if err := crypto.CleanCryptoDir(); err != nil {
+	if err := crypto.CleanOlderCrypoDir(); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil
 		}
@@ -132,7 +132,12 @@ Init all the kernel crypto dir ephemeral to hold keyrings and signatures to secu
 */
 func InitKernelCryptoHooks() error {
 
-	if err := crypto.GenerateCryptoDir(); err != nil {
+	if err := crypto.CleanOlderCrypoDir(); err != nil {
+		log.Println("Error cleaning the older crypto dir, the node agent for LSM in kernel must boot with new ephemeral keys")
+		return err
+	}
+
+	if err := crypto.GenerateBPFCert(); err != nil {
 		return err
 	}
 	return nil
@@ -172,6 +177,9 @@ func main() {
 		panic(err.Error())
 	} else {
 		log.Println("Successfully generated all the crypto keys for node agent with LSM 2 way keyring for enhanced security")
+		if err := crypto.AddKernelKeyRing(); err != nil {
+			panic(err.Error())
+		}
 	}
 
 	envoy.InitTCPWasmFilter()
@@ -231,7 +239,7 @@ func main() {
 	cliSock := cli.GenerateRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
 		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
-		go cliSock.ConfigureUnixSocket()
+		go cliSock.NewNodeAgentUnixCLISocket()
 	}
 
 	if nodeAgentCliOptions.Debug {
@@ -280,7 +288,7 @@ func main() {
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
-	model, err := onnx.ConnectRemoteInferenceSocket(topDomains)
+	model, err := onnx.NewRemoteInferenceSocket(topDomains)
 	if err != nil {
 		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())
@@ -288,7 +296,12 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc := tcl.GenerateTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash)
+	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash)
+
+	if err != nil {
+		log.Println(err.Error())
+		panic(err.Error())
+	}
 
 	if globalConfig.EnhancedFeatures.Dns.EnableNxFloodPrevention {
 		xdpHandler := xdp.NewXdpHandler(&iface)
@@ -299,12 +312,12 @@ func main() {
 
 	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
 		// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
-		ingress := xdp.GenerateIngressSnifferFactory(&iface, model, streamProducer, globalErrorKernelHandlerChannel)
+		ingress := xdp.NewIngressSnifferFactory(&iface, model, streamProducer, globalErrorKernelHandlerChannel)
 		go ingress.SniffIgressForC2C(ctx, utils.DNS_EGRESS_PORT)
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
-	kprobe := kprobe.GenerateKprobeEventFactory()
+	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
@@ -356,7 +369,9 @@ func main() {
 	// global error channel for the kernel hooks
 	go func() {
 		for range globalErrorKernelHandlerChannel {
-			kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
+			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts); err != nil {
+
+			}
 		}
 	}()
 
@@ -402,6 +417,9 @@ func main() {
 		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
 		agentCancelFunc()
+		if err := crypto.CleanupKernelKeyRing(); err != nil {
+			log.Println("Error cleaning up the kernel keyring for custom signed keys", err.Error())
+		}
 		CleanCryptoDirs()
 		streamProducer.CloseProducer()
 		streamConsumer.CloseConsumer()

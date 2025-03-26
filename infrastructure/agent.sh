@@ -51,7 +51,9 @@ sudo apt update -y && sudo apt install -y \
     libncursesw5-dev \
     tk-dev \
     libc6-dev \
-    libbz2-dev
+    libbz2-dev \
+    keyutils \
+    libkeyutils-dev 
 
 # Install x86_64 specific libraries
 arch=$(uname -m)

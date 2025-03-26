@@ -62,13 +62,3 @@ func GetCurrentRXQuees(interfaceName string) (int, error) {
 
 	return txQueues, nil
 }
-
-func test_xdp() {
-
-	queue, err := GetCurrentTXQueues("enp0s1")
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Println(queue)
-}

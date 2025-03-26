@@ -25,7 +25,7 @@ const (
 // remote config from the centralized server broker
 type NodeDaemonCli struct {
 	Unixsock  unixSockPath
-	CloseChan chan interface{}
+	CloseChan chan bool
 	ErorCHan  chan error
 }
 
@@ -33,7 +33,7 @@ type NodeDaemonCli struct {
 func GenerateRemoteCliSocketServer() *NodeDaemonCli {
 	return &NodeDaemonCli{
 		Unixsock:  unixSockPath(LocalCliUnixSockPath),
-		CloseChan: make(chan interface{}), // signal to close the cli server when node agent gracefully shutdowns
+		CloseChan: make(chan bool), // signal to close the cli server when node agent gracefully shutdowns
 		ErorCHan:  make(chan error),
 	}
 }
@@ -176,7 +176,7 @@ func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request)
 	)
 }
 
-func (nc *NodeDaemonCli) ConfigureUnixSocket() {
+func (nc *NodeDaemonCli) NewNodeAgentUnixCLISocket() {
 	listener, err := net.Listen("unix", string(nc.Unixsock))
 
 	if err != nil {

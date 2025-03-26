@@ -29,7 +29,7 @@ type IngressSniffHandler struct {
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
-func GenerateIngressSnifferFactory(iface *netinet.NetIface,
+func NewIngressSnifferFactory(iface *netinet.NetIface,
 	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan error) *IngressSniffHandler {
 
 	// only use  for ingress support for the link (net_device) in kernel

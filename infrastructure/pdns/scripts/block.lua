@@ -6,6 +6,12 @@ local cjson = require("cjson")
 local pgmoon = require("pgmoon")
 local encode_array = require("pgmoon.arrays").encode_array
 
+local debug = false
+
+if debug then
+    local const = require("consts")
+end
+
 local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/etc/powerdns/onnx-inference-out.sock"
 local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/etc/powerdns/onnx-inference-in.sock"
 local EGRESS_INFER_ROUTE = "/onnx/dns"

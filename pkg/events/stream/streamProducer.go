@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	KAFKA_BROKER_CONN_TIMEOUT = time.Second * 10
+	KAFKA_BROKER_CONN_TIMEOUT = time.Second * 2
+	KAFKA_BROKER_CTX_TIMEOUT  = time.Second * 2
 )
 
 type StreamProducer struct {
@@ -33,7 +34,7 @@ type HostNetworkExfilFeatures struct {
 
 func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) error {
 
-	connContext, _ := context.WithTimeout(ctx, KAFKA_BROKER_CONN_TIMEOUT)
+	connContext, _ := context.WithTimeout(ctx, KAFKA_BROKER_CTX_TIMEOUT)
 	connErrorChan := make(chan error)
 	connDone := make(chan bool)
 
@@ -45,7 +46,7 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 		RequiredAcks: kafka.RequireOne,
 		Async:        true,
 		Transport: &kafka.Transport{
-			DialTimeout: time.Second * 10,
+			DialTimeout: KAFKA_BROKER_CONN_TIMEOUT,
 		},
 	}
 
