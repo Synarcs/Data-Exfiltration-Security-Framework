@@ -13,6 +13,8 @@ type NodeAgentCliOptions struct {
 	Cni bool
 	// used for sigkill with threshold limit for maslicious exfil detection
 	SigKill int
+
+	Profile bool
 }
 
 // config for high enhanced security for l3, l44, l7 filters and other orchestrated environments config to stop data breaches

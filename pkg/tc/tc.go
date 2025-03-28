@@ -191,59 +191,64 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 	}
 
 	for {
-		var PacketCountKernel uint32 = 0
-		if err := ebpfMap.Lookup(KernelPacketRedirectCount, &PacketCountKernel); err != nil {
-			if errors.Is(err, ebpf.ErrKeyNotExist) {
-				continue
-			} else {
-				log.Println("Error polling metric for redirected kernel count", err)
-				errorEventChannel <- err
-			}
-		}
-		_, ok := localCache.Get(PacketCountKernel)
-		if ok {
-			continue
-		}
-		info, err := ebpfMap.Info()
-
-		if err != nil {
-			log.Printf("error getting the kernel ebpf map info %+v", err)
-			return err
-		}
-
-		mapName := strings.Replace((strings.Replace(strings.Replace(ebpfMap.String(), info.Type.String(), "", -1), "(", "", -1)), ")", "", -1)
-		mapName = strings.TrimSpace(mapName)
-		mapName = strings.Split(mapName, "#")[0]
-		if utils.DEBUG {
-			log.Println("The current Redirected count of packets is ", mapName, PacketCountKernel)
-		}
-		localCache.Add(PacketCountKernel, true)
-
-		switch mapName {
-		case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
-			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
-				KernelRedirectPacketCount: PacketCountKernel,
-				EvenTime:                  time.Now().Format(time.RFC3339),
-			}); err != nil {
-				if !utils.DEBUG {
-					log.Println("Error Streaming the prometheus metrics", err)
-				}
-			}
-		case events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP:
-			if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCountEvent](events.PacketDPIKernelDropCountEvent{
-				KernelDropPacketCount: PacketCountKernel,
-				EvenTime:              time.Now().Format(time.RFC3339),
-			}); err != nil {
-				if !utils.DEBUG {
-					log.Println("Error Streaming the prometheus metrics", err)
-				}
-			}
+		select {
+		case <-ctx.Done():
+			return nil
 		default:
-			{
+			var PacketCountKernel uint32 = 0
+			if err := ebpfMap.Lookup(KernelPacketRedirectCount, &PacketCountKernel); err != nil {
+				if errors.Is(err, ebpf.ErrKeyNotExist) {
+					continue
+				} else {
+					log.Println("Error polling metric for redirected kernel count", err)
+					errorEventChannel <- err
+				}
 			}
-		}
+			_, ok := localCache.Get(PacketCountKernel)
+			if ok {
+				continue
+			}
+			info, err := ebpfMap.Info()
 
-		time.Sleep(time.Second)
+			if err != nil {
+				log.Printf("error getting the kernel ebpf map info %+v", err)
+				return err
+			}
+
+			mapName := strings.Replace((strings.Replace(strings.Replace(ebpfMap.String(), info.Type.String(), "", -1), "(", "", -1)), ")", "", -1)
+			mapName = strings.TrimSpace(mapName)
+			mapName = strings.Split(mapName, "#")[0]
+			if utils.DEBUG {
+				log.Println("The current Redirected count of packets is ", mapName, PacketCountKernel)
+			}
+			localCache.Add(PacketCountKernel, true)
+
+			switch mapName {
+			case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
+				if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
+					KernelRedirectPacketCount: PacketCountKernel,
+					EvenTime:                  time.Now().Format(time.RFC3339),
+				}); err != nil {
+					if !utils.DEBUG {
+						log.Println("Error Streaming the prometheus metrics", err)
+					}
+				}
+			case events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP:
+				if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCountEvent](events.PacketDPIKernelDropCountEvent{
+					KernelDropPacketCount: PacketCountKernel,
+					EvenTime:              time.Now().Format(time.RFC3339),
+				}); err != nil {
+					if !utils.DEBUG {
+						log.Println("Error Streaming the prometheus metrics", err)
+					}
+				}
+			default:
+				{
+				}
+			}
+
+			time.Sleep(time.Second)
+		}
 	}
 }
 
@@ -374,7 +379,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			log.Println("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan will use port  for mal process monitor in kernel")
 			return
 		}
-		tc_tunnel := GenerateTcTunnelFactory(tc, iface,
+		tc_tunnel := NewTcTunnelFactory(tc, iface,
 			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel)
 		tc.TcTunnelNonStandardPortScan = tc_tunnel
 

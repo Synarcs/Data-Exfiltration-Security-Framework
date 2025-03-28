@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 
 #include <linux/ip.h>
+
 // l2 filter in kerenl 
 #include <linux/if_ether.h>
 
@@ -9,7 +10,8 @@
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
-// l4 dynamic sock filter 
+
+// l4
 #include <linux/udp.h>
 #include <linux/tcp.h>
 #include <linux/pkt_cls.h>

@@ -16,7 +16,6 @@
 #define MAX_DNS_FEATURES 8
 #define MAX_DNS_PRIO_KEYS 4
 
-
 enum MALICIOUS_FLAGS {
     BENIGN = 0,
     SUSPICIOUS,
@@ -252,6 +251,11 @@ struct dns_record_limits_malicious {
     (4 << 0x8) | 8,   // (5 - (tld + root) == 3) // MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD
     (4 << 0x8) | 125, // (127 - (tld - root) == 125) // MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD
 };
+
+// define the MX, TXT and other payload obfuscation based controls  for DNS packets
+#define MAX_DNS_PAYLOAD_TXT_LENGTH 80
+#define MAX_DNS_PAYLOAD_MX_LENGTH 120
+
 
 #define MAX_DNS_FEATURES_KERNEL 8
 #define MAX_DNS_FEATURES_PRIO_KEYS 4

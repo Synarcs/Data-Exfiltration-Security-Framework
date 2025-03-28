@@ -54,6 +54,7 @@ func initKernelProgInjectComptionEvent() map[string]chan bool {
 		progs.KPROBE:         make(chan bool),
 		progs.TRACEPOINT:     make(chan bool),
 		progs.XDP:            make(chan bool),
+		progs.LSM_BPF_HOOKS:  make(chan bool),
 	}
 }
 
@@ -91,13 +92,13 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, c
 
 	if err := cleanHooks.kprobe.DetachKprobeHandlers(); err != nil {
 		return err
-	}
+	} // kernel kprobe layer
 
 	for _, openConnSocks := range cleanHooks.iface.ConnTrackNsHandles {
 		if err := openConnSocks.CloseConntrackNetlinkSock(); err != nil {
 			return err
 		}
-	}
+	} // not kenrle eBPF hook but internally relies over kernel conntrack layer for cleaning nf_netlink socket
 
 	if config.CliFlag {
 		log.Println("Cleaning the mounted unix socket")
@@ -150,6 +151,7 @@ func main() {
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
 	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
+	flag.BoolVar(&nodeAgentCliOptions.Profile, "profile", false, "Runs pprof profile server for flamegraph based node agent profiling live once injected all progs in kernel")
 
 	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods virtual net_device in kernel attached to either the host cni vxlan / bgp net_device or internal node to node communication on same pod
 	flag.BoolVar(&nodeAgentCliOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
@@ -246,16 +248,13 @@ func main() {
 		utils.DEBUG = nodeAgentCliOptions.CliFlag
 	}
 
+	var rpcServer rpc.NodeAgentService
 	if nodeAgentCliOptions.StreamClient {
 		config := make(chan interface{})
-		rpcServer := rpc.NodeAgentService{
-			ConfigChannel: config,
-		}
+		rpcServer.ConfigChannel = config
 
-		if !utils.DEBUG {
-			// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
-			go rpcServer.Server()
-		}
+		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
+		go rpcServer.StartAgentStreamServer()
 	}
 
 	tst := make(chan os.Signal, 1)
@@ -339,6 +338,12 @@ func main() {
 
 	go events.StartPrometheusMetricExporterServer(globalConfig)
 
+	// start the profile server for flamegraph and cpu profiling for the node agent
+	profilerContext, cancelctx := context.WithCancel(ctx)
+	if nodeAgentCliOptions.Profile {
+		go utils.InitProfileServer(profilerContext)
+	}
+
 	detachKernelHooksOpts := &KernelCleanHooks{
 		tc:        tc,
 		nft:       netfilter,
@@ -414,7 +419,8 @@ func main() {
 		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
 			log.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
-		log.Println("Killing the root node agent ebpf programs atatched in Kernel", os.Getpid())
+		log.Println("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
+		agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
 		kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
 		agentCancelFunc()
 		if err := crypto.CleanupKernelKeyRing(); err != nil {
@@ -423,6 +429,15 @@ func main() {
 		CleanCryptoDirs()
 		streamProducer.CloseProducer()
 		streamConsumer.CloseConsumer()
+
+		if nodeAgentCliOptions.StreamClient {
+			rpcServer.CloseRpcServer()
+		}
+
+		// cancel ctx for the profiler running
+		if nodeAgentCliOptions.Profile {
+			cancelctx()
+		}
 		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
 	}
 

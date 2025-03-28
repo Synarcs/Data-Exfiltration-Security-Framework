@@ -1,3 +1,2 @@
 www.google.com A 
-www.amazon.com AAAA 
-www.apple.com AAAA 
+www.apple.com MX

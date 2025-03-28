@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
+import lombok.extern.slf4j.Slf4j;
+
 @ControllerAdvice
 @Service
+@Slf4j
 public class ExceptionHandlerController {
     
     // add custom controller exception for processing 

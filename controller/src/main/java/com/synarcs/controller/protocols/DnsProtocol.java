@@ -1,7 +1,6 @@
 package com.synarcs.controller.protocols;
 
 import java.io.Serializable;
-import java.util.TreeSet;
 
 import com.synarcs.controller.streamserdes.DnsFeatures;
 
@@ -60,7 +59,7 @@ public class DnsProtocol implements Serializable, IFeatureTransportProtocol {
         return ExfilPort;
     }
 
-    public DnsFeatures getDnsFeatures() {
+    public DnsFeatures GetDnsFeatures() {
         return features;
     }
     

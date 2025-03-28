@@ -33,6 +33,7 @@ const (
 	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
 )
 
+// TODO: Replace with discrete IPAM  differring from the all netdev links at the endpoint
 var Iface_Bridge_Subnets map[string]string = map[string]string{
 	NETNS_RNETLINK_EGREESS_DPI_INTERFACE: "10.200.0.1",
 	NETNS_RNETLINK_INGRESS_DPI_INTERFACE: "10.200.0.2",
@@ -115,7 +116,7 @@ func (nf *NetIface) GetRootGateway() error {
 		}
 	}
 
-	dnsResolver, err := ReadPackageConfig()
+	dnsResolver, err := ReadDNSResolvedConf()
 	if err != nil {
 		nf.PhysicalRouterGatewayV4 = gw.To4()
 		nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()

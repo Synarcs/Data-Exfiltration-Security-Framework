@@ -13,7 +13,7 @@ type DnsResolverServer struct {
 	Ipv6 net.IP
 }
 
-func ReadPackageConfig() (*DnsResolverServer, error) {
+func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 	// we dont need parallel i/o since the dns resolv is not much huge file
 	fd, err := os.Open("/etc/resolv.conf")
 	if err != nil {

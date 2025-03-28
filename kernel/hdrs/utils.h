@@ -1,5 +1,5 @@
 #ifndef __UTILS_H_ 
-#define __UTILS_H_ 
+    #define __UTILS_H_ 
 
 #include <stdbool.h>
 #include <linux/version.h>
@@ -53,7 +53,7 @@ struct __kernel_uid_struct_info {
 
 
 /*
-    Verify does kernel support task_comm for task struct 
+    Verify does kernel support task_comm for task struct specifically for kernel traffic control
 */
 static 
 __always_inline bool verify_kernel_version_support_task_comm() {
@@ -105,5 +105,10 @@ __always_inline struct __kernel_uid_struct_info * __get_uid_info() {
     return &proc_info;
 }
 
+
+static
+__always_inline bool _has_skb_mark(struct __sk_buff *skb) {
+    return skb->mark > 0;
+}
 
 #endif 

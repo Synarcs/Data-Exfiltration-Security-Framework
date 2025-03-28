@@ -1,5 +1,5 @@
-#ifndef UDP_PORTS_H
-#define UDP_PORTS_H
+#ifndef RAW_PROC_H 
+#define RAW_PROC_H
 
 #include "dns.h" 
 #include "consts.h"
@@ -37,9 +37,5 @@ static const struct PortMapping UDP_PROTOCOLS[] = {
     {"Kerberos", 88}
 };
 
-#endif
 
-static 
-__always_inline bool is_skb_mark(struct __sk_buff *skb) {
-    return skb->mark == redirect_skb_mark ? true : false;
-}
+#endif

@@ -44,7 +44,9 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
 }
 
-func GenerateTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan error,
+// this is meant for stopping exfiltration over random ports
+// the root kernel single tc handler is advacned to stop exfiltration over both standard and random UDP ports
+func NewTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan error,
 	streamClient *stream.StreamProducer, onnx *model.OnnxModel) *TCCloneTunnel {
 
 	// sniff for random port traffic when detected to be malicious until other wise suspended and terminated
@@ -282,7 +284,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	}
 }
 
-func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) {
+func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) error {
 	runtime.LockOSThread()
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
@@ -293,41 +295,45 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	defer ringBuffer.Close()
 
 	for {
-		if err := ctx.Err(); err != nil {
-			return
-		}
-		if utils.DEBUG {
-			log.Println("polling the ring buffer", "using th map", ebpfEvents)
-		}
-		record, err := ringBuffer.Read()
-		if err != nil {
-			if errors.Is(err, ringbuf.ErrClosed) {
-				return
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			if utils.DEBUG {
+				log.Println("polling the ring buffer", "using th map", ebpfEvents)
 			}
-			log.Printf("Error reading ring buffer: %s", err)
-			return
-		}
-
-		var event events.DnsEvent
-		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-			log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+			record, err := ringBuffer.Read()
 			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
+				if errors.Is(err, ringbuf.ErrClosed) {
+					return err
+				}
+				log.Printf("Error reading ring buffer: %s", err)
+				return err
 			}
-		} else {
-			log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
-		}
 
-		// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
-		if event.ProcessId != 0 && event.ThreadId != 0 {
-			log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer", event)
-		} else {
-			log.Println("Potential DNS tunnel from kernel detected", event)
+			var event events.DnsEvent
+			if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
+				log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
+				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
+				if err != nil {
+					log.Fatalf("Failed to parse event: %v", err)
+					return err
+				}
+			} else {
+				log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
+				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
+				if err != nil {
+					log.Fatalf("Failed to parse event: %v", err)
+					return err
+				}
+			}
+
+			// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
+			if event.ProcessId != 0 && event.ThreadId != 0 {
+				log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer", event)
+			} else {
+				log.Println("Potential DNS tunnel from kernel detected", event)
+			}
 		}
 	}
 }

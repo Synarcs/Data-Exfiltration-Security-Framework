@@ -1,10 +1,27 @@
-// <!---------------------------
-// Name: DNSObselisk 
-// File: dns_tc.c
-// -----------------------------
-// Author: Synarcs
-// Data:   09/25/2024, 2:59:15 AM
-// ---------------------------->
+/* Copyright (c) 2024-2025 Synarcs
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *   -----------------------------
+ *    Author: Synarcs
+ *    Data:   09/25/2024, 2:59:15 AM
+ *   -----------------------------
+*/
 
 #include <linux/bpf.h>
 #include <linux/version.h>
@@ -65,8 +82,11 @@ struct vlan_hdr {
 	__be16	h_vlan_encapsulated_proto;
 };
 
+// actions used to parse the all layers of kernel network stack from skb 
 struct packet_actions {
-    bool (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
+    // init the cursror to hold packet cursor information from skb 
+    void (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
+    // init all the fuctionr ref pointers to parse each layer of kernel network stack raw from skb 
     struct packet_actions (*packet_class_action) (struct packet_actions actions);
     // link layer
     __u8 (*parse_eth) (struct skb_cursor *);
@@ -340,7 +360,7 @@ struct dns_volume_stats {
             }                                       
 
 // custom range order filtering for the DNS domains over the labels queries ssections 
-#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count,subdomain_label_count_config_min_key,subdomain_label_count_config_max_key)                           \
+#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count,subdomain_label_count_config_min_key,subdomain_label_count_config_max_key)                             \
     if (!DEBUG)                                                                                                                                             \
         bpf_printk("subdomain count %d ", subdomain_label_count);                                                                                           \
     __u32 * subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key);          \
@@ -357,7 +377,7 @@ struct dns_volume_stats {
         do {                                                                            \
             if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
                 if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
-                    if (!DEBUG) {                                                        \
+                    if (!DEBUG) {                                                       \
                         bpf_printk("dropping traffic for malicious c2 ipv4 remote c2"); \
                     }                                                                   \
                     return TC_DROP;                                                     \
@@ -383,10 +403,9 @@ struct dns_volume_stats {
 
 
 static 
-__always_inline bool cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
+__always_inline void cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
     cursor->data = (void *)(ll)(skb->data);
     cursor->data_end = (void *)(ll)(skb->data_end);
-    return true;
 }
 
 static 
@@ -422,16 +441,11 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
 
     // Check if the UDP payload fits within the packet
     if ((void *)udp_data + udp_len_payload > skb->data_end) {
-        #ifdef DEBUG
-            if (DEBUG)
-                bpf_printk("UDP payload exceeds packet boundary");
-        #endif
         return 0;  // Return error for the kernel memory limit exceed for memory safety 
     }
 
     // Check if the UDP payload fits within the packet
     if ((void *)udp_data + udp_len_payload > skb->data_end) {
-        bpf_printk("UDP payload exceeds packet boundary");
         return 0;  // Return error for the kernel memory limit exceed for memory safety 
     }
 
@@ -448,15 +462,6 @@ __always_inline __u8 parse_udp(struct  skb_cursor *skb, bool isIpv4) {
     if (process_udp_payload_mem_verification(udp, skb, isIpv4 ? true : false) == 0) 
         return 0;
     
-
-    #ifdef DEBUG
-        if (DEBUG) {
-            __u16 dport = bpf_htons(udp->dest);
-            __u16 sport = bpf_htons(udp->source);
-            bpf_printk("The Dest and src port for UDP packet are %u %u", dport, sport);
-        }
-    #endif
-
     return 1;
 }
 
@@ -518,13 +523,13 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
         };
         if (dns_query_class == qt.MX || dns_query_class == qt.TXT || dns_query_class == qt.CNAME){
             if (dns_query_class == qt.TXT) {
-                if (total_domain_length >= 80) {
+                if (total_domain_length >= MAX_DNS_PAYLOAD_TXT_LENGTH) {
                     resuult.drop = true;
                 }else {
                     resuult.deep_scan_mirror = true;
                 }
             }else if (dns_query_class == qt.MX) {
-                if (total_domain_length >= 120) {
+                if (total_domain_length >= MAX_DNS_PAYLOAD_MX_LENGTH) {
                     resuult.drop = true;
                 }else {
                     resuult.deep_scan_mirror = true;
@@ -1836,6 +1841,8 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 
 static 
 __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
+    if (_has_skb_mark(skb)) 
+        return;
     if (skb_redir_hash == 0) 
         skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
     else

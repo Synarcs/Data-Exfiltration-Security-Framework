@@ -16,6 +16,7 @@ type NodeAgentService struct {
 	pb.UnimplementedNodeAgentServiceServer
 	ConfigChannel chan interface{}
 	Ctx           context.Context
+	Server        *grpc.Server
 }
 
 func (s *NodeAgentService) GetExfilDomains(domain *pb.ExfilDomains, stream pb.NodeAgentService_GetExfilDomainsServer) error {
@@ -42,7 +43,7 @@ func (s *NodeAgentService) GenExfilDomainsLength(ctx context.Context, domain *pb
 	return nil, status.Errorf(codes.Unimplemented, "method GenExfilDomainsLength not implemented")
 }
 
-func (rpc *NodeAgentService) Server() {
+func (rpc *NodeAgentService) StartAgentStreamServer() {
 	list, err := net.Listen("tcp", ":3200")
 	if err != nil {
 		panic(err.Error())
@@ -51,10 +52,19 @@ func (rpc *NodeAgentService) Server() {
 	log.Println("Node Agent RPC Server Listen on POrt :: ", 3200)
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
+	rpc.Server = s
 	pb.RegisterNodeAgentServiceServer(s, &NodeAgentService{})
 	if err := s.Serve(list); err != nil {
 		log.Println(err.Error())
 		panic(err.Error())
 	}
 
+}
+
+func (rpc *NodeAgentService) CloseRpcServer() {
+	if rpc.Server == nil {
+		return
+	}
+
+	rpc.Server.GracefulStop()
 }
