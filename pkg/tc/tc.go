@@ -299,7 +299,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}
 
 	if len(iface.BridgeLinks) != 2 {
-		log.Fatalf("The Node agen cannot be botted unless all the DPI linux veth bridges are added using netlink before exiting ....")
+		log.Fatalf("The Node agent cannot be botted unless all the DPI linux veth bridges are added using netlink before exiting ....")
 		// TODO: Add a process global error channel for detach if any of the tc panic
 		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("The required bridge used for deep security scans not created, please make sure proper veth bridges exist and required linux ns")
 		return

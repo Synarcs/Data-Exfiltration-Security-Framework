@@ -70,17 +70,6 @@
 #define IP_MF	  0x2000
 #define IP_OFFSET 0x1FFF
 
-struct skb_cursor {
-    void *data;
-    void *data_end;
-    struct bpf_spin_lock *lock;
-};
-
-
-struct vlan_hdr {
-	__be16	h_vlan_TCI;
-	__be16	h_vlan_encapsulated_proto;
-};
 
 // actions used to parse the all layers of kernel network stack from skb 
 struct packet_actions {
@@ -162,19 +151,6 @@ struct exfil_raw_packet_mirror {
     __u8 isUdp;
     __u8 isPacketRescanedAndMalicious;
 };
-
-
-// kernel post processing for parsing the user packet event for the first packet send via a non standard kernel egress filter 
-// use the kernel bpf_clone for packet clone to an non host bridge for enhanced deep packet scan since the kernel cannot process the raw packet 
-
-// remove this due a huge possibility of race condition with kernel thread for TC running over each CPU 
-struct exfil_security_egress_reconnisance_map_scan {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __type(key, __u16);
-    __type(value, struct exfil_raw_packet_mirror);
-    __uint(max_entries, 1 << 16);
-} exfil_security_egress_reconnisance_map_scan SEC(".maps");
-
 
 // process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
 struct proc_info_non_standard_port {
@@ -474,10 +450,10 @@ __always_inline __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
 }
 
 static 
-__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTcp) {
+__always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTCP) {
     // verify the dns header payload from root of the skbuff 
 
-    if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) + sizeof(struct udphdr) + sizeof(struct dns_header) > skb->data_end) {
+    if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) +  (isTCP ? sizeof(struct tcphdr) : sizeof(struct udphdr)) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 1;
     }
@@ -566,9 +542,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
     // the size of char containing the dns payload char size 
     __u8 *dns_payload_buffer = (__u8 *) dns_payload;
     /*
-        Usually a dns resolvert sends 1 requestt query for a single request to the remote DNS server 
-        The clsact qdisc is only meant for egress traffic and tc control flow system after fa_codel and default tc action from kernel
-        Direct action appled over the egress traffic 
+        Usually the c2 implant and tunelling tools sends 1 request query per DNS packet  to the remote DNS server 
         DNS exfiltration attacks, malware can hide and transmit data not only in the questions section of DNS queries but also in other sections, making it more flexible and stealthy
     */
 
@@ -784,12 +758,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             return BENIGN;
         }
      }else return SUSPICIOUS;
-   }else {
-        /// the question is malicious since the malicious client is sending multiple questions a C2C where malware is asking next commands 
-        return SUSPICIOUS;
    }
 
-   return BENIGN;
+   return SUSPICIOUS;
 }   
 
 
@@ -1099,7 +1070,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
         struct dns_flags dns_header_flags = get_dns_flags_tcp (dns_header); // padding length in raw skb added for parsing 
         
-        // 1, verify the opcodes, and rcode raw parse from the header 
+        // verify the opcodes, and rcode raw parse from the skb  
         if (dns_header_flags.opcode > valid_opcodes[1]) return 1;
         if (dns_header_flags.rcode >= 24) return 1;
 
@@ -1259,7 +1230,8 @@ __always_inline struct sock_proc_conn_info * __get_malicious_egress_dns_port_ran
     struct sock_proc_conn_info * udp_tran_dns_raw_sock = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_port);
     if (!udp_tran_dns_raw_sock) 
         return NULL;
-    
+    else 
+        bpf_map_delete_elem(&exfil_sock_udp_conn_map, &src_port); // ensure the map ephemeral src port is clean as it pass from kernel cgroup to kernel tc layer 
     return udp_tran_dns_raw_sock;
 }
 
@@ -1342,91 +1314,34 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
     }
 
-    // fetched from kernel sock layer via kernel cgroup root for sock operations 
+    // fetched from kernel sock layervia cgroup root egress (cgroup_skb/egress) for sock operations 
     struct sock_proc_conn_info *sock_proc_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__transport_src_port);
     if (!sock_proc_info) {
-        if (DEBUG)
-            bpf_printk("kernel cannot find the sock ifrom sock layer %d",__transport_src_port);
-        goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
-    }else {
-        if (__update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sock_proc_info, skb, __transport_src_port, __transport_dest_port))
-            return 0;
-        
-        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #ifdef DEBUG
-                if (DEBUG) {
-                    bpf_printk("kernel cannot clone the packet for the redirect"); 
-                }
-            #endif
-        }
         return 1;
-    }
-        
-    struct exfil_raw_packet_mirror *raw_pack = bpf_map_lookup_elem(&exfil_security_egress_reconnisance_map_scan , &udp_dst_transfer_key);
-    if (!raw_pack){
-        struct exfil_raw_packet_mirror pack;
-        pack.dst_port = __transport_dest_port;
-        pack.src_port = __transport_src_port;
-        pack.isUdp = isUdp ? (__u8)1 : (__u8)0;
-        pack.isPacketRescanedAndMalicious = (__u8)0;
-
-        if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, &pack, 0) < 0) {
-            #ifdef DEBUG 
-                if (!DEBUG) {
-                    bpf_printk("Kernel cannot add the required pacekt mirro to the egress ebpf map ....");
-                }
-            #endif 
-        }
-
-        if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #ifdef DEBUG
-                if (DEBUG) {
-                    bpf_printk("kernel cannot clone the packet for the redirect"); 
-                }
-            #endif
-            // only work for clone on ipv4 for now 
-        }
-        return 1; // return this and let the user space dpi on this packet determine if the port over the udp kernel socket is used for malicious transfer
     }else {
-        // the userspace wont allow rescanned malicious tunneled dns traffic to again pass in kernel for further processing 
-        __u8 re_scanned_packed_and_malicious = raw_pack->isPacketRescanedAndMalicious;
-        if (re_scanned_packed_and_malicious == 1) {
+        #ifdef DEBUG
+            if (DEBUG) {
+                bpf_printk("kernel tc layer found the process for current src port as packed moved down kernel stack to kernel tc %d %d", 
+                    sock_proc_info->pid, sock_proc_info->threadId);
+            }
+        #endif
 
-                    // should not update anything in map since this is malicious and other process sending this packet from user-space, must 
-            // an inferred id with the currentl kernel not supporting the task comm from task struct for process control handling to get process ID.
-            if (bpf_map_delete_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key) < 0) {
-                #ifdef DEBUG
-                    if (DEBUG) {
-                        bpf_printk("Error the kernel cannot update the malicious found packet");
-                    }
-                #endif 
-            }
-            if (isTunnelC2CStandardUdpTransport) {
-                #ifdef DEBUG 
-                    if(DEBUG) bpf_printk("Tunnelled c2c dns traffic over other standard port for dns transfer ... ");
-                #endif 
-            }
+        if (__update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sock_proc_info, skb, __transport_src_port, __transport_dest_port)){
             __handle_kernel_map_clone_redirected_count(true);
             return 0;
-        }else {
-            raw_pack->isPacketRescanedAndMalicious = (__u8)0;
-            if (bpf_map_update_elem(&exfil_security_egress_reconnisance_map_scan, &udp_dst_transfer_key, raw_pack, 0) < 0){
-                #ifdef DEBUG
-                   if (DEBUG) {
-                       bpf_printk("Kernel cannot update and make sure the packed scanned is always bengin .....");
-                   }            
-                #endif 
-            }
         }
-   
+        
+        __handle_kernel_map_clone_redirected_count(false);
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             #ifdef DEBUG
-                if (DEBUG) {
+                if (!DEBUG) {
                     bpf_printk("kernel cannot clone the packet for the redirect"); 
                 }
             #endif
         }
+        goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
     }
+        
     SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM:
     return 1;
 }
@@ -1523,7 +1438,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         }
 
         // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
-        if (actions.parse_dns_header_size(&cursor, isIpv4 ? true : false, true) == 0)
+        if (actions.parse_dns_header_size(&cursor, isIpv4, false) == 0)
             // an non dns protocol based udp packet (no dns header found) 
             return 1;
 
@@ -1988,7 +1903,7 @@ int classify(struct __sk_buff *skb){
                 || udp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
                 || udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)) {
 
-                if (actions.parse_dns_header_size(&cursor, true, true) == 0)
+                if (actions.parse_dns_header_size(&cursor, true, false) == 0)
                     return TC_DROP;
 
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
@@ -2288,7 +2203,7 @@ int classify(struct __sk_buff *skb){
 
                 if (IP_DST_OFF > skb->len) {
                     return TC_DROP;  // Check if offset is within bounds for skb len for the payload 
-                }
+               }
 
                 if (bpf_l3_csum_replace(skb, ETH_HLEN + offsetof(struct iphdr, check), 0, csum_diff, 0) < 0) {
                         return TC_FORWARD;
@@ -2325,7 +2240,7 @@ int classify(struct __sk_buff *skb){
             if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS)
                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
         #endif
-        
+
         if (ipv6->nexthdr == IPPROTO_UDP) {
 
             if (actions.parse_udp(&cursor, false) == 0) return TC_DROP;
@@ -2334,10 +2249,10 @@ int classify(struct __sk_buff *skb){
             void * udp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
             if ((void *) udp_data + 1 > cursor.data_end) return TC_DROP;
 
+
             __u32 total_offset = nhoff + sizeof(struct ipv6hdr) + sizeof(struct udphdr);
             if (total_offset > skb->len) return TC_DROP;
 
-            bpf_printk("a valid ipv6 udp packet egress kernel tc");
             __u32 udp_payload_len = bpf_ntohs(udp->len);
             __u32 udp_payload_exclude_header = udp_payload_len - sizeof(struct udphdr);
             
@@ -2347,7 +2262,7 @@ int classify(struct __sk_buff *skb){
                 || udp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
             ) {
 
-                if (actions.parse_dns_header_size(&cursor, true, true) == 0)
+                if (actions.parse_dns_header_size(&cursor, false, false) == 0)
                     return TC_DROP;
                 void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct udphdr) + sizeof(struct dns_header);
                 if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP; 
@@ -2370,19 +2285,18 @@ int classify(struct __sk_buff *skb){
                     if (dns_rate_limit_action == 0) return TC_DROP;
                 }
 
-
                 __u32 out = skb->ifindex;
 
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4;  // loa  the redirection from the kernel 
+                __u32 br_index = 4;  // load  the redirection netdev as default  from the kernel , runtime pulled from the configMap in eBPF map 
 
                 if (config) {
                     br_index = config->BridgeIndexId;
                 }else {
-                    bpf_printk("kernel cannot find the requred kernel config redirect map");
+                    bpf_printk("kernel cannot find the requred kernel config redirect map defaulting to kernel configured link netdev ifindex %d", br_index);
                 }
 
-                // TODO Add event emit for the drop packet processing 
+                // bpf_printk("the init check for ipv6 udp dns packet passed to pass next deep parsing b:%d c:%d d:%d %d", result.isBenign, result.isC2c, result.drop, parse_flag);
                 if (result.isBenign) {
                     #ifdef DEBUG 
                         if (DEBUG) {
@@ -2446,7 +2360,6 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, BPF_F_INGRESS);
-
             }
             else {
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)

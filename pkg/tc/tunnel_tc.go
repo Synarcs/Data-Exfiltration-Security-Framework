@@ -258,13 +258,9 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
 	}
 
-	if tun.TaskCommTCEgressKernelSupport {
-		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
-		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
-	} else {
-		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN])
-		tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT])
-	}
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT])
 
 	// add more eBPF kernel maps if multiple traffic DPI for xfil events is required
 	for _, ebpfMap := range tunnelTrafficEBPFMaps {
@@ -333,38 +329,6 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 				log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer", event)
 			} else {
 				log.Println("Potential DNS tunnel from kernel detected", event)
-			}
-		}
-	}
-}
-
-/*
-Older kernel version not supporting task comm and task struct emit from kernel tc
-*/
-func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdate(destTransportPort uint16, fetchEvent *events.ExfilRawPacketMirror,
-	erroChannel chan interface{}, isBenign bool) {
-
-	KernelMaliciousTransferPortUpdateLock.Lock()
-	defer KernelMaliciousTransferPortUpdateLock.Unlock()
-	if isBenign {
-		fetchEvent.IsPacketRescanedAndMalicious = uint8(0)
-		if err := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN].Put(uint16(destTransportPort), fetchEvent); err != nil {
-			log.Println("Error in updating the map for this benign found packet", err)
-			/// the kernel will always ensure the key exist in gthe lru map before it even rich the user space for this bridge to sniff upon
-			erroChannel <- struct {
-				Err string
-			}{
-				Err: "Error in updating the map for this benign found packet",
-			}
-		}
-	} else {
-		fetchEvent.IsPacketRescanedAndMalicious = uint8(1)
-		if err := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN].Put(uint16(destTransportPort), fetchEvent); err != nil {
-			log.Println("Error in updating the map for this benign found packet", err)
-			erroChannel <- struct {
-				Err string
-			}{
-				Err: "Error in updating the map for this malicious  found packet for kernel to drop pakcet on next packet transfer ",
 			}
 		}
 	}
@@ -492,12 +456,8 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 					utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 				}
 
-				if !tun.TaskCommTCEgressKernelSupport {
-					tun.EnsureTransportTunnelPortMapUpdate(destTransportPort, event, errorChannel, false)
-				} else {
-					log.Println("Updating the process as it was detected carrying out breach ", ev)
-					tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
-				}
+				log.Println("Updating the process as it was detected carrying out breach ", ev)
+				tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 
 				go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
 					Src_port:       int(event.SrcPort),
@@ -548,12 +508,8 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 		}
 
-		if !tun.TaskCommTCEgressKernelSupport {
-			tun.EnsureTransportTunnelPortMapUpdate(destTransportPort, event, errorChannel, false)
-		} else {
-			log.Println("Updating the process as it was detected carrying out breach ", ev)
-			tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
-		}
+		log.Println("Updating the process as it was detected carrying out breach ", ev)
+		tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 
 		if ev != nil {
 			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
@@ -670,24 +626,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 
 		var maliciousTunnelDNSEvent events.ExfilRawPacketMirror // a sniff packet struct not event from ring buffer
 
-		// read the malicious event emitted from kernel with clone for older kernel not supporting task comm
-		if !tun.TaskCommTCEgressKernelSupport {
-			if err := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN].
-				Lookup(&destPortGenTypeValue, &maliciousTunnelDNSEvent); err != nil {
-
-				if errors.Is(err, ebpf.ErrKeyNotExist) {
-					log.Println("The malware c2c agent is retrying to tunnel c2c exfiltrated traffic over ", destPort)
-				} else {
-					errorChannel <- struct {
-						Err string
-					}{
-						Err: fmt.Sprintf("The kernel has not cloned the packet from tc layer %s", err.Error()),
-					}
-				}
-				return
-			}
-		}
-
 		// read and clean the srcport --> (procId, threadId)
 		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT],
 			srcPortGenTypeValue)
@@ -701,12 +639,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			if utils.DEBUG {
 				log.Println("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
 			}
-			// older kernel dont support task comm from task struct for proc should emit events for mal flag in the struct map payload event
-			if !tun.TaskCommTCEgressKernelSupport {
-				tun.EnsureTransportTunnelPortMapUpdate(destPortGenTypeValue, &maliciousTunnelDNSEvent, errorChannel, true) // send true for now need DPI for deep scan over hte packet structure
-			} else {
-				tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
-			}
+			tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 			return
 		}
 
@@ -741,20 +674,6 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 		// kernel will take care to process and set the packet type when kernel redirect iva link clone to the userspace
 		var event events.ExfilRawPacketMirror
 		log.Println("the dest port for packet transfer is ", uint16(destPort))
-		if err := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_RECONNISANCE_MAP_SCAN].Lookup(&destPortGenType, &event); err != nil {
-			log.Printf("The kernel has not cloned the packet from tc layer")
-			if !errors.Is(err, ebpf.ErrKeyNotExist) {
-				errorChannel <- struct {
-					Err string
-				}{
-					Err: "The kernel has not cloned the packet from tc layer",
-				}
-			} else {
-				log.Println("There is potential traffic retry redirected from kernel for Deep scan ::", destPort)
-				// log.Println("The malware c2c agent is retrying to tunnel c2c exfiltrated traffic over ", destPort)
-			}
-			return
-		}
 
 		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT], srcPortGenType)
 

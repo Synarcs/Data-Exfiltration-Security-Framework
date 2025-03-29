@@ -60,7 +60,7 @@ struct exfil_security_egress_dns_limites {
 // if enabled the eBPF node agent in user-space dynamically inject L3, inet in kernel over TC for eBPF in kernel tc to stop any DNS traffic with these l3 traffic 
 // For cloud the eBPF node agent dynamicaaly create netpools for l3 netpools, (eBPF sock / iptables / ipvs) for the CNI in k8s to block DNS upstream traffic to any of such Ip in the network 
 #define L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true 
-#define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS true
+#define L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS false 
 
 
 // rate limit config

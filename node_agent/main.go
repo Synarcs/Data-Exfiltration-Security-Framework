@@ -28,6 +28,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/profile"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"gopkg.in/yaml.v2"
 )
@@ -220,15 +221,6 @@ func main() {
 		return
 	}
 
-	var sockProgs *sock.SockKernelProgs = new(sock.SockKernelProgs)
-	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
-		if err := sockProgs.InjectKernelSockOps(ctx, utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
-			log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
-			panic(err.Error())
-		}
-	}
-
 	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
 
 	globalConfig, err := ReadGlobalNodeAgentConfig()
@@ -341,7 +333,16 @@ func main() {
 	// start the profile server for flamegraph and cpu profiling for the node agent
 	profilerContext, cancelctx := context.WithCancel(ctx)
 	if nodeAgentCliOptions.Profile {
-		go utils.InitProfileServer(profilerContext)
+		go profile.InitProfileServer(profilerContext)
+	}
+
+	var sockProgs *sock.SockKernelProgs = new(sock.SockKernelProgs)
+	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
+		if err := sockProgs.InjectKernelSockOps(ctx, utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
+			log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
+			globalErrorKernelHandlerChannel <- err
+		}
 	}
 
 	detachKernelHooksOpts := &KernelCleanHooks{
@@ -352,6 +353,15 @@ func main() {
 		iface:     &iface,
 		cliSock:   cliSock,
 	}
+
+	// global error channel for the kernel hooks
+	go func() {
+		for range globalErrorKernelHandlerChannel {
+			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts); err != nil {
+				log.Printf("Error receieved in node agent global error chan closing ... %+v", err)
+			}
+		}
+	}()
 
 	go func(tc *tcl.TCHandler) {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
@@ -370,15 +380,6 @@ func main() {
 		sig := <-tst
 		term <- sig
 	}(term, tst)
-
-	// global error channel for the kernel hooks
-	go func() {
-		for range globalErrorKernelHandlerChannel {
-			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts); err != nil {
-
-			}
-		}
-	}()
 
 	// TODO move this to uring or epoll fd listners for the remote inference server to emity socket close signal event consumed via unix trafer port
 	go func() {

@@ -1,7 +1,6 @@
-package utils
+package profile
 
 import (
-	 _ "net/http/pprof"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -9,6 +8,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 // runs system profile for the eBPF node agent in user space
@@ -44,7 +46,7 @@ func InitProfileServer(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			if DEBUG {
+			if utils.DEBUG {
 				log.Printf("Shutting down pprof server on port %d", PPROF_PORT)
 			}
 			server.Shutdown(ctx)

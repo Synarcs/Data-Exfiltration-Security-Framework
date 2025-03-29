@@ -118,3 +118,11 @@ keys:
 	@openssl x509 -in $(CERT) -outform DER -out $(CERT_DER)
 	@echo "Generated keys in $(KEY_DIR) directory"
 	@echo "WARNING: Keep $(PRIVATE_KEY) private and secure!"
+
+pprof_port ?= 8080
+pprof_duration ?= 10 
+
+.PHONY: profile
+profile:
+	@echo "Running Pprof profile over the node agent in user-space"
+	go tool pprof -http=0.0.0.0:$(pprof_port) http://localhost:6262/debug/pprof/profile?seconds=$(pprof_duration)

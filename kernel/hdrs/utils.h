@@ -39,6 +39,16 @@
     if ((void *)((ptr) + (offset)) > (end)) \
         return (ct);
 
+// cursor to and other encap protocol information storing packet cursor information in skb 
+struct skb_cursor {
+    void *data;
+    void *data_end;
+};
+
+struct vlan_hdr {
+	__be16	h_vlan_TCI;
+	__be16	h_vlan_encapsulated_proto;
+};
 
 
 struct __kernel_proc_struct_info {
