@@ -56,7 +56,9 @@ func TestKernelEbpfProgPath(t *testing.T) {
 		"bridge_ing.o":    true,
 		"netlink.o":       true,
 		"tc.o":            true, // root kernel egress tc filter clsact for dns egress exfil control on host net_device
-		"tun.o":           true, // root kernel egress tc filter clsact for dns egress exfil control on tunnel interfaces
+		"tun.o":           true, // tun_chr_open (tun/tap) kprobe
+		"sock.o":          true, // sock_ops_filter
+		"lsm_bpf.o":       true, // lsm bpf hooks integrated for BPF_PROG_LOAD
 	}
 
 	ff, err := os.ReadDir("ebpf")

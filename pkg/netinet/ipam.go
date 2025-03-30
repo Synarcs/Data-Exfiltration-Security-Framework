@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-// use netlink to find discrete ipam over all brides and links on the device for discete IPAM over the virtual NS and bridges ofr the Deep scan
+// use netlink to find discrete ipam over all briges and links on the device for discete IPAM over the virtual NS and bridges ofr the Deep scan
 
 type IpamBlock struct {
 	CidrRange   net.IP

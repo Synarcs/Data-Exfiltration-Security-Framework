@@ -64,7 +64,7 @@ struct exfil_security_egress_dns_limites {
 
 
 // rate limit config
-#define DNS_RATE_LIMIT_VOLUME true
+#define DNS_RATE_LIMIT_VOLUME false
 #define DNS_RATE_LIMIT_TOCKEN_BUCKET false
 
 #define IPV6_ROUTE 1 
@@ -185,12 +185,6 @@ struct result_parse_dns_labels {
 // ipv6 has no checksum but kept this for kernel map verification 
 #define DEFAULT_IPV6_CHECKSUM_MAP 0xff
 
-// RATE LIMITER 
-#define TIMEWINDOW 10000000000
-#define MAX_VOLUME_THRESHOLD 600000 
-
-#define MAX_FREQUENCY_PER_SEC 100
-
 
 #ifndef WIN_PHYSICAL_HYPERVISOR
     #define WIN_PHYSICAL_HYPERVISOR 0 
@@ -204,6 +198,7 @@ struct result_parse_dns_labels {
 #ifndef MAX_PROC_COMM_SIZE
     #define MAX_PROC_COMM_SIZE 200 
 #endif 
+
 
 
 #endif /* __EXFIL_SECURITY_H */

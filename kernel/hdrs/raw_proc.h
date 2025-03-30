@@ -11,6 +11,8 @@ struct PortMapping {
     int port;
 };
 
+#define MAX_UDP_PROTOCOL_TRANSFERS 22
+
 static const struct PortMapping UDP_PROTOCOLS[] = {
     {"DHCP Client", 68},
     {"DHCP Server", 67},

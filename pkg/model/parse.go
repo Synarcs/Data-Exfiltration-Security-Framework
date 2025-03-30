@@ -66,8 +66,6 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 }
 
 func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
-	maliciousProcCountguard.RLock()
-	defer maliciousProcCountguard.RUnlock()
 	return maliciousExfilProcessCount
 }
 

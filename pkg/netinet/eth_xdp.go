@@ -3,6 +3,7 @@ package netinet
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os/exec"
 	"regexp"
 )
@@ -25,7 +26,7 @@ func GetCurrentTXQueues(interfaceName string) (int, error) {
 		rx = regexp.MustCompile(`(?s)Current hardware settings:.*?Combined:\s+(\d+)`)
 		matches = rx.FindStringSubmatch(out.String())
 		if len(matches) < 2 {
-			fmt.Println("could not find TX queues in output")
+			log.Println("could not find TX queues in output")
 			return 0, fmt.Errorf("could not find TX queues in output")
 		}
 	}
@@ -53,7 +54,7 @@ func GetCurrentRXQuees(interfaceName string) (int, error) {
 		rx = regexp.MustCompile(`(?s)Current hardware settings:.*?Combined:\s+(\d+)`)
 		matches = rx.FindStringSubmatch(out.String())
 		if len(matches) < 2 {
-			fmt.Println("could not find RX queues in output")
+			log.Println("could not find RX queues in output")
 			return 0, fmt.Errorf("could not find RX queues in output")
 		}
 	}

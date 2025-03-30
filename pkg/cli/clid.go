@@ -13,6 +13,7 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
@@ -30,7 +31,7 @@ type NodeDaemonCli struct {
 }
 
 // used for ipv on local node via  unxi domain socket AF_UNIX
-func GenerateRemoteCliSocketServer() *NodeDaemonCli {
+func NewRemoteCliSocketServer() *NodeDaemonCli {
 	return &NodeDaemonCli{
 		Unixsock:  unixSockPath(LocalCliUnixSockPath),
 		CloseChan: make(chan bool), // signal to close the cli server when node agent gracefully shutdowns
@@ -154,8 +155,35 @@ func UnblockDomain(w http.ResponseWriter, r *http.Request) {
 	errResponse("Error this is not an valid domain to be removed from blaclisted cahce, ensure it adheres to RFC 1035..")
 }
 
+/*
+Combines all the malicious processes prevented by the kernel and user space exfiltrating data
+*/
+func GetAllPreventedExfiltratedProcessids() map[uint32]int {
+	combinProc := map[uint32]int{}
+
+	defaultPort := model.GetCurrentLoggedExfiltratedProcessids()
+	for malProc, ct := range defaultPort {
+		if val, fd := combinProc[malProc]; !fd {
+			combinProc[malProc] = ct
+		} else {
+			combinProc[malProc] = val + ct
+		}
+	}
+
+	tunnelPortMap := tc.GetCurrentLoggedExfiltratedProcessids()
+
+	for tunnelProc, ct := range tunnelPortMap {
+		if val, fd := combinProc[tunnelProc]; !fd {
+			combinProc[tunnelProc] = ct
+		} else {
+			combinProc[tunnelProc] = val + ct
+		}
+	}
+	return combinProc
+}
+
 func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request) {
-	currProcCount := model.GetCurrentLoggedExfiltratedProcessids()
+	currProcCount := GetAllPreventedExfiltratedProcessids()
 	sendResp := func(msg string) interface{} {
 		return struct {
 			Msg string

@@ -188,6 +188,10 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 
 }
 
+func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
+	return maliciousExfilProcessCount
+}
+
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {
 	var redirCountKey uint16 = 0
 	if !isCloneRedirectedAndMalicious {
@@ -471,6 +475,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destTransportPort)
 					}
 				}
+				go runtime.GC()
 
 			}
 		}
@@ -517,7 +522,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			}
 			// older kernel version use kernel proc fs mount to ge process Information
 		}
-
+		go runtime.GC()
 	}
 	return nil
 }

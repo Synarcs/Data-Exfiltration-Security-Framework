@@ -28,7 +28,7 @@
 
 #include "hdrs/consts.h"
 #include "hdrs/dns.h"
-
+#include "hdrs/rlt.h"
 
 #ifndef tc
     #define TC_FORWARD TC_ACT_OK

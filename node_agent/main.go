@@ -230,7 +230,7 @@ func main() {
 
 	log.Println("The Node Agent booted with global config", globalConfig)
 
-	cliSock := cli.GenerateRemoteCliSocketServer()
+	cliSock := cli.NewRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
 		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
 		go cliSock.NewNodeAgentUnixCLISocket()
