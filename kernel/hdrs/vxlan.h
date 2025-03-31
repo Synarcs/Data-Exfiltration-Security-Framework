@@ -9,9 +9,15 @@
 #include "consts.h"
 #include "dns.h"
 
+// VXLAN DEFAULT VTEP UDP PORT 
+#define VXLAN_DEFAULT_UDP_PORT 4789
+
 //  8 bit offset for the reserved (vxlan >> 24) & (VXLAND_I_OFFSET_BIT)
 #define VXLAN_RD_VNI_FLAG 0x08
 #define VXLAN_RESERVED_OFFSET_BITS_MASK 0xffffff
+
+// vxlan ports exist over the bridge via root vxlan driver or ovs
+#define IS_VXLAN_PORTS_EXIST_BRIDGE false
 
 //    VXLAN Header:
 //    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -32,9 +38,7 @@ __always_inline __u8 __parse_vxlan_flag__hdr(void *transport_data, struct vxlanh
         bpf_printk("parsing the vxlan header %u", flags_vxlan_hdr);
     if ((void *) flags_vxlan_hdr + sizeof(__be32) > data_end) return 0;
     // an valid I sender flag set denoting sender for the vxlan packet 
-    __u32 offset_vxlan_flags = flags_vxlan_hdr & VXLAN_RESERVED_OFFSET_BITS_MASK;
     if ((((flags_vxlan_hdr >> 24) & VXLAN_RD_VNI_FLAG) >> 3) == 1) return 1;
-
     return 0;
 }
 

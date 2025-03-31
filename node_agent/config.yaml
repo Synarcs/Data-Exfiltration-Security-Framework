@@ -36,10 +36,17 @@ disableExporters:
   streaming: false
   metrics:: false
 
+rlimitConfig:
+  tb:
+    maxTokens: 10000
+
+# Add the tb volume config for volume based rate limit over egress tc in kernel 
+
 enhancedFeatures:
   l3: # for l3 filtering to stop exfiltration over other protocols which c2 server remote server ip can be used to exftract data via other tunnel protocols 
     enabledL3Filtering: true 
   dns:
     enableNxFloodPrevention: false 
     enableIngressSniff: true 
-    
+    enabledTbRlimit: false
+    enabbledVolumeRlimit: false

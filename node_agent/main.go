@@ -30,7 +30,6 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/profile"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
-	"gopkg.in/yaml.v2"
 )
 
 type KernelCleanHooks struct {
@@ -57,27 +56,6 @@ func initKernelProgInjectComptionEvent() map[string]chan bool {
 		progs.XDP:            make(chan bool),
 		progs.LSM_BPF_HOOKS:  make(chan bool),
 	}
-}
-
-func ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
-	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			log.Println("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
-			return nil, err
-		}
-		log.Printf("Erorr the config file exists but cannot be read %+v", err)
-		return nil, err
-	}
-
-	var config *conf.NodeAgentConfig = &conf.NodeAgentConfig{}
-
-	ff, _ := os.ReadFile(utils.NODE_CONFIG_FILE)
-
-	if err := yaml.Unmarshal(ff, &config); err != nil {
-		log.Printf("Error unmarshalling the config file %+v", err)
-	}
-
-	return config, nil
 }
 
 func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, cleanHooks *KernelCleanHooks) error {
@@ -222,13 +200,13 @@ func main() {
 	}
 
 	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
+	var agentConfigLoader conf.AgentConfig = &conf.Config{}
+	agentConfigLoader.ReadNodeAgentConfig()
+	globalConfig := agentConfigLoader.GetAgentConfig()
 
-	globalConfig, err := ReadGlobalNodeAgentConfig()
-	if err != nil {
-		panic(err.Error())
+	if utils.DEBUG {
+		log.Println("The Node Agent booted with global config", agentConfigLoader.GetAgentConfig())
 	}
-
-	log.Println("The Node Agent booted with global config", globalConfig)
 
 	cliSock := cli.NewRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
@@ -287,7 +265,7 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash)
+	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash, agentConfigLoader)
 
 	if err != nil {
 		log.Println(err.Error())
@@ -328,7 +306,7 @@ func main() {
 	go kprobe.ProcessTunnelEvent(ctx, &iface, tunnelSocketEventHandler, tc)
 	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
 
-	go events.StartPrometheusMetricExporterServer(globalConfig)
+	go events.StartPrometheusMetricExporterServer(agentConfigLoader.GetAgentConfig())
 
 	// start the profile server for flamegraph and cpu profiling for the node agent
 	profilerContext, cancelctx := context.WithCancel(ctx)

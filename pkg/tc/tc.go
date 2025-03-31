@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
@@ -46,6 +47,8 @@ type TCHandler struct {
 	// the node agent consumer will ensure to send malicious ip address over this channel for node agent to inject them in kernel
 	GlobalMalC2L3addressChannelIpv4 chan net.IP
 	GlobalMalC2L3addressChannelIpv6 chan net.IP
+
+	config conf.AgentConfig
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -97,7 +100,7 @@ func NewDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.Onnx
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash) (*TCHandler, error) {
+	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash, config conf.AgentConfig) (*TCHandler, error) {
 	dnsPacketGen, err := NewDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
 	if err != nil {
@@ -110,6 +113,7 @@ func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		OnnxLoadedModel:                 onnxModel,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
 		Hash:                            agentHash,
+		config:                          config,
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
 		tcHandler.IsEgressXdpSupport = true
@@ -135,6 +139,30 @@ func (tc *TCHandler) PollMaliciousControllerAwareC2Address(errorChannel <-chan e
 			log.Println("Injecting the malicious C2 address into the kernel", getIpv6BigEndianAddrOc1, getIpv6BigEndianAddrOc2)
 		}
 	}()
+}
+
+func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
+
+	rlimitConfig := tc.config.GetRLimitConfig()
+
+	// the map always be created in kernel if rate limit feature is enabled
+	rltmap := tc.TcCollection.Maps[events.EXFIL_SECURITY_TOKEN_BUCKET_DNS_RL]
+
+	if rltmap == nil {
+		log.Println("Runtime Error kernel should have this map defined ")
+		return nil
+	}
+
+	var tbConfig events.TokenBucketEgressDnsConf = events.TokenBucketEgressDnsConf{
+		MaxTokens: uint64(rlimitConfig.Tb.MaxTokens),
+	}
+
+	var rlimitCtbKey uint16 = 0
+	if err := rltmap.Update(&rlimitCtbKey, &tbConfig, ebpf.UpdateNoExist); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
@@ -173,6 +201,17 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		if err := netlink.FilterReplace(&filter); err != nil {
 			panic(err.Error())
 		}
+
+		// attach and start bpf timers in kernel as the program is injected in the kernel
+
+		enhancedFeatures := tc.config.GetAddonFeaturesConfig()
+		if !enhancedFeatures.Dns.EnabledTbRlimit {
+			if err := tc.InitDnsRateLimiter(ctx); err != nil {
+				log.Println("Error initializing the dns rate limiter", err.Error())
+				tc.GlobalErrorKernelHandlerChannel <- err
+			}
+		}
+
 	}
 	return nil
 }

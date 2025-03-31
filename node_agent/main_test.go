@@ -117,25 +117,25 @@ func TestRequireNodeAgentConfig(t *testing.T) {
 
 func TestEachNodeAgentConfigAddress(t *testing.T) {
 	assert := assert.New(t)
-	config, err := ReadGlobalNodeAgentConfig()
-	if err != nil {
-		assert.Error(err)
-	}
+	var config conf.AgentConfig = &conf.Config{}
+
+	config.ReadNodeAgentConfig()
+	globalConfig := config.GetAgentConfig()
 
 	// verify connection upstream dns server
-	_, err = net.Dial("udp", fmt.Sprintf("%s:%d", config.DNSServer.Ip, 53))
+	_, err := net.Dial("udp", fmt.Sprintf("%s:%d", globalConfig.DNSServer.Ip, 53))
 	if err != nil {
 		assert.Error(err)
 	}
 
 	// verify connection upstream metric server (prometheus)
-	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", config.MetricServer.Ip, config.MetricServer.Port))
+	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.MetricServer.Ip, globalConfig.MetricServer.Port))
 	if err != nil {
 		assert.Error(err)
 	}
 
 	// verify connection upstream metric explore server (grafana)
-	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", config.GrafanaServer.Ip, config.MetricServer.Port))
+	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.GrafanaServer.Ip, globalConfig.MetricServer.Port))
 	if err != nil {
 		assert.Error(err)
 	}
@@ -148,11 +148,12 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, time.Second*3)
-	globalConfig, err := ReadGlobalNodeAgentConfig()
+
+	var config conf.AgentConfig = &conf.Config{}
+
+	config.ReadNodeAgentConfig()
+	globalConfig := config.GetAgentConfig()
 	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
-	if err != nil {
-		panic(err.Error())
-	}
 
 	streamProducer := &stream.StreamProducer{
 		KafkaBrokerConfig: globalKakfBrokerConfig,

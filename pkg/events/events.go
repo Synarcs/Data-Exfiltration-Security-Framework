@@ -84,6 +84,12 @@ type DPIRedirectionTimestampVerify struct {
 	UserSpace_Egress_Loaded uint8
 }
 
+// tb rate limit for egress tc
+type TokenBucketEgressDnsConf struct {
+	Timer     [16]byte
+	MaxTokens uint64
+}
+
 // kernel eBPF maps over kernel network stack
 const (
 	EXFILL_SECURITY_EGRESS_REDIRECT_MAP                   = "exfil_security_egress_redirect_map"
@@ -117,4 +123,9 @@ const (
 const (
 	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_ring_buff_non_standard_port"
 	EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP                     = "exfil_security_egress_vxlan_encap_drop"
+)
+
+// maps for kernel timers
+const (
+	EXFIL_SECURITY_TOKEN_BUCKET_DNS_RL = "exfil_security_token_bucket_dns_rl"
 )

@@ -610,7 +610,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                             if ((void *)(ptr + 1) > skb->data_end) 
                                 goto parsed_label_queryHandler;
                         
-                            char char_buffer_value = (char) ( __u8) *ptr;
+                            char __attribute__((__unused__)) char_buffer_value = (char) ( __u8) *ptr;
                             #if DEBUG
                                 bpf_printk("the label is %c", char_buffer_value);
                             #endif
@@ -635,17 +635,16 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             }
 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
-            __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
             // parse the QTYPE
-            query_type = *(__u16 *) (dns_payload_buffer + offset); 
+            __u16 query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
              // parse the QCLASS
-            query_class = *(__u16 *) (dns_payload_buffer + offset);
+             __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
             __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
@@ -896,24 +895,20 @@ static
 __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, __u32 egress_ifindex) {
     struct bpf_dynptr dptr;
     if (bpf_ringbuf_reserve_dynptr(&exfil_security_egress_vxlan_encap_drop, sizeof(struct exfil_vxlan_exfil_event), 0, &dptr) < 0){
-        if (DEBUG) {
+        #if DEBUG
             bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
-        }
+        #endif
         bpf_ringbuf_discard_dynptr(&dptr, 0);
         return;
     }
-    if (DEBUG)
+    #if DEBUG
         bpf_printk("emit an vxlan kernel event for udp %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
+    #endif
     struct exfil_vxlan_exfil_event vxlan_event = (struct exfil_vxlan_exfil_event) {
         .transport_dest_port = bpf_ntohs(udp->dest),
         .transport_src_port = bpf_ntohs(udp->source)
     };
-    long res = bpf_dynptr_write(&dptr, 0, &vxlan_event, sizeof(struct exfil_vxlan_exfil_event), 0);
-    #ifdef DEBUG 
-        if (DEBUG) {
-            bpf_printk("wrote the service map events in the ring buff dptr from kernel evetn emit %u", res);
-        }
-    #endif 
+    bpf_dynptr_write(&dptr, 0, &vxlan_event, sizeof(struct exfil_vxlan_exfil_event), 0);
     bpf_ringbuf_submit_dynptr(&dptr, 0);
     bpf_printk("Emit the vxlan encap tracing event to user space");
 }
@@ -946,11 +941,9 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
         return BENIGN;
     
     // debug potential vxlan encap or tunnel vni parsed 
-    #ifdef DEBUG
-        if (DEBUG) {
-            bpf_printk("Suspicious vxlan tunnel detected started trecursive internal parsing for the skb header with vni %d", vlan_id);
-            bpf_printk("the next header for eth packet in vxlan is %x %x", eth->h_proto, bpf_htons(ETH_P_IP));
-        }
+    #if DEBUG
+        bpf_printk("Suspicious vxlan tunnel detected started trecursive internal parsing for the skb header with vni %d", vlan_id);
+        bpf_printk("the next header for eth packet in vxlan is %x %x", eth->h_proto, bpf_htons(ETH_P_IP));
     #endif
 
     /*
@@ -1016,10 +1009,8 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         
         // verify header opcodes and return types 
         __u16 raw_dns_flags = dns_header->flags;
-        #ifdef DEBUG
-            if (DEBUG) {
+        #if DEBUG
                 bpf_printk("the raw kernel parsed flags are %u", raw_dns_flags);
-            }
         #endif
 
         struct dns_flags dns_header_flags = get_dns_flags(dns_header);
@@ -1060,10 +1051,8 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
         
         // verify header opcodes and return types 
         __u16 raw_dns_flags = dns_header->flags;
-        #ifdef DEBUG
-            if (DEBUG) {
+        #if DEBUG
                 bpf_printk("the raw kernel parsed flags are %u", raw_dns_flags);
-            }
         #endif
 
         struct dns_flags dns_header_flags = get_dns_flags_tcp (dns_header); // padding length in raw skb added for parsing 
@@ -1077,8 +1066,9 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
         return 1; 
 
     // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
-    if (DEBUG)
+    #if DEBUG
         bpf_printk("Non standard transport DPI found for exfil remote c2c server");
+    #endif
     // a malicious encap is used to mask the dns traffPic 
     return 0;
 }
@@ -1357,7 +1347,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
     if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == SUSPICIOUS) {
         __u32 br_index = 5;
         __u32 out = raw_skb->ifindex;
-        __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+        __be32 __attribute__((__unused__)) dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
         __u32 udp_dest_port = bpf_ntohs(udp->dest);
         __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
@@ -1372,10 +1362,8 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
             }
             // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
             if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
-                    }
+                #if DEBUG 
+                    bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
                 #endif 
             }
         }else {
@@ -1474,10 +1462,8 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
             // emit the ring buff from kernel as a transport event 
             
             if (__update_non_stand_port_map(bpf_ntohs(udp->source)) == 0) {
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic redirect to user-space");
-                    }
+                #if DEBUG 
+                    bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic redirect to user-space");
                 #endif
             }
 
@@ -1530,25 +1516,13 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
         event->isTcp = (__u8)1;
         event->isUdp = (__u8)0;
 
-        #ifdef LINUX_VERSION_CODE
-              if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 10, 0)){
-                  __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-                  __u32 threadId = bpf_get_current_pid_tgid() & 0xFFFFFFFF; 
-                  event->processId = (__u32)proc_id; 
-                  event->threadId = (__u32)threadId; 
-              }else {
-                  event->processId = (__u32)0;
-                  event->threadId = (__u32)0;
-              }
-          #endif 
-          
-          if (__update_non_stand_port_map(bpf_ntohs(tcp->source)) == 0) {
-              #ifdef DEBUG 
-                  if (DEBUG) {
-                      bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic");
-                  }
+        struct __kernel_proc_struct_info *proc_info = __get_process_info();
+
+        if (__update_non_stand_port_map(bpf_ntohs(tcp->source)) == 0) {
+              #if DEBUG 
+                  bpf_printk("Error updating the non standard port map for tunnel suspsicious exfiltration traffic");
               #endif
-          }
+        }
 
         bpf_ringbuf_submit(res, 0);
 
@@ -1635,10 +1609,81 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
     }
 #endif
 
+
 // TODO: Add the kernel Token bucket algorithm for rate limiting, for mass throughput time based exfiltration over standard DNS port only or any LLMNR, MDNS  based resolution.
-#if DNS_RATE_LIMIT_TOCKEN_BUCKET 
+#if DNS_RATE_LIMIT_TOCKEN_BUCKET
+
+    // registered callback handler for processing the timer callback linked to a map
+    static 
+    __always_inline int timer_cb(void *map, __u16 *key, struct token_bucket_dns_rl *info) {
+        // Increment the counter
+        info->MaxTokens = MAX_TB_TOKEN_REFILL;
+        __u16 rlimit_timer_tok_key = 0;
+        __u8 rlimit_timer_init_key = 0;
+
+        // reset the flag in kernel to let the timer restarted for processing and rate limiting
+        __u8 * _has_timer_init = bpf_map_lookup_elem(&exfil_security_rtl_time_init, &rlimit_timer_tok_key);
+        if (!_has_timer_init) {
+            // wont be possible since before callback the map is updated and duration is enough for per CPU to process it 
+            return 0;
+        }else {
+            // reset 
+            __u8 reset_timer = 0;
+            __u16 rlimit_timer_tok_key = 0;
+            bpf_map_update_elem(&exfil_security_rtl_time_init, &rlimit_timer_init_key, &reset_timer, BPF_ANY);
+            info->MaxTokens = MIN_TB_TOKEN_CAP;
+        }
+
+        bpf_printk("restarting the bpf timer for rate limiting");
+        // Reschedule the timer to fire again in 1 second (time in nanoseconds)
+        bpf_timer_start(&info->timer, RATE_LIMIT_VOLUME_TIME_WINDOW, 0);
+        return 0;
+    }
+    
+    static 
+    __always_inline void __start_bpf_timer(struct token_bucket_dns_rl *val) {
+        // has be reseted from the timer 
+        bpf_timer_init(&val->timer, &exfil_security_token_bucket_dns_rl, 0); // CLOCK_MONOTONIC clock system timer
+        bpf_timer_start(&val->timer, RATE_LIMIT_VOLUME_TIME_WINDOW, 0); // start the kernel clock timer tied to a map 
+        bpf_timer_set_callback(&val->timer, &timer_cb);
+    }
+
+
+    // TODO: Add one more map to process guard and concurrenct lock when a tiemr is created and pinned to map fd and has started running on a CPU 
+    // each new timer must be invoked and start running pinn to a map over a cpu, where the cb are processed in soft irq style 
     static 
     __always_inline __u8 __dns_rate_limit_tb(struct skb_cursor *cursor, struct __sk_buff *skb) {
+        struct bpf_timer timer;
+
+        __u16 rlimit_timer_tok_key = 0;
+        __u8 rlimit_timer_init_key = 0;
+        
+        struct token_bucket_dns_rl * rlt = bpf_map_lookup_elem(&exfil_security_token_bucket_dns_rl, &rlimit_timer_tok_key);
+        if (!rlt) 
+           goto  ALLOW;// usser space has not registered the token bucket rate limiter for kernel to start processing pinned to a map 
+
+
+        __u8 * _has_timer_init = bpf_map_lookup_elem(&exfil_security_rtl_time_init, &rlimit_timer_init_key);
+        if (_has_timer_init){
+            if (*_has_timer_init) { // timer is already running on a CPU  not soft irq fired yet
+                if (rlt->MaxTokens < 0) {
+                    return 0; // should drop exceed the rate limit threshold
+                }else {
+                    __sync_fetch_and_sub(&rlt->MaxTokens, 1); 
+                }
+            }else {
+                // ensure the timer is restarted and can be started on any CPU 
+                __start_bpf_timer(rlt);
+            }
+        }else {
+            __u8 start_timer = 1;
+            rlt->MaxTokens = rlt->MaxTokens + 1; // timer is active add tokens on each request hit or function called 
+            bpf_map_update_elem(&exfil_security_rtl_time_init, &rlimit_timer_init_key, &start_timer, BPF_NOEXIST);
+            __start_bpf_timer(rlt);
+        }
+
+        // TODO load the max tokens per window from user space
+        ALLOW:
         return 1;// forward the packet 
     }
 #endif
@@ -1772,7 +1817,7 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
             bpf_printk("Error restoring current offset store");
         #endif
     } 
-    __u32 csum_diff = bpf_csum_diff(&current_dest_addr, 4, dest_addr_route, 4, 0);
+    __u32 csum_diff = bpf_csum_diff(current_dest_addr, 4, dest_addr_route, 4, 0);
 
     if (IP_DST_OFF > skb->len) {
         return TC_DROP;  // Check if offset is within bounds
@@ -2018,9 +2063,7 @@ int classify(struct __sk_buff *skb){
 
                 #if DNS_RATE_LIMIT_TOCKEN_BUCKET
                     if (__dns_rate_limit_tb(&cursor, skb) == 0) {
-                            if (DEBUG) bpf_printk("Dropping DNS egress suspicious traffic exceed thrshold for Tocken Bucket rate limit");
-                            return TC_DROP;
-                        }
+                        return TC_DROP;
                     }
                 #endif
 
@@ -2042,6 +2085,12 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else {
+                // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
+                #if IS_VXLAN_PORTS_EXIST_BRIDGE
+                    void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); 
+                    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == BENIGN)
+                        return TC_FORWARD;
+                #endif
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
                                     udp_data, udp_payload_len, udp, true) == 1)
@@ -2177,6 +2226,12 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
             }
             else {
+                // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
+                #if IS_VXLAN_PORTS_EXIST_BRIDGE
+                    void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); 
+                    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == BENIGN)
+                        return TC_FORWARD;
+                #endif
 
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
                     return TC_FORWARD;

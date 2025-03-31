@@ -1,5 +1,14 @@
 package conf
 
+import (
+	"errors"
+	"log"
+	"os"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"gopkg.in/yaml.v2"
+)
+
 // cli agent config for booting the node agent at the endpoitn
 
 type NodeAgentCliOptions struct {
@@ -15,6 +24,53 @@ type NodeAgentCliOptions struct {
 	SigKill int
 
 	Profile bool
+}
+
+// apply addon and extend to support cusomt config as required by the agent in userspace
+type AgentConfig interface {
+	GetAddonFeaturesConfig() *EnhancedFeatures
+	GetAgentConfig() *NodeAgentConfig
+	ReadNodeAgentConfig() error
+	GetRLimitConfig() *RlimitConfig
+}
+
+type Config struct {
+	AgentBootConfig *NodeAgentConfig
+}
+
+func (nn *Config) ReadNodeAgentConfig() error {
+
+	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
+			return err
+		}
+		log.Printf("Erorr the config file exists but cannot be read %+v", err)
+		return err
+	}
+
+	var config *NodeAgentConfig = &NodeAgentConfig{}
+
+	ff, _ := os.ReadFile(utils.NODE_CONFIG_FILE)
+
+	if err := yaml.Unmarshal(ff, &config); err != nil {
+		return err
+	}
+
+	nn.AgentBootConfig = config
+	return nil
+}
+
+func (nn *Config) GetAgentConfig() *NodeAgentConfig {
+	return nn.AgentBootConfig
+}
+
+func (nn *Config) GetAddonFeaturesConfig() *EnhancedFeatures {
+	return &nn.AgentBootConfig.EnhancedFeatures
+}
+
+func (nn *Config) GetRLimitConfig() *RlimitConfig {
+	return &nn.AgentBootConfig.RlimitConfig
 }
 
 // config for high enhanced security for l3, l44, l7 filters and other orchestrated environments config to stop data breaches
@@ -56,11 +112,14 @@ type NodeAgentConfig struct {
 	} `yaml:"disableExporters" reflect:"disableExporters"`
 
 	EnhancedFeatures EnhancedFeatures `yaml:"enhancedFeatures" reflect:"enhancedFeatures"`
+	RlimitConfig     RlimitConfig     `yaml:"rlimitConfig" reflect:"rlimitConfig"`
 }
 
 type DnsEnhancedFeatures struct {
 	EnableNxFloodPrevention bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
 	EnableIngressSniff      bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
+	EnabledTbRlimit         bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
+	EnabbledVolumeRlimit    bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
 }
 
 type L3EnhancedFeatures struct {
@@ -70,4 +129,10 @@ type L3EnhancedFeatures struct {
 type EnhancedFeatures struct {
 	Dns       DnsEnhancedFeatures `yaml:"dns" reflect:"dns"`
 	L3Filters L3EnhancedFeatures  `yaml:"l3" reflect:"l3"`
+}
+
+type RlimitConfig struct {
+	Tb struct {
+		MaxTokens int `yaml:"maxTokens" reflect:"maxTokens"`
+	} `yaml:"tb" reflect:"tb"`
 }
