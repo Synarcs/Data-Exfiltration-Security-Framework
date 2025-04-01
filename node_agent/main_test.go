@@ -66,9 +66,7 @@ func TestKernelEbpfProgPath(t *testing.T) {
 		assert.Fail("Error the required eBPF programs not found")
 	}
 	for _, files := range ff {
-		if fd := kernelProgs[files.Name()]; fd {
-			delete(kernelProgs, files.Name())
-		}
+		delete(kernelProgs, files.Name())
 	}
 	if len(kernelProgs) != 0 {
 		assert.Fail("All the required kernel programs not found for the eBPF node agent")
@@ -182,6 +180,21 @@ func TestNetworkNamespaceCreation(t *testing.T) {
 		}
 		assert.Equal(len(requiredLabeledNamespaces), 0)
 	}
+}
+
+func TestMasterNetworkBridges(t *testing.T) {
+	assert := assert.New(t)
+	bridges := map[string]bool{
+		"nx-br0": true,
+		"br0":    true,
+	}
+
+	for _, brifr := range linkHandler.BridgeLinks {
+		delete(bridges, brifr.Attrs().Name)
+	}
+
+	//  ensure all the required network master l3, l4 veth network bridges are created
+	assert.Equal(len(bridges), 0)
 }
 
 func TestAgentConfigLoader(t *testing.T) {

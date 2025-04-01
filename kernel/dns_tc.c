@@ -593,23 +593,27 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
                 mx_label_ln = max(mx_label_ln, label_len);
 
-                char buff[MAX_DNS_LABEL_LENGTH];
+                #if DEBUG
+                    char buff[MAX_DNS_LABEL_LENGTH];
+                #endif
+
                 #if !SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
                     __u8 iter_label_chars_ln = label_len;
                     if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
                         iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
-                
-                    for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
-                        buff[i] = '\0';
-                
+
+                    #if DEBUG
+                        for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
+                            buff[i] = '\0';
+                    #endif
+                    
                     __u8 *dns_payload_start = (__u8 *)(void *)(dns_payload_buffer + offset + sizeof(__u8));
                     if ((void *)dns_payload_start + 1 > skb->data_end) {
                         goto parsed_label_queryHandler;
                     }
                 
-                    __u8 lower_ct = 0;
-                    __u8 upper_ct = 0;
-                    __u8 digit_ct = 0;
+                    __u8 lower_ct = 0; __u8 upper_ct = 0;
+                    __u8 digit_ct = 0; __u8 spec_char = 0;
 
                     __u8 curr_parsed_jumps = 0;
                     __u8 buffer_lab_ind = 0;
@@ -619,7 +623,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         goto parsed_label_queryHandler;
                 
                     char dns_payload_start_chr = (char)(*dns_payload_start);
-                    buff[buffer_lab_ind] = dns_payload_start_chr;
+                    #if DEBUG
+                        buff[buffer_lab_ind] = dns_payload_start_chr;
+                    #endif
+
                     dns_payload_start = dns_payload_start + sizeof(__u8);
                 
                     if (isLower(dns_payload_start_chr))
@@ -628,11 +635,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         upper_ct++;
                     if (isDigit(dns_payload_start_chr))
                         digit_ct++;
+                    else spec_char++;
 
                     curr_parsed_jumps++;
                     buffer_lab_ind++;
 
-                    if (buffer_lab_ind >= 10)
+                    if (buffer_lab_ind >= MAX_DNS_LABEL_LENGTH)
                         goto parsed_label_queryHandler;
                     
                     if ((void *) dns_payload_start > skb->data_end)
@@ -640,9 +648,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     
                     goto next_char_parse;
                     
-                    if (upper_ct > (int) label_len / 2) return SUSPICIOUS;
+                    if (spec_char > (int) spec_char / 2) return SUSPICIOUS;
                 parsed_label_queryHandler:
-                    // bpf_printk("%s", buff);
                 #endif
                 
                 if (label_len == 0x00) break;

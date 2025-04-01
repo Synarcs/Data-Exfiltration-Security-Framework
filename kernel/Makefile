@@ -25,7 +25,7 @@ sock_sdr_out := sock.o
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	clang -target bpf -Wall -Wunused-variable -fomit-frame-pointer -mcpu=v4 -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2  -o  $(tc_kernel_out) -c $(tc_kernel) 
+	clang -target bpf -Wall -Wunused-variable -fomit-frame-pointer -mcpu=v4 -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -Ofast  -o  $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
 	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
 	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
