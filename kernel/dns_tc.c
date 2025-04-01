@@ -648,7 +648,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     
                     goto next_char_parse;
                     
-                    if (spec_char > (int) spec_char / 2) return SUSPICIOUS;
+                    if (spec_char > (int) label_len / 2) return SUSPICIOUS;
                 parsed_label_queryHandler:
                 #endif
                 
