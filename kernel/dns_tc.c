@@ -271,7 +271,7 @@ struct dns_volume_stats {
 
 // follows leaky bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing volume of traffic over a fixed 1 sec window
 // the packet does not matter (dns + tcpv4 / tcpv6) or (dns + udpv4 + udpv6)
-#ifdef DNS_RATE_LIMIT_VOLUME 
+#if DNS_RATE_LIMIT_VOLUME 
     struct exfil_security_egress_volume_rate_limit_map {
         __uint(type, BPF_MAP_TYPE_LRU_HASH);
         __type(key, __u16);
@@ -281,7 +281,7 @@ struct dns_volume_stats {
 #endif
 
 // follows token bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing dns rps over reaching the egress kernel TC 
-#ifdef DNS_RATE_LIMIT_TOCKEN_BUCKET
+#if DNS_RATE_LIMIT_TOCKEN_BUCKET
     struct exfil_security_egress_tb_rate_limit_map {
         __uint(type, BPF_MAP_TYPE_LRU_HASH);
         __type(key, __u16);
@@ -292,7 +292,7 @@ struct dns_volume_stats {
 
 
 // dynamic netpool l3 ipv4 filtering for any malicious traffic found to upstream servers 
-#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
     struct exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter {
         __uint(type, BPF_MAP_TYPE_LRU_HASH);
         __type(key, __u32);
@@ -301,7 +301,7 @@ struct dns_volume_stats {
     } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
 
-#ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
 
     struct exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter {
         __uint(type, BPF_MAP_TYPE_LPM_TRIE);
@@ -314,7 +314,7 @@ struct dns_volume_stats {
 
 
 // Parse the RAW SKB for query classes 
-#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)      \ 
+#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)\ 
         switch ((dns_query_class)){                 \
                 case 0x0001:                        \
                 case 0x0002:                        \
@@ -349,7 +349,7 @@ struct dns_volume_stats {
 
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
-#ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip)                                   \
         do {                                                                            \
             if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
@@ -360,11 +360,11 @@ struct dns_volume_stats {
                     return TC_DROP;                                                     \
                 }                                                                       \
             }                                                                           \
-        } while(0)
+        } while(0)                                                                      
 #endif
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv6 header 
-#ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
+#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip)                                   \ 
     do {                                                                                \
             if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
@@ -455,7 +455,7 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 
     if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) +  (isTCP ? sizeof(struct tcphdr) : sizeof(struct udphdr)) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
-        return 1;
+        return 0;
     }
 
     return 1;
@@ -525,12 +525,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
 
     struct dns_flags flags = get_dns_flags(dns_header);
-    #ifdef DEBUG
-        if (DEBUG) {
+    #if DEBUG
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
         bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
         bpf_printk("the query opcode %d",  flags.opcode);
-        }
     #endif
 
     // qeuries section 
@@ -582,7 +580,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u8 total_domain_length_exclude_tld = 0;
         // Iter through the Questions Count
         for (__u8 i=0; i < qd_count; i++){
-            __u16 offset = 0;
+            __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
             __u8 root_domain  = 0;
@@ -595,32 +593,58 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
                 mx_label_ln = max(mx_label_ln, label_len);
 
-                #ifdef SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
-                    // parse the characters across each label in the QNAME
-                    if (SUBDOMAIN_RANGE_LABEL_CHAR_SCAN) {
-                        __u32 iter_label_chars_ln = label_len;
-                        if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH) iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
-                        int k = 1;
-                        void * dns_label_offset_char = (void *) (dns_payload_buffer + offset + 1);
-                        while (true) {
-                            if ((void *)(dns_label_offset_char + k) > skb->data_end){
-                                goto parsed_label_queryHandler;
-                            }
-                            __u8 *ptr = (__u8 *)(dns_label_offset_char + k);
-                            if ((void *)(ptr + 1) > skb->data_end) 
-                                goto parsed_label_queryHandler;
-                        
-                            char __attribute__((__unused__)) char_buffer_value = (char) ( __u8) *ptr;
-                            #if DEBUG
-                                bpf_printk("the label is %c", char_buffer_value);
-                            #endif
-                            k++;
-                        }
+                char buff[MAX_DNS_LABEL_LENGTH];
+                #if !SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                    __u8 iter_label_chars_ln = label_len;
+                    if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
+                        iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
+                
+                    for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
+                        buff[i] = '\0';
+                
+                    __u8 *dns_payload_start = (__u8 *)(void *)(dns_payload_buffer + offset + sizeof(__u8));
+                    if ((void *)dns_payload_start + 1 > skb->data_end) {
+                        goto parsed_label_queryHandler;
                     }
-                #endif
+                
+                    __u8 lower_ct = 0;
+                    __u8 upper_ct = 0;
+                    __u8 digit_ct = 0;
 
+                    __u8 curr_parsed_jumps = 0;
+                    __u8 buffer_lab_ind = 0;
+                
+                next_char_parse:
+                    if ((void *)(dns_payload_start + 1) > skb->data_end)
+                        goto parsed_label_queryHandler;
+                
+                    char dns_payload_start_chr = (char)(*dns_payload_start);
+                    buff[buffer_lab_ind] = dns_payload_start_chr;
+                    dns_payload_start = dns_payload_start + sizeof(__u8);
+                
+                    if (isLower(dns_payload_start_chr))
+                        lower_ct++;
+                    if (isUpper(dns_payload_start_chr))
+                        upper_ct++;
+                    if (isDigit(dns_payload_start_chr))
+                        digit_ct++;
+
+                    curr_parsed_jumps++;
+                    buffer_lab_ind++;
+
+                    if (buffer_lab_ind >= 10)
+                        goto parsed_label_queryHandler;
+                    
+                    if ((void *) dns_payload_start > skb->data_end)
+                        goto parsed_label_queryHandler;
+                    
+                    goto next_char_parse;
+                    
+                    if (upper_ct > (int) label_len / 2) return SUSPICIOUS;
                 parsed_label_queryHandler:
-
+                    // bpf_printk("%s", buff);
+                #endif
+                
                 if (label_len == 0x00) break;
                 label_count++;
 
@@ -1075,10 +1099,8 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
 static 
 __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirectedDropped) {
-    #ifdef DEBUG
-        if (DEBUG) {
-            bpf_printk("Updating the kernel maps for clone redirection from kernel ");
-        }
+    #if DEBUG
+        bpf_printk("Updating the kernel maps for clone redirection from kernel ");
     #endif 
     __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
     if (isRedirectedDropped) {
@@ -1258,18 +1280,15 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         br_index = config->NfNdpBridgeIndexId;
         dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
      }else {
-        #ifdef DEBUG
-          if (!DEBUG) {
-             bpf_printk("kernel cannot find the requred kernel config redirect map");
-          }
+        #if DEBUG
+            bpf_printk("kernel cannot find the requred kernel config redirect map");
         #endif
     }
 
 
     bool isTunnelC2CStandardUdpTransport = false;
     if (isUdp) {
-        #ifdef DEEP_SCAN_DNS_UDP_OVERLAY
-            if (!DEEP_SCAN_DNS_UDP_OVERLAY) {
+        #if !DEEP_SCAN_DNS_UDP_OVERLAY
                 // allow an non overlay for fixed ports used by other protocols, for struct check mode, kernel will not process the packet DPI will scan each of them 
                 #pragma unroll(MAX_UDP_PROTOCOL_TRANSFERS)
                 for (int i=0; i < MAX_UDP_PROTOCOL_TRANSFERS; i++) {
@@ -1300,10 +1319,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             return 0;
         }
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #ifdef DEBUG
-                if (DEBUG) {
+            #if DEBUG
                     bpf_printk("kernel cannot clone the packet for the redirect"); 
-                }
             #endif
         }
         goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
@@ -1314,11 +1331,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     if (!sock_proc_info) {
         return 1;
     }else {
-        #ifdef DEBUG
-            if (DEBUG) {
-                bpf_printk("kernel tc layer found the process for current src port as packed moved down kernel stack to kernel tc %d %d", 
+        #if DEBUG
+            bpf_printk("kernel tc layer found the process for current src port as packed moved down kernel stack to kernel tc %d %d", 
                     sock_proc_info->pid, sock_proc_info->threadId);
-            }
         #endif
 
         if (__update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sock_proc_info, skb, __transport_src_port, __transport_dest_port)){
@@ -1328,10 +1343,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         
         __handle_kernel_map_clone_redirected_count(false);
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #ifdef DEBUG
-                if (!DEBUG) {
-                    bpf_printk("kernel cannot clone the packet for the redirect"); 
-                }
+            #if DEBUG
+                bpf_printk("kernel cannot clone the packet for the redirect"); 
             #endif
         }
     }
@@ -1589,18 +1602,14 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
             dns_volume_stats->packet_size = (__u64) dns_payload_size;
         }else {
             dns_volume_stats->packet_size += dns_payload_size;
-            #ifdef DEBUG
-                if (DEBUG) {
+            #if DEBUG
                     bpf_printk("rate limiting current packet threshold is %u",  dns_volume_stats->packet_size);
-                }
             #endif
         }
 
         if (ts - dns_volume_stats->last_timestamp <= RATE_LIMIT_VOLUME_TIME_WINDOW && dns_volume_stats->packet_size > MAX_VOLUME_THRESHOLD){
-            #ifdef DEBUG
-                if (!DEBUG) {
-                    bpf_printk("kernel started rate limiting the packets for egress");
-                }
+            #if DEBUG
+                bpf_printk("kernel started rate limiting the packets for egress");
             #endif
             return 0;
         }else 
@@ -1835,31 +1844,35 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
 
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
-static 
-__always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
-    __u32 dst_addr = bpf_ntohl(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
+#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    static 
+    __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
+        __u32 dst_addr = bpf_ntohl(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
 
-    __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
-    if (isDynamicBlacklisted) {
-        if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {
-            bpf_printk("found a malicious transfer to a c2 server filter the l3 traffic");
+        __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
+        if (isDynamicBlacklisted) {
+            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {
+                bpf_printk("found a malicious transfer to a c2 server filter the l3 traffic");
+            }
+            return false;
         }
         return false;
     }
-    return false;
-}
+#endif
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 // TODO: Add dynamic L3 IPv6 netpool c2 server filter over kernel tc layer, user space eBPF ndoe agent will create dynamic netpool for any k8s CNI to stop traffic over kernel sock (ebpf) or netfilter (ipv6) before it reach kernel traffic control 
-static 
-__always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
+#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    static 
+    __always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
 
-    struct in6_addr dest_addr = ip->daddr;
-    __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
-    if (fd)
-        return true;
-    return false;
-}
+        struct in6_addr dest_addr = ip->daddr;
+        __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
+        if (fd)
+            return true;
+        return false;
+    }
+#endif
 
 
 static 
@@ -2011,8 +2024,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 if (result.isBenign) {
-                    #ifdef DEBUG
-                        if (DEBUG) {
+                    #if DEBUG
                             bpf_printk("Allowing the packet as benign with no further DPI from kernel"); 
                         }
                     #endif
@@ -2106,7 +2118,7 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
 
-            #ifdef L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
+            #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
                  EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
             #endif
             
@@ -2180,11 +2192,9 @@ int classify(struct __sk_buff *skb){
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport) < 0) {
-                        #ifdef DEBUG 
-                            if (!DEBUG) {
+                        #if DEBUG 
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");
-                            }
                         #endif 
                         return TC_DROP;
                     }
@@ -2244,8 +2254,7 @@ int classify(struct __sk_buff *skb){
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
 
-        #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS)
+        #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
         #endif
 
@@ -2308,23 +2317,21 @@ int classify(struct __sk_buff *skb){
                 if (config) {
                     br_index = config->BridgeIndexId;
                 }else {
-                    bpf_printk("kernel cannot find the requred kernel config redirect map defaulting to kernel configured link netdev ifindex %d", br_index);
+                    #if DEBUG
+                        bpf_printk("kernel cannot find the requred kernel config redirect map defaulting to kernel configured link netdev ifindex %d", br_index);
+                    #endif
                 }
 
                 // bpf_printk("the init check for ipv6 udp dns packet passed to pass next deep parsing b:%d c:%d d:%d %d", result.isBenign, result.isC2c, result.drop, parse_flag);
                 if (result.isBenign) {
-                    #ifdef DEBUG 
-                        if (DEBUG) {
+                    #if DEBUG 
                             bpf_printk("Benign packet found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
-                        }
                     #endif
                     return TC_FORWARD;
                 }
                 else if (result.drop) {
-                    #ifdef DEBUG
-                        if (DEBUG) {
-                            bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
-                        }
+                    #if DEBUG
+                        bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
                     #endif
                     // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
                     __handle_kernel_map_redirection_drop_count();
@@ -2338,8 +2345,9 @@ int classify(struct __sk_buff *skb){
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
-                if (DEBUG)
+                #if DEBUG
                     bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
+                #endif 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
                 __u16 sport = bpf_ntohs(udp->source);
@@ -2347,11 +2355,9 @@ int classify(struct __sk_buff *skb){
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
-                        #ifdef DEBUG 
-                            if (!DEBUG) {
+                        #if DEBUG 
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");
-                            }
                         #endif 
                         return TC_DROP;
                     }
@@ -2390,7 +2396,7 @@ int classify(struct __sk_buff *skb){
             void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
             if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
             
-            #ifdef L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+            #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
             #endif
 
@@ -2451,11 +2457,9 @@ int classify(struct __sk_buff *skb){
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
                     if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
-                        #ifdef DEBUG 
-                            if (!DEBUG) {
-                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
+                        #if !DEBUG 
+                            bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");
-                            }
                         #endif 
                         return TC_DROP;
                     }

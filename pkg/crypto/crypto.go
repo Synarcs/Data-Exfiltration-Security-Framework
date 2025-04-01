@@ -86,6 +86,7 @@ func savePrivateKeyToPEM(privateKey []byte, outputFile string) error {
 		Bytes: privateKey,
 	}
 
+	// encode in memory for safety and speed
 	pemData := pem.EncodeToMemory(pemBlock)
 	return os.WriteFile(outputFile, pemData, 0600)
 }

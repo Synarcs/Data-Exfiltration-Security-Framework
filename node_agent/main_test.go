@@ -186,6 +186,7 @@ func TestNetworkNamespaceCreation(t *testing.T) {
 
 func TestAgentConfigLoader(t *testing.T) {
 	nodeAgentLoaderMock := new(NodeAgentMockInjectors)
+
 	nodeAgentLoaderMock.IsMethodCallable(t, "ReadGlobalNodeAgentConfig")
 
 	nodeAgentLoaderMock.On("ReadGlobalNodeAgentConfig").Return(&conf.NodeAgentConfig{}, nil)

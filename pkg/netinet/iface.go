@@ -65,7 +65,7 @@ type NetIface struct {
 
 	ConnTrackNsHandles map[int]conntrack.ConntrackSock
 }
-
+	
 func (nf *NetIface) ReadInterfaces(containered bool) error {
 	links, err := netlink.LinkList()
 	if err != nil {
