@@ -83,6 +83,16 @@ sudo apt install -y \
     python3-virtualenv
 
 
+tcp_wasm_envoy_breach_sec=0 
+if [[ $tcp_wasm_envoy_breach_sec -eq 1 ]]; then 
+    wget -O- https://apt.envoyproxy.io/signing.key | sudo gpg --dearmor -o /etc/apt/keyrings/envoy-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/envoy-keyring.gpg] https://apt.envoyproxy.io focal main" | sudo tee /etc/apt/sources.list.d/envoy.list
+    sudo apt-get update
+    sudo apt-get install envoy
+    envoy --version
+fi 
+
+
 # Install GVM and Go 1.23.2
 echo "[✅] Installation gvm for go!"
 echo "[x] Installing GVM (Go Version Manager)"
