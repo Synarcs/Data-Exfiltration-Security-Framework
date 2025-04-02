@@ -106,17 +106,11 @@ const (
 	EXFIL_VXLAN_BLOCK_EGRESS_PORT = "exfil_vxlan_block_egress_port"
 	EXFIL_TC_BRIDGE_CONFIG_MAP    = "exfil_security_tc_bridge_config_map"
 
-	// controller aware l3, proxy maps for all maps kernel will drop traffic
-	EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter"
-	EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter"
-
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"
 
 	// all maps for deep scan from kernel maps
 	EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_map_non_standard_port"
-	EXFIL_SECURITY_EGRESS_PROC_MAL                             = "exfil_security_egress_proc_mal"
-	EXFIL_SECURITY_EGRESS_NSP_MAP                              = "exfil_security_egress_nsp_map"
 )
 
 // kernel eBPF ring buffers over kernel network stack
@@ -128,4 +122,13 @@ const (
 // maps for kernel timers
 const (
 	EXFIL_SECURITY_TOKEN_BUCKET_DNS_RL = "exfil_security_token_bucket_dns_rl"
+)
+
+// pinned maps
+const (
+	EXFIL_SECURITY_EGRESS_PROC_MAL                          = "exfil_security_egress_proc_mal"
+	EXFIL_SECURITY_EGRESS_NSP_MAP                           = "exfil_security_egress_nsp_map"
+	EXFIL_SOCK_UDP_CONN_MAP                                 = "exfil_sock_udp_conn_map"
+	EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter"
+	EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter"
 )

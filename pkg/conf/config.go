@@ -31,6 +31,7 @@ type AgentConfig interface {
 	GetAddonFeaturesConfig() *EnhancedFeatures
 	GetAgentConfig() *NodeAgentConfig
 	ReadNodeAgentConfig() error
+	GetL3FiltersConfig() *L3EnhancedFeatures
 	GetRLimitConfig() *RlimitConfig
 }
 
@@ -71,6 +72,10 @@ func (nn *Config) GetAddonFeaturesConfig() *EnhancedFeatures {
 
 func (nn *Config) GetRLimitConfig() *RlimitConfig {
 	return &nn.AgentBootConfig.RlimitConfig
+}
+
+func (nn *Config) GetL3FiltersConfig() *L3EnhancedFeatures {
+	return &nn.AgentBootConfig.EnhancedFeatures.L3Filters
 }
 
 // config for high enhanced security for l3, l44, l7 filters and other orchestrated environments config to stop data breaches
@@ -123,7 +128,8 @@ type DnsEnhancedFeatures struct {
 }
 
 type L3EnhancedFeatures struct {
-	EnabledL3Filtering bool `yaml:"enabledL3Filtering" reflect:"enabledL3Filtering"`
+	EnabledL3v4Filtering bool `yaml:"enabledL3v4Filtering" reflect:"enabledL3v4Filtering"`
+	EnabledL3v6Filtering bool `yaml:"enabledL3v6Filtering" reflect:"enabledL3v6Filtering"`
 }
 
 type EnhancedFeatures struct {

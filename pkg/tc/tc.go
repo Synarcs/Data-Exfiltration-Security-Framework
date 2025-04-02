@@ -57,13 +57,7 @@ var (
 	INIT_LIMITS_KERNEL_CONFIG = false
 )
 
-var (
-	mapsToPinSharedProcKillMap = []string{
-		"exfil_security_egress_proc_mal",
-		"exfil_security_egress_nsp_map",
-		"exfil_sock_udp_conn_map",
-	}
-)
+var mapsToPinSharedProcKillMap []string
 
 func NewDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer) (*model.DnsPacketGen, error) {
@@ -119,10 +113,26 @@ func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		tcHandler.IsEgressXdpSupport = true
 	}
 
+	InitPinMapHandlerNames(config)
 	ipv4c2mal, ipv6c2mal := utils.GenerateC2BlacklistAddressChannels()
 	tcHandler.GlobalMalC2L3addressChannelIpv4 = ipv4c2mal
 	tcHandler.GlobalMalC2L3addressChannelIpv6 = ipv6c2mal
 	return tcHandler, nil
+}
+
+func InitPinMapHandlerNames(config conf.AgentConfig) {
+	mapsToPinSharedProcKillMap = []string{
+		events.EXFIL_SECURITY_EGRESS_PROC_MAL,
+		events.EXFIL_SECURITY_EGRESS_NSP_MAP,
+		events.EXFIL_SOCK_UDP_CONN_MAP,
+	}
+	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
+		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER)
+	}
+
+	if config.GetL3FiltersConfig().EnabledL3v6Filtering {
+		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER)
+	}
 }
 
 func (tc *TCHandler) PollMaliciousControllerAwareC2Address(errorChannel <-chan error) {

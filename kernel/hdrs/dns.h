@@ -32,7 +32,7 @@ enum MALICIOUS_FLAGS {
 #endif
 
 
-#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN false 
+#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN true 
 
 
 //                               1  1  1  1  1  1

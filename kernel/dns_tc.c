@@ -290,29 +290,6 @@ struct dns_volume_stats {
     } exfil_security_egress_tb_rate_limit_map SEC(".maps");
 #endif 
 
-
-// dynamic netpool l3 ipv4 filtering for any malicious traffic found to upstream servers 
-#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-    struct exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter {
-        __uint(type, BPF_MAP_TYPE_LRU_HASH);
-        __type(key, __u32);
-        __type(value, __u32);
-        __uint(max_entries, 1 << 10);
-    } exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter SEC(".maps");
-#endif 
-
-#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-
-    struct exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter {
-        __uint(type, BPF_MAP_TYPE_LPM_TRIE);
-        __type(key, struct in6_addr);
-        __type(value, __u8);
-        __uint(map_flags, BPF_F_NO_PREALLOC);
-        __uint(max_entries, 1 << 10);
-    } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
-#endif 
-
-
 // Parse the RAW SKB for query classes 
 #define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)\ 
         switch ((dns_query_class)){                 \
@@ -579,7 +556,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u8 total_domain_length = 0;
         __u8 total_domain_length_exclude_tld = 0;
         // Iter through the Questions Count
-        for (__u8 i=0; i < qd_count; i++){
+        __u8 i = 0; __u8 j = 0; // iters
+        forn(qd_count, __u8, i) {
             __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
@@ -587,7 +565,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             // parse the QNAME
             // iter over the char labels in QNAME
-            for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
+            forn(MAX_DNS_NAME_LENGTH, __u8, j) {
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
@@ -597,7 +575,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     char buff[MAX_DNS_LABEL_LENGTH];
                 #endif
 
-                #if !SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
                     __u8 iter_label_chars_ln = label_len;
                     if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
                         iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
@@ -846,14 +824,16 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
 
         __u8 total_domain_length_exclude_tld = 0;
-        for (__u8 i=0; i < qd_count; i++){
+        __u8 i = 0; __u8 j = 0; // iters
+
+        forn(qd_count, __u8, i) {
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
             __u8 root_domain  = 0;
 
             // parse the QNAME
-            for (int j=0; j < MAX_DNS_NAME_LENGTH; j++){
+            forn(MAX_DNS_NAME_LENGTH, __u8, j){
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
@@ -1854,7 +1834,7 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
     static 
     __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
-        __u32 dst_addr = bpf_ntohl(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
+        __u32 dst_addr = bpf_ntohs(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
 
         __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
         if (isDynamicBlacklisted) {
