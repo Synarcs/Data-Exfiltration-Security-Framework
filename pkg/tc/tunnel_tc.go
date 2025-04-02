@@ -138,6 +138,8 @@ type maliciousExfilPortIngressSniffCtx struct {
 }
 
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
+
 var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
@@ -159,6 +161,11 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 
 	if ct, fd := maliciousExfilProcessCount[mapField.ProcessId]; !fd {
 		maliciousExfilProcessCount[mapField.ProcessId] = 1
+		maliciousExfilProcessAliveTime[mapField.ProcessId] = events.MaliciousProcessAliveTime{
+			ExfiltrationStartedAt: time.Now().Format(time.RFC850),
+			ProcessId:             mapField.ProcessId,
+			AliveTime:             time.Now().Second(),
+		}
 	} else {
 		if utils.DEBUG {
 			log.Println("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
@@ -171,7 +178,13 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			if err := cmd.Run(); err != nil {
 				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, sigKillStdoutBuffer)
 			}
-			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", mapField.ProcessId)
+			log.Printf("The exfiltration was stopped send sigkill to the process %d was killed successfully", mapField.ProcessId)
+			evTime := maliciousExfilProcessAliveTime[mapField.ProcessId]
+			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)
+
+			go events.ExportPromeEbpfExporterEvents[events.MaliciousProcessAliveTime](evTime)
+
+			delete(maliciousExfilProcessAliveTime, mapField.ProcessId)
 			delete(maliciousExfilProcessCount, mapField.ProcessId)
 
 			// stop sniffing PCAP over this port since the node SIGKILL the process
@@ -330,7 +343,7 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 
 			// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
 			if event.ProcessId != 0 && event.ThreadId != 0 {
-				log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer", event)
+				events.PrettyPrintMaliciousDNSEvent(&event)
 			} else {
 				log.Println("Potential DNS tunnel from kernel detected", event)
 			}

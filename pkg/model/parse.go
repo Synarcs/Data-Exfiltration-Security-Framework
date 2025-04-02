@@ -40,6 +40,7 @@ type DnsPacketGen struct {
 }
 
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
 type CombinedFeatures []DNSFeatures
@@ -49,6 +50,11 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	defer maliciousProcCountguard.Unlock()
 	if ct, fd := maliciousExfilProcessCount[procId]; !fd {
 		maliciousExfilProcessCount[procId] = 1
+		maliciousExfilProcessAliveTime[procId] = events.MaliciousProcessAliveTime{
+			ExfiltrationStartedAt: time.Now().Format(time.RFC850),
+			ProcessId:             procId,
+			AliveTime:             time.Now().Second(),
+		}
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
 			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
@@ -58,6 +64,10 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 			if err := cmd.Run(); err != nil {
 				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, sigKillStdoutBuffer)
 			}
+			evTime := maliciousExfilProcessAliveTime[procId]
+			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)
+			go events.ExportPromeEbpfExporterEvents[events.MaliciousProcessAliveTime](evTime)
+			delete(maliciousExfilProcessAliveTime, procId)
 			delete(maliciousExfilProcessCount, procId)
 			return
 		}
@@ -314,7 +324,6 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			Protocol:   6,
 		})
 		tcpPacket.SetNetworkLayerForChecksum(ipv4)
-		fmt.Println("tcp packet", tcpPacket)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, tcpPacket, &dnsPacket); err != nil {
 			log.Println("Error reconstructing the DNS packet", err)
 			return err

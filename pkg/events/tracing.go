@@ -48,6 +48,12 @@ type PacketDPIKernelDropCountEvent struct {
 	EvenTime              string
 }
 
+type MaliciousProcessAliveTime struct {
+	ExfiltrationStartedAt string
+	ProcessId             uint32
+	AliveTime             int
+}
+
 type VxlanEncapKenrelEvent struct {
 	Vni                   uint32
 	Udp_src_port          uint16
@@ -95,7 +101,7 @@ const (
 // TODO Make nested generic service interfaces
 type KernelPacketDropRedirectInterface interface {
 	PacketDPIRedirectionCountEvent | PacketDPIKernelDropCountEvent | PacketDPICloneRedirectionCountEvent | PacketDPICloneRedirectionDropCountEvent |
-		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer | VxlanEncapKenrelEvent
+		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer | VxlanEncapKenrelEvent | MaliciousProcessAliveTime
 }
 
 type RawDnsEvent struct {
@@ -251,6 +257,16 @@ var (
 		},
 	)
 
+	malicious_process_alive_system = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "malicious_process_alive_system",
+			Help: "Time the malicious process was alive in system before terminated by node-agent",
+		}, []string{
+			"Exfiltration_Attempt_Started_At",
+			"Process_Id",
+			"Alive_Time",
+		},
+	)
 	malicious_non_stanard_socket_port_transfer = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "malicious_non_stanard_socket_port_transfer",
@@ -286,7 +302,7 @@ func init() {
 		redirect_event_metric, redirect_event_metric_count,
 		clone_redirect_event_metric, clone_redirect_event_metric_count,
 		clone_redirect_event_drop_metric, clone_redirect_event_drop_metric_count,
-		maliciousdetectedDnsPacket, malicious_detected_event_userspace,
+		maliciousdetectedDnsPacket, malicious_detected_event_userspace, malicious_process_alive_system,
 		sniffedDnsEvent, dnsRoundTripTime_metric,
 		malicious_tunnel_socket, malicious_non_stanard_socket_port_transfer,
 		malicious_vxlan_encap_dns_vtep_tunnel_transfer, cpuUsage, memoryUsageGauge)
@@ -449,6 +465,14 @@ func ExportPromeEbpfExporterEvents[T KernelPacketDropRedirectInterface](event T)
 			"l2_tunnel_mac_address": e.L2_tunnel_mac_address,
 			"domains":               strings.Join(e.Domains, ","),
 		}).Set(float64(time.Now().Nanosecond()))
+		return nil
+
+	case MaliciousProcessAliveTime:
+		malicious_process_alive_system.With(prometheus.Labels{
+			"Exfiltration_Attempt_Started_At": e.ExfiltrationStartedAt,
+			"Process_Id":                      strconv.Itoa(int(e.ProcessId)),
+			"Alive_Time":                      strconv.Itoa(int(e.AliveTime)),
+		})
 		return nil
 
 	default:

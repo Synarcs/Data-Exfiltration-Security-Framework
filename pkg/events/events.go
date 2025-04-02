@@ -1,5 +1,7 @@
 package events
 
+import "log"
+
 // lower protocol packet information
 type DnsEvent struct {
 	DstPort          uint32
@@ -9,6 +11,12 @@ type DnsEvent struct {
 	IsTcp            uint8
 	ProcessId        uint32
 	ThreadId         uint32
+}
+
+func PrettyPrintMaliciousDNSEvent(ev *DnsEvent) {
+	log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer")
+	log.Printf("\n Dest Port :: %d \n Src Port :: %d \n DNS Query ID :: %d \n Process Id :: %d \n Thread Id :: %d", ev.DstPort,
+		ev.SrcPort, ev.DnsTransactionId, ev.ProcessId, ev.ThreadId)
 }
 
 type DnsMapPayloadNonOverlayPort struct {

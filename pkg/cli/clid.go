@@ -66,6 +66,7 @@ func blacklistIngressDomains(w http.ResponseWriter, r *http.Request) {
 	payload, err := json.Marshal(info)
 	if err != nil {
 		log.Println("Error in marshalling and rerun current state of blacklisted domains for ingress LRU cache")
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
