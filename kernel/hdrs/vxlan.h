@@ -28,7 +28,7 @@
 
 struct vxlanhdr {
     __u32 vx_flags;    /* VXLAN flags, covering header process flags */
-    __u32 vx_vni;      /* 24-bit VXLAN Network Identifier  + Kernel Reserved flags*/
+    __u32 vx_vni;     /* 24-bit VXLAN Network Identifier  + Kernel Reserved flags*/
 };
 
 static

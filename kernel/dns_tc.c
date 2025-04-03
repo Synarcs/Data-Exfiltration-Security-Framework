@@ -314,16 +314,23 @@ struct dns_volume_stats {
             }                                       
 
 // custom range order filtering for the DNS domains over the labels queries ssections 
-#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count,subdomain_label_count_config_min_key,subdomain_label_count_config_max_key)                             \
-    if (!DEBUG)                                                                                                                                             \
-        bpf_printk("subdomain count %d ", subdomain_label_count);                                                                                           \
-    __u32 * subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key);          \
-    if (!subdomain_label_count_config_min_map) *subdomain_label_count_config_min_map = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
-    __u32 * subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key);          \
-    if (!subdomain_label_count_config_max_map) *subdmoain_label_count_config_max_map = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD;                \
-    if (subdmoain_label_count >= subdmoain_label_count_config_min_map && subdmoain_label_count <= subdmoain_label_count_config_max_map) return SUSPICIOUS;  \
-    if (subdmoain_label_count > subdmoain_label_count_config_max_map) return MALICIOUS;                                                                     \
-
+#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count_config_min_key, subdomain_label_count_config_max_key) \
+    do { \
+        __u32 *subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); \
+        if (!subdomain_label_count_config_min_map) { \
+            __u32 min_value = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
+            subdomain_label_count_config_min_map = &min_value; \
+        } \
+        __u32 *subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); \
+        if (!subdomain_label_count_config_max_map) { \
+            __u32 max_value = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
+            subdomain_label_count_config_max_map = &max_value; \
+        } \
+        if (subdomain_label_count >= *subdomain_label_count_config_min_map && subdomain_label_count <= *subdomain_label_count_config_max_map) \
+            return SUSPICIOUS; \
+        if (subdomain_label_count > *subdomain_label_count_config_max_map) \
+            return MALICIOUS; \
+    } while(0)                                                                                                                                   
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
@@ -354,6 +361,30 @@ struct dns_volume_stats {
             }                                                                           \
     } while(0)        
 #endif 
+
+#if IS_VXLAN_PORTS_EXIST_BRIDGE
+    #define EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb)          \
+        do {                                                              \
+            struct udphdr *udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr); \
+            if ((void *)udp + 1 > cursor.data_end) return TC_FORWARD;     \
+                                                                          \
+            void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); \
+            if ((void *)transport_payload + 1 > cursor.data_end) return TC_FORWARD; \
+                                                                          \
+            __u8 potential_dns_tunnel = __parse_encap_vxlan_tunnel_header(&cursor, skb, transport_payload); \
+            switch (potential_dns_tunnel) {                               \
+                case MALICIOUS:                                           \
+                    return TC_DROP;                                       \
+                case BENIGN:                                              \
+                    return TC_FORWARD;                                    \
+                case SUSPICIOUS:                                          \
+                    __emit_vxlan_standard_port(udp, skb);                 \
+                    return TC_FORWARD;                                    \
+                default:                                                  \
+                    return TC_FORWARD;                                    \
+            }                                                             \
+        } while (0)
+#endif
 
 static 
 __always_inline void cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -576,60 +607,59 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 #endif
 
                 #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
-                    __u8 iter_label_chars_ln = label_len;
-                    if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
-                        iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
+                        __u8 iter_label_chars_ln = label_len;
+                        if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
+                            iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
 
-                    #if DEBUG
-                        for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
-                            buff[i] = '\0';
-                    #endif
+                        #if DEBUG
+                            for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
+                                buff[i] = '\0';
+                        #endif
+                        
+                        __u8 *dns_payload_start = (__u8 *)(void *)(dns_payload_buffer + offset + sizeof(__u8));
+                        if ((void *)dns_payload_start + 1 > skb->data_end) {
+                            goto parsed_label_queryHandler;
+                        }
+
+                        __u8 spec_char = 0;
+                        __u8 curr_parsed_jumps = 0;
+                        __u8 buffer_lab_ind = 0;
                     
-                    __u8 *dns_payload_start = (__u8 *)(void *)(dns_payload_buffer + offset + sizeof(__u8));
-                    if ((void *)dns_payload_start + 1 > skb->data_end) {
-                        goto parsed_label_queryHandler;
-                    }
-                
-                    __u8 lower_ct = 0; __u8 upper_ct = 0;
-                    __u8 digit_ct = 0; __u8 spec_char = 0;
-
-                    __u8 curr_parsed_jumps = 0;
-                    __u8 buffer_lab_ind = 0;
-                
-                next_char_parse:
-                    if ((void *)(dns_payload_start + 1) > skb->data_end)
-                        goto parsed_label_queryHandler;
-                
-                    char dns_payload_start_chr = (char)(*dns_payload_start);
-                    #if DEBUG
-                        buff[buffer_lab_ind] = dns_payload_start_chr;
-                    #endif
-
-                    dns_payload_start = dns_payload_start + sizeof(__u8);
-                
-                    if (isLower(dns_payload_start_chr))
-                        lower_ct++;
-                    if (isUpper(dns_payload_start_chr))
-                        upper_ct++;
-                    if (isDigit(dns_payload_start_chr))
-                        digit_ct++;
-                    else spec_char++;
-
-                    curr_parsed_jumps++;
-                    buffer_lab_ind++;
-
-                    if (buffer_lab_ind >= MAX_DNS_LABEL_LENGTH)
-                        goto parsed_label_queryHandler;
+                    next_char_parse:
+                        if ((void *)(dns_payload_start + 1) > skb->data_end)
+                            goto parsed_label_queryHandler;
                     
-                    if ((void *) dns_payload_start > skb->data_end)
-                        goto parsed_label_queryHandler;
+                        char dns_payload_start_chr = (char)(*dns_payload_start);
+                        #if DEBUG
+                            buff[buffer_lab_ind] = dns_payload_start_chr;
+                        #endif
+
+                        dns_payload_start = dns_payload_start + sizeof(__u8);
                     
-                    goto next_char_parse;
-                    
-                    if (spec_char > (int) label_len / 2) return SUSPICIOUS;
-                parsed_label_queryHandler:
+                        if (!(isLower(dns_payload_start_chr) || 
+                            isUpper(dns_payload_start_chr) || 
+                            isDigit(dns_payload_start_chr))) 
+                            spec_char++;
+
+                        curr_parsed_jumps++;
+                        buffer_lab_ind++;
+
+                        if (buffer_lab_ind >= MAX_DNS_LABEL_LENGTH)
+                            goto parsed_label_queryHandler;
+                        
+                        if ((void *) dns_payload_start > skb->data_end)
+                            goto parsed_label_queryHandler;
+                        
+                        goto next_char_parse;
+                        
+                        if (spec_char > (int) label_len / 2) return SUSPICIOUS;
+                    parsed_label_queryHandler:
                 #endif
                 
+                #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
+                    SUBDOMAIN_RANGE_FILTER(label_key_subdomain_length_exclude_tld_min,label_key_subdomain_length_exclude_tld_max)
+                #endif
+            
                 if (label_len == 0x00) break;
                 label_count++;
 
@@ -656,7 +686,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
              __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
-            __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 __attribute__((__unused__)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
             
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
@@ -930,7 +960,8 @@ __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, _
         kernel never allows the packet to pass over standard dns udp l4 to be encapsulated as a vxlan inside the main packet. 
 */
 static 
-__always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, void * transport_payload) {
+__always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, 
+        struct __sk_buff *raw_skb, void * transport_payload) {
     /*
         vxland is tunnel traffic for all upto layer 7 inside layer 4 with a valid vni header at start 
     */
@@ -968,6 +999,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
             if ((void *)(udp + 1) > skb->data_end) return BENIGN;
             struct dns_header *dns_header = (struct dns_header *)(udp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+
             return SUSPICIOUS;
         }else if (ip->protocol == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
@@ -984,6 +1016,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
             if ((void *)(udp + 1) > skb->data_end) return BENIGN;
             struct dns_header *dns_header = (struct dns_header *)(udp + 1);
             if ((void *)(dns_header + 1) > skb->data_end) return BENIGN;
+
             return SUSPICIOUS;
         }else if (ipv6->nexthdr == IPPROTO_TCP) {
             struct tcphdr *tcp = (struct tcphdr *)(ipv6 + 1);
@@ -996,6 +1029,56 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb, v
     }
     return BENIGN;
 }
+
+
+static 
+__always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void * transport_payload, 
+                    struct __sk_buff *raw_skb, struct udphdr *udp) {
+        // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
+    if (__parse_encap_vxlan_tunnel_header(skb, raw_skb, transport_payload) == SUSPICIOUS) {
+        __u32 br_index = 5;
+        __u32 out = raw_skb->ifindex;
+        __be32 __attribute__((__unused__)) dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
+
+        __u32 udp_dest_port = bpf_ntohs(udp->dest);
+        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+
+        if (userspace_vxlan_flag_val) {
+            #if DEBUG 
+                bpf_printk("kernel found the vxlan flag for the udp port %u", udp_dest_port); 
+            #endif
+            if (*userspace_vxlan_flag_val == 1) {
+                // there is an malicious exfiltrated dns traffic done over this vxlan port 
+                return 0;
+            }
+            // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
+            if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
+                #if DEBUG 
+                    bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
+                #endif 
+            }
+        }else {
+            /* emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
+                   continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
+                The Kernel parallely emits 2 events for DPI over non-standard port and potential vxlan 
+                any next exfil packet process and any of those maps user space has populated as malicious i drop
+                This cause the malware to have intermidate connection with remote c2 server potentially breaking the connection between c2 implant and remote server.
+            */
+            __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
+        }
+    }
+
+    return 1;
+}
+
+/*
+    Emits ring buffer directly dont need raw parsing considering the vxlan encap is over standard port of UDP for encap transfer
+*/
+static
+__always_inline void __emit_vxlan_standard_port(struct udphdr *udp, struct __sk_buff *skb) {
+    __emit_kernel_encap_event_vxlan_encap(udp, skb->ifindex);
+}
+
 
 static 
 __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb, struct __sk_buff *raw_skb,void *dns_payload, 
@@ -1339,47 +1422,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM:
     return 1;
 }
-
-static 
-__always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void * transport_payload, 
-                    struct __sk_buff *raw_skb, struct udphdr *udp) {
-        // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
-    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == SUSPICIOUS) {
-        __u32 br_index = 5;
-        __u32 out = raw_skb->ifindex;
-        __be32 __attribute__((__unused__)) dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
-
-        __u32 udp_dest_port = bpf_ntohs(udp->dest);
-        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
-
-        if (userspace_vxlan_flag_val) {
-            #if DEBUG 
-                bpf_printk("kernel found the vxlan flag for the udp port %u", udp_dest_port); 
-            #endif
-            if (*userspace_vxlan_flag_val == 1) {
-                // there is an malicious exfiltrated dns traffic done over this vxlan port 
-                return 0;
-            }
-            // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
-            if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
-                #if DEBUG 
-                    bpf_printk("kernel cannot delete the vxlan flag for the udp port %u", udp_dest_port);
-                #endif 
-            }
-        }else {
-            /* emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
-                   continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
-                The Kernel parallely emits 2 events for DPI over non-standard port and potential vxlan 
-                any next exfil packet process and any of those maps user space has populated as malicious i drop
-                This cause the malware to have intermidate connection with remote c2 server potentially breaking the connection between c2 implant and remote server.
-            */
-            __emit_kernel_encap_event_vxlan_encap(udp, raw_skb->ifindex);
-        }
-    }
-
-    return 1;
-}
-
 
 /*
     Emits ring buffer events to user space for malicious transfer for  potential malicious transfer over random ports
@@ -2084,11 +2126,9 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
             }else {
-                // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
+                    // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
-                    void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); 
-                    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == BENIGN)
-                        return TC_FORWARD;
+                    EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
                 #endif
 
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
@@ -2223,12 +2263,6 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
             }
             else {
-                // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
-                #if IS_VXLAN_PORTS_EXIST_BRIDGE
-                    void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); 
-                    if (__parse_encap_vxlan_tunnel_header(skb, transport_payload) == BENIGN)
-                        return TC_FORWARD;
-                #endif
 
                 if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
                     return TC_FORWARD;
@@ -2370,6 +2404,11 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
             }
             else {
+
+                #if IS_VXLAN_PORTS_EXIST_BRIDGE
+                    EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
+                #endif
+
                 if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;
                 return TC_DROP;

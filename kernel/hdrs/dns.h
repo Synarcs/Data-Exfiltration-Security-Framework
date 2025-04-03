@@ -31,8 +31,9 @@ enum MALICIOUS_FLAGS {
     #define NETBIOS_EGRESS_MULTICAST_PORT 137
 #endif
 
-
-#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN true 
+// TODO: convert all the consts to proper config loader from ebpf maps
+#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN false
+#define SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER false
 
 
 //                               1  1  1  1  1  1

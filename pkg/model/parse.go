@@ -33,8 +33,8 @@ type DnsParserActions interface{}
 type DnsPacketGen struct {
 	IfaceHandler        *netinet.NetIface
 	SockSendFdInterface []netlink.Link
-	SocketSendFd        *int
-	XdpSocketSendFd     *xdp.Socket
+	SocketSendFd        *int        // AF_PACKET
+	XdpSocketSendFd     *xdp.Socket // AF_XDP
 	OnnxModel           *OnnxModel
 	StreamClient        *stream.StreamProducer
 }
@@ -84,7 +84,7 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 	if customNsFdHandle != nil {
 		connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[int(netns.NsHandle(*customNsFdHandle))]
 		if !fd {
-			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index", *customNsFdHandle)
+			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index %d", *customNsFdHandle)
 		}
 		if utils.DEBUG {
 			log.Println("clean the stale entry for conntrack ", connSockHandle)
@@ -107,7 +107,6 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 }
 
 func (d *DnsPacketGen) CleanRedirectEgressMapsForXdp() error {
-
 	return nil
 }
 
