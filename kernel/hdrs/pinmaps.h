@@ -53,5 +53,6 @@ struct exfil_security_egress_nsp_map {
         __type(value, __u8);
         __uint(map_flags, BPF_F_NO_PREALLOC);
         __uint(max_entries, 1 << 10);
+        __uint(pinning, LIBBPF_PIN_BY_NAME);
     } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
 #endif 

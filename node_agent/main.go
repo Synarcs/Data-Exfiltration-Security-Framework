@@ -58,23 +58,24 @@ func initKernelProgInjectComptionEvent() map[string]chan bool {
 	}
 }
 
-func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, cleanHooks *KernelCleanHooks) error {
-	if err := cleanHooks.tc.DetachHandler(&ctx); err != nil {
+func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
+	cleanHooks *KernelCleanHooks, ignoreErr bool) error {
+	if err := cleanHooks.tc.DetachHandler(&ctx); err != nil && !ignoreErr {
 		return err
 	} // kernel TC layer
 
-	if err := cleanHooks.nft.DetachKernelBridgeTCFilters(&ctx); err != nil {
+	if err := cleanHooks.nft.DetachKernelBridgeTCFilters(&ctx); err != nil && !ignoreErr {
 		return err
 	} // kernel Netfilter layer
 
 	cleanHooks.tc.IsLinkPppLinkAttached(&ctx)
 
-	if err := cleanHooks.kprobe.DetachKprobeHandlers(); err != nil {
+	if err := cleanHooks.kprobe.DetachKprobeHandlers(); err != nil && !ignoreErr {
 		return err
 	} // kernel kprobe layer
 
 	for _, openConnSocks := range cleanHooks.iface.ConnTrackNsHandles {
-		if err := openConnSocks.CloseConntrackNetlinkSock(); err != nil {
+		if err := openConnSocks.CloseConntrackNetlinkSock(); err != nil && !ignoreErr {
 			return err
 		}
 	} // not kenrle eBPF hook but internally relies over kernel conntrack layer for cleaning nf_netlink socket
@@ -86,7 +87,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions, c
 
 	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
 		// clean the kernel sock op for attached filter over init kernel sock prog
-		if err := cleanHooks.sockProgs.DetachKernelSockProg(ctx); err != nil {
+		if err := cleanHooks.sockProgs.DetachKernelSockProg(ctx); err != nil && !ignoreErr {
 			return err
 		}
 	}
@@ -335,7 +336,7 @@ func main() {
 	// global error channel for the kernel hooks
 	go func() {
 		for range globalErrorKernelHandlerChannel {
-			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts); err != nil {
+			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
 				log.Printf("Error receieved in node agent global error chan closing ... %+v", err)
 			}
 		}
@@ -375,7 +376,9 @@ func main() {
 				} else {
 					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
 				}
-				kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
+				if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
+					log.Printf("Error cleaning the injected kernel hooks %+v", err)
+				}
 				os.Exit(int(syscall.SIGTERM))
 			}
 		}
@@ -400,7 +403,10 @@ func main() {
 		}
 		log.Println("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
-		kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts)
+		if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
+			log.Printf("Error cleaning the injected kernel hooks %+v", err)
+		}
+
 		agentCancelFunc()
 		if err := crypto.CleanupKernelKeyRing(); err != nil {
 			log.Println("Error cleaning up the kernel keyring for custom signed keys", err.Error())

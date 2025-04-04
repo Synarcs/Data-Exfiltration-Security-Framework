@@ -137,7 +137,10 @@ type maliciousExfilPortIngressSniffCtx struct {
 	cancelSniff context.CancelFunc
 }
 
+// convert to an shared distributed cache over the enitr data plane if required
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int) // the lifecycle is only until the agent is alive for in-mory log count, for detailed metrics, prometheus is exporting detailed kernel metrics of malicious detected count
+
 var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
 
 var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
@@ -165,6 +168,13 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			ExfiltrationStartedAt: time.Now().Format(time.RFC850),
 			ProcessId:             mapField.ProcessId,
 			AliveTime:             time.Now().Second(),
+		}
+
+		// ensure does there exist conflict for preocess ID which was killed previously
+		if val, fd := maliciousExfilProcessesRecCt[mapField.ProcessId]; fd {
+			maliciousExfilProcessesRecCt[mapField.ProcessId] = val + 1
+		} else {
+			maliciousExfilProcessesRecCt[mapField.ProcessId] = val + 1
 		}
 	} else {
 		if utils.DEBUG {
@@ -202,7 +212,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 }
 
 func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
-	return maliciousExfilProcessCount
+	return maliciousExfilProcessesRecCt
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {

@@ -159,9 +159,10 @@ func UnblockDomain(w http.ResponseWriter, r *http.Request) {
 /*
 Combines all the malicious processes prevented by the kernel and user space exfiltrating data
 */
-func GetAllPreventedExfiltratedProcessids() map[uint32]int {
+func GetAllPreventedExfiltratedProcessids() (map[uint32]int, []string) {
 	combinProc := map[uint32]int{}
 
+	var malProces []string
 	defaultPort := model.GetCurrentLoggedExfiltratedProcessids()
 	for malProc, ct := range defaultPort {
 		if val, fd := combinProc[malProc]; !fd {
@@ -180,28 +181,34 @@ func GetAllPreventedExfiltratedProcessids() map[uint32]int {
 			combinProc[tunnelProc] = val + ct
 		}
 	}
-	return combinProc
+
+	for process := range combinProc {
+		malProces = append(malProces, fmt.Sprintf("%d", process))
+	}
+	return combinProc, malProces
 }
 
 func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request) {
-	currProcCount := GetAllPreventedExfiltratedProcessids()
-	sendResp := func(msg string) interface{} {
+	currProcCount, procs := GetAllPreventedExfiltratedProcessids()
+	sendResp := func(msg string, procs []string) interface{} {
 		return struct {
-			Msg string
+			Msg   string
+			Procs []string
 		}{
-			Msg: msg,
+			Msg:   msg,
+			Procs: procs,
 		}
 	}
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if len(currProcCount) == 0 {
 		json.NewEncoder(w).Encode(
-			sendResp("No malicious process Detected yet by the node-agent"),
+			sendResp("No malicious process Detected yet by the node-agent", []string{}),
 		)
 		return
 	}
 	json.NewEncoder(w).Encode(
-		sendResp(fmt.Sprintf("%s", currProcCount)),
+		sendResp(fmt.Sprintf("%d", len(currProcCount)), procs),
 	)
 }
 

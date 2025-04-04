@@ -39,7 +39,9 @@ type DnsPacketGen struct {
 	StreamClient        *stream.StreamProducer
 }
 
+// convert to an shared distributed cache over the enitr data plane if required
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+var maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int)
 var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
@@ -54,6 +56,12 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 			ExfiltrationStartedAt: time.Now().Format(time.RFC850),
 			ProcessId:             procId,
 			AliveTime:             time.Now().Second(),
+		}
+		// ensure does there exist conflict for preocess ID which was killed previously
+		if val, fd := maliciousExfilProcessesRecCt[procId]; fd {
+			maliciousExfilProcessesRecCt[procId] = val + 1
+		} else {
+			maliciousExfilProcessesRecCt[procId] = val + 1
 		}
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
@@ -76,7 +84,7 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 }
 
 func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
-	return maliciousExfilProcessCount
+	return maliciousExfilProcessesRecCt
 }
 
 // Re packet send gen ensure removal of stale conntrack entries to reserved cokernel memory and prevent the conntrack table to grow

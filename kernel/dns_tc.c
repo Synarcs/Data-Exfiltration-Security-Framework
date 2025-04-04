@@ -935,13 +935,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 static
 __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, __u32 egress_ifindex) {
     struct bpf_dynptr dptr;
-    if (bpf_ringbuf_reserve_dynptr(&exfil_security_egress_vxlan_encap_drop, sizeof(struct exfil_vxlan_exfil_event), 0, &dptr) < 0){
-        #if DEBUG
-            bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
-        #endif
-        bpf_ringbuf_discard_dynptr(&dptr, 0);
-        return;
-    }
     #if DEBUG
         bpf_printk("emit an vxlan kernel event for udp %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
     #endif
@@ -949,9 +942,15 @@ __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, _
         .transport_dest_port = bpf_ntohs(udp->dest),
         .transport_src_port = bpf_ntohs(udp->source)
     };
+    if (bpf_ringbuf_reserve_dynptr(&exfil_security_egress_vxlan_encap_drop, sizeof(struct exfil_vxlan_exfil_event), 0, &dptr) < 0){
+        #if DEBUG
+            bpf_printk("Error allocating memory for dynamic ptr size in ring buffer");
+        #endif
+        bpf_ringbuf_discard_dynptr(&dptr, 0);
+        return;
+    }
     bpf_dynptr_write(&dptr, 0, &vxlan_event, sizeof(struct exfil_vxlan_exfil_event), 0);
     bpf_ringbuf_submit_dynptr(&dptr, 0);
-    bpf_printk("Emit the vxlan encap tracing event to user space");
 }
 
 
