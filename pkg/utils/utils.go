@@ -84,8 +84,8 @@ const (
 
 // user space remote inferencing support for unix domain sockets
 const (
-	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/onnx-inference-out.sock"
-	ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/run/onnx-inference-in.sock"
+	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/dnsobelisk/onnx-inference-out.sock"
+	ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/run/dnsobelisk/onnx-inference-in.sock"
 )
 
 const (
@@ -112,6 +112,11 @@ type Utsname struct {
 	Version    [65]int8
 	Machine    [65]int8
 	Domainname [65]int8
+}
+
+type KernelInjectProgInfo struct {
+	IsInjected   bool
+	EbpfProgInfo *ebpf.ProgramInfo
 }
 
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
@@ -147,7 +152,7 @@ func BigEndianToIPv4(ipInt uint32) string {
 	return net.IP(ipBytes).String()
 }
 
-// generate the required channesl for controller to stream those remote ipv4 / ipv6 c2 server addressses
+// generate the required chanel for controller to stream those remote ipv4 / ipv6 c2 server addresses
 func GenerateC2BlacklistAddressChannels() (chan net.IP, chan net.IP) {
 	return make(chan net.IP), make(chan net.IP)
 }

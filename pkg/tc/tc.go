@@ -301,7 +301,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 	}
 }
 
-func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan bool) {
+func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan utils.KernelInjectProgInfo) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
 	if errors.Is(ctx.Err(), context.Canceled) {
 		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
@@ -333,6 +333,10 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	defer spec.Close()
 
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
+	info, err := prog.Info()
+	if err != nil {
+		panic(err)
+	}
 
 	if prog == nil {
 		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG)
@@ -356,7 +360,10 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 
-	injectChan[progs.TC_PROG] <- true
+	injectChan[progs.TC_PROG] <- utils.KernelInjectProgInfo{
+		IsInjected:   true,
+		EbpfProgInfo: info,
+	}
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {
 

@@ -9,6 +9,11 @@ compile:
 	@echo "Compiling the eBPF Node Agent for $(shell go env GOOS && go env GOARCH)"
 	go build $(node_agent) 
 
+.PHONY: run
+run: 
+	sudo setcap 'cap_bpf=ep cap_net_admin=ep cap_perfmon=ep ' main
+	getcap ./main 
+
 .PHONY: compile-kernel
 compile-kernel:
 	@echo "Compiling all kernel ebpf programs"

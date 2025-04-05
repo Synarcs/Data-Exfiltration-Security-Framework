@@ -32,9 +32,9 @@ type DnsParserActions interface{}
 
 type DnsPacketGen struct {
 	IfaceHandler        *netinet.NetIface
-	SockSendFdInterface []netlink.Link
-	SocketSendFd        *int        // AF_PACKET
-	XdpSocketSendFd     *xdp.Socket // AF_XDP
+	SockSendFdInterface []netlink.Link // AF_NETLINK
+	SocketSendFd        *int           // AF_PACKET
+	XdpSocketSendFd     *xdp.Socket    // AF_XDP
 	OnnxModel           *OnnxModel
 	StreamClient        *stream.StreamProducer
 }

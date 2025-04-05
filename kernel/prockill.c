@@ -48,8 +48,7 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
         if (mal_detected_count < EGRESS_MAL_PROC_EXFIL_SCHED) {
             // 3 proc map kill free 
             if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id) < 0) {
-                #ifdef DEBUG 
-                    if (DEBUG) 
+                #if DEBUG 
                         bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
                 #endif
             }
@@ -62,9 +61,8 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
             __u32 * mal_proc_redir_ct = bpf_map_lookup_elem(&exfil_security_egress_nsp_map, &mal_proc_redir_key);
             if (mal_proc_redir_ct) {
                 if (bpf_map_delete_elem(&exfil_security_egress_nsp_map, &mal_proc_redir_key) < 0) {
-                    #ifdef DEBUG 
-                        if (DEBUG) 
-                            bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
+                    #if DEBUG 
+                        bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
                     #endif
                 }
             }

@@ -856,14 +856,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
         __u8 total_domain_length_exclude_tld = 0;
         __u8 i = 0; __u8 j = 0; // iters
 
-        forn(qd_count, __u8, i) {
+        forn(qd_count, typeof(i), i) {
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
             __u8 root_domain  = 0;
 
             // parse the QNAME
-            forn(MAX_DNS_NAME_LENGTH, __u8, j){
+            forn(MAX_DNS_NAME_LENGTH, typeof(j) , j){
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);

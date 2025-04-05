@@ -308,26 +308,19 @@ func init() {
 		malicious_vxlan_encap_dns_vtep_tunnel_transfer, cpuUsage, memoryUsageGauge)
 }
 
-func ExportCpuProcessMetrics() error {
+func ExportCpuProcessMetrics(ctx context.Context) error {
 	pid := os.Getpid()
 	cpuCount := float64(runtime.NumCPU())
-	for {
+	exportCpumemMetrics := func() error {
 		proc, err := process.NewProcess(int32(pid))
 
 		if err != nil {
 			return err
 		}
 
-		cpuPercent, err := proc.Percent(time.Second)
-		if err != nil {
-			log.Println("error get cpu percent ", err)
-			continue
-		}
+		cpuPercent, _ := proc.Percent(time.Second)
 
-		memUsage, err := proc.MemoryInfo()
-		if err != nil {
-			continue
-		}
+		memUsage, _ := proc.MemoryInfo()
 
 		cpuPercent = cpuPercent / cpuCount
 		idlePercent := 100.0 - cpuPercent
@@ -337,7 +330,19 @@ func ExportCpuProcessMetrics() error {
 
 		memoryUsageGauge.Set(float64(memUsage.RSS))
 
-		time.Sleep(time.Second)
+		return nil
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			if err := exportCpumemMetrics(); err != nil {
+				log.Println(err.Error())
+			}
+			time.Sleep(time.Second)
+		}
 	}
 }
 

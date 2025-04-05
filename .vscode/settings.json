@@ -145,7 +145,10 @@
         "types.h": "c",
         "ipc.h": "c",
         "pinmaps.h": "c",
-        "sockpin.h": "c"
+        "sockpin.h": "c",
+        "errno.h": "c",
+        "vmlinux.h": "c",
+        "ipv6.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "disabled"

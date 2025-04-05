@@ -46,15 +46,15 @@ func initGlobalErrorControlChannel() chan error {
 }
 
 // return a channel map for other events hook the node agent must inject post successfull injection of the required prog of interest
-func initKernelProgInjectComptionEvent() map[string]chan bool {
-	return map[string]chan bool{
-		progs.TC_PROG:        make(chan bool),
-		progs.NETFILTER_PROG: make(chan bool),
-		progs.SOCK_PROG:      make(chan bool),
-		progs.KPROBE:         make(chan bool),
-		progs.TRACEPOINT:     make(chan bool),
-		progs.XDP:            make(chan bool),
-		progs.LSM_BPF_HOOKS:  make(chan bool),
+func initKernelProgInjectComptionEvent() map[string]chan utils.KernelInjectProgInfo {
+	return map[string]chan utils.KernelInjectProgInfo{
+		progs.TC_PROG:        make(chan utils.KernelInjectProgInfo),
+		progs.NETFILTER_PROG: make(chan utils.KernelInjectProgInfo),
+		progs.SOCK_PROG:      make(chan utils.KernelInjectProgInfo),
+		progs.KPROBE:         make(chan utils.KernelInjectProgInfo),
+		progs.TRACEPOINT:     make(chan utils.KernelInjectProgInfo),
+		progs.XDP:            make(chan utils.KernelInjectProgInfo),
+		progs.LSM_BPF_HOOKS:  make(chan utils.KernelInjectProgInfo),
 	}
 }
 
@@ -78,7 +78,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
 		if err := openConnSocks.CloseConntrackNetlinkSock(); err != nil && !ignoreErr {
 			return err
 		}
-	} // not kenrle eBPF hook but internally relies over kernel conntrack layer for cleaning nf_netlink socket
+	} // not kernel eBPF hook but internally relies over kernel conntrack layer for cleaning nf_netlink socket
 
 	if config.CliFlag {
 		log.Println("Cleaning the mounted unix socket")
@@ -89,7 +89,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
 		// clean the kernel sock op for attached filter over init kernel sock prog
 		if err := cleanHooks.sockProgs.DetachKernelSockProg(ctx); err != nil && !ignoreErr {
 			return err
-		}
+		} // kernel socks cgroup layer
 	}
 
 	return nil
@@ -111,17 +111,18 @@ func CleanCryptoDirs() error {
 /*
 Init all the kernel crypto dir ephemeral to hold keyrings and signatures to secure bpf programs injections
 */
-func InitKernelCryptoHooks() error {
+func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 
 	if err := crypto.CleanOlderCrypoDir(); err != nil {
 		log.Println("Error cleaning the older crypto dir, the node agent for LSM in kernel must boot with new ephemeral keys")
-		return err
+		return nil, err
 	}
 
-	if err := crypto.GenerateBPFCert(); err != nil {
-		return err
+	if agentCryptoConfig, err := crypto.GenerateBPFCert(); err != nil {
+		return nil, err
+	} else {
+		return agentCryptoConfig, nil
 	}
-	return nil
 }
 
 func main() {
@@ -154,12 +155,22 @@ func main() {
 	ctx, agentCancelFunc := context.WithCancel(ctx)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
-	if err := InitKernelCryptoHooks(); err != nil {
+	if agentCryptoConfig, err := InitKernelCryptoHooks(); err != nil {
 		log.Println("the Node agent cannot boot without crypto validation ", err.Error())
 		panic(err.Error())
 	} else {
+		log.Println(agentCryptoConfig)
 		log.Println("Successfully generated all the crypto keys for node agent with LSM 2 way keyring for enhanced security")
-		if err := crypto.AddKernelKeyRing(); err != nil {
+
+		eBPFProgs, err := os.ReadDir("ebpf")
+		if err != nil {
+			panic(err)
+		}
+		for _, prog := range eBPFProgs {
+			go crypto.ComputeRawBpfByteOriginalSig("ebpf", prog.Name(), agentCryptoConfig)
+		}
+
+		if err := crypto.AddKernelKeyRing(agentCryptoConfig); err != nil {
 			panic(err.Error())
 		}
 	}
@@ -393,7 +404,7 @@ func main() {
 	}()
 
 	// export the cpu metrics for the node agent once booted to prometheus
-	go events.ExportCpuProcessMetrics()
+	go events.ExportCpuProcessMetrics(ctx)
 
 	sigType, done := <-term
 	if done {
@@ -411,7 +422,11 @@ func main() {
 		if err := crypto.CleanupKernelKeyRing(); err != nil {
 			log.Println("Error cleaning up the kernel keyring for custom signed keys", err.Error())
 		}
-		CleanCryptoDirs()
+
+		if crypto.DUMP_CA_LSM {
+			CleanCryptoDirs()
+		}
+
 		streamProducer.CloseProducer()
 		streamConsumer.CloseConsumer()
 

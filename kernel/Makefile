@@ -43,7 +43,7 @@ compile:
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
 vmlinux-btf: 
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > hdrs/vmlinux.h	
+	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > vmlinux.h	
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
@@ -191,10 +191,10 @@ sock:
 .PHONY: clean-bpf-build
 clean-bpf-build: 
 	rm -rf *.o 
-	rm -rf hdrs/vmlinux.h 
+	rm -rf vmlinux.h 
 
 
-crypto_kernel ?= $(shell pwd)/crypto/lsm_bpf.c
+crypto_kernel ?= $(shell pwd)/lsm_bpf.c
 crypto_kernel_out ?= lsm_bpf.o 
 
 .PHONY: crypto 

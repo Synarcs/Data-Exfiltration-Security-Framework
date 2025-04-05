@@ -23,7 +23,8 @@ parser = ArgumentParser()
 parser.add_argument('-c', '--controller', type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
 parser.add_argument('-m', '--model_path', type=str, required=True, help="Path to the ONNX model")
 args = parser.parse_args()
-model = Path('../model/dns_sec.onnx' if not os.path.exists(args.model_path) else args.model_path).absolute()
+model: Path = Path('../model/dns_sec.onnx' if not os.path.exists(args.model_path) else args.model_path).absolute()
+isControllerEnabled: bool = True if args.controller == True else False
 session = ort.InferenceSession(model) 
 
 if not os.path.exists(model):
@@ -174,7 +175,7 @@ def run_egress_server(controllerMode: bool = False, threadQueue: Queue = None) -
     # os.chmod(inferSock, 777) # only for testing TODO: Enforce strict MAC and kernel LSM for strict permission over the  unix sock fd 
     try:
         httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
-        print(f'HTTP Server over unix socket transport on {inferSock}')
+        print(f'Current thread handling{threading.current_thread().name} HTTP Server over unix socket transport for egress inference {inferSock}')
         
         tt = threading.Thread(target=httpd.serve_forever())
         tt.start()
@@ -208,7 +209,7 @@ def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) 
     # os.chmod(inferSock, 777) # only for testing TODO: Enforce strict MAC and kernel LSM for strict permission over the  unix sock fd 
     try:
         httpd = ThreadingUnixSocketHttpServer(inferSock, HandleInferenceConnHttpLayer7)
-        print(f'HTTP Server over unix socket transport on {inferSock}')
+        print(f'Current thread handling{threading.current_thread().name} HTTP Server over unix socket transport for ingress inference {inferSock}')
         
         tt = threading.Thread(target=httpd.serve_forever())
         tt.start()
@@ -226,9 +227,31 @@ def run_ingress_server(controllerMode: bool = False, threadQueue: Queue = None) 
             os.unlink(inferSock)
 
 
+def initSockKernelFsMnt(isController: bool = False): 
+    if isController:
+        return 
+    
+    # ensure there no dangling kernfs mounted unix sock with no live process serving the socket
+    if os.path.exists(consts.ONNX_MNT_PATH):
+        if len(os.listdir(consts.ONNX_MNT_PATH)) > 0: # un gracefully other running mount socket
+            for fd in os.listdir(consts.ONNX_MNT_PATH):
+                if fd == consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS or fd == consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS:
+                    os.unlink(fd)
+                    os.remove(fd)
+        os.removedirs(consts.ONNX_MNT_PATH)
+    
+    os.mkdir(consts.ONNX_MNT_PATH)
+
+def cleanSockKernelFsMnt(egressFd: str, ingressFd: str, isController: bool):
+    if os.path.exists(egressFd):
+        os.unlink(egressFd)
+    if os.path.exists(ingressFd): 
+        os.unlink(ingressFd) 
+    if not isController:
+        os.removedirs(consts.ONNX_MNT_PATH)
+ 
 if __name__ == "__main__":
     from argparse import ArgumentParser
-
 
 
     ingressQueue: Queue = Queue()
@@ -241,13 +264,10 @@ if __name__ == "__main__":
         print(f"Received {sig}, shutting down inference servers...")
 
         try:
-            ingressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if parser.controller == True else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS
-            egressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if parser.controller == True else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS
-            if os.path.exists(egressFd):
-                os.unlink(egressFd)
-            if os.path.exists(ingressFd): 
-                os.unlink(ingressFd) 
-     
+            ingressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_INGRESS if not isControllerEnabled else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_INGRESS
+            egressFd = consts.ONNX_INFERENCE_UNIX_SOCKET_EGRESS if not isControllerEnabled else consts.ONNX_INFERENCE_UNIX_SOCKET_CONTROLLER_EGRESS
+  
+            cleanSockKernelFsMnt(egressFd, ingressFd, isControllerEnabled)
             ingressQueue.put(True)
             egressQueue.put(True)
 
@@ -264,6 +284,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGTERM, killSock)
 
     print(f'Starting the inference server over Unix socket transport (PID: {os.getpid()})')
+    initSockKernelFsMnt(isControllerEnabled)
 
     try:
         ingress: Future = executor.submit(run_ingress_server, args.controller, ingressQueue) 

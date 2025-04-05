@@ -26,62 +26,41 @@ func VerifyKeyRinggenerated() (string, error) {
 	return file, err
 }
 
-func GetSignKeySize() ([]byte, int64, error) {
-	_, err := VerifyKeyRinggenerated()
-	if err != nil {
-		log.Println("the required keyring not found to sign loaded progs in kernel space")
-		return nil, -1, err
-	}
-
-	fd, err := os.Open(CERT_DER_FILE)
-
-	if err != nil {
-		return nil, -1, err // perfmission or other errors
-	}
-
-	defer fd.Close()
-	fileInfo, _ := fd.Stat()
-
-	fileSize := fileInfo.Size()
-
-	if fileSize > (1 << 12) {
-		// kernel usually dont allow the keyrings to have more than 4096 bytes
-		return nil, -1, fmt.Errorf("the size of the file is too large to be loaded in kernel keyring")
-	}
-
-	var keyBuff []byte = make([]byte, fileSize)
-	_, err = fd.Read(keyBuff)
-
-	if err != nil {
-		return nil, -1, err
-	}
-
-	return keyBuff, fileSize, nil
-}
-
 const (
 	KEYCTL_JOIN_SESSION_KEYRING = 1
 	KEYCTL_LINK                 = 8
 )
 
-func AddKernelKeyRing() error {
-	// create a new session keyring ID in the kernel
+func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
+
+	if DUMP_CA_LSM {
+		VerifyKeyRinggenerated()
+	}
+
+	// create a new session keyring ID in the kernel, the keyring should be ephemeral and lived only until the node agent is alive in kernel
 	sessionID, err := unix.KeyctlInt(KEYCTL_JOIN_SESSION_KEYRING, 0, 0, 0, 0)
 	if err != nil {
 		log.Fatalf("Failed to create new session keyring: %v", err)
 	}
 
 	log.Printf("Created session keyring with ID: %d", sessionID)
-	keyBuff, keySize, err := GetSignKeySize()
+
 	if err != nil {
 		return err
 	}
-	log.Println("the size of the keyring Der file for encrypt x509 cert is ", keyBuff[:1], keySize)
+
+	if err != nil {
+		log.Fatalf("Failed to generate ECDH key: %v", err)
+	}
+
+	val := config.Cert.Raw
+
+	log.Println("the size of the keyring Der file for encrypt x509 cert is ", val[:1], len(val))
 
 	keyDesc := ".ebpf:signing:x509"
 
 	// Add the asymmetric key to the session keyring
-	keyID, err := unix.AddKey("asymmetric", keyDesc, keyBuff, unix.KEY_SPEC_SESSION_KEYRING)
+	keyID, err := unix.AddKey("asymmetric", keyDesc, val, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
 		log.Fatalf("Failed to add key: %v", err)
 	}
@@ -94,7 +73,7 @@ func AddKernelKeyRing() error {
 	}
 	fmt.Printf("Created keyring with ID: %d\n", keyringID)
 
-	// Link the key to the keyring one used by the userspace laoder, and second via the kernel BPF LSM hooks before all the kernel eBPF hooks are injected inside kernell network stack
+	// Link the key to the keyring one used by the userspace laoder, and second via the kernel BPF LSM hooks before all the kernel eBPF hooks are injected inside kernell network stack, raw tracepoint and kprobes
 	ret, err := unix.KeyctlInt(unix.KEYCTL_LINK, keyID, keyringID, 0, 0)
 	if err != nil {
 		log.Fatalf("Failed to link key: %v", err)

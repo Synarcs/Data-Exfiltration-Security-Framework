@@ -20,7 +20,7 @@ import (
 type unixSockPath string
 
 const (
-	LocalCliUnixSockPath = "/run/clid.sock"
+	LocalCliUnixSockPath = "/run/dnsobelisk/clid.sock"
 )
 
 // remote config from the centralized server broker

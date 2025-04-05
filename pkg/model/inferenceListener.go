@@ -17,6 +17,7 @@ func GetInferenceUnixClient(isEgress bool) (*http.Client, net.Conn, error) {
 	var conn net.Conn
 	var err error
 
+	// TODO: fix and load from node agent mount config
 	if isEgress {
 		conn, err = net.Dial("unix", utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
 		if err != nil {
