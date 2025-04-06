@@ -42,6 +42,16 @@ func GeteBPFAgentRemoteSockConn() (net.Conn, *http.Client, error) {
 	return conn, connRef, nil
 }
 
+func GetNodeAgentUnixInferenceHttpListner(path string, connRef *http.Client) (*http.Response, error) {
+	resp, err := connRef.Get(fmt.Sprintf("http://%s/%s", consts.SOCK_TYPE, path))
+	if err != nil {
+		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
+		return nil, err
+	}
+
+	return resp, err
+}
+
 func GetCurrentBootedNodeAgentConfigLimits() error {
 
 	_, connRef, err := GeteBPFAgentRemoteSockConn()
@@ -49,9 +59,8 @@ func GetCurrentBootedNodeAgentConfigLimits() error {
 		return err
 	}
 
-	resp, err := connRef.Get(fmt.Sprintf("http://%s/limits", "unix"))
+	resp, err := GetNodeAgentUnixInferenceHttpListner("limits", connRef)
 	if err != nil {
-		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
 		return err
 	}
 
@@ -90,7 +99,7 @@ func GetCurrentBootedNodeAgentBlacklistedIngressDomainsSLD() error {
 		return err
 	}
 
-	resp, err := connRef.Get(fmt.Sprintf("http://%s/blacklist/ingress", "unix"))
+	resp, err := GetNodeAgentUnixInferenceHttpListner("blacklist/ingress", connRef)
 	if err != nil {
 		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
 		return err
@@ -114,7 +123,7 @@ func GetCurrentBootedNodeAgentBlacklistedEgressDomainsSLD() error {
 		return err
 	}
 
-	resp, err := connRef.Get(fmt.Sprintf("http://%s/blacklist/egress", "unix"))
+	resp, err := GetNodeAgentUnixInferenceHttpListner("blacklist/egress", connRef)
 	if err != nil {
 		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
 		return err
@@ -138,7 +147,7 @@ func UnblockDomain(domain string) error {
 		return err
 	}
 
-	resp, err := connRef.Get(fmt.Sprintf("http://%s/whitelist?domain=%s", "unix", domain))
+	resp, err := GetNodeAgentUnixInferenceHttpListner("whitelist", connRef)
 	if err != nil {
 		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
 		return err
@@ -162,7 +171,7 @@ func GetMaliciousDetectedProcessCtOnNode() error {
 		return err
 	}
 
-	resp, err := connRef.Get(fmt.Sprintf("http://%s/malProcessCt", "unix"))
+	resp, err := GetNodeAgentUnixInferenceHttpListner("malProcessCt", connRef)
 	if err != nil {
 		log.Println("Error connecting to the Node Agent Local Unix Socket, please make sure the Node Agent is running and the stream socket is healthy", err.Error())
 		return err

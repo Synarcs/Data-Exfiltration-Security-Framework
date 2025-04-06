@@ -4,15 +4,20 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/initca"
 	"go.mozilla.org/pkcs7"
@@ -158,6 +163,8 @@ func GenerateBPFCert() (*NodeAgentCryptoConfig, error) {
 	}
 
 	log.Println("Generated BPF Signing Certificate and stored in", KEY_DIR)
+	log.Println("Generate global cert for node agent with injected in kernel keyring use to sign ebpf programs with signature", hex.EncodeToString(cert.Signature))
+
 	return &NodeAgentCryptoConfig{
 		Cert:    cert,
 		Key:     pKey,
@@ -188,22 +195,33 @@ func verifyPkcs7Signature(signPayload []byte, data []byte) error {
 	return nil
 }
 
-func computeOriginalSignature(data []byte, cryptoConfig *NodeAgentCryptoConfig, org *CompiledProgInfo) error {
+func pkcs7Sign(data []byte, cryptoConfig *NodeAgentCryptoConfig) ([]byte, error) {
 
 	signedData, err := pkcs7.NewSignedData(data)
 	if err != nil {
-		log.Fatalf("NewSignedData failed: %v", err)
+		return nil, err
 	}
 
 	err = signedData.AddSigner(cryptoConfig.Cert, cryptoConfig.Key, pkcs7.SignerInfoConfig{})
 	if err != nil {
-		log.Fatalf("AddSigner failed: %v", err)
+		return nil, err
 	}
 	signedData.Detach()
 
 	p7Bytes, err := signedData.Finish()
 	if err != nil {
-		log.Fatalf("Finish failed: %v", err)
+		return nil, err
+	}
+
+	return p7Bytes, nil
+}
+
+func (lsm *CryptoBpfLsm) computeOriginalSignature(data []byte, org *CompiledProgInfo) error {
+
+	p7Bytes, err := pkcs7Sign(data, lsm.AgentCryptoConfig)
+
+	if err != nil {
+		return err
 	}
 
 	if len(p7Bytes) > len(org.Sig) {
@@ -221,31 +239,88 @@ func computeOriginalSignature(data []byte, cryptoConfig *NodeAgentCryptoConfig, 
 	return nil
 }
 
-func ComputeRawBpfByteOriginalSig(basePath, progPath string, cryptoConfig *NodeAgentCryptoConfig) error {
-	progData, err := os.ReadFile(path.Join(basePath, progPath))
+func (lsm *CryptoBpfLsm) computeModifiedSignature(instructions asm.Instructions,
+	origSig []byte, modSig *ModifiedJitProgInfo) error {
+
+	var buff bytes.Buffer
+	instructions.Marshal(&buff, binary.LittleEndian)
+	p7Bytes, err := pkcs7Sign(buff.Bytes(), lsm.AgentCryptoConfig)
+
 	if err != nil {
 		return err
 	}
 
-	if len(progData) == 0 {
+	if len(p7Bytes) > len(modSig.Sig) {
+		return fmt.Errorf("signature too large for buffer (size: %d, max: %d)", len(p7Bytes), len(modSig.Sig))
+	}
+
+	copy(modSig.Sig[:], p7Bytes)
+	modSig.SigLen = len(p7Bytes)
+
+	if err := verifyPkcs7Signature(p7Bytes, buff.Bytes()); err != nil {
+		log.Println("Signature verification failed")
+		return err
+	}
+
+	return nil
+}
+
+type CryptoBpfLsm struct {
+	PinnedMaps        []string
+	AgentCryptoConfig *NodeAgentCryptoConfig
+}
+
+func NewCryptoBpfLsm(agentCryptoConfig *NodeAgentCryptoConfig) *CryptoBpfLsm {
+	return &CryptoBpfLsm{
+		PinnedMaps: []string{
+			events.EXFIL_SECURITY_ORIGINAL_PROGRAM,
+			events.EXFIL_SECURITY_MODIFIED_SIGNATURE,
+			events.EXFIL_SECURITY_KEYRING_MAP,
+		},
+		AgentCryptoConfig: agentCryptoConfig,
+	}
+}
+
+func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
+	ebpfProg *ebpf.ProgramInfo) error {
+
+	// TODO: Ensure strict cgroups for memory bounds
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return err
+	}
+
+	if len(ebpfProgRaw) == 0 {
 		return fmt.Errorf("empty program data")
 	}
 
 	var org CompiledProgInfo
 
-	copy(org.Data[:], progData)
-	org.DataLen = len(progData)
+	copy(org.Data[:], ebpfProgRaw)
+	org.DataLen = len(ebpfProgRaw)
 
-	if err := computeOriginalSignature(org.Data[:org.DataLen], cryptoConfig, &org); err != nil {
-		log.Println("Error computing original signature or sig verification failed for prog :", progPath, err)
+	if err := lsm.computeOriginalSignature(org.Data[:org.DataLen], &org); err != nil {
+		log.Println("Error computing original signature or sig verification failed for prog :", ebpfProg.Name, err)
 		return err
 	}
 
-	log.Println("Original signature computed successfully for prog:", progPath, hex.EncodeToString(cryptoConfig.Cert.Signature))
+	_ = filepath.Join(utils.PINPATH, "exfil_security_original_program")
+	_ = filepath.Join(utils.PINPATH, "exfil_security_modified_signature")
+	_ = filepath.Join(utils.PINPATH, "exfil_security_keyring_map")
+
+	insn, err := ebpfProg.Instructions()
+	if err != nil {
+		return err
+	}
+
+	var mod ModifiedJitProgInfo
+	if err := lsm.computeModifiedSignature(insn, org.Sig[:org.SigLen], &mod); err != nil {
+		log.Println("Error computing modified signature or sig verification failed for prog :", ebpfProg.Name, err)
+		return err
+	}
 	return nil
 }
 
-func computeModifiedSignature(instructions []asm.Instructions,
-	origSig []byte, privateKeyPath, certPath string, modSig *ModifiedJitProgInfo) error {
+func (lsm *CryptoBpfLsm) RemoveCryptoLSMProgs() error {
+
 	return nil
 }

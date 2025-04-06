@@ -140,3 +140,10 @@ const (
 	EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter"
 	EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER = "exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter"
 )
+
+// lsm crypto maps in kernel
+const (
+	EXFIL_SECURITY_ORIGINAL_PROGRAM   = "exfil_security_original_program"
+	EXFIL_SECURITY_MODIFIED_SIGNATURE = "exfil_security_modified_signature"
+	EXFIL_SECURITY_KEYRING_MAP        = "exfil_security_keyring_map"
+)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -115,8 +116,7 @@ type Utsname struct {
 }
 
 type KernelInjectProgInfo struct {
-	IsInjected   bool
-	EbpfProgInfo *ebpf.ProgramInfo
+	IsInjected bool
 }
 
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
@@ -181,6 +181,14 @@ func ReadEbpfFromSpec(ctx context.Context, ebpfProgCode string) (*ebpf.Collectio
 		return nil, err
 	}
 	return spec, nil
+}
+
+func ReadEbpfProgRaw(path string) ([]byte, error) {
+	prog, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return prog, nil
 }
 
 func GenerateBigEndianIpv6(ipv6 string) (uint64, uint64) {

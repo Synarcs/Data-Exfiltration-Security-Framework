@@ -115,7 +115,7 @@ __always_inline struct __kernel_uid_struct_info * __get_uid_info() {
 
 
 static
-__always_inline bool _has_skb_mark(struct __sk_buff *skb) {
+__always_inline bool __has_skb_mark(struct __sk_buff *skb) {
     return skb->mark > 0;
 }
 

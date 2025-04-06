@@ -531,7 +531,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
-
     struct dns_flags flags = get_dns_flags(dns_header);
     #if DEBUG
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
@@ -684,10 +683,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
              // parse the QCLASS
              __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
-            offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
+            offset += sizeof(__u16); 
 
             __u8 __attribute__((__unused__)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
-            
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
@@ -696,44 +694,39 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             __u8 dns_query_labels =  parse_dns_qeury_type_section(skb, query_class, qtypes);
                 
-            if (dns_query_labels == MALICIOUS) return MALICIOUS;
+            // if (dns_query_labels == MALICIOUS) return MALICIOUS;
 
-            __u32 prio_features_suspicious = 0x00; // match the features which user space enforce in kernel 
-            __u8 prio_violate_count[MAX_DNS_PRIO_KEYS] = {0};
+            __u64 prio_violate_bitset = 0x00; // mxset for now 
 
             // subdomain length per label (min | max)
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
                     if (mx_label_ln >= (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff) && mx_label_ln <= (*MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) >> 8; // consider any key since min and max range has same prio in kernel eBPF map 
-                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                        if (feature_prio > MAX_DNS_PRIO_KEYS)  // just to ensure ease fro verifier bounds
                             feature_prio = MAX_DNS_PRIO_KEYS;
-                        prio_violate_count[feature_prio]++;
-                        prio_features_suspicious += 1;
+                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
             }else if (mx_label_ln >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL & 0xff) && 
                             mx_label_ln <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL & 0xff)){
                         __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                        if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
                             feature_prio = MAX_DNS_PRIO_KEYS;
-                        prio_violate_count[feature_prio]++;
-                        prio_features_suspicious++;
+                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // label count (min | max)
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
                 if (label_count >= (*MIN_LABEL_COUNT_KERNEL_MAP & 0xff) && label_count <= (*MAX_LABEL_COUNT_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_LABEL_COUNT_KERNEL_MAP) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                        if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
                             feature_prio = MAX_DNS_PRIO_KEYS;
-                        prio_violate_count[feature_prio]++;
-                        prio_features_suspicious++;
+                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             }else if (label_count >= (DNS_RECORD_LIMITS.MIN_LABEL_COUNT & 0xff) && label_count <= (DNS_RECORD_LIMITS.MAX_LABEL_COUNT & 0xff)){
                     __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_LABEL_COUNT) >> 8;
-                    if (feature_prio > MAX_DNS_PRIO_KEYS) 
+                    if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
                         feature_prio = MAX_DNS_PRIO_KEYS;
-                    prio_violate_count[feature_prio]++;
-                    prio_features_suspicious++;
+                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // total domain length (min | max) 
@@ -743,16 +736,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     __u8 feature_prio = (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP) >> 8;
                     if (feature_prio > MAX_DNS_PRIO_KEYS)
                         feature_prio = MAX_DNS_PRIO_KEYS;
-                    prio_violate_count[feature_prio]++;
-                    prio_features_suspicious++;
+                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length >= (DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH & 0xff) && 
                 total_domain_length <= (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH & 0xff)) {
                     __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH) >> 8;
                     if (feature_prio > MAX_DNS_PRIO_KEYS)
                         feature_prio = MAX_DNS_PRIO_KEYS;
-                    prio_violate_count[feature_prio]++;
-                    prio_features_suspicious++;
+                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // subdomain length excludes tld (min | max)
@@ -762,28 +753,21 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP) >> 8;
                         if (feature_prio > MAX_DNS_PRIO_KEYS)
                             feature_prio = MAX_DNS_PRIO_KEYS;
-                        prio_violate_count[feature_prio]++;
-                        prio_features_suspicious++;
+                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length_exclude_tld >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff) && 
                        total_domain_length_exclude_tld <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff)) {
                         __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) >> 8;
                         if (feature_prio > MAX_DNS_PRIO_KEYS)
                             feature_prio = MAX_DNS_PRIO_KEYS;
-                        prio_violate_count[feature_prio]++;
-                        prio_features_suspicious++;
+                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
-
-            if (prio_features_suspicious > 0) {
-                bool isHighPrioMarkFeatureViolated = false;
-                for (int i =0; i < MAX_DNS_PRIO_KEYS; i++) {
-                    if ( i > 0) {
-                        isHighPrioMarkFeatureViolated = prio_violate_count[i] > 0 ? true : false;
-                    }else if (prio_violate_count[i] > 0 && isHighPrioMarkFeatureViolated) 
-                        return SUSPICIOUS;
-                }
-                return SUSPICIOUS;
+            // lsb --> msb == high prio --> low prio
+            for (int i =0; i < MAX_DNS_PRIO_KEYS; i++) {
+                if (prio_violate_bitset & 1)
+                    return SUSPICIOUS; // violated an high prio feature filter
+                prio_violate_bitset >>= 1;
             }
 
             if (c2c_check.isC2c) {
@@ -1203,9 +1187,9 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
         struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
 
         if (!config) {
-            skb->mark = redirect_skb_mark;
+            __mark_skb_packet_buffer(skb, redirect_skb_mark);
         }else {
-            skb->mark = config->KernelTCSKBMark;
+            __mark_skb_packet_buffer(skb, config->KernelTCSKBMark);
         }
     }
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
@@ -1837,7 +1821,7 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 
 static 
 __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
-    if (_has_skb_mark(skb)) 
+    if (__has_skb_mark(skb)) 
         return;
     if (skb_redir_hash == 0) 
         skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
@@ -1902,7 +1886,11 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
     }
 #endif
 
-
+/*
+    TODO: the kernel should enforce active sensor security for traffic over udp
+          for tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
+            for DPI over TCP streams over DNS, started implemented user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security and parsing must be done over kernel cgroup/skb_egress.
+*/  
 static 
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
     actions.cursor_init = &cursor_init;
@@ -2137,143 +2125,14 @@ int classify(struct __sk_buff *skb){
             }
             return TC_FORWARD;
         }else if (ip->protocol == IPPROTO_TCP) {
-
-            if (actions.parse_tcp(&cursor, true) == 0) return TC_DROP;
-            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr);
-            if ((void *) tcp + 1 > cursor.data_end) return TC_DROP;
-            void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
-            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
-
-            #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
-            #endif
-            
-            if (tcp->dest == bpf_ntohs(DNS_EGRESS_PORT)
-                || tcp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
-                || tcp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
-            ) {
-
-                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr) + sizeof(struct dns_header_tcp);
-                if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
-                struct dns_header_tcp *dns = (struct dns_header_tcp *) (tcp_data);
-                
-                if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
-
-                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
-                    return TC_DROP;
-                }
-
-                // reached app layer no offset processing required from kernel 
-                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload_transport_tcp(&cursor, dns_payload, dns);
-    
-                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
-
-                // for ipv4 packet process and kernel redirection for a tcp packet running dns on it 
-                __be32 current_dest_addr; 
-                __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4);
-                __be32 dest_addr_route_malicious = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_MALICIOUS);
-
-                __u32 out = skb->ifindex;
-                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4; 
-
-                if (config) {
-                    __be32 redirect_address_from_config = config->RedirectIpv4;
-                    dest_addr_route = bpf_htonl(redirect_address_from_config);
-                    br_index = config->BridgeIndexId;
-                }else {
-                    #if DEBUG
-                        bpf_printk("kernel cannot find the requred kernel config redirect map for tcp packet processing");
-                    #endif
-                }
-                
-                if (result.isBenign) 
-                    return TC_FORWARD;
-                else if (result.drop) {
-
-                    __u32 br_index = 4;
-                    struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
-                    
-                    if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route_malicious) == TC_DROP) {
-                        return TC_DROP;
-                    }
-
-                    __handle_kernel_map_redirection_drop_count();
-
-                    if (!config) {
-                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                    }else {
-                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                    }
-                    
-                    if (config) 
-                        return bpf_redirect(config->BridgeIndexId, BPF_F_INGRESS);
-                    else return bpf_redirect(br_index, BPF_F_INGRESS);
-                }
-
-                __u32 transaction_id = bpf_ntohs(dns->transaction_id);
-                __u16 ip_checksum = bpf_ntohs(ip->check);
-                __u16 sport = bpf_ntohs(tcp->source);
-
-                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport) < 0) {
-                        #if DEBUG 
-                                bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
-                                                packet redirect lifecycle");
-                        #endif 
-                        return TC_DROP;
-                    }
-                    // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
-                } else {
-                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
-                    return TC_DROP;
-                }
-
-                __handle_kernel_map_redirection_count();
-
-                __u32 tcp_payload_len = bpf_ntohs(ip->tot_len) - (ip->ihl * 4) - (tcp->doff * 4);
-                if (result.deep_scan_mirror) {
-                    #if DNS_RATE_LIMIT_VOLUME 
-                        if (__dns_rate_limit_volume(&cursor, skb, (__u32) tcp_payload_len) == 0) {
-                            return TC_DROP;
-                        }
-                    #endif 
-
-                    #if DNS_RATE_LIMIT_TOCKEN_BUCKET
-                            if (__dns_rate_limit_tb(&cursor, skb) == 0) {
-                                if (DEBUG) bpf_printk("Dropping DNS egress suspicious traffic exceed thrshold for Tocken Bucket rate limit");
-                                return TC_DROP;
-                            }
-                    #endif
-                }
-
-                if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route) == TC_DROP) {
-                    return TC_DROP;
-                }
-
-                if (!config) {
-                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                }else {
-                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                }
-
-                __update_kernel_packet_redirection_time(transaction_id);
-                return bpf_redirect(br_index, BPF_F_INGRESS);
-            }
-            else {
-
-                if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, true) == 1) 
-                    return TC_FORWARD;
-                
-                return TC_FORWARD;
-            }
+            return TC_FORWARD;
         }
 	}else if (eth->h_proto == bpf_htons(ETH_P_IPV6)) {
 
         ipv6 = cursor.data + sizeof(struct ethhdr);
         if ((void *)(ipv6 + 1) > cursor.data_end) return TC_DROP;
 
+        // dynamic L3 filter based for cross protocol c2 exfiltration security, to stop c2 exfiltration from these remote ip's over any protocol as well for encrypted channels
         #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
                 EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
         #endif
@@ -2414,122 +2273,7 @@ int classify(struct __sk_buff *skb){
             }
             return TC_FORWARD;
         }else if (ipv6->nexthdr == IPPROTO_TCP) {
-
-            if (actions.parse_tcp(&cursor, false) == 0) return TC_DROP;
-            tcp = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr);
-            if ((void *) tcp + 1 > cursor.data_end) return TC_DROP;
-            void * tcp_data = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct tcphdr);
-            if ((void *) tcp_data + 1 > cursor.data_end) return TC_DROP;
-            
-            #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
-            #endif
-
-            if (tcp->dest == bpf_htons(DNS_EGRESS_PORT)
-                || tcp->dest == bpf_htons(DNS_EGRESS_MULTICAST_PORT) 
-                || tcp->dest == bpf_htons(LLMNR_EGRESS_LOCAL_MULTICAST_PORT)
-            ){
-
-                struct dns_header_tcp *dns = (struct dns_header_tcp *) tcp_data; 
-                if ((void *) dns + 1 > cursor.data_end) return TC_DROP;
-
-                void *dns_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct ipv6hdr) + sizeof(struct tcphdr)
-                            + sizeof(struct dns_header_tcp); 
-                
-                if (actions.parse_dns_payload_transport_tcp(&cursor, dns_payload, dns, skb->len) == 0) {
-                    return TC_DROP;
-                }
-
-                // reached app layer no offset processing required from kernel 
-                __u8 parse_flag = actions.parse_dns_payload_memsafet_payload_transport_tcp(&cursor, dns_payload, dns);
-    
-                struct result_parse_dns_labels result = __parse_dns_flags_actions(parse_flag);
-
-                __u32 skb_ifIndex = skb->ifindex;
-
-                
-                __u32 out = skb->ifindex;
-
-                struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
-                __u32 br_index = 4;  // loa  the redirection from the kernel 
-
-                if (config) {
-                    br_index = config->BridgeIndexId;
-                }else {
-                    bpf_printk("kernel cannot find the requred kernel config redirect map");
-                }
-
-                if (result.isBenign) 
-                    return TC_FORWARD;
-                else if (result.drop) {
-
-                    __handle_kernel_map_redirection_drop_count();
-                    
-                    if (!config) {
-                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                    }else {
-                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                    }
-    
-                    
-                    ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                    return bpf_redirect(br_index, BPF_F_INGRESS);
-                }
-                
-                __u16 transaction_id = bpf_ntohs(dns->transaction_id);
-                __u16 sport = bpf_ntohs(tcp->source);
-
-                struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
-                if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
-                        #if !DEBUG 
-                            bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
-                                                packet redirect lifecycle");
-                        #endif 
-                        return TC_DROP;
-                    }
-                    // Key not found, insert new element for the dns query id mapped to layer 3 checksum
-                    // bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);
-                } else {
-                    if (__update_kernel_time_post_redirect(transaction_id, map_layer3_redirect_value) == TC_FORWARD) return TC_FORWARD;
-                    return TC_FORWARD;
-                }
-
-                __handle_kernel_map_redirection_count();
-                if (!config) {
-                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                }else {
-                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                }
-
-                __u32 tcp_payload_len = bpf_ntohs(ipv6->payload_len) - (tcp->doff * 4);
-                if (result.deep_scan_mirror) {
-                    #if DNS_RATE_LIMIT_VOLUME
-                        __u8 dns_rate_limit_action = __dns_rate_limit(&cursor, skb, (__u32) tcp_payload_len);
-                        if (dns_rate_limit_action == 0) return TC_DROP;
-                    #endif
-
-                    #if DNS_RATE_LIMIT_TOCKEN_BUCKET
-                        if (__dns_rate_limit_tb(&cursor, skb) == 0) {
-                            if (DEBUG) bpf_printk("Dropping DNS egress suspicious traffic exceed thrshold for Tocken Bucket rate limit");
-                            return TC_DROP;
-                        }
-                    #endif 
-                }
-
-                ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
-               
-                // forward the traffic to the brodhe fpr enhanced DPI in userspace 
-                __update_kernel_packet_redirection_time(dns->transaction_id);
-                return bpf_redirect(br_index, BPF_F_INGRESS);
-            }
-            else {
-                if (__parse_skb_non_standard_tcp(cursor, skb, actions, tcp_data, false) == 1) 
-                    return TC_FORWARD;
-                
-                return TC_FORWARD;
-            }
-            
+            return TC_FORWARD;
         }
     } else return TC_FORWARD; // likely a kernel vxland packet over the virtual bridge 
 

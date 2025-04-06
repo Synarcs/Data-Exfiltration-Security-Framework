@@ -10,6 +10,7 @@ struct {
     __uint(max_entries, 2);
     __type(key, __u32);
     __type(value, __u32);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } keyring_map SEC(".maps");
 
 struct original_data {
@@ -33,6 +34,7 @@ struct {
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct modified_sig);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } modified_signature SEC(".maps");
 
 struct {
@@ -40,6 +42,7 @@ struct {
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct original_data);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } original_program SEC(".maps");
 
 struct {
@@ -47,6 +50,7 @@ struct {
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct combined_buffer);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
 } combined_data_map SEC(".maps");
 
 #endif /* __CRYPTOMAPS_H_ */

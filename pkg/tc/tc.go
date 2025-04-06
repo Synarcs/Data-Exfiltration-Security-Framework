@@ -49,6 +49,8 @@ type TCHandler struct {
 	GlobalMalC2L3addressChannelIpv6 chan net.IP
 
 	config conf.AgentConfig
+
+	CryptoAgentLSMHandler *crypto.CryptoBpfLsm
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -94,7 +96,8 @@ func NewDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.Onnx
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash, config conf.AgentConfig) (*TCHandler, error) {
+	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash, config conf.AgentConfig,
+	cryptoAgentLSMHandler *crypto.CryptoBpfLsm) (*TCHandler, error) {
 	dnsPacketGen, err := NewDnsPacketResendUtils(&iface, onnxModel, streamClient)
 
 	if err != nil {
@@ -108,6 +111,7 @@ func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
 		Hash:                            agentHash,
 		config:                          config,
+		CryptoAgentLSMHandler:           cryptoAgentLSMHandler,
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
 		tcHandler.IsEgressXdpSupport = true
@@ -315,6 +319,13 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		return
 	}
 
+	rawEbpfProgBytes, err := utils.ReadEbpfProgRaw(utils.TC_EGRESS_ROOT_NETIFACE_INT)
+
+	if err != nil {
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
+	}
+
 	for name, mapSpec := range handler.Maps {
 		if strings.Contains(mapsToPinSharedProcKillMap[0], name) {
 			mapSpec.Pinning = ebpf.PinByName
@@ -333,15 +344,22 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	defer spec.Close()
 
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
-	info, err := prog.Info()
-	if err != nil {
-		panic(err)
-	}
-
 	if prog == nil {
 		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG)
 		return
 	}
+
+	info, err := prog.Info()
+	if err != nil {
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
+	}
+
+	if err := tc.CryptoAgentLSMHandler.InjectLSMProgsPostSignatureGenerate(rawEbpfProgBytes, info); err != nil {
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
+	}
+
 	tc.Prog = prog
 	tc.TcCollection = spec
 
@@ -361,8 +379,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	configMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_CONFIG_MAP]
 
 	injectChan[progs.TC_PROG] <- utils.KernelInjectProgInfo{
-		IsInjected:   true,
-		EbpfProgInfo: info,
+		IsInjected: true,
 	}
 	if configMap != nil {
 		for index, link := range iface.PhysicalLinks {

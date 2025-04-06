@@ -94,9 +94,7 @@ func TestBridgeInterfaces(t *testing.T) {
 
 	if len(linkHandler.BridgeLinks) > 0 {
 		for _, link := range linkHandler.BridgeLinks {
-			if _, ok := requiredNodeAgentBridgeLinks[link.Attrs().Name]; ok {
-				delete(requiredNodeAgentBridgeLinks, link.Attrs().Name)
-			}
+			delete(requiredNodeAgentBridgeLinks, link.Attrs().Name)
 		}
 		if len(requiredNodeAgentBridgeLinks) == 0 {
 			assert.True(true)

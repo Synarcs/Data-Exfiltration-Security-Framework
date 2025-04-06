@@ -155,25 +155,13 @@ func main() {
 	ctx, agentCancelFunc := context.WithCancel(ctx)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
-	if agentCryptoConfig, err := InitKernelCryptoHooks(); err != nil {
+	agentCryptoConfig, err := InitKernelCryptoHooks()
+	if err != nil {
 		log.Println("the Node agent cannot boot without crypto validation ", err.Error())
 		panic(err.Error())
-	} else {
-		log.Println(agentCryptoConfig)
-		log.Println("Successfully generated all the crypto keys for node agent with LSM 2 way keyring for enhanced security")
-
-		eBPFProgs, err := os.ReadDir("ebpf")
-		if err != nil {
-			panic(err)
-		}
-		for _, prog := range eBPFProgs {
-			go crypto.ComputeRawBpfByteOriginalSig("ebpf", prog.Name(), agentCryptoConfig)
-		}
-
-		if err := crypto.AddKernelKeyRing(agentCryptoConfig); err != nil {
-			panic(err.Error())
-		}
 	}
+
+	cryptoLsmProgHandler := crypto.NewCryptoBpfLsm(agentCryptoConfig)
 
 	envoy.InitTCPWasmFilter()
 
@@ -277,7 +265,8 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel, hash, agentConfigLoader)
+	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel,
+		hash, agentConfigLoader, cryptoLsmProgHandler)
 
 	if err != nil {
 		log.Println(err.Error())
@@ -419,6 +408,11 @@ func main() {
 		}
 
 		agentCancelFunc()
+
+		if err := cryptoLsmProgHandler.RemoveCryptoLSMProgs(); err != nil {
+			log.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)
+		}
+
 		if err := crypto.CleanupKernelKeyRing(); err != nil {
 			log.Println("Error cleaning up the kernel keyring for custom signed keys", err.Error())
 		}
@@ -438,6 +432,8 @@ func main() {
 		if nodeAgentCliOptions.Profile {
 			cancelctx()
 		}
+
+		log.Println("Node agent gracefully shutdown successfully with root process id", os.Getpid())
 		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
 	}
 
