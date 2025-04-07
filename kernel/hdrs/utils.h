@@ -14,7 +14,6 @@
 #define isDigit(a) ((a) - '0' >= 0 && '9' - (a) >= 0)
 
 
-
 #define div(a, b) ((a) / (b))
 
 #define forn(x, type, i) for (type i = 0; i < (x); i++)
@@ -112,7 +111,6 @@ __always_inline struct __kernel_uid_struct_info * __get_uid_info() {
     }
     return &proc_info;
 }
-
 
 static
 __always_inline bool __has_skb_mark(struct __sk_buff *skb) {

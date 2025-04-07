@@ -1,6 +1,10 @@
 #ifndef __CONST_H_ 
 #define __CONST_H_ 
 
+// disable local stack warnings for always inline fucns 
+#pragma clang diagnostic ignored "-Wreturn-stack-address"
+#pragma clang diagnostic ignored "-Wbackslash-newline-escape"
+
 #include <linux/ipv6.h>
 #include <linux/in6.h>
 #include <stdbool.h>
