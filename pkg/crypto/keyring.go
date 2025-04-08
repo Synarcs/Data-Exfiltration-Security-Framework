@@ -10,8 +10,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type KernelCryptoKeyRingIds struct {
+	SessionId         uint32
+	RootKeyringId     uint32
+	EbpfSignKeyringId uint32
+}
+
 func VerifyKeyRinggenerated() (string, error) {
-	file := path.Join(CERT_DER_FILE)
+	file := path.Join(CERT_FILE)
 	_, err := os.Stat(file)
 
 	if err != nil {
@@ -32,6 +38,7 @@ const (
 )
 
 func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
+	log.Println("Configuring the kernel keyring for all prog verification in kernel ")
 
 	if DUMP_CA_LSM {
 		VerifyKeyRinggenerated()
@@ -49,10 +56,6 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 		return err
 	}
 
-	if err != nil {
-		log.Fatalf("Failed to generate ECDH key: %v", err)
-	}
-
 	val := config.Cert.Raw
 
 	log.Println("the size of the keyring Der file for encrypt x509 cert is ", val[:1], len(val))
@@ -64,14 +67,14 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	if err != nil {
 		log.Fatalf("Failed to add key: %v", err)
 	}
-	log.Printf("Key added with ID: %d", keyID)
+	log.Printf("Root key added with ID: %d", keyID)
 
 	// Create a new keyring in the session keyring
 	keyringID, err := unix.AddKey("keyring", "_ebpf", nil, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
 		log.Fatalf("Failed to create keyring: %v", err)
 	}
-	fmt.Printf("Created keyring with ID: %d\n", keyringID)
+	log.Printf("Created eBPF prog signer keyring with ID: %d\n", keyringID)
 
 	// Link the key to the keyring one used by the userspace laoder, and second via the kernel BPF LSM hooks before all the kernel eBPF hooks are injected inside kernell network stack, raw tracepoint and kprobes
 	ret, err := unix.KeyctlInt(unix.KEYCTL_LINK, keyID, keyringID, 0, 0)
@@ -106,22 +109,29 @@ func CleanupKernelKeyRing() error {
 		if err != nil {
 			log.Printf("Warning: failed to unlink _ebpf keyring: %v", err)
 		}
+
+		log.Println("Successfully cleaned up ebpfKeyringID session keyring", ebpfKeyringID)
+	} else {
+		log.Println("keyring not found for ebpf session keyring")
 	}
 
 	// Find and revoke the asymmetric key
-	keyID, err := unix.KeyctlSearch(sessionID, "asymmetric", ".ebpf:signing:x509", 0)
+	rootKeyId, err := unix.KeyctlSearch(sessionID, "asymmetric", ".ebpf:signing:x509", 0)
 	if err == nil {
 		// Revoke the key for the parent sign
-		_, err = unix.KeyctlInt(unix.KEYCTL_REVOKE, keyID, 0, 0, 0)
+		_, err = unix.KeyctlInt(unix.KEYCTL_REVOKE, rootKeyId, 0, 0, 0)
 		if err != nil {
 			log.Printf("Warning: failed to revoke key: %v", err)
 		}
 
 		// Unlink the key from session
-		_, err = unix.KeyctlInt(unix.KEYCTL_UNLINK, keyID, sessionID, 0, 0)
+		_, err = unix.KeyctlInt(unix.KEYCTL_UNLINK, rootKeyId, sessionID, 0, 0)
 		if err != nil {
 			log.Printf("Warning: failed to unlink key: %v", err)
 		}
+		log.Println("Successfully cleaned up root session keyring", rootKeyId)
+	} else {
+		log.Println("key not found for root session keyring")
 	}
 
 	// Finally, clear the session keyring (removes any remaining items)
@@ -132,4 +142,45 @@ func CleanupKernelKeyRing() error {
 
 	log.Println("Successfully cleaned up kernel session keyring", sessionID)
 	return nil
+}
+
+func GetKeyRingSessionId() (int, error) {
+
+	sessionID, err := unix.KeyctlInt(unix.KEYCTL_GET_KEYRING_ID, unix.KEY_SPEC_SESSION_KEYRING, 0, 0, 0)
+	if err != nil {
+		return -1, fmt.Errorf("failed to get session keyring ID: %v", err)
+	}
+
+	return sessionID, nil
+}
+
+func GetEbpFProgSignKeyringId() (uint32, error) {
+
+	sessionID, err := GetKeyRingSessionId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get session keyring ID: %v", err)
+	}
+
+	ebpfKeyringID, err := unix.KeyctlSearch(sessionID, "keyring", "_ebpf", 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get ebpf keyring ID: %v", err)
+	}
+
+	return uint32(ebpfKeyringID), nil
+}
+
+func GetRootKeyRingId() (uint32, error) {
+
+	sessionID, err := GetKeyRingSessionId()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get session keyring ID: %v", err)
+	}
+
+	keyID, err := unix.KeyctlSearch(sessionID, "asymmetric", ".ebpf:signing:x509", 0)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to get ebpf keyring ID: %v", err)
+	}
+
+	return uint32(keyID), nil
 }

@@ -30,6 +30,7 @@ const (
 	SOCK_OPS_PROC_UDP_TRACEPOINT    = "dns_udp_sock_ops"
 	XDP_CONTROL_PROG                = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
+	LSM_CRYPTO_VERIFY_PROG        = "bpf" // runs over lsm crypto for bpf_prog load
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 	DEFAULT_SK_BUFF_NUONCE        = 0xffff
 )

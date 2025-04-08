@@ -22,9 +22,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.synarcs.controller.exceptions.MalformedDomainException;
 import com.synarcs.controller.repository.MaliciousDomain;
 import com.synarcs.controller.service.BlacklistDomain;
 import com.synarcs.controller.service.MaliciousNsResolve;
+import com.synarcs.controller.service.UpdateBenignSld;
 
 
 // later fix and move all business logic inside the dedicated blacklist service 
@@ -39,7 +41,10 @@ public class DnsSecController implements Serializable {
 
     @Autowired 
     private MaliciousNsResolve dnsResolver; 
-    
+   
+    @Autowired
+    private UpdateBenignSld updatedataplaneSld;
+
     @GetMapping
     public String getControllerVersion() {
         return "0.1.1";
@@ -109,6 +114,17 @@ public class DnsSecController implements Serializable {
             return c2DomainServer.get();
         }
         return null;
+    }
+
+
+    @PostMapping("/c2/benign/{sld}")
+    public String successUpdateDataPlaneBenginCache(@PathVariable String sld) {
+        try {
+            updatedataplaneSld.sendDnsBenignDomainCacheUpdate(sld);
+            return "Sld Domain streamed to data plane " + sld;
+        }catch (MalformedDomainException exception) {
+            return "Error the domain is malformed";
+        }
     }
 
 }

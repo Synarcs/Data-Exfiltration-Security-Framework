@@ -5,13 +5,13 @@
 #define MAX_DATA_SIZE (1024 * 1024)
 #define MAX_SIG_SIZE 4096
 
-struct {
+struct  {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 2);
     __type(key, __u32);
     __type(value, __u32);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} keyring_map SEC(".maps");
+} exfil_security_keyring_map SEC(".maps");
 
 struct original_data {
     __u8 data[MAX_DATA_SIZE];
@@ -29,28 +29,28 @@ struct combined_buffer {
     __u8 data[MAX_DATA_SIZE + MAX_SIG_SIZE];
 };
 
-struct {
+struct  {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct modified_sig);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} modified_signature SEC(".maps");
+} exfil_security_modified_signature SEC(".maps");
 
-struct {
+struct  {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct original_data);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} original_program SEC(".maps");
+} exfil_security_original_program SEC(".maps");
 
-struct {
+struct  {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
     __type(key, __u32);
     __type(value, struct combined_buffer);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
-} combined_data_map SEC(".maps");
+} exfil_security_combined_data_map SEC(".maps");
 
 #endif /* __CRYPTOMAPS_H_ */

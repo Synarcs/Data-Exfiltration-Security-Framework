@@ -146,4 +146,5 @@ const (
 	EXFIL_SECURITY_ORIGINAL_PROGRAM   = "exfil_security_original_program"
 	EXFIL_SECURITY_MODIFIED_SIGNATURE = "exfil_security_modified_signature"
 	EXFIL_SECURITY_KEYRING_MAP        = "exfil_security_keyring_map"
+	EXFIL_SECURITY_COMBINED_DATA_MAP  = "exfil_security_combined_data_map"
 )

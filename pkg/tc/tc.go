@@ -305,7 +305,8 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 	}
 }
 
-func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan utils.KernelInjectProgInfo) {
+func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan utils.KernelInjectProgInfo,
+	metaKeyringInfo *crypto.KernelCryptoKeyRingIds) {
 	log.Println("Attaching a kernel Handler for the TC CLS_Act Qdisc")
 	if errors.Is(ctx.Err(), context.Canceled) {
 		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
@@ -355,7 +356,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		return
 	}
 
-	if err := tc.CryptoAgentLSMHandler.InjectLSMProgsPostSignatureGenerate(rawEbpfProgBytes, info); err != nil {
+	if err := tc.CryptoAgentLSMHandler.InjectLSMProgsPostSignatureGenerate(rawEbpfProgBytes, info, metaKeyringInfo); err != nil {
 		tc.GlobalErrorKernelHandlerChannel <- err
 		return
 	}
@@ -554,7 +555,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
 
 		if len(payload) < 2 {
-			log.Println("errror ", len(payload))
 			return fmt.Errorf("TCP payload too short for dns parsing")
 		}
 
@@ -813,5 +813,6 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 			}
 		}
 	}
+	defer tc.TcCollection.Close()
 	return nil
 }

@@ -121,8 +121,49 @@ func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 	if agentCryptoConfig, err := crypto.GenerateBPFCert(); err != nil {
 		return nil, err
 	} else {
+		log.Println("Configuring the kernel keyring for the node agent")
+
+		if err := crypto.AddKernelKeyRing(agentCryptoConfig); err != nil {
+			return nil, err
+		}
 		return agentCryptoConfig, nil
 	}
+}
+
+func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
+	sessionIdInjectedRing, err := crypto.GetKeyRingSessionId()
+	if err != nil {
+		log.Println("Error getting the kernel keyring session id", err.Error())
+		return nil, err
+	}
+
+	if utils.DEBUG {
+		log.Println("The keyring session found and is ", sessionIdInjectedRing)
+	}
+
+	ebpfKeyringId, err := crypto.GetEbpFProgSignKeyringId()
+	if err != nil {
+		return nil, err
+	}
+
+	if utils.DEBUG {
+		log.Println("The keyring session found for ebpf is ", ebpfKeyringId)
+	}
+
+	rootKeyringId, err := crypto.GetRootKeyRingId()
+	if err != nil {
+		return nil, err
+	}
+
+	if utils.DEBUG {
+		log.Println("The keyring session found for root is ", rootKeyringId)
+	}
+
+	return &crypto.KernelCryptoKeyRingIds{
+		SessionId:         uint32(sessionIdInjectedRing),
+		EbpfSignKeyringId: uint32(ebpfKeyringId),
+		RootKeyringId:     uint32(rootKeyringId),
+	}, nil
 }
 
 func main() {
@@ -161,7 +202,18 @@ func main() {
 		panic(err.Error())
 	}
 
+	metaKeyringInfo, err := PopulateInjectedKeyringMetaInfo()
+	if err != nil {
+		log.Println("Error populating the keyring meta info", err.Error())
+		panic(err.Error())
+	}
 	cryptoLsmProgHandler := crypto.NewCryptoBpfLsm(agentCryptoConfig)
+
+	// inject the crypto lsm program in kernel for all ebpf prog verification
+	if err := cryptoLsmProgHandler.InjectLsmProg(ctx); err != nil {
+		log.Println("Error injecting the crypto lsm prog in kernel", err.Error())
+		panic(err.Error())
+	}
 
 	envoy.InitTCPWasmFilter()
 
@@ -290,7 +342,7 @@ func main() {
 	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
+	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan, metaKeyringInfo)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := &bridgetc.BridgeTCFilters{

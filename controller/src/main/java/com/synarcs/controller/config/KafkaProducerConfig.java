@@ -29,7 +29,7 @@ public class KafkaProducerConfig {
     }
 
     @Bean
-    public ProducerFactory<String, DnsdataplaneBlk> producerFactory() {
+    public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> props = new HashMap<>();
         // kept this to have controller have isolated config files
         props.put(
@@ -45,7 +45,7 @@ public class KafkaProducerConfig {
     }
 
     @Bean
-    public KafkaTemplate<String, DnsdataplaneBlk> kafkaTemplate() {
+    public KafkaTemplate<String, Object> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 }

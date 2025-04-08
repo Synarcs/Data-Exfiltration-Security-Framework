@@ -4,6 +4,7 @@
 // disable local stack warnings for always inline fucns 
 #pragma clang diagnostic ignored "-Wreturn-stack-address"
 #pragma clang diagnostic ignored "-Wbackslash-newline-escape"
+#pragma clang diagnostic ignored "-Wunused-parameter"
 
 #include <linux/ipv6.h>
 #include <linux/in6.h>

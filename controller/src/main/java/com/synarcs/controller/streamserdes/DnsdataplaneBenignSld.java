@@ -1,0 +1,18 @@
+package com.synarcs.controller.streamserdes;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class DnsdataplaneBenignSld {
+    
+    private String sld;
+    private String tld;
+}

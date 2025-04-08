@@ -8,11 +8,13 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import com.synarcs.controller.config.ControllerKafkaTopics;
 import com.synarcs.controller.config.yaml.Config;
 import com.synarcs.controller.repository.DNSBlacklistRepository;
 import com.synarcs.controller.repository.MaliciousDomain;
 import com.synarcs.controller.streamserdes.DnsFeatures;
 import com.synarcs.controller.streamserdes.DnsdataplaneBlk;
+import com.synarcs.controller.utils.DomainLexicalValidator;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 public class BlacklistDomain {
 
     // used by control plane to add infer messgae in topic to instruct all nodes in data plane to blacklist them in cache and rehydrate cache, preventing reuse of unix socket for inference over ONNX  on node
-    private final String controllerInferenceTopic = "exfil-sec-infer-controller";
     private final String internalRecursorerResolver = "10.158.82.55"; // use this since for test environment the server lookup for DNS over internal AUTH server 
 
     private Config controllerConfig;
@@ -35,7 +36,10 @@ public class BlacklistDomain {
     private MaliciousNsResolve dnsResolver;
 
     @Autowired
-    private KafkaTemplate<String, DnsdataplaneBlk> kafkaTemplate;
+    private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Autowired 
+    private DomainLexicalValidator validator;
 
     @Autowired
     public BlacklistDomain(Config config) {
@@ -81,7 +85,7 @@ public class BlacklistDomain {
 
     public void sendDNSCacheAddDataplane(DnsFeatures maliciousEvent, List<String> resolveAddressMaliciousC2Domains) {
         log.info("adding the controller gen blacklist " + maliciousEvent);
-        kafkaTemplate.send(controllerInferenceTopic, DnsdataplaneBlk.builder().
+        kafkaTemplate.send(ControllerKafkaTopics.controllerInferenceTopic, DnsdataplaneBlk.builder().
                 fqdn(maliciousEvent.getFqdn())
                 .tld(maliciousEvent.getTld())
                 .recordType(maliciousEvent.getRecordType())

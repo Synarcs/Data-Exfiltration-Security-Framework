@@ -46,7 +46,8 @@ type NetIface struct {
 	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
 	LoopBackLinks []netlink.Link // loopback links
 
-	LinkMap map[string]bool
+	VxlanLinks []netlink.Link
+	LinkMap    map[string]bool
 	// all the encapsulated packet links for tunnelling using packet encapsulation
 	// most tunnelling link use kernel router netfilter forwarding via non control host for detection prevention
 	PointPointTunVxLinks []netlink.Link
@@ -65,7 +66,7 @@ type NetIface struct {
 
 	ConnTrackNsHandles map[int]conntrack.ConntrackSock
 }
-	
+
 func (nf *NetIface) ReadInterfaces(containered bool) error {
 	links, err := netlink.LinkList()
 	if err != nil {
@@ -83,6 +84,7 @@ func (nf *NetIface) ReadInterfaces(containered bool) error {
 
 	log.Println("the custom link to process are ", customLinks)
 	nf.Links = links
+	nf.GetVxlanLinks()
 	var hardwareInterfaces []netlink.Link
 	var logicalInterfaces []netlink.Link
 	var bridgeInterfaces []netlink.Link
@@ -101,6 +103,14 @@ func (nf *NetIface) ReadInterfaces(containered bool) error {
 		nf.BridgeLinks = bridgeInterfaces
 	}
 	return nil
+}
+
+func (nf *NetIface) GetVxlanLinks() {
+	for _, link := range nf.Links {
+		if link.Type() == "vxlan" {
+			nf.VxlanLinks = append(nf.VxlanLinks, link)
+		}
+	}
 }
 
 func (nf *NetIface) GetRootGateway() error {

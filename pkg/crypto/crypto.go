@@ -11,13 +11,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
-	"github.com/cilium/ebpf/rlimit"
+	"github.com/cilium/ebpf/link"
 	"github.com/cloudflare/cfssl/csr"
 	"github.com/cloudflare/cfssl/initca"
 	"go.mozilla.org/pkcs7"
@@ -46,18 +44,23 @@ type NodeAgentCryptoConfig struct {
 }
 
 type CompiledProgInfo struct {
-	Data    [MAX_DATA_SIZE]byte
-	DataLen int
+	Data    [1024 * 1024]byte
+	DataLen uint32
 	Sig     [4096]byte
-	SigLen  int
+	SigLen  uint32
 }
 
 type ModifiedJitProgInfo struct {
 	Data    [MAX_DATA_SIZE]byte
-	DataLen int
+	DataLen uint32
 	Sig     [4096]byte
-	SigLen  int
+	SigLen  uint32
 	Prog    asm.Instruction
+}
+
+type ModifiedSig struct {
+	Sig    [4096]byte
+	SigLen uint32
 }
 
 /*
@@ -229,7 +232,7 @@ func (lsm *CryptoBpfLsm) computeOriginalSignature(data []byte, org *CompiledProg
 	}
 
 	copy(org.Sig[:], p7Bytes)
-	org.SigLen = len(p7Bytes)
+	org.SigLen = uint32(len(p7Bytes))
 
 	if err := verifyPkcs7Signature(p7Bytes, data); err != nil {
 		log.Println("Signature verification failed")
@@ -255,7 +258,7 @@ func (lsm *CryptoBpfLsm) computeModifiedSignature(instructions asm.Instructions,
 	}
 
 	copy(modSig.Sig[:], p7Bytes)
-	modSig.SigLen = len(p7Bytes)
+	modSig.SigLen = uint32(len(p7Bytes))
 
 	if err := verifyPkcs7Signature(p7Bytes, buff.Bytes()); err != nil {
 		log.Println("Signature verification failed")
@@ -267,45 +270,44 @@ func (lsm *CryptoBpfLsm) computeModifiedSignature(instructions asm.Instructions,
 
 type CryptoBpfLsm struct {
 	PinnedMaps        []string
+	LsmProgCollection *ebpf.Collection
 	AgentCryptoConfig *NodeAgentCryptoConfig
+	Program           *ebpf.Program
+	Link              link.Link
 }
 
 func NewCryptoBpfLsm(agentCryptoConfig *NodeAgentCryptoConfig) *CryptoBpfLsm {
 	return &CryptoBpfLsm{
 		PinnedMaps: []string{
-			events.EXFIL_SECURITY_ORIGINAL_PROGRAM,
+			events.EXFIL_SECURITY_KEYRING_MAP,
 			events.EXFIL_SECURITY_MODIFIED_SIGNATURE,
 			events.EXFIL_SECURITY_KEYRING_MAP,
+			events.EXFIL_SECURITY_COMBINED_DATA_MAP,
 		},
 		AgentCryptoConfig: agentCryptoConfig,
 	}
 }
 
 func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
-	ebpfProg *ebpf.ProgramInfo) error {
-
-	// TODO: Ensure strict cgroups for memory bounds
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return err
-	}
-
-	if len(ebpfProgRaw) == 0 {
-		return fmt.Errorf("empty program data")
-	}
+	ebpfProg *ebpf.ProgramInfo, keyringconfigInfo *KernelCryptoKeyRingIds) error {
 
 	var org CompiledProgInfo
 
 	copy(org.Data[:], ebpfProgRaw)
-	org.DataLen = len(ebpfProgRaw)
+	org.DataLen = uint32(len(ebpfProgRaw))
 
 	if err := lsm.computeOriginalSignature(org.Data[:org.DataLen], &org); err != nil {
 		log.Println("Error computing original signature or sig verification failed for prog :", ebpfProg.Name, err)
 		return err
 	}
 
-	_ = filepath.Join(utils.PINPATH, "exfil_security_original_program")
-	_ = filepath.Join(utils.PINPATH, "exfil_security_modified_signature")
-	_ = filepath.Join(utils.PINPATH, "exfil_security_keyring_map")
+	log.Println("Populating keyring map with sign key ring id")
+	var crypto_kernel_const uint32 = 0
+
+	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_KEYRING_MAP].Put(&crypto_kernel_const, &keyringconfigInfo.EbpfSignKeyringId); err != nil {
+		log.Println("Error writing to keyring map", err)
+		return err
+	}
 
 	insn, err := ebpfProg.Instructions()
 	if err != nil {
@@ -317,10 +319,26 @@ func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 		log.Println("Error computing modified signature or sig verification failed for prog :", ebpfProg.Name, err)
 		return err
 	}
-	return nil
-}
 
-func (lsm *CryptoBpfLsm) RemoveCryptoLSMProgs() error {
+	_ = uint32(lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_ORIGINAL_PROGRAM].FD())
+	_ = uint32(lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_MODIFIED_SIGNATURE].FD())
+
+	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_ORIGINAL_PROGRAM].
+		Put(&crypto_kernel_const, &org); err != nil {
+		log.Println("Error writing original program info to map", err)
+		return err
+	}
+
+	var modSignPayload *ModifiedSig = &ModifiedSig{
+		Sig:    mod.Sig,
+		SigLen: mod.SigLen,
+	}
+
+	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_MODIFIED_SIGNATURE].
+		Put(&crypto_kernel_const, modSignPayload); err != nil {
+		log.Println("Error writing modified program info to map", err)
+		return err
+	}
 
 	return nil
 }
