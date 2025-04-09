@@ -1,7 +1,6 @@
 package conntrack
 
 import (
-	"log"
 	"net/netip"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -26,16 +25,16 @@ func NewContrackSock(netns int) (*ConntrackSock, error) {
 		NetNS: 0,
 	})
 	if err != nil {
-		log.Println("Error Getting the the Contrack Netlink Socket")
+		utils.Log("Error Getting the the Contrack Netlink Socket")
 		return nil, err
 	}
 
-	log.Println("Init complete for Conntrack Socket over Netlink socket for Network Namespace ", netns)
+	utils.Log("Init complete for Conntrack Socket over Netlink socket for Network Namespace ", netns)
 
 	if utils.DEBUG {
 		stats, _ := c.Stats()
 		for _, stat := range stats {
-			log.Println("Successfully Booted with Kernel Conntrack Fd over Netlink sock", stat.String())
+			utils.Log("Successfully Booted with Kernel Conntrack Fd over Netlink sock", stat.String())
 		}
 	}
 
@@ -62,16 +61,16 @@ func (c *ConntrackSock) CleanCloneDanglingEntries(flowEntry *ConntrackCleanEntry
 	if utils.DEBUG {
 		flows, _ := c.ConntrackSock.Dump(&conntrack.DumpOptions{})
 		for _, flow := range flows {
-			log.Println("flow for the naetwork ns ", flow)
+			utils.Log("flow for the naetwork ns ", flow)
 		}
 	}
 
 	if c.ConntrackSock == nil {
-		log.Println("Error ther con sock cannot be empty")
+		utils.Log("Error ther con sock cannot be empty")
 		return nil
 	}
 	if utils.DEBUG {
-		log.Println("Cleaning dest conntrack entry for the flow entry ", flowEntry)
+		utils.Log("Cleaning dest conntrack entry for the flow entry ", flowEntry)
 	}
 	if err := c.ConntrackSock.Delete(flow); err != nil {
 		return err

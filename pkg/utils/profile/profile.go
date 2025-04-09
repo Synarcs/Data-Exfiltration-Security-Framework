@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -33,7 +32,7 @@ func InitProfileServer(ctx context.Context) error {
 		},
 	}
 	go func() {
-		log.Printf("Starting pprof server on port %d", PPROF_PORT)
+		utils.Logger.Printf("Starting pprof server on port %d", PPROF_PORT)
 		if err := server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				graceFulClose <- true
@@ -47,11 +46,11 @@ func InitProfileServer(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			if utils.DEBUG {
-				log.Printf("Shutting down pprof server on port %d", PPROF_PORT)
+				utils.Logger.Printf("Shutting down pprof server on port %d", PPROF_PORT)
 			}
 			server.Shutdown(ctx)
 		case <-graceFulClose:
-			log.Println("Profile server shutdown gracefully")
+			utils.Log("Profile server shutdown gracefully")
 			return nil
 		case err := <-errorClose:
 			return err

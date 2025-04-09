@@ -39,10 +39,10 @@ func (xdp *XdpHandler) LinkXdp() error {
 	}
 
 	if len(spec.Programs) > 1 {
-		log.Println("Multiple programs found in the root collection")
+		utils.Log("Multiple programs found in the root collection")
 	}
 	if len(spec.Programs) == 0 {
-		log.Println("The Ebpf Bytecode is corrupt or malformed")
+		utils.Log("The Ebpf Bytecode is corrupt or malformed")
 	}
 
 	defer spec.Close()
@@ -56,7 +56,7 @@ func (xdp *XdpHandler) LinkXdp() error {
 				Interface: links.Attrs().Index,
 			})
 			if err != nil {
-				log.Println("Error attaching the XDP program to the interface")
+				utils.Log("Error attaching the XDP program to the interface")
 				panic(err.Error())
 			}
 

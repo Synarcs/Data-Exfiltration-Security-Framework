@@ -2,7 +2,6 @@ package conf
 
 import (
 	"errors"
-	"log"
 	"os"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -43,10 +42,10 @@ func (nn *Config) ReadNodeAgentConfig() error {
 
 	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Println("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
+			utils.Log("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
 			return err
 		}
-		log.Printf("Erorr the config file exists but cannot be read %+v", err)
+		utils.Logger.Printf("Erorr the config file exists but cannot be read %+v", err)
 		return err
 	}
 

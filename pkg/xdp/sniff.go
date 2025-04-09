@@ -71,7 +71,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	}
 
 	if utils.DEBUG {
-		log.Println("packet L3 and L4 ", isIpv4, isUdp)
+		utils.Log("packet L3 and L4 ", isIpv4, isUdp)
 	}
 
 	transportLayer := packet.Layer(layers.LayerTypeUDP)
@@ -95,7 +95,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		processFeaturesInference := func() error {
 			features, err := model.ProcessDnsFeatures(dns, false)
 			if err != nil {
-				log.Println(err.Error())
+				utils.Log(err.Error())
 				return err
 			}
 
@@ -122,7 +122,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 
 		err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
 		if err != nil {
-			log.Println("Error decoding the dns packet over the tcp stream", err)
+			utils.Log("Error decoding the dns packet over the tcp stream", err)
 			return err
 		}
 
@@ -134,7 +134,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPPort uint16) error {
 	var errorChannel chan error = make(chan error) // dedicated channel to sniff and process ingress sniff errors
 	var graceFulCloseSniff chan bool = make(chan bool)
-	log.Println("Sniffing Ingress traffic for potential malicious remote C2C commands")
+	utils.Log("Sniffing Ingress traffic for potential malicious remote C2C commands")
 
 	// do deep lexcial analysis of the packet over the ingress for the response action set
 	processPcapFilterHandlerIngress := func(linkInterface netlink.Link,
@@ -147,7 +147,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		defer cap.Close()
 
 		// runs over br netfilter layer on iptables
-		log.Println("Generated Ingress Packet Listener to sniff DNS packets over the UDP and TCP Transport Layer")
+		utils.Log("Generated Ingress Packet Listener to sniff DNS packets over the UDP and TCP Transport Layer")
 		if err := cap.SetBPFFilter(fmt.Sprintf("udp src port %d or tcp src port %d", sniffUDPPort, sniffUDPPort)); err != nil {
 			log.Fatalf("Error setting BPF filter: %v", err)
 			return err
@@ -158,7 +158,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 			select {
 			case <-ctx.Done():
 				if sniffUDPPort != utils.DNS_EGRESS_PORT {
-					log.Println("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent in user-space")
+					utils.Log("context cancelled for sniffing over this malicious port ", sniffUDPPort, "since the process was SIGKILL by node agent in user-space")
 				}
 				graceFulCloseSniff <- true
 				return nil

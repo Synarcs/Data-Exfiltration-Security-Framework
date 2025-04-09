@@ -2,8 +2,9 @@ package netinet
 
 import (
 	"context"
-	"log"
 	"net"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 // use netlink to find discrete ipam over all briges and links on the device for discete IPAM over the virtual NS and bridges ofr the Deep scan
@@ -18,7 +19,7 @@ type IpamBlock struct {
 func (ipam *NetIface) LookUpdiscreteIpv4(ctx context.Context) (*IpamBlock, error) {
 	routes := ipam.AddrV4
 	for _, route := range routes {
-		log.Println(route)
+		utils.Log(route)
 	}
 	return nil, nil
 }
@@ -26,7 +27,7 @@ func (ipam *NetIface) LookUpdiscreteIpv4(ctx context.Context) (*IpamBlock, error
 func (ipam *NetIface) LookUpdiscreteIpv6(ctx context.Context) (*IpamBlock, error) {
 	routes := ipam.AddrV4
 	for _, route := range routes {
-		log.Println(route)
+		utils.Log(route)
 	}
 	return nil, nil
 }

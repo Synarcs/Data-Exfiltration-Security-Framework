@@ -2,7 +2,6 @@ package tracepoint
 
 import (
 	"context"
-	"log"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -23,7 +22,7 @@ func GenerateTracePointHandlers() *ExfilSecTreacePoint {
 }
 
 func (exf *ExfilSecTreacePoint) AttachTracePointHandlers(ctx context.Context, iface *netinet.NetIface) {
-	log.Println("Attaching the kernel Tracepoints")
+	utils.Log("Attaching the kernel Tracepoints")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())

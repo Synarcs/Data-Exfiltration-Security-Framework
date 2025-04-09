@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"reflect"
 	"time"
@@ -71,7 +70,7 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 
 		if err := connLeader.CreateTopics(topic...); err != nil {
 			if errors.Is(err, kafka.TopicAlreadyExists) {
-				log.Printf("Topic already exists %+v", err)
+				utils.Logger.Printf("Topic already exists %+v", err)
 			}
 			erroChan <- err
 		}
@@ -83,21 +82,21 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 		select {
 		case <-connContext.Done():
 			// channel is closed to ensure there is a timeout connect to remote kafka broker, since the kafka uses background context blocking node agent
-			log.Println("Error connecting to the remote Kafka broker ", connContext.Err())
+			utils.Log("Error connecting to the remote Kafka broker ", connContext.Err())
 			return nil
 		case err := <-connErrorChan:
 			if connContext.Err(); err != nil {
 				// there is other error before the connection context with timeout has closed
-				log.Println("Error connecting to remote kafka broker ", err.Error())
+				utils.Log("Error connecting to remote kafka broker ", err.Error())
 			}
 			close(connErrorChan)
 			return err
 		case <-connDone:
-			log.Println("Connected to remote kafka broker ", prod.KafkaBrokerConfig.Brokers)
+			utils.Log("Connected to remote kafka broker ", prod.KafkaBrokerConfig.Brokers)
 			close(connDone)
 			return nil
 		default:
-			log.Println("Trying to connect to remote Kafka broker ...", prod.KafkaBrokerConfig.Brokers)
+			utils.Log("Trying to connect to remote Kafka broker ...", prod.KafkaBrokerConfig.Brokers)
 			time.Sleep(time.Second)
 		}
 	}
@@ -108,14 +107,14 @@ func (prod *StreamProducer) StreamThreadEvent(event []byte) error {
 		return fmt.Errorf("kafka writer not initialized")
 	}
 
-	log.Println("Publishing  to remote kafka broker ", prod.Writer.Addr.Network(), prod.Writer.Addr.String())
+	utils.Log("Publishing  to remote kafka broker ", prod.Writer.Addr.Network(), prod.Writer.Addr.String())
 
 	if err := prod.Writer.WriteMessages(context.Background(), kafka.Message{
 		Value: event,
 		Time:  time.Now(),
 	}); err != nil {
 		if !utils.DEBUG {
-			log.Println("Error writing to kafka ", err)
+			utils.Log("Error writing to kafka ", err)
 		}
 		return err
 	}
@@ -144,7 +143,7 @@ func (prod *StreamProducer) MarshallStreamThreadEvent(event interface{}, network
 	}
 
 	if utils.DEBUG {
-		log.Println("Event Size (bytes):", len(marshalledEvent))
+		utils.Log("Event Size (bytes):", len(marshalledEvent))
 	}
 	if err := prod.StreamThreadEvent(marshalledEvent); err != nil {
 		return err

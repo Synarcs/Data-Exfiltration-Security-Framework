@@ -3,7 +3,6 @@ package tc
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -59,7 +58,7 @@ func (tc *TCHandler) AttachTcProgramTunTap(ctx context.Context, interfaceName st
 		return err
 	}
 
-	log.Println("the ebpf tc clsact direct action attached in kernel for egress hook over the tunnel interface")
+	utils.Log("the ebpf tc clsact direct action attached in kernel for egress hook over the tunnel interface")
 	return nil
 }
 
@@ -68,14 +67,14 @@ func (tc *TCHandler) IsLinkPppLinkAttached(ctx *context.Context) {
 		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
 			// deteach the present added kernel tuntap interface
 			if err := tc.DetachHandlerTunTap(ctx, link); err != nil {
-				log.Printf("Error detaching the Netlink Attached Socket event %+v", err)
+				utils.Logger.Printf("Error detaching the Netlink Attached Socket event %+v", err)
 			}
 		}
 	}
 }
 
 func (tc *TCHandler) DetachHandlerTunTap(ctx *context.Context, link netlink.Link) error {
-	log.Println("Detaching the Attached PPP links found and their dynamically loaded eBPF program in kernel for DPI")
+	utils.Log("Detaching the Attached PPP links found and their dynamically loaded eBPF program in kernel for DPI")
 	err := netlink.QdiscDel(&netlink.Clsact{
 		QdiscAttrs: netlink.QdiscAttrs{
 			LinkIndex: link.Attrs().Index,

@@ -4,6 +4,7 @@ import (
 	"log"
 	"os/exec"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/tetratelabs/proxy-wasm-go-sdk/proxywasm"
 	"github.com/tetratelabs/proxy-wasm-go-sdk/proxywasm/types"
 )
@@ -21,6 +22,6 @@ func StartEnvoyFilter() error {
 }
 
 func InitTCPWasmFilter() {
-	log.Println("Initializing Envoy TCP Wasm Filter for DNS deep scan filter to prevent DNS exfiltration")
+	utils.Log("Initializing Envoy TCP Wasm Filter for DNS deep scan filter to prevent DNS exfiltration")
 	proxywasm.SetVMContext(&wasmFilterVm{})
 }

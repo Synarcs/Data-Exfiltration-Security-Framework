@@ -4,9 +4,9 @@ Copyright © 2024 Syncarcs
 package cmd
 
 import (
-	"log"
 	"os"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +27,7 @@ var rootCmd = &cobra.Command{
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		log.Println(err)
+		utils.Log(err)
 		os.Exit(1)
 	}
 }

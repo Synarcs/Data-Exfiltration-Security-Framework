@@ -3,7 +3,6 @@ package utils
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -83,7 +82,7 @@ func GetProcessInfo(pid int) (*ProcessInfo, error) {
 			if len(uid) > 0 {
 				userinfo, err := user.LookupId(uid[0])
 				if err != nil {
-					log.Printf("Error Looking up user Info for user %s", uid[:])
+					Logger.Printf("Error Looking up user Info for user %s", uid[:])
 				}
 				procInfo.UserOwner = userinfo.Username
 				procInfo.GroupId = userinfo.Gid

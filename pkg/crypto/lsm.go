@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"context"
-	"log"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
@@ -11,7 +10,7 @@ import (
 )
 
 func (lsm *CryptoBpfLsm) InjectLsmProg(ctx context.Context) error {
-	log.Println("Injecting the LSM BPF for crypto validation of bpf progs")
+	utils.Log("Injecting the LSM BPF for crypto validation of bpf progs")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
@@ -49,7 +48,7 @@ func (lsm *CryptoBpfLsm) InjectLsmProg(ctx context.Context) error {
 	lsm.Link = link
 	lsm.Program = prog
 
-	log.Println("Injected LSM Progs successfully")
+	utils.Log("Injected LSM Progs successfully")
 	return nil
 }
 

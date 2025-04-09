@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -339,7 +338,7 @@ func ExportCpuProcessMetrics(ctx context.Context) error {
 			return nil
 		default:
 			if err := exportCpumemMetrics(); err != nil {
-				log.Println(err.Error())
+				utils.Log(err.Error())
 			}
 			time.Sleep(time.Second)
 		}
@@ -355,7 +354,7 @@ func StartPrometheusMetricExporterServer(config *conf.NodeAgentConfig) error {
 		metricsExporterPort, _ = strconv.Atoi(config.MetricsExporter.Port)
 	}
 
-	log.Println("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", metricsExporterPort)
+	utils.Log("Starting the prometheus eBPF Node Agent metric exporter server on /metrics", metricsExporterPort)
 
 	metricMux := http.NewServeMux()
 
@@ -377,7 +376,7 @@ func StartPrometheusMetricExporterServer(config *conf.NodeAgentConfig) error {
 	}
 
 	if err := server.ListenAndServe(); err != nil {
-		log.Println("error starting the prometheus exporter server", err)
+		utils.Log("error starting the prometheus exporter server", err)
 		return err
 	}
 	return nil

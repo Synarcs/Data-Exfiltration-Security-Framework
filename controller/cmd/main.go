@@ -60,7 +60,7 @@ func CreateCniClientSet(globalControllerConfig *conf.GlobalControllerConfig, k8s
 }
 
 func main() {
-	log.Println("Add the required network policies enforced by the eBPF Node Agent to controller for dynamic network policies for remote c2 servers")
+	log.Print("Add the required network policies enforced by the eBPF Node Agent to controller for dynamic network policies for remote c2 servers")
 	sock, err := net.Listen("unix", CNI_CONTROLLER_SOCK)
 
 	controlSigKillChan := make(chan os.Signal, 1)

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -39,7 +39,7 @@ func (mock *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgent
 }
 
 func TestMain(t *testing.M) {
-	log.Println("Starting the test for kernel netlink sockets and interfaces  ....")
+	utils.Log("Starting the test for kernel netlink sockets and interfaces  ....")
 
 	linkHandler = netinet.NetIface{}
 	linkHandler.ReadInterfaces(false)
@@ -156,7 +156,7 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	}
 
 	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {
-		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+		utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 		assert.Fail(err.Error())
 	}
 

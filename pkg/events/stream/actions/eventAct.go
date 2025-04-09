@@ -1,11 +1,11 @@
 package actions
 
 import (
-	"log"
 	"reflect"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 )
 
@@ -33,7 +33,7 @@ func (ev *EventAckKernelFilter) UpdateKernelTCFilterEgressDNSLimits(dynamicKerne
 				i, limitVal, ebpf.UpdateAny,
 			)
 			if err != nil {
-				log.Println("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
 				return err
 			}
 		}

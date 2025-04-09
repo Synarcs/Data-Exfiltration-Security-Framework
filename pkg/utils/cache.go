@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"log"
-
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -23,17 +21,17 @@ var NODE_AGENT_INGRESS_BACKLISTED_DOMAINS *lru.Cache[string, bool]
 
 // Init the cache for the eBPF node agent in user space
 func InitCache() error {
-	log.Println("Init the Lru Cache for the Node Agent")
+	Logger.Info("Init the Lru Cache for the Node Agent")
 	cache, err := lru.New[string, *lru.Cache[string, bool]](MAX_NODE_AGENT_CACHE_SIZE)
 	if err != nil {
-		log.Println("Error creating the Lru cache for egress", err)
+		Logger.Info("Error creating the Lru cache for egress", err)
 		return err
 	}
 	NODE_AGENT_BLACKLISTED_DOMAINS = cache
 	// init the init ingress cache
 	ingressCache, err := lru.New[string, bool](MAX_NODE_AGENT_CACHE_SIZE)
 	if err != nil {
-		log.Println("Error creating the Lru cache for ingress", err)
+		Logger.Info("Error creating the Lru cache for ingress", err)
 		return err
 	}
 	NODE_AGENT_INGRESS_BACKLISTED_DOMAINS = ingressCache
@@ -44,24 +42,18 @@ func InitCache() error {
 // Egress cache processing for the eBPF node-agent LRU cache
 // tld and the value
 func UpdateDomainBlacklistInEgressCache(tld, fqdn string) {
-	log.Println("Adding Malicious Domain in the Cache", tld)
-	var evict bool
+	Logger.Info("Adding Malicious Domain in the Cache", tld)
 	fdCache, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
 		newDomainCache, err := lru.New[string, bool](INFERENED_DOMAIN_CACHE_SIZE_PER_TLD)
 		if err != nil {
-			log.Println("Error creating the inner LRU cache for tld", err, tld)
+			Logger.Info("Error creating the inner LRU cache for tld", err, tld)
 		}
 		newDomainCache.Add(fqdn, true)
-		evict = NODE_AGENT_BLACKLISTED_DOMAINS.Add(tld, newDomainCache)
+		NODE_AGENT_BLACKLISTED_DOMAINS.Add(tld, newDomainCache)
 	} else {
 		fdCache.Add(fqdn, true)
 	}
-
-	if evict && DEBUG {
-		log.Println("Cache Hit the max Size evicted the Least Recently Used Key")
-	}
-
 }
 
 // Get the tld from the egress cache
@@ -74,11 +66,11 @@ func GetKeyPresentInEgressCache(tld string) bool {
 func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
-		log.Printf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld)
+		Logger.Printf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld)
 	} else {
 		value, _ := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 		if fqdn == "" {
-			log.Println("Removing a specific fqdn domain from node blacklist cache")
+			Logger.Info("Removing a specific fqdn domain from node blacklist cache")
 			NODE_AGENT_BLACKLISTED_DOMAINS.Remove(tld)
 		} else {
 			value.Remove(fqdn)
@@ -94,7 +86,7 @@ func DeleteAllBlacklistforSLDInEgressCache(tld string) {
 
 // Get the blacklisted domains from the  egress cache
 func GetBlaclistedDomainsEgressCache() []string {
-	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
+	Logger.Info("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
 
 	returnBlacklistedDomains := []string{}
 	returnBlacklistedDomains = append(returnBlacklistedDomains, NODE_AGENT_BLACKLISTED_DOMAINS.Keys()...)
@@ -104,10 +96,7 @@ func GetBlaclistedDomainsEgressCache() []string {
 // Ingress cache processing for the eBPF node-agent LRU cache
 // Add the tld to the ingress cache
 func IngUpdateDomainBlacklistInCache(tld string) {
-	isEvict := NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Add(tld, true)
-	if isEvict && DEBUG {
-		log.Println("The Node cache for ingress becaome almost full evict cache process ...")
-	}
+	NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Add(tld, true)
 }
 
 // Check if the tld is present in the ingress cache and return value if present
@@ -123,7 +112,7 @@ func IngDeleteDomainBlackListInCache(tld string) bool {
 
 // Get the list of tld present in the ingress cache
 func GetBlaclistedDomainsIngressCache() []string {
-	log.Println("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
+	Logger.Info("Inoveked CLI via Unix socket to runtiime inspect the required blaclisted SLD in the Node Agent LRU cache")
 	returnBlacklistedDomains := []string{}
 
 	returnBlacklistedDomains = append(returnBlacklistedDomains, NODE_AGENT_INGRESS_BACKLISTED_DOMAINS.Keys()...)

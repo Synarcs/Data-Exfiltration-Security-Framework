@@ -3,7 +3,6 @@ package model
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -65,12 +64,12 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 		}
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
-			log.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
+			utils.Logger.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(procId)))
 			var sigKillStdoutBuffer bytes.Buffer
 			cmd.Stderr = &sigKillStdoutBuffer
 			if err := cmd.Run(); err != nil {
-				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, sigKillStdoutBuffer)
+				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, sigKillStdoutBuffer)
 			}
 			evTime := maliciousExfilProcessAliveTime[procId]
 			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)
@@ -95,20 +94,20 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index %d", *customNsFdHandle)
 		}
 		if utils.DEBUG {
-			log.Println("clean the stale entry for conntrack ", connSockHandle)
+			utils.Log("clean the stale entry for conntrack ", connSockHandle)
 		}
 		return nil
 	}
 
 	connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[0]
 	if !fd {
-		log.Println("The Required Root namespace not found make sure the Netns map si initiated properly .. ")
+		utils.Log("The Required Root namespace not found make sure the Netns map si initiated properly .. ")
 		return nil
 	}
 	if err := connSockHandle.CleanCloneDanglingEntries(conntrackEntry); err != nil {
 		if utils.DEBUG {
 			// the conntrack internally use the base netfilter layer from kernel if the required conntrack table has no entry and nil value is returned
-			log.Println("Error removing the staled conntrack entry", err.Error())
+			utils.Log("Error removing the staled conntrack entry", err.Error())
 		}
 	}
 	return nil
@@ -153,7 +152,7 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 		roundProcessTime := float64(currProcessTime-int(KernelPacketRedirectTimeEgress)) / 1_000_000.0
 
 		if utils.DEBUG {
-			log.Printf("The round trip time for the dns packet %fms", roundProcessTime)
+			utils.Logger.Printf("The round trip time for the dns packet %fms", roundProcessTime)
 		}
 		events.UpdateLatencyMetricEvents(roundProcessTime)
 	}
@@ -166,7 +165,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
-		log.Println("[x] Recrafting the entire DNS packet")
+		utils.Log("[x] Recrafting the entire DNS packet")
 	}
 	ethernet := ethLayer.(*layers.Ethernet)
 
@@ -194,14 +193,14 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 
 	dns, ok := dnsLayer.(*layers.DNS)
 	if !ok {
-		log.Println("Error parsing the dns header return")
+		utils.Log("Error parsing the dns header return")
 		return fmt.Errorf("error parsing DNS layer")
 	}
 
 	features, err := ProcessDnsFeatures(dns, isEgress)
 
 	if err != nil {
-		log.Println("Error generating the features over the packet", err)
+		utils.Log("Error generating the features over the packet", err)
 		return err
 	}
 
@@ -210,14 +209,14 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	if !isBenign {
 		if isEgress {
 			if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
-				log.Println("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
+				utils.Log("The Exfiltrated DNS packet was found to be exfiltrated by process in user space with pid ", processInfo.ProcessId)
 				// used as a metric to interact with kernel syscall layer if supported the implant will be terminated at the endpoing if it exceeds the threshold limit for malicious
-				log.Println("Existing found a  th emalicious transfer for process over stanndard DNS port ", processInfo)
+				utils.Log("Existing found a  th emalicious transfer for process over stanndard DNS port ", processInfo)
 				go IncrementMaliciousProcCountLocalCache(processInfo.ProcessId)
 			}
 			// for process with ID 0 are not supported since the kernel is old to emit task_comm or task strcut to user space for integration with syscall layer
 		}
-		log.Println("Malicious DNS Exfiltrated Query Found Dropping the packet", features)
+		utils.Log("Malicious DNS Exfiltrated Query Found Dropping the packet", features)
 		// add the tld and domain information in packet malicious map for local cache
 		for _, feature := range features {
 			if isUdp {
@@ -267,7 +266,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 	}
 
 	if utils.DEBUG {
-		log.Println("Packet Found benign after Deep Lexical Scan Resending the packet")
+		utils.Log("Packet Found benign after Deep Lexical Scan Resending the packet")
 	}
 
 	dnsPacket := d.GenerateDnsPacket(*dns, nil)
@@ -299,7 +298,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		})
 		udpPacket.SetNetworkLayerForChecksum(ipv4)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, udpPacket, &dnsPacket); err != nil {
-			log.Println("Error reconstructing the DNS packet", err)
+			utils.Log("Error reconstructing the DNS packet", err)
 			return err
 		}
 	} else if !isIpv4 && isUdp {
@@ -316,13 +315,13 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 		opts.ComputeChecksums = false
 		udpPacket.SetNetworkLayerForChecksum(ipv6)
 		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, udpPacket, &dnsPacket); err != nil {
-			log.Println("Error reconstructing the DNS packet", err)
+			utils.Log("Error reconstructing the DNS packet", err)
 			return err
 		}
 	}
 
 	if utils.DEBUG {
-		log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
+		utils.Log("time took to serialize the whole packet", time.Now().Nanosecond()-st)
 	}
 	outputPacket := buffer.Bytes()
 	outputPacketLen := len(outputPacket)
@@ -349,7 +348,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				fx[i].Len = uint32(outputPacketLen)
 			}
 			trxCount := d.XdpSocketSendFd.Transmit(fx)
-			log.Println("Transmitted framecount is ", trxCount)
+			utils.Log("Transmitted framecount is ", trxCount)
 		}
 	}
 

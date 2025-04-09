@@ -1,5 +1,5 @@
 set terminal png size 1600,1200
-set output "out/1k/dns_perf_enb_gtld.png"
+set output "test.png"
 set multiplot layout 2,1
 
 # QPS and Packet Loss Line Graph (First Plot)

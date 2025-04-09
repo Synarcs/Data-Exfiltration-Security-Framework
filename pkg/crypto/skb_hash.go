@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"log"
 	"strconv"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -31,7 +30,7 @@ func (h *Hash) GetRandomBootSkbMark() {
 	}
 
 	if !utils.DEBUG {
-		log.Printf("The eBPF Node Agent uses the current random SKB mark for secure redirection %s",
+		utils.Logger.Printf("The eBPF Node Agent uses the current random SKB mark for secure redirection %s",
 			hex.EncodeToString(randomNuonceSkbMarkBoot))
 	}
 

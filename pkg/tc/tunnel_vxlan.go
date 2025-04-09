@@ -68,7 +68,7 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 	vxlanTunnelInterface, err := tc.GetTunnelLinkInterfaceInfo(dstPort)
 	if err != nil {
 		// dont emit event, since the vxlan tunnel is gone and netlink cannot find vxlan interface with the udp dst port
-		log.Println("The Required Dst UDP port vxlan tunnel net_device not found", err)
+		utils.Log("The Required Dst UDP port vxlan tunnel net_device not found", err)
 		return
 	}
 
@@ -85,13 +85,13 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 func (tc *TCHandler) GetTunnelLinkInterfaceInfo(dstPort uint16) (*netlink.Vxlan, error) {
 	encapTunnelVtepLinks, err := tc.Interfaces.GetVxlanTunnelInterfaces()
 	if err != nil {
-		log.Println("Error getting the vxlan tunnel interfaces", err)
+		utils.Log("Error getting the vxlan tunnel interfaces", err)
 		return nil, err
 	}
 
 	// kerel use dest  port for vxlan encap over ht the link and it should be there on the net_device matching a vxlan
 	if vxlanLink, fd := encapTunnelVtepLinks[dstPort]; !fd {
-		log.Println("Error getting the vxlan tunnel interfaces", err)
+		utils.Log("Error getting the vxlan tunnel interfaces", err)
 		return nil, fmt.Errorf("Error getting the vxlan tunnel interfaces")
 	} else {
 		return vxlanLink, nil
@@ -137,10 +137,10 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 			dstPort := udpLayer.(*layers.UDP).DstPort
 			if layer := innerPacket.Layer(layers.LayerTypeDNS); layer != nil {
 				dnsLayer := layer.(*layers.DNS)
-				log.Println("Sniffed DNS traffic over vxlan encap ", dnsLayer)
+				utils.Log("Sniffed DNS traffic over vxlan encap ", dnsLayer)
 				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort), dnsLayer)
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
-					log.Println(err.Error())
+					utils.Log(err.Error())
 				}
 				isDnsLayerPresent = true
 			}
@@ -149,18 +149,18 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 			dstPort := udpLayer.(*layers.TCP).DstPort
 			if layer := innerPacket.Layer(layers.LayerTypeDNS); layer != nil {
 				dnsLayer := layer.(*layers.DNS)
-				log.Println("Sniffed DNS traffic over vxlan encap ", dnsLayer)
+				utils.Log("Sniffed DNS traffic over vxlan encap ", dnsLayer)
 				tc.ExportVxlanTunnelDnsTrafficMetric(int(vxlanPacket.VNI), uint16(srcPort), uint16(dstPort), dnsLayer)
 				if err := tc.UpdateVxlanDestPortTransferMapDrop(uint16(dstPort), ebpfMap); err != nil {
-					log.Println(err.Error())
+					utils.Log(err.Error())
 				}
 				isDnsLayerPresent = true
 			}
 		}
 		if !isDnsLayerPresent {
-			log.Println("Sniffed traffic over VNI for vxlan encap, no DNS encap in vxlan packed", vxlanPacket.VNI)
+			utils.Log("Sniffed traffic over VNI for vxlan encap, no DNS encap in vxlan packed", vxlanPacket.VNI)
 		} else {
-			log.Println("Sniffed traffic over VNI for vxlan, contains DNS encap in vxlan", vxlanPacket.VNI)
+			utils.Log("Sniffed traffic over VNI for vxlan, contains DNS encap in vxlan", vxlanPacket.VNI)
 		}
 	}
 
@@ -178,23 +178,23 @@ func (tc *TCHandler) SniffPcapVxlanTrafficPort(event *events.DPIVxlanKernelEncap
 	}
 	controlChannelMap[event.Transport_Dest_Port] = make(chan bool)
 	// for now get the root physical based on egress if_index  later ensure it maps to skb egress link from kernel
-	log.Println("Init Pcap hanle to live sniff for deep user-sapce inspacetion for any exfil traffic in vxlan encap", event)
+	utils.Log("Init Pcap hanle to live sniff for deep user-sapce inspacetion for any exfil traffic in vxlan encap", event)
 
 	// start sniffing the traffic and make sure any vxlan traffi sniff parses l7 exfiltrated payload for dns
 	pcapHandle, err := tc.Interfaces.GetRootNamespacePcapHandle()
 
 	time.AfterFunc(POLL_TICKER_VXLAN_DURATION, func() {
-		log.Println("Closing the pcap handle for vxlan encap traffic over udp port and release block", event.Transport_Dest_Port)
+		utils.Log("Closing the pcap handle for vxlan encap traffic over udp port and release block", event.Transport_Dest_Port)
 		pcapHandle.Close() // closes after userspace stops polling over pcap bpf filter
 	})
 
 	if err != nil {
-		log.Printf("Error getting root namespace pcap handle %v", err)
+		utils.Logger.Printf("Error getting root namespace pcap handle %v", err)
 	}
 	// parse the header DPI for vxlan encap
-	log.Println("Using the kernel filter for bpf ", fmt.Sprintf("udp dst port %d", event.Transport_Dest_Port))
+	utils.Log("Using the kernel filter for bpf ", fmt.Sprintf("udp dst port %d", event.Transport_Dest_Port))
 	if err := pcapHandle.SetBPFFilter(fmt.Sprintf("udp dst port %d", event.Transport_Dest_Port)); err != nil {
-		log.Printf("Error opening the pcap handling on udp port for vxlan transfer %d", event.Transport_Dest_Port)
+		utils.Logger.Printf("Error opening the pcap handling on udp port for vxlan transfer %d", event.Transport_Dest_Port)
 		return err
 	}
 
@@ -202,12 +202,12 @@ func (tc *TCHandler) SniffPcapVxlanTrafficPort(event *events.DPIVxlanKernelEncap
 
 	for pack := range packets.Packets() {
 		if utils.DEBUG {
-			log.Println("Sniffing the udp service port for vxlan encap packets from kernel ebpf ring event ", pack.Layers())
+			utils.Log("Sniffing the udp service port for vxlan encap packets from kernel ebpf ring event ", pack.Layers())
 		}
 		go tc.DeepScanVxlanPacketencap(pack, ebpfMap)
 	}
 	defer func() {
-		log.Println("free the port for next sniff")
+		utils.Log("free the port for next sniff")
 		controlChannelMap[event.Transport_Dest_Port] <- true
 	}()
 
@@ -218,7 +218,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 
 	vxlanEncapMap := tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP]
 	if vxlanEncapMap == nil {
-		log.Printf("Cannot poll the nil map from kernel for an empty Vxlan or non init ring buff")
+		utils.Logger.Printf("Cannot poll the nil map from kernel for an empty Vxlan or non init ring buff")
 		return nil
 	}
 
@@ -265,7 +265,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 
-			log.Println("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
+			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
 			case <-isdport_chan_cleaned_sniff[event.Transport_Dest_Port]:
 				// it mean the sniff channel was cleaned post sniff interval
@@ -275,19 +275,19 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
 			default:
 				if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; !fd {
-					log.Println("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
+					utils.Log("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
 					go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
 				}
 			}
 			go closeSniffSignalHandler(&event, dport_tunnel_pcap)
 		} else {
-			log.Println("Polling the ring buffer for the x86 big endian systems")
+			utils.Log("Polling the ring buffer for the x86 big endian systems")
 			err = binary.Read(bytes.NewReader(record.RawSample), binary.BigEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 
-			log.Println("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
+			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
 			case <-isdport_chan_cleaned_sniff[event.Transport_Dest_Port]:
 				// it mean the sniff channel was cleaned post sniff interval
@@ -299,7 +299,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				}
 			}
 			go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
-			log.Println("Vxland Event polled from kernel non standard port init sniff to ensure the port is not exfiltrating data", event)
+			utils.Log("Vxland Event polled from kernel non standard port init sniff to ensure the port is not exfiltrating data", event)
 		}
 	}
 }

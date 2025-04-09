@@ -6,7 +6,6 @@ package sock
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"runtime"
@@ -48,7 +47,7 @@ func (sock *SockKernelProgs) InitEpfSockProg(ctx context.Context) (*ebpf.Collect
 }
 
 func (sock *SockKernelProgs) InjectKernelSockOps(ctx context.Context, bpfMountPath string, sockeBPFProg string) error {
-	log.Println("Injecting the sock Ops for UDP sock trace for the current kernel not supporting task_comm in egress Tc ")
+	utils.Log("Injecting the sock Ops for UDP sock trace for the current kernel not supporting task_comm in egress Tc ")
 
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("Cannot Inject programs when the parent context for node agent is cancelled %s", ctx.Err())
@@ -102,7 +101,7 @@ func (sock *SockKernelProgs) InjectKernelSocketFilters(ctx context.Context, bpfM
 		return fmt.Errorf("Cannot Inject programs when the parent context for node agent is cancelled %s", ctx.Err())
 	}
 
-	log.Println("Received Pod Mutation request Kernel Exfiltration guard eBPf sock programs in kernel")
+	utils.Log("Received Pod Mutation request Kernel Exfiltration guard eBPf sock programs in kernel")
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return err
 	}

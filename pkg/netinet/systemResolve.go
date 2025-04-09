@@ -2,10 +2,11 @@ package netinet
 
 import (
 	"bufio"
-	"log"
 	"net"
 	"os"
 	"strings"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 type DnsResolverServer struct {
@@ -17,7 +18,7 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 	// we dont need parallel i/o since the dns resolv is not much huge file
 	fd, err := os.Open("/etc/resolv.conf")
 	if err != nil {
-		log.Println("Error Reading the fild descriptor for resolv.conf")
+		utils.Log("Error Reading the fild descriptor for resolv.conf")
 		return nil, err
 	}
 

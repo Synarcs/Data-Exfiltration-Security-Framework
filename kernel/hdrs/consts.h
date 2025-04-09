@@ -70,7 +70,7 @@ struct exfil_security_egress_dns_limites {
 
 // rate limit config
 #define DNS_RATE_LIMIT_VOLUME false
-#define DNS_RATE_LIMIT_TOCKEN_BUCKET true
+#define DNS_RATE_LIMIT_TOCKEN_BUCKET false
 
 #define IPV6_ROUTE 1 
 

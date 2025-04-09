@@ -1,8 +1,7 @@
 package events
 
 import (
-	"log"
-
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
@@ -12,9 +11,9 @@ func HandleKernelDroppedPacket(dnsLayer gopacket.Layer, isIpv4, isUdp bool, prot
 	switch protocol {
 	case "DNS":
 		dnsPacket := dnsLayer.(*layers.DNS)
-		log.Println("the malicious packet found in kernel redirecetd for monitoring is ", dnsPacket)
+		utils.Log("the malicious packet found in kernel redirecetd for monitoring is ", dnsPacket)
 	default:
-		log.Println("The Protocol not supported for threat streaming of teh message")
+		utils.Log("The Protocol not supported for threat streaming of teh message")
 	}
 	if dnsLayer != nil {
 	}

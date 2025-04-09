@@ -138,7 +138,6 @@ func UnblockDomain(w http.ResponseWriter, r *http.Request) {
 	if len(sld) >= 0 && len(sld) <= (1<<8)-1 {
 		// unblock the domain both over ingress and egress routes
 		if strings.Count(strings.TrimSpace(sld), ".") != 1 {
-			log.Println()
 			errResponse("Please provide a SLD and not TLD or an FQDN with multiple labels ...")
 			return
 		}

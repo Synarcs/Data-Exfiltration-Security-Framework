@@ -1,6 +1,8 @@
 package events
 
-import "log"
+import (
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+)
 
 // lower protocol packet information
 type DnsEvent struct {
@@ -14,8 +16,8 @@ type DnsEvent struct {
 }
 
 func PrettyPrintMaliciousDNSEvent(ev *DnsEvent) {
-	log.Println("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer")
-	log.Printf("\n Dest Port :: %d \n Src Port :: %d \n DNS Query ID :: %d \n Process Id :: %d \n Thread Id :: %d", ev.DstPort,
+	utils.Log("Potential DNS tunnel from kernel detected, polled from kernel non standard port tunnel transfer")
+	utils.Logger.Printf("\n Dest Port :: %d \n Src Port :: %d \n DNS Query ID :: %d \n Process Id :: %d \n Thread Id :: %d", ev.DstPort,
 		ev.SrcPort, ev.DnsTransactionId, ev.ProcessId, ev.ThreadId)
 }
 

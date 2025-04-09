@@ -243,7 +243,7 @@ func GetKernelRelease() (string, error) {
 func GenerateUniqueConsumerGroupId() string {
 	var rd []byte = make([]byte, 6)
 	if _, err := rand.Read(rd); err != nil {
-		log.Println("Error generating the unique consumer group id ", err.Error())
+		Logger.Info("Error generating the unique consumer group id ", err.Error())
 		return ""
 	}
 	return hex.EncodeToString(rd)
@@ -252,7 +252,7 @@ func GenerateUniqueConsumerGroupId() string {
 func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 	release, err := GetKernelRelease()
 	if err != nil {
-		log.Println("Error getting the kernel release version ", err.Error())
+		Logger.Info("Error getting the kernel release version ", err.Error())
 		return false
 	}
 

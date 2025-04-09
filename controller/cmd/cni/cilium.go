@@ -2,7 +2,6 @@ package cni
 
 import (
 	"context"
-	"log"
 
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/k8s"
@@ -31,7 +30,7 @@ type CiliumNetworkPolicy struct {
 
 func NewCiliunNetworkPolicy(clientSet *k8s.K8sClientSet) *CiliumNetworkPolicy {
 	if clientSet == nil {
-		log.Println("the required clientset to target K8s cluster is not provided")
+		utils.Log("the required clientset to target K8s cluster is not provided")
 	}
 
 	return &CiliumNetworkPolicy{
@@ -75,7 +74,7 @@ func (cni *CiliumNetworkPolicy) CreateL3NetworkPolicy(ctx context.Context, l3fil
 	for _, netPool := range netFilters.Items {
 		if len(netPool.Spec.Egress) > 0 {
 			for _, egressFilter := range netPool.Spec.Egress {
-				log.Println(egressFilter.ToFQDNs)
+				utils.Log(egressFilter.ToFQDNs)
 			}
 		}
 	}

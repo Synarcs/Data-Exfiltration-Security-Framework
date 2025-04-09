@@ -5,11 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -33,7 +33,7 @@ func exfil_client() {
 		TotalLength: 10,
 	})
 	if err != nil {
-		log.Println(err)
+		utils.Log(err)
 	}
 
 	var reader chan os.Signal = make(chan os.Signal)
@@ -53,11 +53,11 @@ func exfil_client() {
 				break
 			}
 			if err != nil {
-				log.Println("error receive froms erver side stream ", err)
+				utils.Log("error receive froms erver side stream ", err)
 				return
 			}
 			if val != nil {
-				log.Println(val.Domain, val.Tld)
+				utils.Log(val.Domain, val.Tld)
 			}
 			fmt.Println(val.Status)
 		}

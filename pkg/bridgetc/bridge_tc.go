@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/crypto"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -29,13 +28,13 @@ type BridgeTCFilters struct {
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
 
 	for _, link := range btc.Interfaces.BridgeLinks {
-		log.Println("Attaching TC qdisc to the interface ", link.Attrs().Name)
+		utils.Log("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
 		if err != nil {
 			panic(err.Error())
 		}
 
-		log.Println("Attaching a qdisc handler for the bridge")
+		utils.Log("Attaching a qdisc handler for the bridge")
 		qdisc_clsact := &netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,
@@ -72,7 +71,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 }
 
 func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, isEgress bool) {
-	log.Println("Attaching the netfilter hook in kernel for ingress bridge PreRouting traffic")
+	utils.Log("Attaching the netfilter hook in kernel for ingress bridge PreRouting traffic")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
@@ -81,7 +80,7 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 	handler, err := utils.ReadEbpfFromSpec(ctx, utils.NF_EGRESS_BRIDGE_NETIFACE_INT)
 
 	if errors.Is(ctx.Err(), context.Canceled) {
-		log.Println("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
+		utils.Log("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
 		return
 	}
 
@@ -119,12 +118,12 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 	defer spec.Close()
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
-		log.Println("Error attaching the clsact bpf qdisc for netdev")
+		utils.Log("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
-		log.Println("Error attaching the clsact bpf qdisc for netdev")
+		utils.Log("Error attaching the clsact bpf qdisc for netdev")
 		panic(err.Error())
 	}
 
@@ -145,7 +144,7 @@ func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) er
 			},
 		})
 		if err != nil {
-			log.Println("No Matching clsact desc found to delete")
+			utils.Log("No Matching clsact desc found to delete")
 			return err
 		}
 	}

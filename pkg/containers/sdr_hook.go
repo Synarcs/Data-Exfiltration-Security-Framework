@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/containers/sock"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 type MutationWebHook struct {
@@ -91,10 +91,10 @@ func (m *MutationWebHook) InitMutationServer(opts ...interface{}) {
 			},
 		}
 
-		log.Println("Starting the Mutation Webhook Server on port ", m.Port)
+		utils.Log("Starting the Mutation Webhook Server on port ", m.Port)
 
 		if err := server.ListenAndServe(); err != nil {
-			log.Println("Error starting the mutation server")
+			utils.Log("Error starting the mutation server")
 			panic(err.Error())
 		}
 	}()

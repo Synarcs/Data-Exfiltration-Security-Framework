@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"golang.org/x/sys/unix"
 )
 
@@ -22,9 +23,9 @@ func VerifyKeyRinggenerated() (string, error) {
 
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Println("File does not exist")
+			utils.Log("File does not exist")
 		} else {
-			log.Println("Runtime permission error please check the file stats and permission", err)
+			utils.Log("Runtime permission error please check the file stats and permission", err)
 		}
 		return "", err
 	}
@@ -38,7 +39,7 @@ const (
 )
 
 func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
-	log.Println("Configuring the kernel keyring for all prog verification in kernel ")
+	utils.Log("Configuring the kernel keyring for all prog verification in kernel ")
 
 	if DUMP_CA_LSM {
 		VerifyKeyRinggenerated()
@@ -50,7 +51,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 		log.Fatalf("Failed to create new session keyring: %v", err)
 	}
 
-	log.Printf("Created session keyring with ID: %d", sessionID)
+	utils.Logger.Printf("Created session keyring with ID: %d", sessionID)
 
 	if err != nil {
 		return err
@@ -58,7 +59,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 
 	val := config.Cert.Raw
 
-	log.Println("the size of the keyring Der file for encrypt x509 cert is ", val[:1], len(val))
+	utils.Log("the size of the keyring Der file for encrypt x509 cert is ", val[:1], len(val))
 
 	keyDesc := ".ebpf:signing:x509"
 
@@ -67,24 +68,24 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	if err != nil {
 		log.Fatalf("Failed to add key: %v", err)
 	}
-	log.Printf("Root key added with ID: %d", keyID)
+	utils.Logger.Printf("Root key added with ID: %d", keyID)
 
 	// Create a new keyring in the session keyring
 	keyringID, err := unix.AddKey("keyring", "_ebpf", nil, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
 		log.Fatalf("Failed to create keyring: %v", err)
 	}
-	log.Printf("Created eBPF prog signer keyring with ID: %d\n", keyringID)
+	utils.Logger.Printf("Created eBPF prog signer keyring with ID: %d\n", keyringID)
 
 	// Link the key to the keyring one used by the userspace laoder, and second via the kernel BPF LSM hooks before all the kernel eBPF hooks are injected inside kernell network stack, raw tracepoint and kprobes
 	ret, err := unix.KeyctlInt(unix.KEYCTL_LINK, keyID, keyringID, 0, 0)
 	if err != nil {
-		log.Fatalf("Failed to link key: %v", err)
+		utils.Logger.Fatalf("Failed to link key: %v", err)
 	}
 	if ret < 0 {
-		log.Fatalf("Failed to link key: %v", err)
+		utils.Logger.Fatalf("Failed to link key: %v", err)
 	}
-	fmt.Printf("Linked key %d to keyring %d\n", keyID, keyringID)
+	utils.Logger.Printf("Linked key %d to keyring %d\n", keyID, keyringID)
 	return nil
 }
 
@@ -101,18 +102,18 @@ func CleanupKernelKeyRing() error {
 		// Found the keyring, clear it first (removes all keys inside)
 		_, err = unix.KeyctlInt(unix.KEYCTL_CLEAR, ebpfKeyringID, 0, 0, 0)
 		if err != nil {
-			log.Printf("Warning: failed to clear _ebpf keyring: %v", err)
+			utils.Logger.Printf("Warning: failed to clear _ebpf keyring: %v", err)
 		}
 
 		// Unlink the keyring from session
 		_, err = unix.KeyctlInt(unix.KEYCTL_UNLINK, ebpfKeyringID, sessionID, 0, 0)
 		if err != nil {
-			log.Printf("Warning: failed to unlink _ebpf keyring: %v", err)
+			utils.Logger.Printf("Warning: failed to unlink _ebpf keyring: %v", err)
 		}
 
-		log.Println("Successfully cleaned up ebpfKeyringID session keyring", ebpfKeyringID)
+		utils.Log("Successfully cleaned up ebpfKeyringID session keyring", ebpfKeyringID)
 	} else {
-		log.Println("keyring not found for ebpf session keyring")
+		utils.Log("keyring not found for ebpf session keyring")
 	}
 
 	// Find and revoke the asymmetric key
@@ -121,17 +122,17 @@ func CleanupKernelKeyRing() error {
 		// Revoke the key for the parent sign
 		_, err = unix.KeyctlInt(unix.KEYCTL_REVOKE, rootKeyId, 0, 0, 0)
 		if err != nil {
-			log.Printf("Warning: failed to revoke key: %v", err)
+			utils.Logger.Printf("Warning: failed to revoke key: %v", err)
 		}
 
 		// Unlink the key from session
 		_, err = unix.KeyctlInt(unix.KEYCTL_UNLINK, rootKeyId, sessionID, 0, 0)
 		if err != nil {
-			log.Printf("Warning: failed to unlink key: %v", err)
+			utils.Logger.Printf("Warning: failed to unlink key: %v", err)
 		}
-		log.Println("Successfully cleaned up root session keyring", rootKeyId)
+		utils.Log("Successfully cleaned up root session keyring", rootKeyId)
 	} else {
-		log.Println("key not found for root session keyring")
+		utils.Log("key not found for root session keyring")
 	}
 
 	// Finally, clear the session keyring (removes any remaining items)
@@ -140,7 +141,7 @@ func CleanupKernelKeyRing() error {
 		return fmt.Errorf("failed to clear session keyring: %v", err)
 	}
 
-	log.Println("Successfully cleaned up kernel session keyring", sessionID)
+	utils.Log("Successfully cleaned up kernel session keyring", sessionID)
 	return nil
 }
 

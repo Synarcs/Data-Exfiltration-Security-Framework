@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"time"
 
@@ -98,7 +97,7 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 	// configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
 
 	if configMapIpv4 == nil {
-		log.Println("Kernel is configured with l3 netpools for egress TC filter right now, please ensure L3 Netpool filter is enabled")
+		utils.Log("Kernel is configured with l3 netpools for egress TC filter right now, please ensure L3 Netpool filter is enabled")
 		return
 	}
 
@@ -107,11 +106,11 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 		// convert to network order
 		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
 		if _, fd := consumer.L3NodeFilterCache.Get(remoteIpAddressInferedMaliciousController); !fd {
-			log.Println("Updating the malicious l3 filter in kernel ", utils.BigEndianToIPv4(ipv4BigEndianAddress))
+			utils.Log("Updating the malicious l3 filter in kernel ", utils.BigEndianToIPv4(ipv4BigEndianAddress))
 			consumer.L3NodeFilterCache.Add(remoteIpAddressInferedMaliciousController, ipv4BigEndianAddress)
 			if err := configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny); err != nil {
 				if !errors.Is(err, ebpf.ErrKeyExist) {
-					log.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
+					utils.Logger.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
 				}
 			}
 		}
@@ -144,8 +143,8 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					}
 
 					if utils.DEBUG {
-						log.Println("Consuming from the stream threat topic ", STREAM_THREAT_TOPIC_INFER)
-						log.Println("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
+						utils.Log("Consuming from the stream threat topic ", STREAM_THREAT_TOPIC_INFER)
+						utils.Log("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
 							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains), statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 					}
 
@@ -168,10 +167,10 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 							// inject l3 address for remote c2 address to block packets for both egress and ingress TC, only inject if not running orchestrated workloads and for purely bare-metal environments
 							for _, nodeAddress := range statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains {
 								if net.ParseIP(nodeAddress).To4() != nil {
-									log.Println("Received a dynamic controller aware blacklist ipv4 l3 address to be injected for filtering from skb in tc egress and ingress", net.ParseIP(nodeAddress).To4().String())
+									utils.Log("Received a dynamic controller aware blacklist ipv4 l3 address to be injected for filtering from skb in tc egress and ingress", net.ParseIP(nodeAddress).To4().String())
 								} else {
 									if net.ParseIP(nodeAddress).To16() == nil {
-										log.Println("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
+										utils.Log("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
 									}
 								}
 							}
@@ -220,7 +219,7 @@ func (c *StreamConsumer) CloseConsumer() error {
 			continue
 		}
 		if err := consumer.Close(); err != nil {
-			log.Println("Error closing consumer ", err.Error())
+			utils.Log("Error closing consumer ", err.Error())
 		}
 	}
 	return nil

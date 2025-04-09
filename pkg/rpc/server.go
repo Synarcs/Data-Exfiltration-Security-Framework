@@ -2,11 +2,11 @@ package rpc
 
 import (
 	"context"
-	"log"
 	"net"
 	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,13 +49,13 @@ func (rpc *NodeAgentService) StartAgentStreamServer() {
 		panic(err.Error())
 	}
 
-	log.Println("Node Agent RPC Server Listen on POrt :: ", 3200)
+	utils.Log("Node Agent RPC Server Listen on POrt :: ", 3200)
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
 	rpc.Server = s
 	pb.RegisterNodeAgentServiceServer(s, &NodeAgentService{})
 	if err := s.Serve(list); err != nil {
-		log.Println(err.Error())
+		utils.Log(err.Error())
 		panic(err.Error())
 	}
 

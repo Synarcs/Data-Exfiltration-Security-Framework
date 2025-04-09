@@ -195,7 +195,7 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 			mrsh, _ := json.Marshal(features)
 
 			if utils.DEBUG {
-				log.Println(mrsh)
+				utils.Log(mrsh)
 			}
 		}
 	}
@@ -320,10 +320,10 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 	}
 
 	if !utils.DEBUG && isEgress {
-		// log.Println("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
+		// utils.Log("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
 		for _, feature := range features {
 			mrsh, _ := json.Marshal(feature)
-			fmt.Println(string(mrsh))
+			log.Println(string(mrsh))
 		}
 	}
 

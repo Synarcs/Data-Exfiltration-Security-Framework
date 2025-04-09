@@ -60,7 +60,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 	case "DNS":
 		dnsFeatures, ok := features.([]DNSFeatures)
 		if !ok {
-			log.Panic("The Required features needs to adher to the protocol definition")
+			utils.Logger.Error("The Required features needs to adher to the protocol definition")
 		}
 
 		// calls the python unix socket for inferenceing against the onnx loaded deep learning model
@@ -94,7 +94,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			}
 			resp, err := client.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
 			if err != nil {
-				log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 				return false, err
 			}
 
@@ -103,7 +103,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			payload, err := io.ReadAll(resp.Body)
 
 			if err != nil {
-				log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 				return false, err
 			}
 
@@ -111,12 +111,12 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 			err = json.Unmarshal(payload, &inferenceResponse)
 
 			if err != nil {
-				log.Printf("Error while unmarshalling the onnx inference response %v", err)
+				utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
 				return false, err
 			}
 
 			if utils.DEBUG {
-				log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
+				utils.Log("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
 			}
 
 			if inferenceResponse.ThreatType {
@@ -134,18 +134,18 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING {
 			eval, err := processRemoteUnixInference(featureVectorsFloat, direction)
 			if err != nil {
-				log.Printf("Errpr in processing inference from remote unix socket  %v", err)
+				utils.Logger.Printf("Errpr in processing inference from remote unix socket  %v", err)
 				return false
 			}
 			return eval
 		} else {
 			if direction && utils.DEBUG {
-				log.Println("The inference model is not required for the dns features due to the benign tld host domain")
+				utils.Log("The inference model is not required for the dns features due to the benign tld host domain")
 			}
 			return true
 		}
 	default:
-		log.Println("the protocol not supported or missing the onnx model for evaluation")
+		utils.Log("the protocol not supported or missing the onnx model for evaluation")
 		return false
 	}
 }

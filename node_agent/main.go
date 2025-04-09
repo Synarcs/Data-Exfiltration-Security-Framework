@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -81,7 +80,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
 	} // not kernel eBPF hook but internally relies over kernel conntrack layer for cleaning nf_netlink socket
 
 	if config.CliFlag {
-		log.Println("Cleaning the mounted unix socket")
+		utils.Log("Cleaning the mounted unix socket")
 		cleanHooks.cliSock.CloseChan <- true
 	}
 
@@ -114,14 +113,14 @@ Init all the kernel crypto dir ephemeral to hold keyrings and signatures to secu
 func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 
 	if err := crypto.CleanOlderCrypoDir(); err != nil {
-		log.Println("Error cleaning the older crypto dir, the node agent for LSM in kernel must boot with new ephemeral keys")
+		utils.Log("Error cleaning the older crypto dir, the node agent for LSM in kernel must boot with new ephemeral keys")
 		return nil, err
 	}
 
 	if agentCryptoConfig, err := crypto.GenerateBPFCert(); err != nil {
 		return nil, err
 	} else {
-		log.Println("Configuring the kernel keyring for the node agent")
+		utils.Log("Configuring the kernel keyring for the node agent")
 
 		if err := crypto.AddKernelKeyRing(agentCryptoConfig); err != nil {
 			return nil, err
@@ -133,12 +132,12 @@ func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 	sessionIdInjectedRing, err := crypto.GetKeyRingSessionId()
 	if err != nil {
-		log.Println("Error getting the kernel keyring session id", err.Error())
+		utils.Log("Error getting the kernel keyring session id", err.Error())
 		return nil, err
 	}
 
 	if utils.DEBUG {
-		log.Println("The keyring session found and is ", sessionIdInjectedRing)
+		utils.Log("The keyring session found and is ", sessionIdInjectedRing)
 	}
 
 	ebpfKeyringId, err := crypto.GetEbpFProgSignKeyringId()
@@ -147,7 +146,7 @@ func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 	}
 
 	if utils.DEBUG {
-		log.Println("The keyring session found for ebpf is ", ebpfKeyringId)
+		utils.Log("The keyring session found for ebpf is ", ebpfKeyringId)
 	}
 
 	rootKeyringId, err := crypto.GetRootKeyRingId()
@@ -156,7 +155,7 @@ func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 	}
 
 	if utils.DEBUG {
-		log.Println("The keyring session found for root is ", rootKeyringId)
+		utils.Log("The keyring session found for root is ", rootKeyringId)
 	}
 
 	return &crypto.KernelCryptoKeyRingIds{
@@ -168,8 +167,12 @@ func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 
 func main() {
 	runtime.LockOSThread()
+	ctx := context.Background()
+	ctx, agentCancelFunc := context.WithCancel(ctx)
+	utils.NewLogger(ctx)
+
 	var nodeAgentCliOptions conf.NodeAgentCliOptions
-	log.Println("The Node Agent Booted up with thte process Id", os.Getpid())
+	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
 	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
@@ -192,26 +195,26 @@ func main() {
 	}
 	flag.Parse()
 
-	ctx := context.Background()
-	ctx, agentCancelFunc := context.WithCancel(ctx)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
+
+	// configure the global logger
 
 	agentCryptoConfig, err := InitKernelCryptoHooks()
 	if err != nil {
-		log.Println("the Node agent cannot boot without crypto validation ", err.Error())
+		utils.Log("the Node agent cannot boot without crypto validation ", err.Error())
 		panic(err.Error())
 	}
 
 	_, err = PopulateInjectedKeyringMetaInfo()
 	if err != nil {
-		log.Println("Error populating the keyring meta info", err.Error())
+		utils.Log("Error populating the keyring meta info", err.Error())
 		panic(err.Error())
 	}
 	cryptoLsmProgHandler := crypto.NewCryptoBpfLsm(agentCryptoConfig)
 
 	// // inject the crypto lsm program in kernel for all ebpf prog verification
 	// if err := cryptoLsmProgHandler.InjectLsmProg(ctx); err != nil {
-	// 	log.Println("Error injecting the crypto lsm prog in kernel", err.Error())
+	// 	utils.Log("Error injecting the crypto lsm prog in kernel", err.Error())
 	// 	panic(err.Error())
 	// }
 
@@ -244,7 +247,7 @@ func main() {
 	}
 
 	if nodeAgentCliOptions.Sdr || nodeAgentCliOptions.Cni {
-		log.Println("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
+		utils.Log("The eBPF Node Agent for DNS security booted as a sidecar for Kubernetes POD for exfiltration security")
 		mutationHookService := containers.NewMutationWebHook(nodeAgentCliOptions.K8sControllerWebhookPort, ":")
 		mutationHookService.InitMutationServer()
 		// configure the k8s Admission mutation webhook to inject k8s eBPF DNS as a sidecar for all pods labelled as security required for eBPF node agent
@@ -257,12 +260,12 @@ func main() {
 	globalConfig := agentConfigLoader.GetAgentConfig()
 
 	if utils.DEBUG {
-		log.Println("The Node Agent booted with global config", agentConfigLoader.GetAgentConfig())
+		utils.Log("The Node Agent booted with global config", agentConfigLoader.GetAgentConfig())
 	}
 
 	cliSock := cli.NewRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
-		log.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
+		utils.Logger.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
 		go cliSock.NewNodeAgentUnixCLISocket()
 	}
 
@@ -283,7 +286,7 @@ func main() {
 	var term chan os.Signal = make(chan os.Signal, 1)
 
 	if err != nil {
-		log.Println("error loading the top domains", err)
+		utils.Log("error loading the top domains", err)
 		panic(err.Error())
 	}
 
@@ -300,18 +303,18 @@ func main() {
 	}
 
 	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {
-		log.Println("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+		utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 	}
 
 	if err := streamConsumer.NewStreamKafkaConsumer(ctx); err != nil {
-		log.Println("Error starting node agent data plane kafka consumer ", err.Error())
+		utils.Log("Error starting node agent data plane kafka consumer ", err.Error())
 	}
 
 	// load the model from onnx lib
 	// TODO: fix this remove garbage unwanted memory load for the model
 	model, err := onnx.NewRemoteInferenceSocket(topDomains)
 	if err != nil {
-		log.Println("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
+		utils.Log("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())
 	}
 
@@ -321,14 +324,14 @@ func main() {
 		hash, agentConfigLoader, cryptoLsmProgHandler)
 
 	if err != nil {
-		log.Println(err.Error())
+		utils.Log(err.Error())
 		panic(err.Error())
 	}
 
 	if globalConfig.EnhancedFeatures.Dns.EnableNxFloodPrevention {
 		xdpHandler := xdp.NewXdpHandler(&iface)
 		if err := xdpHandler.LinkXdp(); err != nil {
-			log.Printf("Error Attach the XDP to physical link %+v", err)
+			utils.Logger.Printf("Error Attach the XDP to physical link %+v", err)
 		}
 	}
 
@@ -342,7 +345,7 @@ func main() {
 	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
+	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan, nil)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := &bridgetc.BridgeTCFilters{
@@ -371,7 +374,7 @@ func main() {
 	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
 		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
 		if err := sockProgs.InjectKernelSockOps(ctx, utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
-			log.Println("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
+			utils.Log("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
 			globalErrorKernelHandlerChannel <- err
 		}
 	}
@@ -389,14 +392,14 @@ func main() {
 	go func() {
 		for range globalErrorKernelHandlerChannel {
 			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-				log.Printf("Error receieved in node agent global error chan closing ... %+v", err)
+				utils.Logger.Printf("Error receieved in node agent global error chan closing ... %+v", err)
 			}
 		}
 	}()
 
 	go func(tc *tcl.TCHandler) {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
-		log.Println("Loading the consumer for consuming thrat events update from control plane")
+		utils.Log("Loading the consumer for consuming thrat events update from control plane")
 		for range globalEBPFProgInjectChan[progs.TC_PROG] {
 			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog, &iface)
 			if err := streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx); err != nil {
@@ -420,16 +423,16 @@ func main() {
 			_, ingressErr := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
 			if egressErr != nil || ingressErr != nil {
 				if errors.Is(egressErr, os.ErrNotExist) {
-					log.Println("The Unix Local Unix Inference Socket is not available", egressErr.Error())
-					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
+					utils.Log("The Unix Local Unix Inference Socket is not available", egressErr.Error())
+					utils.Log("Gracefully shutting the Node agent and remove all kernel hooks")
 				} else if errors.Is(ingressErr, os.ErrNotExist) {
-					log.Println("The Unix Local Unix Inference Socket is not available", ingressErr.Error())
-					log.Println("Gracefully shutting the Node agent and remove all kernel hooks")
+					utils.Log("The Unix Local Unix Inference Socket is not available", ingressErr.Error())
+					utils.Log("Gracefully shutting the Node agent and remove all kernel hooks")
 				} else {
-					log.Println("The Remote Unix Socket FD is not healthy", err.Error())
+					utils.Log("The Remote Unix Socket FD is not healthy", err.Error())
 				}
 				if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-					log.Printf("Error cleaning the injected kernel hooks %+v", err)
+					utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
 				}
 				os.Exit(int(syscall.SIGTERM))
 			}
@@ -451,22 +454,22 @@ func main() {
 	if done {
 		switch sigType {
 		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
-			log.Println("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
+			utils.Log("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 		}
-		log.Println("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
+		utils.Log("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
 		agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
 		if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-			log.Printf("Error cleaning the injected kernel hooks %+v", err)
+			utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
 		}
 
 		agentCancelFunc()
 
 		if err := cryptoLsmProgHandler.RemoveCryptoLSMProgs(); err != nil {
-			log.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)
+			utils.Logger.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)
 		}
 
 		if err := crypto.CleanupKernelKeyRing(); err != nil {
-			log.Println("Error cleaning up the kernel keyring for custom signed keys", err.Error())
+			utils.Log("Error cleaning up the kernel keyring for custom signed keys", err.Error())
 		}
 
 		if crypto.DUMP_CA_LSM {
@@ -485,7 +488,7 @@ func main() {
 			cancelctx()
 		}
 
-		log.Println("Node agent gracefully shutdown successfully with root process id", os.Getpid())
+		utils.Log("Node agent gracefully shutdown successfully with root process id", os.Getpid())
 		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
 	}
 

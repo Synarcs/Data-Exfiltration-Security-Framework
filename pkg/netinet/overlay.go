@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
@@ -23,7 +24,7 @@ func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
 	link, err := netlink.LinkByName(veth)
 
 	if err != nil {
-		log.Printf("Failed to get link %s: %v", veth, err)
+		utils.Logger.Printf("Failed to get link %s: %v", veth, err)
 		return err
 	}
 

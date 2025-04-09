@@ -26,7 +26,7 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 	ingressClient, _, err := model.GetInferenceUnixClient(false)
 
 	if err != nil {
-		log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 		return err
 	}
 
@@ -37,30 +37,30 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 	}
 	resp, err := ingressClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
 	if err != nil {
-		log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 		return err
 	}
 	defer resp.Body.Close()
 	payload, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 		return err
 	}
 	var inferenceResponse model.InferenceResponseIngress
 	err = json.Unmarshal(payload, &inferenceResponse)
 
 	if err != nil {
-		log.Printf("Error while unmarshalling the onnx inference response %v", err)
+		utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
 		return err
 	}
 
 	if utils.DEBUG {
-		log.Println("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
+		utils.Log("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
 	}
 
 	for index, resp := range inferenceResponse.ThreatType {
 		if resp {
-			log.Println("raw feature for malicious payload is ::", rawFeatures[index])
+			utils.Log("raw feature for malicious payload is ::", rawFeatures[index])
 			utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
 			// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
 			// the same port as used for egrres will be used as src port for response from remote c2c malware

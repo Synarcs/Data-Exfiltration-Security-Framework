@@ -3,7 +3,6 @@ package netinet
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"os/exec"
 	"strings"
@@ -70,19 +69,19 @@ type NetIface struct {
 func (nf *NetIface) ReadInterfaces(containered bool) error {
 	links, err := netlink.LinkList()
 	if err != nil {
-		log.Println(err)
+		utils.Log(err)
 		return err
 	}
 	customLinks := make([]netlink.Link, 0)
 
 	for _, link := range links {
 		if link.Type() == "device" && !strings.Contains(link.Attrs().Name, "lo") {
-			log.Println("Physical links on the Node ", link.Attrs().Name, link.Type())
+			utils.Log("Physical links on the Node ", link.Attrs().Name, link.Type())
 			customLinks = append(customLinks, link)
 		}
 	}
 
-	log.Println("the custom link to process are ", customLinks)
+	utils.Log("the custom link to process are ", customLinks)
 	nf.Links = links
 	nf.GetVxlanLinks()
 	var hardwareInterfaces []netlink.Link
@@ -143,7 +142,7 @@ func (nf *NetIface) GetRootGateway() error {
 		}
 	}
 
-	log.Println("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
+	utils.Log("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
 	return nil
 }
 
@@ -170,7 +169,7 @@ func getRouterIPv6() string {
 	rm, _ := icmp.ParseMessage(58, rb[:n])
 
 	if rm.Type == ipv6.ICMPTypeRouterAdvertisement || rm.Type == ipv6.ICMPTypeCertificationPathSolicitation && !utils.DEBUG {
-		log.Printf("Router solicitation received from: %v", peer.String())
+		utils.Logger.Printf("Router solicitation received from: %v", peer.String())
 	}
 
 	return peer.String()
@@ -186,12 +185,12 @@ func (nf *NetIface) ReadRoutes() error {
 	for _, link := range nf.PhysicalLinks {
 		routes, err := netlink.RouteList(link, netlink.FAMILY_V4)
 		if err != nil {
-			log.Println(err)
+			utils.Log(err)
 			return err
 		}
 		addr, err := netlink.AddrList(link, netlink.FAMILY_V4)
 		if err != nil {
-			log.Println(err)
+			utils.Log(err)
 			return err
 		}
 
@@ -199,13 +198,13 @@ func (nf *NetIface) ReadRoutes() error {
 		// getRouterIPv6()
 		routesv6, err := netlink.RouteList(link, netlink.FAMILY_V6)
 		if err != nil {
-			log.Println(err)
+			utils.Log(err)
 			return err
 		}
 
 		addrv6, err := netlink.AddrList(link, netlink.FAMILY_V6)
 		if err != nil {
-			log.Println(err)
+			utils.Log(err)
 			return err
 		}
 
@@ -237,7 +236,7 @@ func (iface *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
 			}
 			if strings.Contains(flags.String(), "pointtopoint") {
 				// attach the ppp socket tc hooks inside kernel
-				log.Println("ppp socket detected attaching tc hooks", link.Attrs().Name, link.Attrs().Index)
+				utils.Log("ppp socket detected attaching tc hooks", link.Attrs().Name, link.Attrs().Index)
 				return link
 			}
 			iface.LinkMap[link.Attrs().Name] = true
@@ -254,7 +253,7 @@ func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 	for _, link := range links {
 		// for the kernel p2p2 encap via l2/l3 pair of tun/tap interfaces
 		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
-			log.Println("Found a tunnel link ", link.Attrs().Name, "  ", link.Attrs().MTU)
+			utils.Log("Found a tunnel link ", link.Attrs().Name, "  ", link.Attrs().MTU)
 			tunnelLinks = append(tunnelLinks, link)
 		}
 	}
@@ -276,7 +275,7 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 
 		if link.Attrs().Flags == net.FlagPointToPoint {
 			// an possible tunnelling interface for packet processing
-			log.Println("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
+			utils.Log("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
 			continue
 		} else {
 			// Exclude virtual interfaces (e.g., loopback, bridge, vlan, etc.)
@@ -307,7 +306,7 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 // physical interfaces are the host pair veth interface which attach to the bridge for l3 balancing l3 and l2 traffic for all pods in CNI subnet or docker ips on docker bridge
 func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.Link, []netlink.Link) {
 	containerVethPairInterface := make([]netlink.Link, 0)
-	log.Println("Reading net links for container environments via netlink sockets")
+	utils.Log("Reading net links for container environments via netlink sockets")
 	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
 	bridgeInterfaces := make([]netlink.Link, 0)
 
@@ -319,7 +318,7 @@ func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.
 		attrs := link.Attrs()
 		if link.Attrs().Flags == net.FlagPointToPoint { // (tun/tap ppp tunnels cannot be there inside containers or POID intern networking CIDR)
 			// an possible tunnelling interface for packet processing
-			log.Println("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
+			utils.Log("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
 			continue
 		} else {
 			isLoopbackType := attrs.EncapType == "loopback" ||
@@ -390,7 +389,7 @@ func (nf *NetIface) GetRootNamespace() (*netns.NsHandle, error) {
 
 	rootNs, err := netns.Get()
 	if err != nil {
-		log.Println("[x] Error Getting the Root Namespace")
+		utils.Log("[x] Error Getting the Root Namespace")
 		return nil, err
 	}
 
@@ -407,7 +406,7 @@ func (nf *NetIface) ListRootnetlinkNetworkNamespaces() map[string]int {
 
 	err := cmd.Run()
 	if err != nil {
-		log.Println("The Node Agent lack permission to process NETLINK socket for ns")
+		utils.Log("The Node Agent lack permission to process NETLINK socket for ns")
 		panic(err.Error())
 	}
 
@@ -456,13 +455,13 @@ func (nf *NetIface) InitconnTrackSockHandles() error {
 	nsHandles, err := nf.GetAllNetworkNamespaces()
 
 	if err != nil {
-		log.Panicln("Error getting tall the netwrk Handles ....")
+		utils.Logger.Error("Error getting tall the netwrk Handles ....")
 	}
 	var conntracknsHandles map[int]conntrack.ConntrackSock = make(map[int]conntrack.ConntrackSock)
 	for _, id := range nsHandles {
 		connTrackSock, err := conntrack.NewContrackSock(id) // init and ensure the conntrack kernel entries are cleaned for the root ns
 		if err != nil {
-			log.Printf("Error getting the NetLink socket for cleaning dangling conntrack entries for Root Network Namespace %v", connTrackSock)
+			utils.Logger.Printf("Error getting the NetLink socket for cleaning dangling conntrack entries for Root Network Namespace %v", connTrackSock)
 			return err
 		}
 		conntracknsHandles[id] = *connTrackSock
@@ -507,24 +506,24 @@ func (nf *NetIface) GetRootNamespacePcapHandleDuration(time time.Duration) (*pca
 }
 
 func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
-	log.Println("Creating XDP socket fd to send packet")
+	utils.Log("Creating XDP socket fd to send packet")
 	_, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
-		log.Println("Error in opening a raw socket fd to the bridge socket")
+		utils.Log("Error in opening a raw socket fd to the bridge socket")
 		return nil, err
 	}
 
 	// use the egress transfer queue to send the packet on the physical port inside kernel to make directly reach the interface bypass the kernel network stack
 	txQueueId, err := GetCurrentTXQueues(nf.PhysicalLinks[0].Attrs().Name)
 	if err != nil {
-		log.Println("Error in getting the tx TX queue id")
+		utils.Log("Error in getting the tx TX queue id")
 		return nil, err
 	}
-	log.Println("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
+	utils.Log("the tx queue id is ", txQueueId, nf.PhysicalLinks[0].Attrs().Index)
 
 	xdpSock, err := xdp.NewSocket(nf.PhysicalLinks[0].Attrs().Index, txQueueId, nil)
 	if err != nil {
-		log.Println("Error in binding the AF_XDP Socket to TX Queues")
+		utils.Log("Error in binding the AF_XDP Socket to TX Queues")
 		return nil, err
 	}
 
@@ -532,10 +531,10 @@ func (nf *NetIface) GetRootNamespaceRawSocketFdXDP() (*xdp.Socket, error) {
 }
 
 func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
-	log.Println("Creating AF_PACKET socket fd to send packet")
+	utils.Log("Creating AF_PACKET socket fd to send packet")
 	fd, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, syscall.ETH_P_ALL)
 	if err != nil {
-		log.Println("Error in opening a raw socket fd to the bridge socket")
+		utils.Log("Error in opening a raw socket fd to the bridge socket")
 		return nil, err
 	}
 

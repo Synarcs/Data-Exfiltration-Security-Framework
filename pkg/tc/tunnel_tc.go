@@ -121,13 +121,13 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 
 	// remove the proc info from the thrid map for kernel re init pack flow
 	if err := malProcMap.Delete(&procId); err != nil {
-		log.Println(err.Error()) // no need to process this as this may never happen since user space has guard rails for mutex in uapi
+		utils.Log(err.Error()) // no need to process this as this may never happen since user space has guard rails for mutex in uapi
 	}
 
 	// remove from map 2 deepScanCloneProcPortMap (a process port and process id) can never collide over each clock cycle from CPU
 	if err := deepScanCloneProcPortMap.Delete(&nsp_map_dport); err != nil {
 		if utils.DEBUG {
-			log.Println(err.Error()) // EONET does not care for removel
+			utils.Log(err.Error()) // EONET does not care for removel
 		}
 	}
 }
@@ -178,7 +178,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 		}
 	} else {
 		if utils.DEBUG {
-			log.Println("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
+			utils.Log("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
 		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			var sigKillStdoutBuffer bytes.Buffer
@@ -186,9 +186,9 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))
 			cmd.Stderr = &sigKillStdoutBuffer
 			if err := cmd.Run(); err != nil {
-				log.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, sigKillStdoutBuffer)
+				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, sigKillStdoutBuffer)
 			}
-			log.Printf("The exfiltration was stopped send sigkill to the process %d was killed successfully", mapField.ProcessId)
+			utils.Logger.Printf("The exfiltration was stopped send sigkill to the process %d was killed successfully", mapField.ProcessId)
 			evTime := maliciousExfilProcessAliveTime[mapField.ProcessId]
 			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)
 
@@ -222,7 +222,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 		if cloneredirectMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectMap.Lookup(&redirCountKey, &currCt); err != nil {
-				log.Printf("Error while reading the clone redirect count from the map %+v", err)
+				utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionCountEvent](events.PacketDPICloneRedirectionCountEvent{
 				KernelCloneRedirectPacketCount: currCt,
@@ -234,7 +234,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 		if cloneredirectDropMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectDropMap.Lookup(&redirCountKey, &currCt); err != nil {
-				log.Printf("Error while reading the clone redirect count from the map %+v", err)
+				utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionDropCountEvent](events.PacketDPICloneRedirectionDropCountEvent{
 				KernelCloneRedirectPacketDropCount: currCt,
@@ -251,14 +251,14 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	handler, err := tun.IfaceHandler.GetBridgePcapHandleClone()
 
 	if err != nil {
-		log.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_RAW_NETLINK_BRIDGE_DPI)
+		utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_RAW_NETLINK_BRIDGE_DPI)
 		tun.GlobalKernelErrorChannel <- err
 	}
 
 	defer handler.Close()
 
 	if err := handler.SetBPFFilter("udp or tcp"); err != nil {
-		log.Println("Error while setting the bpf filter")
+		utils.Log("Error while setting the bpf filter")
 		tun.GlobalKernelErrorChannel <- err
 	}
 
@@ -273,7 +273,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 				if !ok {
 					return
 				}
-				log.Println("Received an error while sniffing the packets over the veth bridge in kernel redirected non standard packet clone", msg)
+				utils.Log("Received an error while sniffing the packets over the veth bridge in kernel redirected non standard packet clone", msg)
 			default:
 				time.Sleep(time.Second)
 			}
@@ -292,7 +292,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	// add more eBPF kernel maps if multiple traffic DPI for xfil events is required
 	for _, ebpfMap := range tunnelTrafficEBPFMaps {
 		if ebpfMap == nil {
-			log.Println("Error the map parsed for tunneled c2c other socket is null")
+			utils.Log("Error the map parsed for tunneled c2c other socket is null")
 			sniffTunnelErr <- struct {
 				Err string
 			}{
@@ -323,27 +323,27 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 			return nil
 		default:
 			if utils.DEBUG {
-				log.Println("polling the ring buffer", "using th map", ebpfEvents)
+				utils.Log("polling the ring buffer", "using th map", ebpfEvents)
 			}
 			record, err := ringBuffer.Read()
 			if err != nil {
 				if errors.Is(err, ringbuf.ErrClosed) {
 					return err
 				}
-				log.Printf("Error reading ring buffer: %s", err)
+				utils.Logger.Printf("Error reading ring buffer: %s", err)
 				return err
 			}
 
 			var event events.DnsEvent
 			if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-				log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
+				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 				if err != nil {
 					log.Fatalf("Failed to parse event: %v", err)
 					return err
 				}
 			} else {
-				log.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
+				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
 				if err != nil {
 					log.Fatalf("Failed to parse event: %v", err)
@@ -355,7 +355,7 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 			if event.ProcessId != 0 && event.ThreadId != 0 {
 				events.PrettyPrintMaliciousDNSEvent(&event)
 			} else {
-				log.Println("Potential DNS tunnel from kernel detected", event)
+				utils.Log("Potential DNS tunnel from kernel detected", event)
 			}
 		}
 	}
@@ -411,7 +411,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			client, conn, err := model.GetInferenceUnixClient(true)
 
 			if err != nil {
-				log.Println("Error Gettting report inference socket for inference")
+				utils.Log("Error Gettting report inference socket for inference")
 
 			}
 			defer conn.Close()
@@ -428,7 +428,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 
 			resp, err := client.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
 			if err != nil {
-				log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 				return err
 			}
 			defer resp.Body.Close()
@@ -436,7 +436,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			payload, err := io.ReadAll(resp.Body)
 
 			if err != nil {
-				log.Printf("Error while evaluating the onnx model for the dns features %v", err)
+				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
 				return err
 			}
 
@@ -444,12 +444,12 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			err = json.Unmarshal(payload, &inferenceResponse)
 
 			if err != nil {
-				log.Printf("Error while unmarshalling the onnx inference response %v", err)
+				utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
 				return err
 			}
 
 			if !utils.DEBUG {
-				log.Println("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
+				utils.Log("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
 			}
 
 			// detected malicious exfiltrated object
@@ -483,7 +483,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 					utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 				}
 
-				log.Println("Updating the process as it was detected carrying out breach ", ev)
+				utils.Log("Updating the process as it was detected carrying out breach ", ev)
 				tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 
 				go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{
@@ -504,7 +504,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 		}
 	} else {
 		// some section are already scanned and found to be malicious from different process or same process from user-space over the SLD domain exfiltrating date
-		log.Println("SLD domain scanned to malicious not re scanning with remote unix inference server", features)
+		utils.Log("SLD domain scanned to malicious not re scanning with remote unix inference server", features)
 		for _, feature := range features {
 			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
@@ -536,7 +536,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
 		}
 
-		log.Println("Updating the process as it was detected carrying out breach ", ev)
+		utils.Log("Updating the process as it was detected carrying out breach ", ev)
 		tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 
 		if ev != nil {
@@ -592,7 +592,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			}
 
 			if utils.DEBUG {
-				log.Println("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
+				utils.Log("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
 			}
 			return true
 		} else {
@@ -602,7 +602,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			}
 
 			if utils.DEBUG {
-				log.Println("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
+				utils.Log("found an encapsulated kernel dns packet the service VNI transport ID is ", remoteDestVniTransportID)
 			}
 			return true
 		}
@@ -613,7 +613,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 	packetTransportLayer := packet.TransportLayer()
 	if packetTransportLayer == nil {
 		if utils.DEBUG {
-			log.Println("the packet does not have a transport layer")
+			utils.Log("the packet does not have a transport layer")
 		}
 		// runtime chekc although this would never ever happen since the l4 is always checked in kernel
 		// not event a dns packet
@@ -628,7 +628,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 	transportPayload := packetTransportLayer.LayerPayload()
 	if len(transportPayload) < 12 {
 		if utils.DEBUG {
-			log.Println("error while parsing the packet from kernel has header lenght to small")
+			utils.Log("error while parsing the packet from kernel has header lenght to small")
 		}
 		// the kernel already have marked this as 0 no need to process anything
 		// cannot be a dns packet
@@ -640,7 +640,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 	err := dns.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback)
 	if err != nil {
 		if utils.DEBUG {
-			log.Println("error while parsing the packet from kernel")
+			utils.Log("error while parsing the packet from kernel")
 		}
 		return // not a dns packet
 	}
@@ -659,13 +659,13 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			srcPortGenTypeValue)
 
 		if err != nil {
-			log.Println("Error in deleting the map for this kernel clone redirected suspicious  packet", err)
+			utils.Log("Error in deleting the map for this kernel clone redirected suspicious  packet", err)
 		}
 
 		// check for vxlan encap over the udp frame
 		if isPackEncapsulated(dns, transportPayload) {
 			if utils.DEBUG {
-				log.Println("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
+				utils.Log("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
 			}
 			tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
 			return
@@ -686,7 +686,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 		// standard go packet does not parse any NB query records
 		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(features, destPortGenTypeValue, srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel); err != nil {
 			if utils.DEBUG {
-				log.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
+				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 			}
 			errorChannel <- struct {
 				Err string
@@ -701,12 +701,12 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 		var srcPortGenType uint16 = uint16(udpPack.(*layers.UDP).SrcPort)
 		// kernel will take care to process and set the packet type when kernel redirect iva link clone to the userspace
 		var event events.ExfilRawPacketMirror
-		log.Println("the dest port for packet transfer is ", uint16(destPort))
+		utils.Log("the dest port for packet transfer is ", uint16(destPort))
 
 		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT], srcPortGenType)
 
 		if err != nil {
-			log.Println("Error in deleting the map for this benign found packet", err)
+			utils.Log("Error in deleting the map for this benign found packet", err)
 		}
 
 		// verify kernel support task comm to access kernel task struct over kernel TC layer
@@ -725,7 +725,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 
 		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(features, destPortGenType, srcPortGenType, &event, ev, errorChannel); err != nil {
 			if utils.DEBUG {
-				log.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
+				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 
 				errorChannel <- struct {
 					Err string

@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
 	"github.com/cilium/ebpf/link"
@@ -108,10 +109,10 @@ func generateSelfSignedCert() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 
 	if DUMP_CA_LSM {
 		if err := savePrivateKeyToPEM(privateKey, PRIVATE_KEY); err != nil {
-			log.Println("Error saving private key:", err)
+			utils.Log("Error saving private key:", err)
 		}
 		if err := savePEMCert(cert, CERT_FILE); err != nil {
-			log.Println("Error saving certificate:", err)
+			utils.Log("Error saving certificate:", err)
 		}
 	}
 
@@ -165,8 +166,8 @@ func GenerateBPFCert() (*NodeAgentCryptoConfig, error) {
 		return nil, err
 	}
 
-	log.Println("Generated BPF Signing Certificate and stored in", KEY_DIR)
-	log.Println("Generate global cert for node agent with injected in kernel keyring use to sign ebpf programs with signature", hex.EncodeToString(cert.Signature))
+	utils.Log("Generated BPF Signing Certificate and stored in", KEY_DIR)
+	utils.Log("Generate global cert for node agent with injected in kernel keyring use to sign ebpf programs with signature", hex.EncodeToString(cert.Signature))
 
 	return &NodeAgentCryptoConfig{
 		Cert:    cert,
@@ -235,7 +236,7 @@ func (lsm *CryptoBpfLsm) computeOriginalSignature(data []byte, org *CompiledProg
 	org.SigLen = uint32(len(p7Bytes))
 
 	if err := verifyPkcs7Signature(p7Bytes, data); err != nil {
-		log.Println("Signature verification failed")
+		utils.Log("Signature verification failed")
 		return err
 	}
 
@@ -261,7 +262,7 @@ func (lsm *CryptoBpfLsm) computeModifiedSignature(instructions asm.Instructions,
 	modSig.SigLen = uint32(len(p7Bytes))
 
 	if err := verifyPkcs7Signature(p7Bytes, buff.Bytes()); err != nil {
-		log.Println("Signature verification failed")
+		utils.Log("Signature verification failed")
 		return err
 	}
 
@@ -297,15 +298,15 @@ func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 	org.DataLen = uint32(len(ebpfProgRaw))
 
 	if err := lsm.computeOriginalSignature(org.Data[:org.DataLen], &org); err != nil {
-		log.Println("Error computing original signature or sig verification failed for prog :", ebpfProg.Name, err)
+		utils.Log("Error computing original signature or sig verification failed for prog :", ebpfProg.Name, err)
 		return err
 	}
 
-	log.Println("Populating keyring map with sign key ring id")
+	utils.Log("Populating keyring map with sign key ring id")
 	var crypto_kernel_const uint32 = 0
 
 	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_KEYRING_MAP].Put(&crypto_kernel_const, &keyringconfigInfo.EbpfSignKeyringId); err != nil {
-		log.Println("Error writing to keyring map", err)
+		utils.Log("Error writing to keyring map", err)
 		return err
 	}
 
@@ -316,7 +317,7 @@ func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 
 	var mod ModifiedJitProgInfo
 	if err := lsm.computeModifiedSignature(insn, org.Sig[:org.SigLen], &mod); err != nil {
-		log.Println("Error computing modified signature or sig verification failed for prog :", ebpfProg.Name, err)
+		utils.Log("Error computing modified signature or sig verification failed for prog :", ebpfProg.Name, err)
 		return err
 	}
 
@@ -325,7 +326,7 @@ func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 
 	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_ORIGINAL_PROGRAM].
 		Put(&crypto_kernel_const, &org); err != nil {
-		log.Println("Error writing original program info to map", err)
+		utils.Log("Error writing original program info to map", err)
 		return err
 	}
 
@@ -336,7 +337,7 @@ func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 
 	if err := lsm.LsmProgCollection.Maps[events.EXFIL_SECURITY_MODIFIED_SIGNATURE].
 		Put(&crypto_kernel_const, modSignPayload); err != nil {
-		log.Println("Error writing modified program info to map", err)
+		utils.Log("Error writing modified program info to map", err)
 		return err
 	}
 

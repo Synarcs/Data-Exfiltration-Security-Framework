@@ -48,11 +48,11 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 		select {
 		case netlinkEvent, ok := <-eventChannel:
 			if !ok {
-				log.Println("the tuntap receive event channle is closed ")
+				utils.Log("the tuntap receive event channle is closed ")
 				return
 			}
 			if utils.DEBUG {
-				log.Println("Tunnel interface received command from channel")
+				utils.Log("Tunnel interface received command from channel")
 			}
 			if tunnelInterface := iface.FetchNewNetlinkPppSocket(); tunnelInterface == nil {
 				// attach the kernel hook over encap tuntap interface for DPI in kernel
@@ -61,7 +61,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 					ctx,
 					tunnelInterface.Attrs().Name,
 				); err != nil {
-					log.Println("error attaching the kernel dynamic tunneling ebpf for tunnel interface", err)
+					utils.Log("error attaching the kernel dynamic tunneling ebpf for tunnel interface", err)
 				}
 
 				go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](netlinkEvent)
@@ -74,7 +74,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 }
 
 func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) error {
-	log.Println("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
+	utils.Log("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
@@ -156,7 +156,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 		go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](events.KernelNetlinkSocket(netlinkEvent))
 
 		if !utils.DEBUG {
-			log.Println("EBPF node agent detected new kernel tun tap link setup for tunnelling interface link via ioctl call")
+			utils.Log("EBPF node agent detected new kernel tun tap link setup for tunnelling interface link via ioctl call")
 		}
 
 		if netlinkEvent.ProcessId != uint32(os.Getpid()) {
@@ -166,7 +166,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 				produceChannel <- events.KernelNetlinkSocket(netlinkEvent)
 				netlinkKernelProcMap[int(netlinkEvent.ProcessId)] = true
 				if utils.DEBUG {
-					log.Println("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent.ProcessId, netlinkEvent.ProcessInfo)
+					utils.Log("Polled from Kernel Tracepoint for netlink socket event", netlinkEvent.ProcessId, netlinkEvent.ProcessInfo)
 				}
 			}
 		}
@@ -177,12 +177,12 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 func (k *NetKProbes) DetachKprobeHandlers() error {
 	if k.NetlinkSocket == nil {
-		log.Println("Cannot call raw detach before the required kprobe is first attached in kernel")
+		utils.Log("Cannot call raw detach before the required kprobe is first attached in kernel")
 		return nil
 	}
 
 	if err := k.KprobelLink.Close(); err != nil {
-		log.Printf("Error detaching the Kprobe for Kernel hooks over netfilter %+v", err)
+		utils.Logger.Printf("Error detaching the Kprobe for Kernel hooks over netfilter %+v", err)
 		return err
 	}
 	return nil

@@ -3,9 +3,10 @@ package netinet
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os/exec"
 	"regexp"
+
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
 func GetCurrentTXQueues(interfaceName string) (int, error) {
@@ -26,7 +27,7 @@ func GetCurrentTXQueues(interfaceName string) (int, error) {
 		rx = regexp.MustCompile(`(?s)Current hardware settings:.*?Combined:\s+(\d+)`)
 		matches = rx.FindStringSubmatch(out.String())
 		if len(matches) < 2 {
-			log.Println("could not find TX queues in output")
+			utils.Log("could not find TX queues in output")
 			return 0, fmt.Errorf("could not find TX queues in output")
 		}
 	}
@@ -54,7 +55,7 @@ func GetCurrentRXQuees(interfaceName string) (int, error) {
 		rx = regexp.MustCompile(`(?s)Current hardware settings:.*?Combined:\s+(\d+)`)
 		matches = rx.FindStringSubmatch(out.String())
 		if len(matches) < 2 {
-			log.Println("could not find RX queues in output")
+			utils.Log("could not find RX queues in output")
 			return 0, fmt.Errorf("could not find RX queues in output")
 		}
 	}
