@@ -478,9 +478,16 @@ func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 	return cap, err
 }
 
-// opens pcap handle over cusotm netlink  (net_device)
+// opens pcap handle over cusotm netlink  (net_device), runs over zero copy to read packet from rx queues of netdev with no overhead of data copy over in userspace
 func (nf *NetIface) GetPcapHandleoverNetDev(link netlink.Link) (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
+	cap.ZeroCopyReadPacketData()
+	return cap, err
+}
+
+// opens pcap handle over cusotm (net_device) through name, runs over zero copy to read packet from rx queues of netdev with no overhead of data copy over in userspace
+func (nf *NetIface) GetPcapHandleoverNetDevByName(link string, mtu int32) (*pcap.Handle, error) {
+	cap, err := pcap.OpenLive(link, mtu, true, pcap.BlockForever)
 	cap.ZeroCopyReadPacketData()
 	return cap, err
 }

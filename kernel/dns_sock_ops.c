@@ -55,10 +55,8 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
        // bpf_printk("the src port for transfer is %d", src_transfer_port);
         struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
         if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_NOEXIST) < 0) {
-            #ifdef DEBUG 
-                if (DEBUG) {
-                    bpf_printk("Error updating the udp sock map for transfer traffic"); 
-                }
+            #if DEBUG 
+                 bpf_printk("Error updating the udp sock map for transfer traffic"); 
             #endif
         }
     }else {
@@ -66,10 +64,8 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
         if (curr_info->pid != proc_info->procId || curr_info->dport != dest_transport_port) {
             struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
             if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_ANY) < 0) {
-                #ifdef DEBUG 
-                    if (DEBUG) {
-                        bpf_printk("Error updating the udp sock map for transfer traffic"); 
-                    }
+                #if DEBUG 
+                    bpf_printk("Error updating the udp sock map for transfer traffic"); 
                 #endif
             }
         }
@@ -128,6 +124,7 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                         return SK_PASS;
                 }
             #endif
+            return SK_PASS;
         case AF_INET6: // IPv6 packets
             struct ipv6hdr *ip6h = data;
             if ((void *)(ip6h + 1) > data_end) return SK_DROP; 
@@ -154,10 +151,10 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                         return SK_PASS;
                 }
             #endif
+            return SK_PASS;
         default:
             return SK_PASS; // not possible for a cgroup to receive 
     }
-    return SK_PASS; 
 }
 
 char _license[] SEC("license") = "GPL";

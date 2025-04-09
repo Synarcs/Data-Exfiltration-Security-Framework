@@ -495,16 +495,6 @@ static
         return SUSPICIOUS;
   }
 
-  static 
-  __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
-      if (__has_skb_mark(skb)) 
-          return;
-      if (skb_redir_hash == 0) 
-          skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
-      else
-          skb->mark = skb_redir_hash;
-  }
-
 static 
 __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u16 dns_query_class, struct qtypes qt, 
                 __u8 total_domain_length, __u8 total_domain_length_exclude_tld) {
@@ -541,7 +531,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
-    struct dns_flags __attribute__((unused)) flags = get_dns_flags(dns_header);
+    struct dns_flags flags = get_dns_flags(dns_header);
     #if DEBUG
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
         bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
@@ -596,8 +586,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u8 total_domain_length = 0;
         __u8 total_domain_length_exclude_tld = 0;
         // Iter through the Questions Count
-        __u8  __attribute__((unused)) i = 0; __u8  __attribute__((unused)) j = 0; // iters
-        forn(qd_count, typeof(i), i) {
+        __u8 i = 0; __u8 j = 0; // iters
+        forn(qd_count, __u8, i) {
             __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
@@ -605,7 +595,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             // parse the QNAME
             // iter over the char labels in QNAME
-            forn(MAX_DNS_NAME_LENGTH, typeof(j), j) {
+            forn(MAX_DNS_NAME_LENGTH, __u8, j) {
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
@@ -686,7 +676,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
             // parse the QTYPE
-            __u16 __attribute__((unused)) query_type = *(__u16 *) (dns_payload_buffer + offset); 
+            __u16 query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
@@ -695,14 +685,14 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
              __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); 
 
-            __u8 __attribute__((unused)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 __attribute__((__unused__)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
             if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
             
 
-            __u8  __attribute__((unused)) dns_query_labels =  parse_dns_qeury_type_section(skb, query_class, qtypes);
+            __u8 dns_query_labels =  parse_dns_qeury_type_section(skb, query_class, qtypes);
                 
             // if (dns_query_labels == MALICIOUS) return MALICIOUS;
 
@@ -802,7 +792,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
     // debug the size and content of questions, answer auth and add count in dns header 
 
-    struct dns_flags __attribute__((unused)) flags = get_dns_flags_tcp(dns_header);
+    struct dns_flags flags = get_dns_flags_tcp(dns_header);
     #if DEBUG
         bpf_printk("the auth question count are %u %u", bpf_ntohs(dns_header->qd_count), bpf_ntohs(dns_header->ans_count));
         bpf_printk("the addon question count are %u %u", bpf_ntohs(dns_header->add_count), bpf_ntohs(dns_header->auth_count));
@@ -848,7 +838,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
         __u32 * MAX_LABEL_COUNT_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_label_count_max);
 
         __u8 total_domain_length_exclude_tld = 0;
-        __u8 __attribute__((unused)) i = 0; __u8 __attribute__((unused)) j = 0; // iters
+        __u8 i = 0; __u8 j = 0; // iters
 
         forn(qd_count, typeof(i), i) {
             __u16 offset = 0;
@@ -874,7 +864,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
             }
             
-            __u16 __attribute__((unused)) query_type; __u16 __attribute__((unused)) query_class;
+            __u16 query_type; __u16 query_class;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
             // parse the QTYPE
             query_type = *(__u16 *) (dns_payload_buffer + offset); 
@@ -886,7 +876,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
-            __u8 __attribute__((unused)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
             if (label_count <= 2) return BENIGN;
             
@@ -920,6 +910,17 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
    return BENIGN;
 }   
 
+
+// skb mark for secure valid redirection in kernel to if_igress over bridge
+static 
+__always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
+    if (__has_skb_mark(skb)) 
+        return;
+    if (skb_redir_hash == 0) 
+        skb->mark = redirect_skb_mark; // unconfigured fromuser space for map in kernel 
+    else
+        skb->mark = skb_redir_hash;
+}
 
 /*
     Emit the kernel event to user space to bind and read traffic over the port 
@@ -964,7 +965,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb,
 
     if (__parse_vxlan_flag__hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
 
-    __u32 __attribute__((unused)) vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
+    __u32 vlan_id = __parse_vxlan_vni_hdr(transport_payload, vxlan, skb->data_end);
 
 
     // do an raw head parsing from the skb->data until the detection for any l7 traffic
@@ -1029,8 +1030,8 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
                     struct __sk_buff *raw_skb, struct udphdr *udp) {
         // for bebnging let the further enhanced dpi in kernel parse the non standard port upto layer 7 when used as a way to tunnel traffic 
     if (__parse_encap_vxlan_tunnel_header(skb, raw_skb, transport_payload) == SUSPICIOUS) {
-        __u32 __attribute__((unused)) br_index = 5;
-        __u32 __attribute__((unused)) out = raw_skb->ifindex;
+        __u32 br_index = 5;
+        __u32 out = raw_skb->ifindex;
         __be32 __attribute__((__unused__)) dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
         __u32 udp_dest_port = bpf_ntohs(udp->dest);
@@ -1067,12 +1068,10 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
 /*
     Emits ring buffer directly dont need raw parsing considering the vxlan encap is over standard port of UDP for encap transfer
 */
-#if IS_VXLAN_PORTS_EXIST_BRIDGE
-    static
-    __always_inline void __emit_vxlan_standard_port(struct udphdr *udp, struct __sk_buff *skb) {
-        __emit_kernel_encap_event_vxlan_encap(udp, skb->ifindex);
-    }
-#endif
+static
+__always_inline void __emit_vxlan_standard_port(struct udphdr *udp, struct __sk_buff *skb) {
+    __emit_kernel_encap_event_vxlan_encap(udp, skb->ifindex);
+}
 
 
 static 
@@ -1097,7 +1096,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         // if (parse_dns_payload_memsafet_payload() == SUSPICIOUS) {
         
         // verify header opcodes and return types 
-        __u16 __attribute__((unused)) raw_dns_flags = dns_header->flags;
+        __u16 raw_dns_flags = dns_header->flags;
         #if DEBUG
                 bpf_printk("the raw kernel parsed flags are %u", raw_dns_flags);
         #endif
@@ -1332,9 +1331,9 @@ __always_inline bool __update_malicious_egress_dns_port_random_kernel_sock_ops_m
 static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
-    __u32 __attribute__((unused)) br_index = 5;
+    __u32 br_index = 5;
     __u32 out = skb->ifindex;
-    __u32 __attribute__((unused)) tc_class_id = skb->tc_classid;
+    __u32 tc_class_id = skb->tc_classid;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
     struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
@@ -1351,7 +1350,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
 
 
-    bool __attribute__((unused)) isTunnelC2CStandardUdpTransport = false;
+    bool isTunnelC2CStandardUdpTransport = false;
     if (isUdp) {
         #if !DEEP_SCAN_DNS_UDP_OVERLAY
                 // allow an non overlay for fixed ports used by other protocols, for struct check mode, kernel will not process the packet DPI will scan each of them 
@@ -1371,7 +1370,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         #endif 
     }
    
-    __u16 __attribute__((unused)) udp_dst_transfer_key = __transport_dest_port;
+    __u16 udp_dst_transfer_key = __transport_dest_port;
    
     if (verify_kernel_version_support_task_comm()) {
         if (__handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port, proc_info)) {
@@ -1444,7 +1443,7 @@ __always_inline void __submit_ring_buff_events_malicious_transfers(bool isStanda
             bpf_ringbuf_discard_dynptr(&dptr, 0);
             return;
         }
-        bpf_dynptr_write(&dptr, 0, &random_port_event, sizeof(struct dns_non_standard_transport_event), 0);
+        long _ = bpf_dynptr_write(&dptr, 0, &random_port_event, sizeof(struct dns_non_standard_transport_event), 0);
 
         bpf_ringbuf_submit_dynptr(&dptr, 0);
     }
@@ -1490,7 +1489,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         udp = (struct udphdr *) (header_payload);
         if ((void *) (udp + 1) > cursor.data_end) return 1;
 
-        __u32 __attribute__((unused)) dest_port = bpf_ntohs(udp->dest);
+        __u32 dest_port = bpf_ntohs(udp->dest);
      
         // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, skb,
@@ -1518,7 +1517,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
 
 static 
-__always_inline __attribute__((unused)) __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions,
+__always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions,
                                                  void *tcp_data, bool isIpv4) {
     if ((void *)(tcp_data + sizeof(struct dns_header_tcp)) > cursor.data_end)
         return 1;
@@ -1552,6 +1551,8 @@ __always_inline __attribute__((unused)) __u8 __parse_skb_non_standard_tcp(struct
         event->dns_transaction_id = bpf_ntohs(dns->transaction_id);
         event->isTcp = (__u8)1;
         event->isUdp = (__u8)0;
+
+        struct __kernel_proc_struct_info *proc_info = __get_process_info();
 
         if (__update_non_stand_port_map(bpf_ntohs(tcp->source)) == 0) {
               #if DEBUG 
@@ -1954,7 +1955,7 @@ int classify(struct __sk_buff *skb){
 
 	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 
-    struct udphdr __attribute__((unused)) *udp; struct tcphdr __attribute__((unused)) *tcp;
+    struct udphdr *udp; struct tcphdr *tcp;
 
     __be16 hproto;
     // check for vland-ieee encap for layer 2 or vlan packet virtualization or tunneling to packet scan over intern packet data 
@@ -1967,8 +1968,7 @@ int classify(struct __sk_buff *skb){
         if ((void *) cursor.data + sizeof(struct ethhdr) + sizeof(struct vlan_hdr) > cursor.data_end) return TC_DROP;
 
         hproto = vlan->h_vlan_encapsulated_proto;
-    }
-    if (eth->h_proto == bpf_htons(ETH_P_IPV6) || eth->h_proto == bpf_htons(ETH_P_IP)) {
+    }else if (eth->h_proto == bpf_htons(ETH_P_IPV6) || eth->h_proto == bpf_htons(ETH_P_IP)) {
         hproto = eth->h_proto;
     }
 

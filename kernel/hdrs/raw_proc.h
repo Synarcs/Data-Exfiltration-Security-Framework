@@ -1,5 +1,5 @@
-#ifndef RAW_PROC_H 
-#define RAW_PROC_H
+#ifndef __RAW_PROC_H__
+#define __RAW_PROC_H__
 
 #include "dns.h" 
 #include "consts.h"
@@ -40,4 +40,4 @@ static const struct PortMapping UDP_PROTOCOLS[] = {
 };
 
 
-#endif
+#endif /* __RAW_PROC_H__ */

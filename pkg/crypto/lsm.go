@@ -77,8 +77,12 @@ func (lsm *CryptoBpfLsm) RemoveCryptoLSMProgs() error {
 	}
 
 	defer func() {
-		lsm.Program.Close()
-		lsm.LsmProgCollection.Close()
+		if lsm.Program != nil {
+			lsm.Program.Close()
+		}
+		if lsm.LsmProgCollection != nil {
+			lsm.LsmProgCollection.Close()
+		}
 	}()
 	return nil
 }

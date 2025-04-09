@@ -204,9 +204,11 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 
 func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool) ([]DNSFeatures, error) {
 	for _, payload := range dns_packet.Authorities {
+		// SOA, OPT
 		if payload.Type == layers.DNSTypeSOA || payload.Type == layers.DNSTypeOPT {
 			continue
 		}
+
 		var feature DNSFeatures
 		dns_query_labels := strings.Split(string(payload.Name), ".")
 		if len(dns_query_labels) > 2 {

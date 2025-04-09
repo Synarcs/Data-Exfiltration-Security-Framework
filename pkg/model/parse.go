@@ -162,7 +162,7 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 // only use for l3 -> ipv4 and l4 -> udp
 func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
-	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo) error {
+	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -319,69 +319,38 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			log.Println("Error reconstructing the DNS packet", err)
 			return err
 		}
-	} else if isIpv4 && !isUdp {
-		// ipv4 and tcp
-		packetL3SrcAddress, _ := netip.ParseAddr(ipv4.SrcIP.String())
-		destAddress, _ := netip.ParseAddr(ipv4.DstIP.String())
-		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
-			SrcAddress: packetL3SrcAddress,
-			DestAddres: destAddress,
-			SrcPort:    uint16(tcpPacket.SrcPort),
-			Destport:   uint16(tcpPacket.DstPort),
-			Protocol:   6,
-		})
-		tcpPacket.SetNetworkLayerForChecksum(ipv4)
-		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv4, tcpPacket, &dnsPacket); err != nil {
-			log.Println("Error reconstructing the DNS packet", err)
-			return err
-		}
-	} else if !isIpv4 && !isUdp {
-		// ipv6 and tcp
-		packetL3SrcAddress, _ := netip.ParseAddr(ipv6.SrcIP.String())
-		destAddress, _ := netip.ParseAddr(ipv6.DstIP.String())
-		d.CleanStaleOlderPacketRescheduleConnEntry(nil, &conntrack.ConntrackCleanEntry{
-			SrcAddress: packetL3SrcAddress,
-			DestAddres: destAddress,
-			SrcPort:    uint16(tcpPacket.SrcPort),
-			Destport:   uint16(tcpPacket.DstPort),
-			Protocol:   6,
-		})
-		opts.ComputeChecksums = false
-		tcpPacket.SetNetworkLayerForChecksum(ipv6)
-		if err := gopacket.SerializeLayers(buffer, opts, ethernet, ipv6, tcpPacket, &dnsPacket); err != nil {
-			log.Println("Error reconstructing the DNS packet", err)
-			return err
-		}
 	}
 
 	if utils.DEBUG {
-		// serialize := time.Now().Nanosecond()
 		log.Println("time took to serialize the whole packet", time.Now().Nanosecond()-st)
 	}
 	outputPacket := buffer.Bytes()
 	outputPacketLen := len(outputPacket)
 
-	if d.XdpSocketSendFd == nil {
-		// first check and bind the xdp kernel socket to tx queue for the interface
-		sockAddr := syscall.SockaddrLinklayer{
-			Protocol: syscall.ETH_P_ALL,
-			Ifindex:  d.SockSendFdInterface[0].Attrs().Index,
-		}
+	// the tcp passive analysis is only meant to passively analyze tcp traffic and detect any malicious traffic send over egress on physical netdev
+	if !isPhysicalNetDevSniff {
+		if d.XdpSocketSendFd == nil {
+			// first check and bind the xdp kernel socket to tx queue for the interface
+			sockAddr := syscall.SockaddrLinklayer{
+				Protocol: syscall.ETH_P_ALL,
+				Ifindex:  d.SockSendFdInterface[0].Attrs().Index,
+			}
 
-		// need this to be replaced with xdp
-		if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
-			return err
-		}
-	} else {
-		// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
-		// eventually free up some of the bpf maps in tc from the kernel space
+			// need this to be replaced with xdp
+			if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
+				return err
+			}
+		} else {
+			// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
+			// eventually free up some of the bpf maps in tc from the kernel space
 
-		fx := d.XdpSocketSendFd.GetDescs(d.XdpSocketSendFd.NumFreeTxSlots())
-		for i := range fx {
-			fx[i].Len = uint32(outputPacketLen)
+			fx := d.XdpSocketSendFd.GetDescs(d.XdpSocketSendFd.NumFreeTxSlots())
+			for i := range fx {
+				fx[i].Len = uint32(outputPacketLen)
+			}
+			trxCount := d.XdpSocketSendFd.Transmit(fx)
+			log.Println("Transmitted framecount is ", trxCount)
 		}
-		trxCount := d.XdpSocketSendFd.Transmit(fx)
-		log.Println("Transmitted framecount is ", trxCount)
 	}
 
 	return nil

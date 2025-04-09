@@ -44,7 +44,7 @@ run-controller-image:
 .PHONY: run-controller
 run-controller:
 	@echo "Running the controller"
-	cd controller && java -jar target/node-agent-controller-1.0-SNAPSHOT.jar &
+	cd controller && java -jar bin/node-agent-controller-1.0-SNAPSHOT.jar 
 
 .PHONY: controller 
 controller:

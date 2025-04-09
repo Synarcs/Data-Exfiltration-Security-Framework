@@ -312,7 +312,7 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	defer ringBuffer.Close()

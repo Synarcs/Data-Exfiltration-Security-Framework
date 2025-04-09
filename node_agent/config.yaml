@@ -54,3 +54,5 @@ enhancedFeatures:
     enableIngressSniff: true 
     enabledTbRlimit: false
     enabbledVolumeRlimit: false
+    
+    enabledPassiveEnhancedTCPDPI: true # works as a  passive sniffer over TCP for filtering ans seuciryt malicious domains 

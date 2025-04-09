@@ -30,9 +30,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
-
-// #include "hdrs/vmlinux.h"
-
 #include "crypto/crypto_maps.h"
 
 #define MAX_DATA_SIZE (1024 * 1024)
@@ -43,9 +40,13 @@
 
 SEC("lsm.s/bpf")
 int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size){
-    
-    if (cmd != BPF_PROG_LOAD)
+
+    if (cmd != 5)
         return 0;
+
+    __u32 insn_cnt;
+    struct bpf_dynptr dptr_org;
+    struct bpf_dynptr dptr_org_sig;
 
     __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
     __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
@@ -56,7 +57,48 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size){
     if (!sign_keyring_id) {
         return 0;
     }
-    bpf_printk("the lsm crypto verification hook called over BPF_PROG_LOAD kernel syscall %d", *sign_keyring_id);
+
+    struct modified_sig *mod_data = bpf_map_lookup_elem(&exfil_security_modified_signature, &keyring_search_map_key);
+    if (!mod_data)
+        return 0;
+
+
+    struct original_data *org_data = bpf_map_lookup_elem(&exfil_security_original_program, &keyring_search_map_key);
+    if (!org_data)
+        return 0;
+    
+    if (bpf_probe_read_kernel(&insn_cnt, sizeof(insn_cnt), &attr->insn_cnt) < 0) {
+        return -EPERM;
+    }
+
+    if (mod_data->sig_len > sizeof(mod_data->sig) ||
+            org_data->data_len > sizeof(org_data->data) ||
+            org_data->sig_len > sizeof(org_data->sig))
+        return -EINVAL;
+
+    if (bpf_dynptr_from_mem(&org_data->data, org_data->data_len, 0, &dptr_org) < 0) {
+        return -E2BIG;
+    }
+    org_data->sig_len &= MAX_SIG_SIZE - 1;
+
+    if (bpf_dynptr_from_mem(&mod_data->sig, org_data->sig_len, 0, &dptr_org_sig) < 0) {
+        return -E2BIG;
+    }
+    mod_data->sig_len &= MAX_SIG_SIZE - 1;
+
+
+    struct bpf_key * trusted_keyring;
+
+    // trusted_keyring = bpf_lookup_user_key(*sign_keyring_id, 0);
+    // if (!trusted_keyring) {
+    //     return -ENOENT;
+    // }
+
+    bpf_printk("yeah the ebpf sign key found");
+    bpf_printk("the lsm crypto verification hook called over BPF_PROG_LOAD kernel syscall %d ins ct %d, sig size %d", 
+                        *sign_keyring_id, insn_cnt, org_data->sig_len);
+    // bpf_key_put(trusted_keyring);
+
     return 0;
 }
 

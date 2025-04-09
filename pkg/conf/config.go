@@ -121,10 +121,11 @@ type NodeAgentConfig struct {
 }
 
 type DnsEnhancedFeatures struct {
-	EnableNxFloodPrevention bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
-	EnableIngressSniff      bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
-	EnabledTbRlimit         bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
-	EnabbledVolumeRlimit    bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
+	EnableNxFloodPrevention      bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
+	EnableIngressSniff           bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
+	EnabledTbRlimit              bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
+	EnabbledVolumeRlimit         bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
+	EnabledPassiveEnhancedTCPDPI bool `yaml:"enabledPassiveEnhancedTCPDPI"`
 }
 
 type L3EnhancedFeatures struct {

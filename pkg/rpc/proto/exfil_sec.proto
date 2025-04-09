@@ -17,6 +17,13 @@ message ExfilDomains {
     map<string, DNS_MALICIOUS_FLAGS> status = 5;
 };
 
+
+message ElfSignature { 
+    bytes signature = 1;
+    bytes publicKey = 2;
+    bytes signatureHash = 3;
+}
+
 message ExfillSecurityLengthLimits { 
     map<int32, int32> domainrangeExfilLimits = 1;
 }

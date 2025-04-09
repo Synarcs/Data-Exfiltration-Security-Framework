@@ -72,7 +72,6 @@ func GetKeyPresentInEgressCache(tld string) bool {
 
 // Delete the tld and fqdn from the egress cache
 func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
-	var evict bool
 	_, fd := NODE_AGENT_BLACKLISTED_DOMAINS.Get(tld)
 	if !fd {
 		log.Printf("The Required domain %s Cannot be blaclisted since its not there in cahce ", tld)
@@ -84,10 +83,6 @@ func DeleteDomainBlackListInEgressCache(tld, fqdn string) error {
 		} else {
 			value.Remove(fqdn)
 		}
-	}
-
-	if evict && DEBUG {
-		log.Println("Cache Hit the max Size evicted the Least Recently Used Key")
 	}
 
 	return nil

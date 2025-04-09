@@ -222,11 +222,6 @@ struct dns_answer_section {
     __u16 rdata;
 } __attribute__((packed));
 
-struct a_record {
-    struct in_addr ip_addr;
-    __u32 ttl;
-};
-
 // define the malicious domain record limits 
 // the default limits from the kernel for the node agent default processing 
 struct dns_record_limits_malicious {

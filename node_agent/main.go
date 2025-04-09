@@ -46,15 +46,15 @@ func initGlobalErrorControlChannel() chan error {
 }
 
 // return a channel map for other events hook the node agent must inject post successfull injection of the required prog of interest
-func initKernelProgInjectComptionEvent() map[string]chan utils.KernelInjectProgInfo {
-	return map[string]chan utils.KernelInjectProgInfo{
-		progs.TC_PROG:        make(chan utils.KernelInjectProgInfo),
-		progs.NETFILTER_PROG: make(chan utils.KernelInjectProgInfo),
-		progs.SOCK_PROG:      make(chan utils.KernelInjectProgInfo),
-		progs.KPROBE:         make(chan utils.KernelInjectProgInfo),
-		progs.TRACEPOINT:     make(chan utils.KernelInjectProgInfo),
-		progs.XDP:            make(chan utils.KernelInjectProgInfo),
-		progs.LSM_BPF_HOOKS:  make(chan utils.KernelInjectProgInfo),
+func initKernelProgInjectComptionEvent() map[string]chan bool {
+	return map[string]chan bool{
+		progs.TC_PROG:        make(chan bool),
+		progs.NETFILTER_PROG: make(chan bool),
+		progs.SOCK_PROG:      make(chan bool),
+		progs.KPROBE:         make(chan bool),
+		progs.TRACEPOINT:     make(chan bool),
+		progs.XDP:            make(chan bool),
+		progs.LSM_BPF_HOOKS:  make(chan bool),
 	}
 }
 
@@ -202,18 +202,18 @@ func main() {
 		panic(err.Error())
 	}
 
-	metaKeyringInfo, err := PopulateInjectedKeyringMetaInfo()
+	_, err = PopulateInjectedKeyringMetaInfo()
 	if err != nil {
 		log.Println("Error populating the keyring meta info", err.Error())
 		panic(err.Error())
 	}
 	cryptoLsmProgHandler := crypto.NewCryptoBpfLsm(agentCryptoConfig)
 
-	// inject the crypto lsm program in kernel for all ebpf prog verification
-	if err := cryptoLsmProgHandler.InjectLsmProg(ctx); err != nil {
-		log.Println("Error injecting the crypto lsm prog in kernel", err.Error())
-		panic(err.Error())
-	}
+	// // inject the crypto lsm program in kernel for all ebpf prog verification
+	// if err := cryptoLsmProgHandler.InjectLsmProg(ctx); err != nil {
+	// 	log.Println("Error injecting the crypto lsm prog in kernel", err.Error())
+	// 	panic(err.Error())
+	// }
 
 	envoy.InitTCPWasmFilter()
 
@@ -342,7 +342,7 @@ func main() {
 	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan, metaKeyringInfo)
+	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := &bridgetc.BridgeTCFilters{

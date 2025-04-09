@@ -13,8 +13,7 @@ import (
 
 // handle all crypto secruity for node agent hash injected in kernel for random hashes
 type Hash struct {
-	SkbHash   uint32
-	Algorithm string
+	SkbHash uint32
 }
 
 func (h *Hash) GetRandomBootSkbMark() {

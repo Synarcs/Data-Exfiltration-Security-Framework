@@ -116,10 +116,6 @@ type Utsname struct {
 	Domainname [65]int8
 }
 
-type KernelInjectProgInfo struct {
-	IsInjected bool
-}
-
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
 const (
 	MAX_NODE_AGENT_CACHE_SIZE = 1000

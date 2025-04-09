@@ -2,7 +2,6 @@ package xdp
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
@@ -76,7 +75,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	}
 
 	transportLayer := packet.Layer(layers.LayerTypeUDP)
-	var dnsLengthTcp uint16 = 0
 	var dnsTcpPayload []byte
 
 	var tcpCheck bool = false
@@ -87,27 +85,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 		} else {
 			panic(fmt.Errorf("the packet is malformed"))
 		}
-	} else {
-		transportLayer = packet.Layer(layers.LayerTypeTCP)
-		tcpPacket := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
-
-		if tcpPacket != nil {
-			isUdp = false
-		} else {
-			panic(fmt.Errorf("the packet is malformed"))
-		}
-		payload := tcpPacket.Payload
-
-		if len(payload) < 2 {
-			log.Println("errror ", len(payload))
-			return fmt.Errorf("TCP payload too short for dns parsing")
-		}
-
-		dnsLengthTcp = binary.BigEndian.Uint16(payload[0:2])
-
-		log.Println("The DNs packet parsdd over tcp transport with length ", dnsLengthTcp)
-		dnsTcpPayload = payload[2:]
-		tcpCheck = true
 	}
 
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
