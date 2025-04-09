@@ -6,6 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/asavie/xdp v0.3.3
+	github.com/charmbracelet/log v0.4.1
 	github.com/cilium/ebpf v0.17.1
 	github.com/cloudflare/cfssl v1.6.5
 	github.com/google/gopacket v1.1.19
@@ -20,6 +21,7 @@ require (
 	github.com/ti-mo/conntrack v0.5.1
 	github.com/vishvananda/netlink v1.3.1-0.20241022031324-976bd8de7d81
 	github.com/vishvananda/netns v0.0.5
+	go.mozilla.org/pkcs7 v0.9.0
 	golang.org/x/net v0.35.0
 	golang.org/x/sys v0.30.0
 	google.golang.org/grpc v1.70.0
@@ -32,7 +34,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/lipgloss v1.0.0 // indirect
-	github.com/charmbracelet/log v0.4.1 // indirect
 	github.com/charmbracelet/x/ansi v0.4.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
@@ -70,7 +71,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zmap/zcrypto v0.0.0-20230310154051-c8b263fd8300 // indirect
 	github.com/zmap/zlint/v3 v3.5.0 // indirect
-	go.mozilla.org/pkcs7 v0.9.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect

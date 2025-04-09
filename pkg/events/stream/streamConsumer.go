@@ -143,7 +143,6 @@ func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) e
 					}
 
 					if utils.DEBUG {
-						utils.Log("Consuming from the stream threat topic ", STREAM_THREAT_TOPIC_INFER)
 						utils.Log("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
 							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains), statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
 					}

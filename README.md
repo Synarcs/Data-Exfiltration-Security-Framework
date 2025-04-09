@@ -4,7 +4,13 @@
 
 
 # DNS Data Exfiltration Security 
-Enhanced observability and security solution built for enterprises to fully prevent DNS base exfiltration (C2, tunnelling, raw) with negligible data loss robust metrics, observability and tracing for malicious exfiltration attempts. Framework build for modern distributed cloud environments. orchestrated environments. High security running Deep Packet inspection directly inside Linux Kernel to prevent every DNS exfiltrated packet to passthrough. Runs eBPF across complete kernel network stack (TC, XDP, SOCK, SYSCALL), to prevent any exfiltration from host net_device to virtual encapsulated kernel traffic. Uses Deep learning in userspace and kafka data streaming and event analytics ensuring dynamic threat mitigation for both cloud-native build DNS infrastructures and legacy DNS topologies. Highly robust in preventing against DGA, safeguarding enterprises from any form of exfiltration happening via DNS. Proposes cloud-native DNS topologies for high security in preventing any type of exfiltration from DNS also ensuring HA with both peak performance and security.
+Enhanced observability and security solution built for enterprises to fully prevent DNS base exfiltration (C2, tunnelling, raw) with negligible data loss robust metrics, observability and tracing for malicious exfiltration attempts. Framework build for modern distributed cloud environments. orchestrated environments. High security running Deep Packet inspection directly inside Linux Kernel to prevent every DNS exfiltrated packet to passthrough. Runs eBPF across complete kernel network stack (TC, XDP, SOCK, SYSCALL), to prevent any exfiltration from host net_device to virtual encapsulated kernel traffic. Uses Deep learning in userspace and kafka data streaming and event analytics ensuring dynamic threat mitigation for both cloud-native build DNS infrastructures and legacy DNS topologies. Highly robust in preventing against DGA, safeguarding enterprises from any form of exfiltration happening via DNS. Proposes cloud-native DNS topologies for high security in preventing any type of exfiltration from DNS also ensuring HA with both peak performance and security. Introduces novel approach referred as kernel enforced dynamic security for endpoint detection and response a wrapper to aid enterpirse EDR / XDR solutions with dynamic network policies, network filters, cloud infrastructure NACL's for cross protocol exfiltration prevention (l3, l4, l7) once prevented via DNS.
+
+
+# Vision
+Introduces a novel approach termed Kernel-Enforced Dynamic Security (KDR) for Endpoint Detection and Response (XDR / EDR), acting as a wrapper to enhance enterprise EDR/XDR solutions.
+KDR provides real-time, kernel-level enforcement of dynamic network policies, fine-grained traffic filters, and cloud infrastructure NACLs to prevent cross-protocol exfiltration across layers L3 (IP), L4 (Transport), and L7 (Application) — especially effective following initial prevention at the DNS layer.
+
 
 ## Node Agent
 
@@ -15,7 +21,7 @@ Kernel
     * Netfilter
     * Kernel Probes
     * Kernel Functions
-    * Raw Tracepoints (Kernel Sched)
+    * Raw Tracepoints (kernel schedulers, software netdev device drivers)
     * Kernel Socket layer (cgroup_egress)
     * Kernel LSM (BPF Security Hooks BPF_PROG_LOAD, secured sign verification)
 * eBPF dynamic advanced maps and tracing for malicious events
@@ -70,25 +76,33 @@ Threat Event Stream Message Analysis Control Plane Server
 * Modular design to integrate across several legacy and modern cloud-native DNS topologies.
 * Robust adaptable to modern evolving threats and massively horizontally scaled data planes, with Kafka threat events updating malicious domain cache in userspace across each node in data plane. 
 
+## Features In Development
+* Rate Limiting
+    * Malicious / Suspicious Requests per second window
+        Implementation of Token Bucket Algorithm for rate-limiting DNS traffic over kernel TC egress QDISC (bpf_timer), with refill rate equals 1 sec kernel time-window per-cpu reference.
+    * Improve the DNS Volume base rate limiting
+* Cloud-Native orchestrated / containerized exfiltration security (via custom blacklist policy filters and CRD resources) using physical netdev Kernel eBPF programs.
+	* Kernel-enforced Dynamic Response (KDR) for cloud environments: leverages eBPF running over the host physical netdev to generate dynamic blacklist policy filters, intercepted in real-time via Kubernetes-based endpoint security operators. These controllers behave as wrappers to add layered security on top of the kernel network stack.
+	* Ongoing integration with Kubernetes using sidecar or guard containers for all pods — running eBPF over the kernel SOCK layer (skb_filter, skb_ops) — enabling real-time detection and prevention of malicious pods attempting data breaches across the entire Kubernetes cluster, thereby security nodes not running the eBPF DNS exfil agent at endpoint. Relies on layered security in kernel over each stages of packet processing from physical to virtual netdev.
+* Zero Trust Architecture with Dual Signatures and Mutual Authentication
+	* Stage 1: Control Plane ↔ Data Plane
+	* gRPC over mutual TLS (mTLS) used for secure communication,
+	* Control plane signs eBPF programs, verified by the data plane during load.
+	* Stage 2: Node ↔ Kernel
+	* Kernel Keyring + BPF LSM hooks enforce signature verification of eBPF ELF programs,
+	* Mirrors TLS certificate revocation logic, supporting internal and parent Certificate Authorities for continuous validation and attestation.
 
 ## Future Plans 
-* Kubernetes Operator and CNI Integration
-    * Started Integration with Kubernetes as sidecar or gaurd contaienrs for all pods, run eBPF over kernel SOCK layer (skb_filter, skb_ops), feature to inherently support stopping breaches via malicious pods carrying data breaches throughout k8s cluster.
-    * Support for dynamic Injection of OPA auth policies for l3 filtering in userspace via sidecar or similar auth filter policies for Istio.
 * Cloud Providers Infrastructure Integration 
     * Integration with Public Cloud providers for dynamic NACL, Security groups, firewall rules creation over VPC for DNS exfiltration security
 eBPF node agent rinning over host ns, to fully thwart data breach by killing malicious C2 implants.
 * Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP) at endpoint itself, supporting conntrack state mapping in eBPF map for TCP handshake prior DNS transfer and stopping DNS data transfer over TCP socket via kernel TC.
-
     1.  Integrate Envoy L7 TCP sock listener over user-space, for kernel to live forward TCP traffic from host netdev TC to envoy l7 socket listneer.
     2.  Implement a envoy GO wasm filter for deep parsing DNS traffic over TCP over unix stream socket and shared as component of core node-agent.
-
-
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orchestrated environments.
 * Enhance framework for safeguarding enterprises from exfiltration over other protocols (ICMP, FTP) etc. 
 * Enhance support for DOT (DNS over TLS), eBPF based TLS fingerprinting interception in kernel. 
 * Add support for XDP ingress NXDOMAIN flood prevention to break DNS woter torture flood attacks. 
-
 
 ## Building 
 
@@ -113,7 +127,11 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 
 ## Conferences
 * Accepted and was presented at [Netdev 0x19](https://netdevconf.info/0x19/sessions/bof/real-time-prevention-of-dns-based-data-exfiltration-bof.html) for innovation in Linux kernel advancing DNS security.
+* Accepted and will be presented at [Linux Security Summit](https://events.linuxfoundation.org/linux-security-summit-north-america/program/schedule/) for innovation in Linux kernel intersecting Kernel datapath, LSM, kprobes, tracepoints for advanced endpoint security solutions.
 
+
+## Disclaimer
+* This project is under heavy development focusing on a longer vision (Kernel enforced dynamic  security for detection and response) a privileged wrapper aiding EDR / XDR solutions, hence expect some bugs around it 😀😀😀
 
 ## Support 
 <a href="https://www.buymeacoffee.com/vedangparan" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>

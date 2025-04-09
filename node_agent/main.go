@@ -345,7 +345,7 @@ func main() {
 	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan, nil)
+	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := &bridgetc.BridgeTCFilters{

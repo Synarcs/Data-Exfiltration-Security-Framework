@@ -51,7 +51,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 		log.Fatalf("Failed to create new session keyring: %v", err)
 	}
 
-	utils.Logger.Printf("Created session keyring with ID: %d", sessionID)
+	utils.Log(fmt.Sprintf("Created session keyring with ID: %d", sessionID))
 
 	if err != nil {
 		return err
@@ -68,14 +68,14 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	if err != nil {
 		log.Fatalf("Failed to add key: %v", err)
 	}
-	utils.Logger.Printf("Root key added with ID: %d", keyID)
+	utils.Log(fmt.Sprintf("Root key added with ID: %d", keyID))
 
 	// Create a new keyring in the session keyring
 	keyringID, err := unix.AddKey("keyring", "_ebpf", nil, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
 		log.Fatalf("Failed to create keyring: %v", err)
 	}
-	utils.Logger.Printf("Created eBPF prog signer keyring with ID: %d\n", keyringID)
+	utils.Log(fmt.Sprintf("Created eBPF prog signer keyring with ID: %d\n", keyringID))
 
 	// Link the key to the keyring one used by the userspace laoder, and second via the kernel BPF LSM hooks before all the kernel eBPF hooks are injected inside kernell network stack, raw tracepoint and kprobes
 	ret, err := unix.KeyctlInt(unix.KEYCTL_LINK, keyID, keyringID, 0, 0)
@@ -85,7 +85,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	if ret < 0 {
 		utils.Logger.Fatalf("Failed to link key: %v", err)
 	}
-	utils.Logger.Printf("Linked key %d to keyring %d\n", keyID, keyringID)
+	utils.Log(fmt.Sprintf("Linked key %d to keyring %d\n", keyID, keyringID))
 	return nil
 }
 
@@ -122,13 +122,13 @@ func CleanupKernelKeyRing() error {
 		// Revoke the key for the parent sign
 		_, err = unix.KeyctlInt(unix.KEYCTL_REVOKE, rootKeyId, 0, 0, 0)
 		if err != nil {
-			utils.Logger.Printf("Warning: failed to revoke key: %v", err)
+			utils.Log(fmt.Sprintf("Warning: failed to revoke key: %v", err))
 		}
 
 		// Unlink the key from session
 		_, err = unix.KeyctlInt(unix.KEYCTL_UNLINK, rootKeyId, sessionID, 0, 0)
 		if err != nil {
-			utils.Logger.Printf("Warning: failed to unlink key: %v", err)
+			utils.Log(fmt.Sprintf("Warning: failed to unlink key: %v", err))
 		}
 		utils.Log("Successfully cleaned up root session keyring", rootKeyId)
 	} else {

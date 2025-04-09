@@ -24,11 +24,10 @@ func Log(args ...any) {
 func NewLogger(ctx context.Context) {
 	once.Do(func() {
 		Logger = log.NewWithOptions(os.Stderr, log.Options{
-			ReportCaller:    true,
 			ReportTimestamp: true,
 			TimeFormat:      time.RFC822,
 		})
-		Logger.SetFormatter(log.TextFormatter)
+		Logger.SetFormatter(log.LogfmtFormatter)
 		Logger.SetPrefix("msg")
 	})
 }
