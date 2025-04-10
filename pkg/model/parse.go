@@ -23,19 +23,15 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
 
-type DnsParserActions interface{}
-
 type DnsPacketGen struct {
-	IfaceHandler        *netinet.NetIface
-	SockSendFdInterface []netlink.Link // AF_NETLINK
-	SocketSendFd        *int           // AF_PACKET
-	XdpSocketSendFd     *xdp.Socket    // AF_XDP
-	OnnxModel           *OnnxModel
-	StreamClient        *stream.StreamProducer
+	IfaceHandler    *netinet.NetIface // AF_NETLINK
+	SocketSendFd    *int              // AF_PACKET
+	XdpSocketSendFd *xdp.Socket       // AF_XDP
+	OnnxModel       *OnnxModel
+	StreamClient    *stream.StreamProducer
 }
 
 // convert to an shared distributed cache over the enitr data plane if required
@@ -332,7 +328,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 			// first check and bind the xdp kernel socket to tx queue for the interface
 			sockAddr := syscall.SockaddrLinklayer{
 				Protocol: syscall.ETH_P_ALL,
-				Ifindex:  d.SockSendFdInterface[0].Attrs().Index,
+				Ifindex:  d.IfaceHandler.PhysicalLinks[0].Attrs().Index,
 			}
 
 			// need this to be replaced with xdp

@@ -32,7 +32,7 @@ func InitProfileServer(ctx context.Context) error {
 		},
 	}
 	go func() {
-		utils.Logger.Printf("Starting pprof server on port %d", PPROF_PORT)
+		utils.Log(fmt.Sprintf("Starting pprof server on port %d", PPROF_PORT))
 		if err := server.ListenAndServe(); err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
 				graceFulClose <- true
@@ -46,7 +46,7 @@ func InitProfileServer(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			if utils.DEBUG {
-				utils.Logger.Printf("Shutting down pprof server on port %d", PPROF_PORT)
+				utils.Log(fmt.Sprintf("Shutting down pprof server on port %d", PPROF_PORT))
 			}
 			server.Shutdown(ctx)
 		case <-graceFulClose:

@@ -28,9 +28,6 @@ import com.synarcs.controller.service.BlacklistDomain;
 import com.synarcs.controller.service.MaliciousNsResolve;
 import com.synarcs.controller.service.UpdateBenignSld;
 
-
-// later fix and move all business logic inside the dedicated blacklist service 
-
 @RestController
 public class DnsSecController implements Serializable {
 

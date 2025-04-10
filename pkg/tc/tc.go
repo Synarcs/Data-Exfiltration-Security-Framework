@@ -8,6 +8,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
@@ -60,63 +61,68 @@ var (
 
 var mapsToPinSharedProcKillMap []string
 
-func NewDnsPacketResendUtils(interfaces *netinet.NetIface, onnxModel *model.OnnxModel,
-	streamClient *stream.StreamProducer) (*model.DnsPacketGen, error) {
-	xdpSocketFd, err := interfaces.GetRootNamespaceRawSocketFdXDP()
+// provide all input required to inject kernel tc qdisc eBPF programs in kernel
+type KernelTcInjectConfig struct {
+	Iface                           *netinet.NetIface
+	OnnxModel                       *model.OnnxModel
+	StreamClient                    *stream.StreamProducer
+	GlobalErrorKernelHandlerChannel chan error
+	AgentHash                       *crypto.Hash
+	AgentConfig                     conf.AgentConfig
+	CryptoAgentLSMHandler           *crypto.CryptoBpfLsm
+}
+
+func NewDnsPacketResendUtils(config *KernelTcInjectConfig) (*model.DnsPacketGen, error) {
+	xdpSocketFd, err := config.Iface.GetRootNamespaceRawSocketFdXDP()
 	if err == nil {
 		utils.Log("[Using the raw packet with AF_PACKET Fd")
 
 		return &model.DnsPacketGen{
-			IfaceHandler:        interfaces,
-			SockSendFdInterface: interfaces.PhysicalLinks,
-			XdpSocketSendFd:     xdpSocketFd,
-			SocketSendFd:        nil,
-			OnnxModel:           onnxModel,
-			StreamClient:        streamClient,
+			IfaceHandler:    config.Iface,
+			XdpSocketSendFd: xdpSocketFd,
+			SocketSendFd:    nil,
+			OnnxModel:       config.OnnxModel,
+			StreamClient:    config.StreamClient,
 		}, nil
 	} else {
 		utils.Log("Error Binding the XDP Socket Physical driver lacking support")
-		fd, err := interfaces.GetRootNamespaceRawSocketFd()
+		fd, err := config.Iface.GetRootNamespaceRawSocketFd()
 
 		if err != nil {
 			return nil, err
 		}
 		return &model.DnsPacketGen{
-			IfaceHandler:        interfaces,
-			SockSendFdInterface: interfaces.PhysicalLinks,
-			SocketSendFd:        fd,
-			XdpSocketSendFd:     nil,
-			OnnxModel:           onnxModel,
-			StreamClient:        streamClient,
+			IfaceHandler:    config.Iface,
+			SocketSendFd:    fd,
+			XdpSocketSendFd: nil,
+			OnnxModel:       config.OnnxModel,
+			StreamClient:    config.StreamClient,
 		}, nil
 	}
 }
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-func NewTcEgressFactory(iface netinet.NetIface, onnxModel *model.OnnxModel,
-	streamClient *stream.StreamProducer,
-	globalErrorKernelHandlerChannel chan error, agentHash *crypto.Hash, config conf.AgentConfig,
-	cryptoAgentLSMHandler *crypto.CryptoBpfLsm) (*TCHandler, error) {
-	dnsPacketGen, err := NewDnsPacketResendUtils(&iface, onnxModel, streamClient)
+func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
+	dnsPacketGen, err := NewDnsPacketResendUtils(config)
 
 	if err != nil {
 		return nil, err
 	}
 
 	tcHandler := &TCHandler{
-		Interfaces:                      &iface,
+		Interfaces:                      config.Iface,
 		DnsPacketGen:                    dnsPacketGen,
-		OnnxLoadedModel:                 onnxModel,
-		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
-		Hash:                            agentHash,
-		config:                          config,
-		CryptoAgentLSMHandler:           cryptoAgentLSMHandler,
+		OnnxLoadedModel:                 config.OnnxModel,
+		GlobalErrorKernelHandlerChannel: config.GlobalErrorKernelHandlerChannel,
+		Hash:                            config.AgentHash,
+		config:                          config.AgentConfig,
+		CryptoAgentLSMHandler:           config.CryptoAgentLSMHandler,
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
 		tcHandler.IsEgressXdpSupport = true
 	}
 
-	InitPinMapHandlerNames(config)
+	InitPinMapHandlerNames(config.AgentConfig)
 	ipv4c2mal, ipv6c2mal := utils.GenerateC2BlacklistAddressChannels()
 	tcHandler.GlobalMalC2L3addressChannelIpv4 = ipv4c2mal
 	tcHandler.GlobalMalC2L3addressChannelIpv6 = ipv6c2mal
@@ -389,7 +395,12 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				RedirectIpv4:            utils.GenerateBigEndianIpv4(utils.GetIpv4AddressUserSpaceDpIString(index + 1)),
 				NfNdpBridgeRedirectIpv4: utils.GenerateBigEndianIpv4(utils.BRIDGE_IPAM_MAL_TUNNEL_IPV4_IP),
 				KernelTCSKBMark:         tc.Hash.SkbHash,
-				IsAgressiveSec:          1, // runs the agent config in aggressive mode to stop even single malicious exfiltration attempt
+			}
+
+			if tc.config.GetAgentAggressiveDpiMode() {
+				kernelTCConfig.IsAgressiveSec = 1 // agressive DPI
+			} else {
+				kernelTCConfig.IsAgressiveSec = 0 // passive DPI
 			}
 
 			if !utils.DEBUG {
@@ -763,7 +774,7 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHand
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
 	tcpSniffErroChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
 
-	if len(ifaceHandler.PhysicalLinks) > 1 && tc.config.GetAgentConfig().EnhancedFeatures.Dns.EnabledPassiveEnhancedTCPDPI {
+	if len(ifaceHandler.PhysicalLinks) > 1 && tc.config.GetAgentConfig().EnhancedFeatures.Dns.EnabledPassiveEgressEnhancedTCPDPI {
 		utils.Log("Processing of multiple Physical links")
 
 		for iface := 0; iface < len(ifaceHandler.PhysicalLinks); iface++ {
@@ -799,8 +810,30 @@ func (tc *TCHandler) DetachTCLinkedTracepointHookHandlers() error {
 	return tc.TcTracepointHandlers.RemoveTracepoints()
 }
 
+/*
+Close the open socket fd,  over kernel AF_PACKET raw / AF_XDP socket for egress tx queues
+*/
+func (tc *TCHandler) CloseSocketFd() {
+	if tc.DnsPacketGen.XdpSocketSendFd != nil {
+		utils.Log("Closing the AF_XDP Socket  for egress rescanned packed resend")
+		if err := tc.DnsPacketGen.XdpSocketSendFd.Close(); err != nil {
+			tc.GlobalErrorKernelHandlerChannel <- err
+		}
+		return
+	}
+
+	if tc.DnsPacketGen.SocketSendFd != nil {
+		utils.Log("Closing the AF_PACKET Socket for egress rescanned packed resend")
+		if err := syscall.Close(*tc.DnsPacketGen.SocketSendFd); err != nil {
+			tc.GlobalErrorKernelHandlerChannel <- err
+		}
+	}
+}
+
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 	// used for removal of tc qdisc and all nested filters to parent qdisc class/ classless filter form all the host interfacee
+	defer tc.CloseSocketFd()
+
 	for _, link := range tc.Interfaces.PhysicalLinks {
 		err := netlink.QdiscDel(&netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
@@ -831,5 +864,6 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 			}
 		}
 	}
+
 	return nil
 }

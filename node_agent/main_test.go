@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// convers all the integration test for the user space entire node agent with kernel code, and kernel compatibility
+
 var linkHandler netinet.NetIface
 
 // cover most of the integration test with kernel netlink sockets / interfaces and ebpf  compiled programs loader to be inject into the kernel network stack

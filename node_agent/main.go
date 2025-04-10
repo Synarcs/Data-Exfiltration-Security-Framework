@@ -320,8 +320,15 @@ func main() {
 
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
-	tc, err := tcl.NewTcEgressFactory(iface, model, streamProducer, globalErrorKernelHandlerChannel,
-		hash, agentConfigLoader, cryptoLsmProgHandler)
+	tc, err := tcl.NewTcEgressFactory(&tcl.KernelTcInjectConfig{
+		Iface:                           &iface,
+		OnnxModel:                       model,
+		StreamClient:                    streamProducer,
+		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
+		AgentConfig:                     agentConfigLoader,
+		AgentHash:                       hash,
+		CryptoAgentLSMHandler:           cryptoLsmProgHandler,
+	})
 
 	if err != nil {
 		utils.Log(err.Error())
@@ -336,8 +343,13 @@ func main() {
 	}
 
 	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
-		// ingress xdp based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
-		ingress := xdp.NewIngressSnifferFactory(&iface, model, streamProducer, globalErrorKernelHandlerChannel)
+		// ingress pcap based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
+		ingress := xdp.NewIngressSniffer(&xdp.IngressSnifferConfig{
+			Iface:                           &iface,
+			OnnxModel:                       model,
+			StreamClient:                    streamProducer,
+			GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
+		})
 		go ingress.SniffIgressForC2C(ctx, utils.DNS_EGRESS_PORT)
 	}
 
@@ -390,7 +402,8 @@ func main() {
 
 	// global error channel for the kernel hooks
 	go func() {
-		for range globalErrorKernelHandlerChannel {
+		for err := range globalErrorKernelHandlerChannel {
+			utils.Logger.Error("Error receieved in node agent global error chan ", err.Error())
 			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
 				utils.Logger.Printf("Error receieved in node agent global error chan closing ... %+v", err)
 			}
@@ -450,46 +463,43 @@ func main() {
 	// export the cpu metrics for the node agent once booted to prometheus
 	go events.ExportCpuProcessMetrics(ctx)
 
-	sigType, done := <-term
-	if done {
-		switch sigType {
-		case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
-			utils.Log("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
-		}
-		utils.Log("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
-		agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
-		if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-			utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
-		}
-
-		agentCancelFunc()
-
-		if err := cryptoLsmProgHandler.RemoveCryptoLSMProgs(); err != nil {
-			utils.Logger.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)
-		}
-
-		if err := crypto.CleanupKernelKeyRing(); err != nil {
-			utils.Log("Error cleaning up the kernel keyring for custom signed keys", err.Error())
-		}
-
-		if crypto.DUMP_CA_LSM {
-			CleanCryptoDirs()
-		}
-
-		streamProducer.CloseProducer()
-		streamConsumer.CloseConsumer()
-
-		if nodeAgentCliOptions.StreamClient {
-			rpcServer.CloseRpcServer()
-		}
-
-		// cancel ctx for the profiler running
-		if nodeAgentCliOptions.Profile {
-			cancelctx()
-		}
-
-		utils.Log("Node agent gracefully shutdown successfully with root process id", os.Getpid())
-		os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
+	sigType := <-term
+	switch sigType {
+	case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
+		utils.Log("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
+	}
+	utils.Log("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
+	agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
+	if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
+		utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
 	}
 
+	agentCancelFunc()
+
+	if err := cryptoLsmProgHandler.RemoveCryptoLSMProgs(); err != nil {
+		utils.Logger.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)
+	}
+
+	if err := crypto.CleanupKernelKeyRing(); err != nil {
+		utils.Log("Error cleaning up the kernel keyring for custom signed keys", err.Error())
+	}
+
+	if crypto.DUMP_CA_LSM {
+		CleanCryptoDirs()
+	}
+
+	streamProducer.CloseProducer()
+	streamConsumer.CloseConsumer()
+
+	if nodeAgentCliOptions.StreamClient {
+		rpcServer.CloseRpcServer()
+	}
+
+	// cancel ctx for the profiler running
+	if nodeAgentCliOptions.Profile {
+		cancelctx()
+	}
+
+	utils.Log("Node agent gracefully shutdown successfully with root process id", os.Getpid())
+	os.Exit(int(syscall.SIGTERM)) // a graceful shutdown evict all the kernel hooks
 }

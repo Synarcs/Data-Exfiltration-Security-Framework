@@ -25,19 +25,25 @@ type IngressSniffHandler struct {
 	GlobalErrorKernelHandlerChannel chan error // handles all control channel created by main to kill any kernel code if found runtime panics
 }
 
+type IngressSnifferConfig struct {
+	Iface                           *netinet.NetIface
+	OnnxModel                       *model.OnnxModel
+	StreamClient                    *stream.StreamProducer
+	GlobalErrorKernelHandlerChannel chan error
+}
+
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 // TODO: Fix all the code redundancies
-func NewIngressSnifferFactory(iface *netinet.NetIface,
-	onnxModel *model.OnnxModel, streamClient *stream.StreamProducer, globalErrorKernelHandlerChannel chan error) *IngressSniffHandler {
+func NewIngressSniffer(config *IngressSnifferConfig) *IngressSniffHandler {
 
 	// only use  for ingress support for the link (net_device) in kernel
 	// Ingress sniff and process neither need AF_XDP not AF_PACKET
 
 	return &IngressSniffHandler{
-		IfaceHandler:                    iface,
-		OnnxModel:                       onnxModel,
-		StreamClient:                    streamClient,
-		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
+		IfaceHandler:                    config.Iface,
+		OnnxModel:                       config.OnnxModel,
+		StreamClient:                    config.StreamClient,
+		GlobalErrorKernelHandlerChannel: config.GlobalErrorKernelHandlerChannel,
 	}
 }
 

@@ -46,8 +46,8 @@ struct exfil_kernel_config  {
     __be32 RedirectIpv4;
     __be32 NfNdpBridgeRedirectIpv4;
     __u32 KernelTCSKBMark;
-    __u8 IsAgressiveSec; // tells the kernel DPI to run the DNS DPI in aggresive mode,
-};
+    __u32 IsAgressiveSec; // tells the kernel DPI to run the DNS DPI in aggresive mode,
+} __attribute__((packed));
 
 /* 
     Each key maps to the service limits for the dns traffic, for example 

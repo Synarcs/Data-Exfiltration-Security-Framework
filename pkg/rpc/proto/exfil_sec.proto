@@ -4,6 +4,8 @@ package exfil_kernel;
 
 option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework";
 
+// the proto is initially written for multi-layer security with control plane verifying progs, and signatures for the eBPF progs at the endpoint over the data plane
+
 enum DNS_MALICIOUS_FLAGS {
     MALICIOUS  = 0;
     SUSPICIOUS = 1;

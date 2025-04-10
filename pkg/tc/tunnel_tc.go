@@ -61,9 +61,12 @@ func NewTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChann
 	}
 
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
-		tccloneTunnel.IngressTunnelSniffer = xdp.NewIngressSnifferFactory(
-			iface, onnx, streamClient, globalErrorChannel,
-		)
+		tccloneTunnel.IngressTunnelSniffer = xdp.NewIngressSniffer(&xdp.IngressSnifferConfig{
+			Iface:                           iface,
+			OnnxModel:                       onnx,
+			StreamClient:                    streamClient,
+			GlobalErrorKernelHandlerChannel: globalErrorChannel,
+		})
 	}
 	return tccloneTunnel
 }

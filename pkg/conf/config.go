@@ -27,6 +27,7 @@ type NodeAgentCliOptions struct {
 
 // apply addon and extend to support cusomt config as required by the agent in userspace
 type AgentConfig interface {
+	GetAgentAggressiveDpiMode() bool
 	GetAddonFeaturesConfig() *EnhancedFeatures
 	GetAgentConfig() *NodeAgentConfig
 	ReadNodeAgentConfig() error
@@ -61,6 +62,10 @@ func (nn *Config) ReadNodeAgentConfig() error {
 	return nil
 }
 
+func (nn *Config) GetAgentAggressiveDpiMode() bool {
+	return nn.AgentBootConfig.AgentModeAggressive
+}
+
 func (nn *Config) GetAgentConfig() *NodeAgentConfig {
 	return nn.AgentBootConfig
 }
@@ -81,7 +86,9 @@ func (nn *Config) GetL3FiltersConfig() *L3EnhancedFeatures {
 //  config usd to boot the DNS node agent in user space and inject kernel eBPF programs
 
 type NodeAgentConfig struct {
-	StreamServers struct {
+	AgentModeAggressive bool `yaml:"agentModeAggressive" reflect:"agentModeAggressive"`
+	AgentModeIsolated   bool `yaml:"agentModeIsolated" reflect:"agentModeIsolated"`
+	StreamServers       struct {
 		Host string `yaml:"host" reflect:"host"`
 		Ip   string `yaml:"ip" reflect:"ip"`
 		Port string `yaml:"port" reflect:"port"`
@@ -120,11 +127,11 @@ type NodeAgentConfig struct {
 }
 
 type DnsEnhancedFeatures struct {
-	EnableNxFloodPrevention      bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
-	EnableIngressSniff           bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
-	EnabledTbRlimit              bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
-	EnabbledVolumeRlimit         bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
-	EnabledPassiveEnhancedTCPDPI bool `yaml:"enabledPassiveEnhancedTCPDPI"`
+	EnableNxFloodPrevention            bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
+	EnableIngressSniff                 bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
+	EnabledTbRlimit                    bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
+	EnabbledVolumeRlimit               bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
+	EnabledPassiveEgressEnhancedTCPDPI bool `yaml:"enabledPassiveEgressEnhancedTCPDPI"`
 }
 
 type L3EnhancedFeatures struct {

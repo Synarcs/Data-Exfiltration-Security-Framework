@@ -80,6 +80,12 @@ DURATION ?= 20
 bench:
 	cd scripts/bench  && bash bench.sh dnsperf $(QPS) $(DURATION)
 
+
+.PHONY: kernel-prof
+kernel-prof:
+	@echo "running kernel eBPF maps profile, require bpftop to be installed"
+	sudo bpftop
+
 .PHONY: gazelle-update-repos
 gazelle-update-repos:
 	bazel run //:gazelle -- update-repos -from_file=go.mod

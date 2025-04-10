@@ -8,8 +8,8 @@ Enhanced observability and security solution built for enterprises to fully prev
 
 
 # Vision
-Introduces a novel approach termed Kernel-Enforced Dynamic Security (KDR) for Endpoint Detection and Response (XDR / EDR), acting as a wrapper to enhance enterprise EDR/XDR solutions.
-KDR provides real-time, kernel-level enforcement of dynamic network policies, fine-grained traffic filters, and cloud infrastructure NACLs to prevent cross-protocol exfiltration across layers L3 (IP), L4 (Transport), and L7 (Application) — especially effective following initial prevention at the DNS layer.
+Introduces a novel approach termed Kernel-Enforced Dynamic Security (KEDS) for Endpoint Detection and Response (XDR / EDR), acting as a wrapper to enhance enterprise EDR/XDR solutions.
+KEDS provides real-time, kernel-level enforcement of dynamic network policies, fine-grained traffic filters, and cloud infrastructure NACLs to prevent cross-protocol exfiltration across layers L3 (IP), L4 (Transport), and L7 (Application) — especially effective following initial prevention at the DNS layer.
 
 
 ## Node Agent

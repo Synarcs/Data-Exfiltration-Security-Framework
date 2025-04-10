@@ -1211,7 +1211,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
 
     if (IP_DST_OFF > skb->len) {
-        return -1;  // Check if offset is within bounds
+        return -1;  // Check if offset is w
     }
 
     if (bpf_l3_csum_replace(skb, IP_CHECK_FF, 0, csum_diff_drop, 0) < 0) {
@@ -1856,6 +1856,18 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
 }
 
 
+/*
+    Runs the DPI in non aggresive mode, relies on kernel link clone_redirect, to actively start hunting traffic from potential malicious transfer over the process 
+    Similar to clone redirect vertically intergrate with kernel syscall layer for map prunning, and malicious process termination
+*/
+static 
+__always_inline bool __handle_non_aggresive_dpi_standard_dns_port(struct __skb_buff *skb, 
+                struct skb_cursor *cursor) {
+    // TODO: Implement this
+    return true;
+}
+
+
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
     static 
@@ -1910,12 +1922,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
     return actions;
 }
-
-
-struct payload_data {
-  __u32 len;
-  __u8 data[1500]; 
-};
 
 struct kernel_handler_map {
     __uint(type, BPF_MAP_TYPE_HASH);
@@ -2030,7 +2036,7 @@ int classify(struct __sk_buff *skb){
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 __u32 br_index = 4; 
 
-                __u8 isAggressiveExfilsec = 1;
+                __u32 isAggressiveExfilsec = 1;
                 if (config) {
                     __be32 redirect_address_from_config = config->RedirectIpv4;
                     dest_addr_route = bpf_htonl(redirect_address_from_config);
@@ -2121,7 +2127,10 @@ int classify(struct __sk_buff *skb){
                 // for now learn dns ring buff event;
 
                 threatHuntPotentialMaliciousProcessExfil:
+
+                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor))
                     return TC_FORWARD;
+                return TC_DROP;
             }else {
                     // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
@@ -2200,7 +2209,7 @@ int classify(struct __sk_buff *skb){
 
                 __u32 out = skb->ifindex;
 
-                __u8 isAggressiveExfilsec = 1; // defaults to aggresive DPI mode to stop single exfiltrated packet leave kernel 
+                __u32 isAggressiveExfilsec = 1; // defaults to aggresive DPI mode to stop single exfiltrated packet leave kernel 
                 
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 __u32 br_index = 4;  // load  the redirection netdev as default  from the kernel , runtime pulled from the configMap in eBPF map 
@@ -2276,7 +2285,10 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
                 
                 threatHuntPotentialMaliciousProcessExfilIpv6:
+                
+                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor))
                     return TC_FORWARD;
+                return TC_DROP;
             }
             else {
 

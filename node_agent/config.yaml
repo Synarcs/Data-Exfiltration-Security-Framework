@@ -43,6 +43,10 @@ rlimitConfig:
   tb:
     maxTokens: 10000
 
+agentModeAggressive: true
+agentModeIsolated: false # assumes this agent is alone runnin at endpoint and not connected to control plane, the agent does not get any updates or malicious stream process from control plane 
+
+
 # Add the tb volume config for volume based rate limit over egress tc in kernel 
 
 enhancedFeatures:
@@ -55,4 +59,4 @@ enhancedFeatures:
     enabledTbRlimit: false
     enabbledVolumeRlimit: false
     
-    enabledPassiveEnhancedTCPDPI: true # works as a  passive sniffer over TCP for filtering ans seuciryt malicious domains 
+    enabledPassiveEgressEnhancedTCPDPI: true # works as a  passive sniffer over TCP for filtering ans seuciryt malicious domains 
