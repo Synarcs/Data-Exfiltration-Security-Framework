@@ -19,7 +19,7 @@
  * SOFTWARE.
  *   -----------------------------
  *    Author: Synarcs
- *    Data:   09/25/2024, 2:59:15 AM
+ *    Date:   09/25/2024, 2:59:15 AM
  *   -----------------------------
 */
 
@@ -2030,14 +2030,20 @@ int classify(struct __sk_buff *skb){
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 __u32 br_index = 4; 
 
+                __u8 isAggressiveExfilsec = 1;
                 if (config) {
                     __be32 redirect_address_from_config = config->RedirectIpv4;
                     dest_addr_route = bpf_htonl(redirect_address_from_config);
                     br_index = config->BridgeIndexId;
+                    isAggressiveExfilsec = config->IsAgressiveSec;
                 }else {
                     #if DEBUG
                         bpf_printk("kernel cannot find the requred kernel config redirect map");
                     #endif
+                }
+
+                if (isAggressiveExfilsec == 0) {
+                    goto threatHuntPotentialMaliciousProcessExfil;
                 }
 
                 if (result.isBenign) {
@@ -2113,6 +2119,9 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
+
+                threatHuntPotentialMaliciousProcessExfil:
+                    return TC_FORWARD;
             }else {
                     // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
@@ -2191,11 +2200,14 @@ int classify(struct __sk_buff *skb){
 
                 __u32 out = skb->ifindex;
 
+                __u8 isAggressiveExfilsec = 1; // defaults to aggresive DPI mode to stop single exfiltrated packet leave kernel 
+                
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 __u32 br_index = 4;  // load  the redirection netdev as default  from the kernel , runtime pulled from the configMap in eBPF map 
 
                 if (config) {
                     br_index = config->BridgeIndexId;
+                    isAggressiveExfilsec = config->IsAgressiveSec;
                 }else {
                     #if DEBUG
                         bpf_printk("kernel cannot find the requred kernel config redirect map defaulting to kernel configured link netdev ifindex %d", br_index);
@@ -2225,9 +2237,10 @@ int classify(struct __sk_buff *skb){
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
-                #if DEBUG
-                    bpf_printk("A DNS packet was found over IPv6 and using UDP as the transport");
-                #endif 
+                if (isAggressiveExfilsec == 0){
+                    goto threatHuntPotentialMaliciousProcessExfilIpv6;
+                }
+
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
                 __u16 sport = bpf_ntohs(udp->source);
@@ -2261,6 +2274,9 @@ int classify(struct __sk_buff *skb){
                 __update_kernel_packet_redirection_time(transaction_id);
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, BPF_F_INGRESS);
+                
+                threatHuntPotentialMaliciousProcessExfilIpv6:
+                    return TC_FORWARD;
             }
             else {
 

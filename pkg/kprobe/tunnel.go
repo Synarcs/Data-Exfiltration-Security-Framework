@@ -83,7 +83,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
 
 	if err != nil {
-		log.Fatal("error loading the xdp program over interface")
+		utils.Logger.Fatal("error loading the xdp program over interface")
 		return err
 	}
 
@@ -103,7 +103,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	//  Kernel Tracepoint for socket syscall for an open socket fd inside kernel of AF_FAMILY AF_NETLINK
 	sockettp, err := link.Kprobe(TUNTAP_NET_OPEN, objs.NetlinkSocket, nil)
 	if err != nil {
-		log.Fatal("error loading the kprobe program over sys_enter sock")
+		utils.Logger.Fatal("error loading the kprobe program over sys_enter sock")
 		return err
 	}
 
@@ -119,7 +119,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	ringBuff, err := ringbuf.NewReader(objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent)
 
 	if err != nil {
-		log.Fatal("Error in creating the ring buffer reader")
+		utils.Logger.Fatal("Error in creating the ring buffer reader")
 		return err
 	}
 	defer ringBuff.Close()
@@ -128,7 +128,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 	for {
 		if err != nil {
-			log.Fatal("Error in creating the ring buffer reader")
+			utils.Logger.Fatal("Error in creating the ring buffer reader")
 			return err
 		}
 
@@ -137,7 +137,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return nil
 			}
-			log.Fatal("Error in reading the ring buffer reader")
+			utils.Logger.Fatal("Error in reading the ring buffer reader")
 			return err
 		}
 

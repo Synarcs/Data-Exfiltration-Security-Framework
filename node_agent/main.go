@@ -265,7 +265,7 @@ func main() {
 
 	cliSock := cli.NewRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
-		utils.Logger.Printf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath)
+		utils.Log(fmt.Sprintf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath))
 		go cliSock.NewNodeAgentUnixCLISocket()
 	}
 
@@ -432,7 +432,7 @@ func main() {
 					utils.Log("The Remote Unix Socket FD is not healthy", err.Error())
 				}
 				if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-					utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
+					utils.Log(fmt.Sprintf("Error cleaning the injected kernel hooks %+v", err))
 				}
 				os.Exit(int(syscall.SIGTERM))
 			}

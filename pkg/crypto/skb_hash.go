@@ -34,6 +34,5 @@ func (h *Hash) GetRandomBootSkbMark() {
 		utils.Log(fmt.Sprintf("The eBPF Node Agent uses the current random SKB mark for secure redirection %s",
 			hex.EncodeToString(randomNuonceSkbMarkBoot)))
 	}
-
 	h.SkbHash = binary.BigEndian.Uint32(randomNuonceSkbMarkBoot)
 }

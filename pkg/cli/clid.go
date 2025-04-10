@@ -235,13 +235,13 @@ func (nc *NodeDaemonCli) NewNodeAgentUnixCLISocket() {
 	}
 
 	defer func() {
-		log.Println("Shutting down Node Agent CLI socket...")
+		utils.Log("Shutting down Node Agent CLI socket...")
 		// the cli sock dont need to be graceful rather abrubt close for all the sock fd to be released and upstream connection to force (since this is over unix socket)
 		listener.Close()
 		server.Close()
 		if _, err := os.Stat(string(nc.Unixsock)); err == nil {
 			if err := os.Remove(string(nc.Unixsock)); err != nil {
-				log.Println("Error removing mounted CLI socket:", err)
+				utils.Log("Error removing mounted CLI socket:", err)
 			}
 		}
 	}()
@@ -257,10 +257,10 @@ func (nc *NodeDaemonCli) NewNodeAgentUnixCLISocket() {
 	for {
 		select {
 		case err := <-nc.ErorCHan:
-			log.Println("error creating L7 http overlay over unix socket", err.Error())
+			utils.Log("error creating L7 http overlay over unix socket", err.Error())
 			return
 		case <-nc.CloseChan:
-			log.Println("received to close linux unix mount sock cli channel")
+			utils.Log("received to close linux unix mount sock cli channel")
 			return
 		}
 	}

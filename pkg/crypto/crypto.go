@@ -9,7 +9,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -127,12 +126,12 @@ func generateSelfSignedCert() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 
 	pblock, _ := pem.Decode(privateKey)
 	if privateKey == nil || pblock.Type != "EC PRIVATE KEY" {
-		log.Fatal("failed to decode key PEM", block)
+		utils.Logger.Fatal("failed to decode key PEM", block)
 	}
 
 	pKey, err := x509.ParseECPrivateKey(pblock.Bytes)
 	if err != nil {
-		log.Fatalf("failed to parse key: %v", err)
+		utils.Logger.Fatalf("failed to parse key: %v", err)
 	}
 
 	return certificate, pKey, nil

@@ -3,7 +3,6 @@ package crypto
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path"
 
@@ -48,7 +47,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	// create a new session keyring ID in the kernel, the keyring should be ephemeral and lived only until the node agent is alive in kernel
 	sessionID, err := unix.KeyctlInt(KEYCTL_JOIN_SESSION_KEYRING, 0, 0, 0, 0)
 	if err != nil {
-		log.Fatalf("Failed to create new session keyring: %v", err)
+		utils.Logger.Fatalf("Failed to create new session keyring: %v", err)
 	}
 
 	utils.Log(fmt.Sprintf("Created session keyring with ID: %d", sessionID))
@@ -66,14 +65,14 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	// Add the asymmetric key to the session keyring
 	keyID, err := unix.AddKey("asymmetric", keyDesc, val, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
-		log.Fatalf("Failed to add key: %v", err)
+		utils.Logger.Fatalf("Failed to add key: %v", err)
 	}
 	utils.Log(fmt.Sprintf("Root key added with ID: %d", keyID))
 
 	// Create a new keyring in the session keyring
 	keyringID, err := unix.AddKey("keyring", "_ebpf", nil, unix.KEY_SPEC_SESSION_KEYRING)
 	if err != nil {
-		log.Fatalf("Failed to create keyring: %v", err)
+		utils.Logger.Fatalf("Failed to create keyring: %v", err)
 	}
 	utils.Log(fmt.Sprintf("Created eBPF prog signer keyring with ID: %d\n", keyringID))
 

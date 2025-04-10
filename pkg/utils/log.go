@@ -27,7 +27,7 @@ func NewLogger(ctx context.Context) {
 			ReportTimestamp: true,
 			TimeFormat:      time.RFC822,
 		})
-		Logger.SetFormatter(log.LogfmtFormatter)
+		Logger.SetFormatter(log.TextFormatter)
 		Logger.SetPrefix("msg")
 	})
 }

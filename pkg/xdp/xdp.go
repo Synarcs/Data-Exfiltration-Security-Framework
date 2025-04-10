@@ -2,7 +2,6 @@ package xdp
 
 import (
 	"context"
-	"log"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -28,13 +27,13 @@ func (xdp *XdpHandler) LinkXdp() error {
 	handler, err := ebpf.LoadCollectionSpec(TC_INGRESS_ROOT_NETIFACE_INT)
 
 	if err != nil {
-		log.Fatal("error loading the xdp program over interface")
+		utils.Logger.Fatal("error loading the xdp program over interface")
 		return err
 	}
 
 	spec, err := ebpf.NewCollection(handler)
 	if err != nil {
-		log.Fatal("error loading the xdp program over interface")
+		utils.Logger.Fatal("error loading the xdp program over interface")
 		return err
 	}
 

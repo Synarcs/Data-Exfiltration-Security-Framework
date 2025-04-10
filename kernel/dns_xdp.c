@@ -19,9 +19,12 @@
  * SOFTWARE.
  * -----------------------------
  * Author: Synarcs
- * Data:   10/25/2024, 2:59:15 AM
+ * Date:   09/25/2024, 2:59:15 AM
  * ---------------------------->
 */
+
+// TODO: Add the endpoint DDoS prevention for stoping DNS NXDomain Floods / Water Torture attacks.
+
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
 #include <linux/tcp.h>

@@ -3,7 +3,6 @@ package xdp
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
@@ -149,7 +148,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 		// runs over br netfilter layer on iptables
 		utils.Log("Generated Ingress Packet Listener to sniff DNS packets over the UDP and TCP Transport Layer")
 		if err := cap.SetBPFFilter(fmt.Sprintf("udp src port %d or tcp src port %d", sniffUDPPort, sniffUDPPort)); err != nil {
-			log.Fatalf("Error setting BPF filter: %v", err)
+			utils.Logger.Fatalf("Error setting BPF filter: %v", err)
 			return err
 		}
 
