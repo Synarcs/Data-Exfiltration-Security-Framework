@@ -140,7 +140,7 @@ int classify(struct __sk_buff *skb){
         }
         case bpf_ntohs(ETH_P_IPV6): {
             struct ipv6hdr *ip = (struct ipv6hdr *)(eth + 1);
-            if ((void *) (ip + 1) > data_end) return XDP_DROP;
+            if ((void *) (ip + 1) > data_end) return TC_DROP;
 
             switch (ip->nexthdr) {
                 case IPPROTO_UDP: {

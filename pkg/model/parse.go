@@ -34,6 +34,41 @@ type DnsPacketGen struct {
 	StreamClient    *stream.StreamProducer
 }
 
+type DnsPacketGenConfig struct {
+	Iface        *netinet.NetIface
+	OnnxModel    *OnnxModel
+	StreamClient *stream.StreamProducer
+}
+
+func NewDnsPacketResendUtils(config *DnsPacketGenConfig) (*DnsPacketGen, error) {
+	xdpSocketFd, err := config.Iface.GetRootNamespaceRawSocketFdXDP()
+	if err == nil {
+		utils.Log("[Using the raw packet with AF_PACKET Fd")
+
+		return &DnsPacketGen{
+			IfaceHandler:    config.Iface,
+			XdpSocketSendFd: xdpSocketFd,
+			SocketSendFd:    nil,
+			OnnxModel:       config.OnnxModel,
+			StreamClient:    config.StreamClient,
+		}, nil
+	} else {
+		utils.Log("Error Binding the XDP Socket Physical driver lacking support")
+		fd, err := config.Iface.GetRootNamespaceRawSocketFd()
+
+		if err != nil {
+			return nil, err
+		}
+		return &DnsPacketGen{
+			IfaceHandler:    config.Iface,
+			SocketSendFd:    fd,
+			XdpSocketSendFd: nil,
+			OnnxModel:       config.OnnxModel,
+			StreamClient:    config.StreamClient,
+		}, nil
+	}
+}
+
 // convert to an shared distributed cache over the enitr data plane if required
 var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
 var maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int)

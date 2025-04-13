@@ -20,22 +20,6 @@
 #define forin(x, y, type, i) for (type i = (x); i < (y); i++)
 #define forine(x, y, type, i, ...) for (type i = (x); i <= (y); i++)
 
-#define __print_type(a, ...) __GENERIC(x, \
-    __u8: bpf_printk("%u\n", a) \
-    default: bpf_printk("Generic type not processed\n") \
-)
-
-#define __GENERIC_PRINT(x, ...) __GENERIC_TYPE(x, __VA_ARGS__) 
-
-
-#define CHECK_BOUNDS(ptr, offset, end, ct) \
-    if ((void *)((ptr) + (offset) + 1) > (end)) \
-        return (ct);
-
-#define CHECK_BOUNDS_OFFSET(ptr, offset, end, ct)  \
-    if ((void *)((ptr) + (offset)) > (end)) \
-        return (ct);
-
 // cursor to and other encap protocol information storing packet cursor information in skb 
 struct skb_cursor {
     void *data;

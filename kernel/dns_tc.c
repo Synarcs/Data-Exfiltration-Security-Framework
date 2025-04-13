@@ -1855,6 +1855,13 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
     }
 }
 
+// v6 dnat, ipv6 does not contain checksum for fast transfer over the wire the checksum in skb need not be incrementally recomputed
+// TODO: All the ipv6 dnat in kernel has to configured from userspace node agent over discrete ipam v4/v6 range at the endpoint
+static 
+__always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
+    ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
+}
+
 
 /*
     Runs the DPI in non aggresive mode, relies on kernel link clone_redirect, to actively start hunting traffic from potential malicious transfer over the process 
@@ -1922,14 +1929,6 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
     return actions;
 }
-
-struct kernel_handler_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 1 << 24);
-    __type(key, __u8);
-    __type(value, __u16);
-    __uint(map_flags, BPF_F_NO_PREALLOC);
-} maps SEC(".maps");
 
 static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 	__u16 frag_off;
@@ -2278,7 +2277,7 @@ int classify(struct __sk_buff *skb){
                     __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
                 }
                 
-                ipv6->daddr = bridge_redirect_addr_ipv6_suspicious;
+                __skb_l3_dnat_v6(&ipv6);
 
                 __update_kernel_packet_redirection_time(transaction_id);
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 

@@ -72,38 +72,13 @@ type KernelTcInjectConfig struct {
 	CryptoAgentLSMHandler           *crypto.CryptoBpfLsm
 }
 
-func NewDnsPacketResendUtils(config *KernelTcInjectConfig) (*model.DnsPacketGen, error) {
-	xdpSocketFd, err := config.Iface.GetRootNamespaceRawSocketFdXDP()
-	if err == nil {
-		utils.Log("[Using the raw packet with AF_PACKET Fd")
-
-		return &model.DnsPacketGen{
-			IfaceHandler:    config.Iface,
-			XdpSocketSendFd: xdpSocketFd,
-			SocketSendFd:    nil,
-			OnnxModel:       config.OnnxModel,
-			StreamClient:    config.StreamClient,
-		}, nil
-	} else {
-		utils.Log("Error Binding the XDP Socket Physical driver lacking support")
-		fd, err := config.Iface.GetRootNamespaceRawSocketFd()
-
-		if err != nil {
-			return nil, err
-		}
-		return &model.DnsPacketGen{
-			IfaceHandler:    config.Iface,
-			SocketSendFd:    fd,
-			XdpSocketSendFd: nil,
-			OnnxModel:       config.OnnxModel,
-			StreamClient:    config.StreamClient,
-		}, nil
-	}
-}
-
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
-	dnsPacketGen, err := NewDnsPacketResendUtils(config)
+	dnsPacketGen, err := model.NewDnsPacketResendUtils(&model.DnsPacketGenConfig{
+		Iface:        config.Iface,
+		OnnxModel:    config.OnnxModel,
+		StreamClient: config.StreamClient,
+	})
 
 	if err != nil {
 		return nil, err
@@ -515,6 +490,56 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 	return nil
 }
 
+/*
+Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
+*/
+func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
+}
+
+/*
+Aggressive DPI for processing L3 UDP packet over DNS live redirected from kernel
+*/
+func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_id uint16, isIpv6 bool,
+	ip_layer3_checksum_kernel_ts *events.DPIRedirectionKernelMap, dnsMapRedirectMap *ebpf.Map, dnsMapRedirectVerify *ebpf.Map) error {
+
+	err := dnsMapRedirectMap.Lookup(&dns_packet_id, ip_layer3_checksum_kernel_ts)
+	if err != nil {
+		utils.Log("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
+	} else {
+		if utils.DEBUG {
+			utils.Log("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+		}
+
+		if isIpv6 {
+			// support for ipv6
+			if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
+				return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
+			}
+		}
+
+		// for AF_XDP kernel inject in device driver TX queue no need for guard map again and timing attack check as required in AF_PACKET
+		if tc.IsEgressXdpSupport {
+			if err := dnsMapRedirectMap.Delete(&dns_packet_id); err != nil {
+				if !errors.Is(err, ebpf.ErrKeyNotExist) {
+					utils.Log("Link has XDP support Error delete the Key ", dns_packet_id)
+				}
+			}
+		} else {
+			// will again pass through kernel AF_PACKET via kernel TC
+			timeVal := events.DPIRedirectionTimestampVerify{
+				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
+				UserSpace_Egress_Loaded: 1,
+			}
+
+			if err := dnsMapRedirectVerify.Put(timeVal.Kernel_timets, timeVal.UserSpace_Egress_Loaded); err != nil {
+				utils.Log("Error updating the timestamp kernel values for egress traffic")
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, ifaceHandler *netinet.NetIface,
 	handler *pcap.Handle, isPhysicalNetDevSniff bool) error {
 
@@ -582,6 +607,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 	// init conside for pcap over udp dg only for now
 
 	dnsLayer := packet.Layer(layers.LayerTypeDNS)
+
 	dnsMapRedirectMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_MAP]
 	dnsMapRedirectVerify := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_TC_VERIFY_MAP]
 
@@ -614,44 +640,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 	isIpv6 := !isIpv4
 
-	processVeifyKernelDnsTS := func(dns_packet_id uint16, ip_layer3_checksum_kernel_ts *events.DPIRedirectionKernelMap) error {
-
-		err := dnsMapRedirectMap.Lookup(&dns_packet_id, ip_layer3_checksum_kernel_ts)
-		if err != nil {
-			utils.Log("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
-		} else {
-			if utils.DEBUG {
-				utils.Log("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
-			}
-
-			if isIpv6 {
-				// support for ipv6
-				if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
-					return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
-				}
-			}
-
-			// for AF_XDP kernel inject in device driver TX queue no need for guard map again and timing attack check as required in AF_PACKET
-			if tc.IsEgressXdpSupport {
-				if err := dnsMapRedirectMap.Delete(&dns_packet_id); err != nil {
-					if !errors.Is(err, ebpf.ErrKeyNotExist) {
-						utils.Log("Link has XDP support Error delete the Key ", dns_packet_id)
-					}
-				}
-			} else {
-				// will again pass through kernel AF_PACKET via kernel TC
-				timeVal := events.DPIRedirectionTimestampVerify{
-					Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
-					UserSpace_Egress_Loaded: 1,
-				}
-
-				if err := dnsMapRedirectVerify.Put(timeVal.Kernel_timets, timeVal.UserSpace_Egress_Loaded); err != nil {
-					utils.Log("Error updating the timestamp kernel values for egress traffic")
-					return err
-				}
-			}
-		}
-		return nil
+	if !tc.config.GetAgentConfig().AgentModeAggressive {
+		goto processPacketForNonAggresiveDPI
 	}
 
 	if dnsLayer != nil {
@@ -661,7 +651,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
 		if !isPhysicalNetDevSniff {
-			if err := processVeifyKernelDnsTS(dns_packet_id, &ip_layer3_checksum_kernel_ts); err != nil {
+			if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts, dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
 				utils.Log(fmt.Sprintf("Error verify the UDP packet time from kernel %+v", err))
 			}
 		}
@@ -696,13 +686,13 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		var dns_packet_id uint16 = uint16(dns.ID)
 		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		if err := processVeifyKernelDnsTS(dns_packet_id, &ip_layer3_checksum_kernel_ts); err != nil {
+		if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts,
+			dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
 			utils.Log(fmt.Sprintf("Error processing the dns packet over tcp stream %+v", err))
 		}
 
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
-			fmt.Println("called here for redirect over tcp")
 			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
@@ -719,6 +709,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 	}
 
+processPacketForNonAggresiveDPI:
+	tc.ProcessEachPacketPassiveDpi(ctx)
 	return nil
 }
 
