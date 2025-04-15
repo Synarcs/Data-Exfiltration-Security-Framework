@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/netip"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
@@ -273,7 +272,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
 			})
-			go runtime.GC()
+			go utils.ForceGcPacketBufferZerocopyUserspace()
 		}
 		return nil
 	} else {
@@ -366,7 +365,6 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 				Ifindex:  d.IfaceHandler.PhysicalLinks[0].Attrs().Index,
 			}
 
-			// need this to be replaced with xdp
 			if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
 				return err
 			}

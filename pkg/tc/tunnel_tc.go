@@ -548,8 +548,8 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			}
 			// older kernel version use kernel proc fs mount to ge process Information
 		}
-		go runtime.GC()
 	}
+	go utils.ForceGcPacketBufferZerocopyUserspace()
 	return nil
 }
 

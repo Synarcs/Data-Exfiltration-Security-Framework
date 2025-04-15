@@ -2,16 +2,20 @@ package netinet
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/iowatchers"
 	"github.com/asavie/xdp"
+	"github.com/fsnotify/fsnotify"
 	"github.com/google/gopacket/pcap"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -112,10 +116,10 @@ func (nf *NetIface) GetVxlanLinks() {
 	}
 }
 
-func (nf *NetIface) GetRootGateway() error {
-	if len(nf.RoutesV4) == 0 && len(nf.RoutesV6) == 0 {
-		return fmt.Errorf("No routes found")
-	}
+var sysetemdResolvedConfigUpdateGuard sync.Mutex
+
+func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer) {
+
 	var gw net.IP
 	physicalLink := nf.PhysicalLinks[0].Attrs().Name
 	for _, val := range nf.RoutesV4[physicalLink] {
@@ -125,24 +129,82 @@ func (nf *NetIface) GetRootGateway() error {
 		}
 	}
 
-	dnsResolver, err := ReadDNSResolvedConf()
-	if err != nil {
-		nf.PhysicalRouterGatewayV4 = gw.To4()
-		nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
-	} else {
-		if dnsResolver.Ipv4 != nil {
-			nf.PhysicalRouterGatewayV4 = dnsResolver.Ipv4
+	configCustomDefaultLocalgw := func(resolverConfig *DnsResolverServer) {
+		if resolverConfig.Ipv4 != nil {
+			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv4
 		} else {
 			nf.PhysicalRouterGatewayV4 = gw.To4()
 		}
-		if dnsResolver.Ipv6 != nil {
-			nf.PhysicalRouterGatewayV6 = dnsResolver.Ipv6
+		if resolverConfig.Ipv6 != nil {
+			nf.PhysicalRouterGatewayV6 = resolverConfig.Ipv6
 		} else {
 			nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
 		}
 	}
 
-	utils.Log("the physical router gateway is ", nf.PhysicalRouterGatewayV4, nf.PhysicalRouterGatewayV6)
+	if dnsResolver == nil {
+		hostResolverConfig, err := ReadDNSResolvedConf() // read config from file of systemd resolved
+		if err != nil {
+			nf.PhysicalRouterGatewayV4 = net.ParseIP(utils.GLOBAL_ROUTE_IPV4_TRANSFER_LINKS[0]).To4()
+			nf.PhysicalRouterGatewayV6 = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[0]).To16()
+		}
+		configCustomDefaultLocalgw(hostResolverConfig)
+		return
+	}
+	configCustomDefaultLocalgw(dnsResolver)
+}
+
+func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
+	utils.Log("received an event for systemd-resolved config change", ev.String())
+	if !ev.Has(fsnotify.Write) {
+		// only update on write event from kernel for the resolved config
+		return
+	}
+	sysetemdResolvedConfigUpdateGuard.Lock()
+	defer sysetemdResolvedConfigUpdateGuard.Unlock()
+
+	resolvedDnsChange, err := ReadDNSResolvedConf()
+	if err != nil {
+		return // suppress this dont change any agent config since the agent is love running  with all eBPF progs in kernel
+	}
+
+	nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
+}
+
+// updates the root process for eBPF node agent in user space which injected all kernel programs over any changes on disk for systemd resolved
+func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
+	utils.Log("Starting the Inotify Systemd Resolved watcher")
+	inotifywatcher, err := iowatchers.SysntemdResolveFsWatch()
+
+	doneChan := make(chan bool)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				doneChan <- true
+				return
+			case ev, cls := <-inotifywatcher.Events:
+				if !cls {
+					utils.Log("Channel for fs notify event closed")
+					return
+				}
+				nf.UpdateAgentConfig(&ev)
+			case err := <-inotifywatcher.Errors:
+				utils.Log("Channel for fs notify event error ", err.Error())
+				return
+			}
+		}
+	}()
+
+	if err := inotifywatcher.Add(SYSTEMD_RESOLVED_PATH); err != nil {
+		utils.Log("error adding watcher", SYSTEMD_RESOLVED_PATH)
+	}
+
+	<-doneChan
 	return nil
 }
 

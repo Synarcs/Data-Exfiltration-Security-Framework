@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"io"
@@ -11,8 +12,24 @@ import (
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+func readCerts() (credentials.TransportCredentials, error) {
+	cert, err := os.ReadFile("keys/certificate.pem")
+	if err != nil {
+		return nil, err
+	}
+
+	pool := x509.NewCertPool()
+	pool.AddCert(&x509.Certificate{
+		Raw: cert,
+	})
+
+	cred := credentials.NewClientTLSFromCert(pool, "localhost.com")
+	return cred, nil
+}
 
 // the stream client is control my node agent to receive server side streams from server
 // the kernel will detach and remove fd for the socket once the parent process is killed of the node agent

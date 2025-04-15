@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"strconv"
+	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
@@ -25,7 +27,7 @@ func InitProfileServer(ctx context.Context) error {
 	server := http.Server{
 		Addr: fmt.Sprintf(":%d", PPROF_PORT),
 		BaseContext: func(net.Listener) context.Context {
-			return ctx
+			return context.WithValue(ctx, "boot_time", strconv.Itoa(time.Now().Second()))
 		},
 		TLSConfig: &tls.Config{
 			InsecureSkipVerify: true,

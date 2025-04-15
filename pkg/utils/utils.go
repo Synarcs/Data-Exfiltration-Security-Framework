@@ -45,11 +45,16 @@ const (
 )
 
 var (
+	// google DNS servers
 	GLOBAL_ROUTE_IPV6_TRANSFER_LINKS = []string{
 		"2001:4860:4860::8888",
 		"2001:4860:4860::8844",
 		"2606:4700:4700::1111",
 		"2606:4700:4700::1001",
+	}
+	GLOBAL_ROUTE_IPV4_TRANSFER_LINKS = []string{
+		"8.8.8.8",
+		"8.8.4.4",
 	}
 )
 
@@ -269,4 +274,8 @@ func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 		return true
 	}
 	return false
+}
+
+func ForceGcPacketBufferZerocopyUserspace() {
+	runtime.GC()
 }

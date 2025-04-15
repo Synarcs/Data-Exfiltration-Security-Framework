@@ -224,8 +224,11 @@ func main() {
 	iface := netinet.NetIface{}
 	iface.ReadInterfaces(nodeAgentCliOptions.ContainerRuntime || nodeAgentCliOptions.Sdr)
 	iface.ReadRoutes()
-	iface.GetRootGateway()
+	iface.ConfigureAgentDnsServerConfig(nil)
 	iface.InitconnTrackSockHandles()
+
+	// before node agent inject kernel programs for security add inotify watchers for sysetmd resolved
+	go iface.UpdateResolvedConfigForAgent(ctx)
 
 	// init the hash for skb and entire node agent, the hash should be always unique per agent boot and injecttion in kernel
 	hash := &crypto.Hash{}

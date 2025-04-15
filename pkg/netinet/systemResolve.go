@@ -14,13 +14,18 @@ type DnsResolverServer struct {
 	Ipv6 net.IP
 }
 
+const (
+	SYSTEMD_RESOLVED_PATH = "/etc/resolv.conf"
+)
+
 func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 	// we dont need parallel i/o since the dns resolv is not much huge file
-	fd, err := os.Open("/etc/resolv.conf")
+	fd, err := os.Open(SYSTEMD_RESOLVED_PATH)
 	if err != nil {
 		utils.Log("Error Reading the fild descriptor for resolv.conf")
 		return nil, err
 	}
+	defer fd.Close()
 
 	line := bufio.NewScanner(fd)
 	dnsResolver := DnsResolverServer{}

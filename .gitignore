@@ -27,3 +27,6 @@ infrastructure/dga/*.conf
 
 pkg/envoy/target/*
 pkg/envoy/*.lock
+pkg/rpc/keys/*
+
+

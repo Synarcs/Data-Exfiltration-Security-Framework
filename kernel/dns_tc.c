@@ -185,14 +185,16 @@ struct exfil_security_egress_redirect_map {
 } exfil_security_egress_redirect_map SEC(".maps");
 
 
-// map used which let kernel perform DPI over different protocols with deep scan for both l4, l7 protocols to ensure data breach prvention 
-// for l7 protocols like ftp, dns, smtp the kernel does packet redirection ensure map safety time attack prevention and brute force attack from user space malware 
-struct exfil_security_protocols_identifier_maps {
-    __uint(type, BPF_MAP_TYPE_ARRAY);
-    __type(key, __u32); // protocol identifier
-    __type(value, __u16);   // protocol identifier populated by userspace node agent to run dpi and enhanced DPI in kernel  for both l4, l7 protocols.
-    __uint(max_entries, 5); //  kernel DPI support for FTP, SMTP, (DNS done), HTTP, ICMP, IGMP 
-} exfil_security_protocols_identifier_maps SEC(".maps"); 
+#if EXFIL_SEC_CROSS_PROTOCOL_RELATION 
+    // map used which let kernel perform DPI over different protocols with deep scan for both l4, l7 protocols to ensure data breach prvention 
+    // for l7 protocols like ftp, dns, smtp the kernel does packet redirection ensure map safety time attack prevention and brute force attack from user space malware 
+    struct exfil_security_protocols_identifier_maps {
+        __uint(type, BPF_MAP_TYPE_ARRAY);
+        __type(key, __u32); // protocol identifier
+        __type(value, __u16);   // protocol identifier populated by userspace node agent to run dpi and enhanced DPI in kernel  for both l4, l7 protocols.
+        __uint(max_entries, 5); //  kernel DPI support for FTP, SMTP, (DNS done), HTTP, ICMP, IGMP 
+    } exfil_security_protocols_identifier_maps SEC(".maps"); 
+#endif
 
 struct exfil_security_egress_redurect_ts_verify {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
@@ -461,7 +463,8 @@ static
 __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, bool isTCP) {
     // verify the dns header payload from root of the skbuff 
 
-    if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) +  (isTCP ? sizeof(struct tcphdr) : sizeof(struct udphdr)) + sizeof(struct dns_header) > skb->data_end) {
+    if (skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr)) +  
+                    (isTCP ? sizeof(struct tcphdr) : sizeof(struct udphdr)) + sizeof(struct dns_header) > skb->data_end) {
         // this is definitely not a layer 7 dns header allow this to be classified for a valid action 
         return 0;
     }
@@ -526,7 +529,7 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
         return resuult;
 }
 
-static 
+static
 __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
@@ -591,8 +594,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
-            __u8 root_domain  = 0;
-
+            __u8 root_domain = 0;
+            
             // parse the QNAME
             // iter over the char labels in QNAME
             forn(MAX_DNS_NAME_LENGTH, __u8, j) {
@@ -605,7 +608,11 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     char buff[MAX_DNS_LABEL_LENGTH];
                 #endif
 
-                #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                bool parse_potential_tld = false;
+                if (label_len == 3) {
+                    parse_potential_tld = true;
+                }
+                #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN || parse_potential_tld
                         __u8 iter_label_chars_ln = label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
                             iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
@@ -654,7 +661,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         if (spec_char > (int) label_len / 2) return SUSPICIOUS;
                     parsed_label_queryHandler:
                 #endif
-                
+
                 #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
                     SUBDOMAIN_RANGE_FILTER(label_key_subdomain_length_exclude_tld_min,label_key_subdomain_length_exclude_tld_max)
                 #endif
@@ -685,7 +692,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
              __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); 
 
-            __u8 __attribute__((__unused__)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 __attribute__((unused)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 
@@ -1934,7 +1941,7 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 	__u16 frag_off;
 
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);
-	frag_off = __bpf_ntohs(frag_off);
+	frag_off = bpf_ntohs(frag_off);
 	return frag_off & (IP_MF | IP_OFFSET);
 }
 
