@@ -102,14 +102,14 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 	}
 }
 
-func (prod *StreamProducer) StreamThreadEvent(event []byte) error {
+func (prod *StreamProducer) StreamThreadEvent(ctx context.Context, event []byte) error {
 	if prod.Writer == nil {
 		return fmt.Errorf("kafka writer not initialized")
 	}
 
 	utils.Log("Publishing  to remote kafka broker ", prod.Writer.Addr.Network(), prod.Writer.Addr.String())
 
-	if err := prod.Writer.WriteMessages(context.Background(), kafka.Message{
+	if err := prod.Writer.WriteMessages(ctx, kafka.Message{
 		Value: event,
 		Time:  time.Now(),
 	}); err != nil {
@@ -135,7 +135,7 @@ func StreamOrderMergedEvent(structs ...interface{}) map[string]interface{} {
 	return streamEvent
 }
 
-func (prod *StreamProducer) MarshallStreamThreadEvent(event interface{}, networkConfig HostNetworkExfilFeatures) error {
+func (prod *StreamProducer) MarshallStreamThreadEvent(ctx context.Context, event interface{}, networkConfig HostNetworkExfilFeatures) error {
 
 	marshalledEvent, err := json.Marshal(StreamOrderMergedEvent(event, networkConfig))
 	if err != nil {
@@ -145,7 +145,7 @@ func (prod *StreamProducer) MarshallStreamThreadEvent(event interface{}, network
 	if utils.DEBUG {
 		utils.Log("Event Size (bytes):", len(marshalledEvent))
 	}
-	if err := prod.StreamThreadEvent(marshalledEvent); err != nil {
+	if err := prod.StreamThreadEvent(ctx, marshalledEvent); err != nil {
 		return err
 	}
 

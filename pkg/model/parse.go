@@ -2,6 +2,7 @@ package model
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"net"
@@ -189,7 +190,8 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 }
 
 // only use for l3 -> ipv4 and l4 -> udp
-func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
+func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
+	ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
 	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool) error {
 
@@ -266,7 +268,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ethLayer, networkLayer, transportL
 						events.DNS, int(udpPacket.DstPort), nil)
 				}
 			}
-			go d.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+			go d.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
 				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),

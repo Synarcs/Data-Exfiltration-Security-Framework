@@ -181,6 +181,7 @@ func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 		return err
 	}
 
+	defer inotifywatcher.Close()
 	go func() {
 		for {
 			select {
@@ -188,12 +189,14 @@ func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 				doneChan <- true
 				return
 			case ev, cls := <-inotifywatcher.Events:
+				doneChan <- true
 				if !cls {
 					utils.Log("Channel for fs notify event closed")
 					return
 				}
 				nf.UpdateAgentConfig(&ev)
 			case err := <-inotifywatcher.Errors:
+				doneChan <- true
 				utils.Log("Channel for fs notify event error ", err.Error())
 				return
 			}
@@ -202,6 +205,7 @@ func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 
 	if err := inotifywatcher.Add(SYSTEMD_RESOLVED_PATH); err != nil {
 		utils.Log("error adding watcher", SYSTEMD_RESOLVED_PATH)
+		doneChan <- true
 	}
 
 	<-doneChan
@@ -313,7 +317,7 @@ func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 	var tunnelLinks []netlink.Link = make([]netlink.Link, 0)
 
 	for _, link := range links {
-		// for the kernel p2p2 encap via l2/l3 pair of tun/tap interfaces
+		// for the kernel p2p encap via l2/l3 pair of tun/tap interfaces
 		if strings.Contains(link.Attrs().Flags.String(), "pointtopoint") {
 			utils.Log("Found a tunnel link ", link.Attrs().Name, "  ", link.Attrs().MTU)
 			tunnelLinks = append(tunnelLinks, link)

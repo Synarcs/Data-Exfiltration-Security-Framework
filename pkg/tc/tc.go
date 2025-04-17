@@ -75,9 +75,8 @@ type KernelTcInjectConfig struct {
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
 	dnsPacketGen, err := model.NewDnsPacketResendUtils(&model.DnsPacketGenConfig{
-		Iface:        config.Iface,
-		OnnxModel:    config.OnnxModel,
-		StreamClient: config.StreamClient,
+		Iface:     config.Iface,
+		OnnxModel: config.OnnxModel,
 	})
 
 	if err != nil {
@@ -657,7 +656,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 
 		if isIpv4 && isUdp {
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
@@ -666,7 +665,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 		if !isIpv4 && isUdp {
 			// ipv6 and udp
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
@@ -693,7 +692,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
@@ -701,7 +700,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
-			tc.DnsPacketGen.EvaluateGeneratePacket(eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,

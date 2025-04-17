@@ -315,24 +315,26 @@ struct dns_volume_stats {
                     return SUSPICIOUS;              \
             }                                       
 
-// custom range order filtering for the DNS domains over the labels queries ssections 
-#define SUBDOMAIN_RANGE_FILTER(subdomain_label_count_config_min_key, subdomain_label_count_config_max_key) \
-    do { \
-        __u32 *subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); \
-        if (!subdomain_label_count_config_min_map) { \
-            __u32 min_value = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
-            subdomain_label_count_config_min_map = &min_value; \
-        } \
-        __u32 *subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); \
-        if (!subdomain_label_count_config_max_map) { \
-            __u32 max_value = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
-            subdomain_label_count_config_max_map = &max_value; \
-        } \
-        if (subdomain_label_count >= *subdomain_label_count_config_min_map && subdomain_label_count <= *subdomain_label_count_config_max_map) \
-            return SUSPICIOUS; \
-        if (subdomain_label_count > *subdomain_label_count_config_max_map) \
-            return MALICIOUS; \
-    } while(0)                                                                                                                                   
+#if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER 
+    // custom range order filtering for the DNS domains over the labels queries ssections 
+    #define SUBDOMAIN_RANGE_FILTER(subdomain_label_count_config_min_key, subdomain_label_count_config_max_key) \
+        do { \
+            __u32 *subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); \
+            if (!subdomain_label_count_config_min_map) { \
+                __u32 min_value = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
+                subdomain_label_count_config_min_map = &min_value; \
+            } \
+            __u32 *subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); \
+            if (!subdomain_label_count_config_max_map) { \
+                __u32 max_value = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
+                subdomain_label_count_config_max_map = &max_value; \
+            } \
+            if (subdomain_label_count >= *subdomain_label_count_config_min_map && subdomain_label_count <= *subdomain_label_count_config_max_map) \
+                return SUSPICIOUS; \
+            if (subdomain_label_count > *subdomain_label_count_config_max_map) \
+                return MALICIOUS; \
+        } while(0)      
+#endif 
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 

@@ -117,92 +117,102 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 	}
 }
 
+func (c *StreamConsumer) ControllerInferMalTopicConsumer(ctx context.Context,
+	consumer *kafka.Reader, topic string) {
+	for {
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, io.EOF) {
+				time.Sleep(time.Second)
+			} else {
+				c.ConsumerErroChan <- err
+				return
+			}
+		}
+		msg, err := consumer.ReadMessage(ctx)
+		if err != nil {
+			c.ConsumerErroChan <- err
+		}
+
+		// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
+		var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
+
+		if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
+			c.ConsumerErroChan <- err
+		}
+
+		if utils.DEBUG {
+			utils.Log("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
+				statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains), statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
+		}
+
+		if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
+			if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
+				utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+			}
+
+			if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
+				utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
+			}
+		} else {
+			utils.DeleteDomainBlackListInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+			utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
+		}
+
+		// check for l3 filtering over malicious ipv4, ipv6 c2 tunnel server Ip's
+		if utils.DEBUG {
+			if len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains) > 0 {
+				// inject l3 address for remote c2 address to block packets for both egress and ingress TC, only inject if not running orchestrated workloads and for purely bare-metal environments
+				for _, nodeAddress := range statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains {
+					if net.ParseIP(nodeAddress).To4() != nil {
+						utils.Log("Received a dynamic controller aware blacklist ipv4 l3 address to be injected for filtering from skb in tc egress and ingress", net.ParseIP(nodeAddress).To4().String())
+					} else {
+						if net.ParseIP(nodeAddress).To16() == nil {
+							utils.Log("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
+						}
+					}
+				}
+			}
+		}
+
+		// dynamically blacklist l3 in kernel egress tc
+		if topic == STREAM_THREAT_TOPIC_INFER_TCP || topic == STREAM_THREAT_TOPIC_INFER {
+			c.AddL3FilterForTrafficOverKernelTC(ctx, &statefulAnalyzedStreeamEvent)
+		}
+	}
+}
+
+func (c *StreamConsumer) ControllErInferBenignConsumer(ctx context.Context,
+	consumer *kafka.Reader, topic string) {
+	for {
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, io.EOF) {
+				time.Sleep(time.Second)
+			} else {
+				c.ConsumerErroChan <- err
+				return
+			}
+		}
+		msg, err := consumer.ReadMessage(ctx)
+		if err != nil {
+			c.ConsumerErroChan <- err
+		}
+		var sldEvent events.RemoteSLDNodeCacheUpdate
+		if err := json.Unmarshal(msg.Value, &sldEvent); err != nil {
+			c.ConsumerErroChan <- err
+		}
+
+		c.TopDomainsCache.UpdateDomainDomainTLDCache(sldEvent.SLD)
+		utils.IngDeleteDomainBlackListInCache(sldEvent.SLD)
+		utils.DeleteAllBlacklistforSLDInEgressCache(sldEvent.SLD)
+	}
+}
+
 func (c *StreamConsumer) ConsumeStreamAnalyzedThreatEvent(ctx context.Context) error {
 	for topic, consumer := range c.Consumers {
 		if topic != STREAM_BENIGN_SLD_TOPIC && topic == STREAM_THREAT_TOPIC_INFER {
-			go func(consumer *kafka.Reader, ctx context.Context) {
-				for {
-					if err := ctx.Err(); err != nil {
-						if errors.Is(err, io.EOF) {
-							time.Sleep(time.Second)
-						} else {
-							c.ConsumerErroChan <- err
-							return
-						}
-					}
-					msg, err := consumer.ReadMessage(ctx)
-					if err != nil {
-						c.ConsumerErroChan <- err
-					}
-
-					// the controller with use to write to a different topic which all nodes in data plane in same consumer group read and commits their offsets
-					var statefulAnalyzedStreeamEvent events.RemoteStreamInferenceControllerAnalyzed
-
-					if err := json.Unmarshal(msg.Value, &statefulAnalyzedStreeamEvent); err != nil {
-						c.ConsumerErroChan <- err
-					}
-
-					if utils.DEBUG {
-						utils.Log("Consumed thread event from other node or same data breach over DNS was prevented and C2 / tunnel impant was killed by node-agent over remote C2 Implant Server L3 IP",
-							statefulAnalyzedStreeamEvent.DetectedThreadNodeIpv4, len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains), statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains)
-					}
-
-					if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
-						if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-							utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
-						}
-
-						if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
-							utils.IngUpdateDomainBlacklistInCache(statefulAnalyzedStreeamEvent.Tld)
-						}
-					} else {
-						utils.DeleteDomainBlackListInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
-						utils.IngDeleteDomainBlackListInCache(statefulAnalyzedStreeamEvent.Tld)
-					}
-
-					// check for l3 filtering over malicious ipv4, ipv6 c2 tunnel server Ip's
-					if utils.DEBUG {
-						if len(statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains) > 0 {
-							// inject l3 address for remote c2 address to block packets for both egress and ingress TC, only inject if not running orchestrated workloads and for purely bare-metal environments
-							for _, nodeAddress := range statefulAnalyzedStreeamEvent.ResolveAddressMaliciousC2Domains {
-								if net.ParseIP(nodeAddress).To4() != nil {
-									utils.Log("Received a dynamic controller aware blacklist ipv4 l3 address to be injected for filtering from skb in tc egress and ingress", net.ParseIP(nodeAddress).To4().String())
-								} else {
-									if net.ParseIP(nodeAddress).To16() == nil {
-										utils.Log("The remote C2 server cannot be blacklisted since its neither a valid ipv4 or ipv6")
-									}
-								}
-							}
-						}
-					}
-
-					// dynamically blacklist l3 in kernel egress tc
-					if topic == STREAM_THREAT_TOPIC_INFER_TCP || topic == STREAM_THREAT_TOPIC_INFER {
-						c.AddL3FilterForTrafficOverKernelTC(ctx, &statefulAnalyzedStreeamEvent)
-					}
-				}
-			}(consumer, ctx)
+			go c.ControllerInferMalTopicConsumer(ctx, consumer, topic)
 		} else {
-			go func(consumer *kafka.Reader, ctx context.Context) error {
-				// for all the benign domains
-				for {
-					if err := ctx.Err(); err != nil {
-						return ctx.Err()
-					}
-					msg, err := consumer.ReadMessage(ctx)
-					if err != nil {
-						c.ConsumerErroChan <- err
-					}
-					var sldEvent events.RemoteSLDNodeCacheUpdate
-					if err := json.Unmarshal(msg.Value, &sldEvent); err != nil {
-						c.ConsumerErroChan <- err
-					}
-
-					c.TopDomainsCache.UpdateDomainDomainTLDCache(sldEvent.SLD)
-					utils.IngDeleteDomainBlackListInCache(sldEvent.SLD)
-					utils.DeleteAllBlacklistforSLDInEgressCache(sldEvent.SLD)
-				}
-			}(consumer, ctx)
+			go c.ControllErInferBenignConsumer(ctx, consumer, topic)
 		}
 	}
 

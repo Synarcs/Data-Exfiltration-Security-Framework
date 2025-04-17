@@ -1,5 +1,4 @@
 www.google.com A 
-www.google.com AAAA 
-www.apple.com A 
-www.netflix.com AAAA
-
+www.amazonaws.com  A
+amazon.com AAAA 
+doubleclick.net MX

@@ -253,6 +253,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 
 	handler, err := tun.IfaceHandler.GetBridgePcapHandleClone()
 
+	ctx := context.Background()
 	if err != nil {
 		utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_RAW_NETLINK_BRIDGE_DPI)
 		tun.GlobalKernelErrorChannel <- err
@@ -306,7 +307,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	}
 
 	for packet := range packetSource.Packets() {
-		go tun.ProcessTunnelHandlerPackets(packet, sniffTunnelErr)
+		go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)
 	}
 }
 
@@ -385,7 +386,7 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdateKernelProc(procComm 
 	return nil
 }
 
-func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(features []model.DNSFeatures, destTransportPort uint16, srcTransportPort uint16,
+func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx context.Context, features []model.DNSFeatures, destTransportPort uint16, srcTransportPort uint16,
 	event *events.ExfilRawPacketMirror, ev *events.DnsMapPayloadNonOverlayPort, errorChannel chan interface{}) error {
 
 	isAnySectionDomMalInCache := false
@@ -470,7 +471,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 							int(destTransportPort), nil)
 					}
 
-					go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+					go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
 						ExfilPort:        strconv.Itoa(int(destTransportPort)),
 						Protocol:         string(events.DNS),
 						PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
@@ -521,7 +522,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 			}
 
 			// even though found continous stream the events for any detected malicious events in the data plane for incident response and tracking every packet level  malicious activity
-			go tun.StreamClient.MarshallStreamThreadEvent(feature, stream.HostNetworkExfilFeatures{
+			go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
 				ExfilPort:        strconv.Itoa(int(destTransportPort)),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
@@ -553,7 +554,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(featu
 	return nil
 }
 
-func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, errorChannel chan interface{}) {
+func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packet gopacket.Packet, errorChannel chan interface{}) {
 
 	isPackEncapsulated := func(dnsPacket *layers.DNS, transportPayload []byte) bool {
 		if dnsPacket == nil {
@@ -687,7 +688,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 		// process nothing in userspace
 		// just cehck and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
 		// standard go packet does not parse any NB query records
-		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(features, destPortGenTypeValue, srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel); err != nil {
+		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenTypeValue, srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel); err != nil {
 			if utils.DEBUG {
 				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 			}
@@ -726,7 +727,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(packet gopacket.Packet, er
 			}
 		}
 
-		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(features, destPortGenType, srcPortGenType, &event, ev, errorChannel); err != nil {
+		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenType, srcPortGenType, &event, ev, errorChannel); err != nil {
 			if utils.DEBUG {
 				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 

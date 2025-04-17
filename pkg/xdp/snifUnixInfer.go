@@ -2,6 +2,7 @@ package xdp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,9 @@ import (
 func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeatures,
 	iface *netinet.NetIface, streamClient *stream.StreamProducer) error {
 	// process deep lexical analysis from remote unix transport inference server
+
+	ctx := context.Background()
+
 	inferRequest := model.InferenceRequest{
 		// pass all the 8 features which define the input layer for the inference in the onnx model
 		Features: features,
@@ -67,7 +71,7 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 			// dont monitro task comm and process struct over ingress traffic
 			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]),
 				&iface.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT, nil)
-			go streamClient.MarshallStreamThreadEvent(rawFeatures[index], stream.HostNetworkExfilFeatures{
+			go streamClient.MarshallStreamThreadEvent(ctx, rawFeatures[index], stream.HostNetworkExfilFeatures{
 				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: iface.PhysicalNodeBridgeIpv4.String(),
