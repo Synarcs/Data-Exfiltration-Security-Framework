@@ -14,15 +14,10 @@ run:
 	sudo setcap 'cap_bpf=ep cap_net_admin=ep cap_perfmon=ep ' main
 	getcap ./main 
 
-.PHONY: compile-kernel
-compile-kernel:
+.PHONY: compile-kernel-ebpf
+compile-kernel-ebpf:
 	@echo "Compiling all kernel ebpf programs"
 	cd ../kernel && make
-
-.PHONY: compile-kernel-x86
-compile-kernel-x86: 
-	@echo "Compiling eBPF Kernel Programs for x86-64 architecture"
-	cd ../kernel && make compile-x86
 
 .PHONY: build-cli 
 build-cli:
@@ -37,14 +32,7 @@ test:
 .PHONY: build
 build:
 	@echo "Building and compiling the eBPF Node Agent {Kernel, User-Space}"
-	make compile-kernel
-	make build-cli 
-	make compile
-
-.PHONY: build-x86
-build-x86:
-	@echo "Building and compiling eBPF Node Agent {Kernel, User-space}"
-	make compile-kernel-x86
+	make compile-kernel-ebpf
 	make build-cli 
 	make compile
 

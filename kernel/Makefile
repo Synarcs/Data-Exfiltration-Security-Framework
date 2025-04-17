@@ -22,13 +22,30 @@ p2p_kernel_out := tun.o
 sock_sdr := dns_sock_ops.c 
 sock_sdr_out := sock.o
 
+CLANG := clang 
+CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER
+ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
+LLVM_IR_ARGS := -S -emit-llvm 
+KERNEL_HEADERS := /usr/src/linux-headers-$(shell uname -r)
+BPF_CFLAGS := -target bpf \
+              -D__TARGET_ARCH_$(ARCH) \
+              -I/usr/include/$(shell uname -m)-linux-gnu \
+              -I$(KERNEL_HEADERS)
+
+
+# tc bpf qdisc iprotue2 comm 
+QDISC_RM := sudo tc qdisc del dev
+QDISC_ADD := sudo tc qdisc add dev
+QDISC := clsact
+
+
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
-	clang -target bpf -Wall -Wunused-variable -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2  -o  $(tc_kernel_out) -c $(tc_kernel) 
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o $(tc_kernel_out) -c $(tc_kernel) 
 	make vmlinux-btf
-	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
-	clang -target bpf -Wall -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	make crypto
 	make netlink 
 	make tc_tun 
@@ -48,57 +65,33 @@ vmlinux-btf:
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
 	@echo "emit llvm compile ir for the ebpf bytecode"
-	clang -target bpf -S -emit-llvm -I/usr/include/aarch64-linux-gnu -g -O3 -o ir/tc_ir -c $(tc_kernel)
-	clang -target bpf -S -I/usr/include/aarch64-linux-gnu -g -O2 -o ir/netlink_ir -c $(netlink_kernel) 
+	$(CLANG) $(LLVM_IR_ARGS) $(BPF_CFLAGS) -o ir/tc_ir -c $(tc_kernel)
 
-
-.PHONY: compile-llvm-x86
-compile-llvm-x86:
-	clang -target bpf -flto -Wl,-plugin-opt=also-emit-llvm  -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(tc_kernel_out) -c $(tc_kernel)
-	cp tc.o ../node_agent
-	cp bridge.o ../node_agent/ebpf/ 
-	llv-objdump -S tc.o 
-
-# for x86 compilation of cpu 
-.PHONY: compile-x86
-compile-x86:
-	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o tc.o -o $(tc_kernel_out) -c $(tc_kernel) 
-	make vmlinux-btf
-	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
-	clang -target bpf -I/usr/include/x86_64-linux-gnu -g -O3 -o bridge.o -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
-	make netlink-x86  
-	make tc_tun-x86
-	make tracepoints-x86
-	make xdp-x86
-	cp $(tc_kernel_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
-	make clean-bpf-build
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc
 tc: 
-	sudo tc qdisc add dev enp0s1 clsact
-	sudo tc qdisc add dev br0 clsact
+	$(QDISC_ADD) dev enp0s1 clsact
+	$(QDISC_ADD) dev br0 clsact
 	sudo tc qdisc show 
 
 .PHONY: tc-remove-vm
 tc-remove-vm:
-	sudo tc qdisc del dev enp0s1 clsact
+	$(QDISC_RM) eth0 $(QDISC) 
+	# cloud vm usually have eth0 for receiver link name 
 
 
 .PHONY: tc-remove
 tc-remove:
-	sudo tc qdisc del dev enp0s1 clsact
-	sudo tc qdisc del dev lo clsact
-	sudo tc qdisc del dev docker0 clsact
-	sudo tc qdisc del dev br0 clsact
+	$(QDISC_RM) enp0s1 $(QDISC)
+	$(QDISC_RM) docker0 $(QDISC)
+	$(QDISC_RM) br0 $(QDISC)
 
 
 .PHONY: tc-filter 
 tc-filter:
-	sudo tc filter add dev enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
-	sudo tc filter add dev br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
+	$(QDISC_ADD) enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
+	$(QDISC_ADD) br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
 	# sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
 .PHONY: tc-show 
@@ -111,19 +104,13 @@ tc-show:
 tc-tracing:
 	sudo cat /sys/kernel/debug/tracing/trace_pipe
 
-
 .PHONY: xdp
 xdp: 
-	clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
-
-.PHONY: xdp-x86
-xdp-x86:
-	clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
-
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o $(xdp_kernel_out) -c $(xdp_kernel)
 
 .PHONY: xdp-mount
 xdp-mount:
-	sudo clang -target bpf -I/usr/include/aarch64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
+	make xdp 
 	sudo mount -t bpf bpf /sys/fs/bpf/
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 
@@ -132,12 +119,6 @@ xdp-mount:
 xdp-show:
 	sudo ip link show dev enp0s1 
 	sudo xdp-loader status 
-
-.PHONY: xdp-mount-x86
-xdp-mount-x86:
-	sudo clang -target bpf -I/usr/include/x86_64-linux-gnu  -g -O3 -o $(xdp_kernel_out) -c $(xdp_kernel)
-	sudo mount -t bpf bpf /sys/fs/bpf/
-	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 
 .PHONY: xdp-umount
 xdp-umount:
@@ -148,44 +129,25 @@ xdp-umount:
 .PHONY: netlink
 netlink: 
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
-	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: netlink-x86 
-netlink-x86: 
-	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for x86" 
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tracepoints
 tracepoints:
 	@echo "Compiling the ebpf tracepoints for arm64"
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
-	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: tracepoints-x86
-tracepoints-x86:
-	@echo "Compiling the ebpf tracepoints for x86"
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
 	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
 
 .PHONY: tc_tun 
 tc_tun:
 	@echo "Compiling the tunnel tc egress filter"
-	clang -target bpf -fomit-frame-pointer  -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(p2p_kernel_out) -c $(p2p_kernel) 
 	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: tc_tun-x86 
-tc_tun-x86:
-	@echo "Compiling the tunnel tc egress filter for x86"
-	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/x86_64-linux-gnu  -g -O2 -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	cp $(p2p_kernel_out) ../node_agent/ebpf/ \
-
 
 .PHONY: sock
 sock:
 	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket"
-	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(sock_sdr_out) -c $(sock_sdr)
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(sock_sdr_out) -c $(sock_sdr)
 	cp $(sock_sdr_out) ../node_agent/ebpf/
 
 .PHONY: clean-bpf-build
@@ -193,12 +155,11 @@ clean-bpf-build:
 	rm -rf *.o 
 	rm -rf vmlinux.h 
 
-
 crypto_kernel ?= $(shell pwd)/lsm_bpf.c
 crypto_kernel_out ?= lsm_bpf.o 
 
 .PHONY: crypto 
 crypto:
 	@echo "Compiling the crypto LSM hooks"
-	clang -target bpf -fomit-frame-pointer -DLLVM_USE_LINKER -I/usr/include/aarch64-linux-gnu -g -O2 -o  $(crypto_kernel_out) -c $(crypto_kernel) 
+	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(crypto_kernel_out) -c $(crypto_kernel) 
 	cp $(crypto_kernel_out) ../node_agent/ebpf/ 
