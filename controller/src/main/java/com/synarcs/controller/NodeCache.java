@@ -1,6 +1,7 @@
 package com.synarcs.controller;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -8,18 +9,33 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.synarcs.controller.protocols.IFeatureTransportProtocol;
 import com.synarcs.controller.protocols.ProtocolEnums;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 public class NodeCache<T> implements Serializable {
 
+    private final Cache<String, Boolean> cache;
+    private final int MAX_MAL_BLACK_DOM_CT = 10_000;
+
+    // init cache for performance with lru cache eviction to reduce unwanted blacklisting calls to the recursor interceprors on the DNS server
+    public NodeCache() {
+        cache = Caffeine
+            .newBuilder()
+            .maximumSize(MAX_MAL_BLACK_DOM_CT)
+            .expireAfterWrite(Duration.ofDays(1))
+            .executor(Runnable::run)
+            .recordStats()
+            .build();
+    }
+
     // preserve ordering for insertion 
-    private Map<T, Integer> ct = new LinkedHashMap<>();
+    private final Map<T, Integer> ct = new LinkedHashMap<>();
 
     // all the kmaps can be converted to shared scache space for different nodes 
     // domain ipv4 / ipv6 --> Map<String, Integer>>  (sld domain, count  (exfiltrated attempts detected on node (malware retry)))
-    private Map<T, Map<T, Integer>> nodeSldExfilCount = new HashMap<>();
-    private Map<T, Map<ProtocolEnums, Integer>> nodeProtocolExfilCount = new HashMap<>();
+    private final Map<T, Map<T, Integer>> nodeSldExfilCount = new HashMap<>();
+    private final Map<T, Map<ProtocolEnums, Integer>> nodeProtocolExfilCount = new HashMap<>();
     
     
     Logger log = LoggerFactory.getLogger(NodeCache.class);

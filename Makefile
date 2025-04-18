@@ -5,10 +5,13 @@ DEBUG ?= false
 build:
 	bash build.sh 
 
+.PHONY: node-metrics
+node-metrics:
+	@echo "starting the node exported metrics for monitor infrastructure at the node"
+	cd bin/ && bash start.sh &
+
 .PHONY: run_node_agent
 run_node_agent:
-	@echo "Creating required Network Topology for node agent"
-	bash scripts/brctl.sh
 	@echo "starting unix sock inference server $(model_path)"
 	sudo python3 model/infer/inference.py -m $(model_path) &
 	@echo "Booting up the node agent"
@@ -85,3 +88,11 @@ bench:
 kernel-prof:
 	@echo "running kernel eBPF maps profile, require bpftop to be installed"
 	sudo bpftop
+
+pprof_port ?= 8080
+pprof_duration ?= 10 
+
+.PHONY: profile-agent
+profile-agent:
+	@echo "Running Pprof profile over the node agent in user-space"
+	go tool pprof -http=0.0.0.0:$(pprof_port) http://localhost:6262/debug/pprof/profile?seconds=$(pprof_duration)
