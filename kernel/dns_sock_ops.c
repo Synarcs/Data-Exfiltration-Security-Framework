@@ -75,9 +75,9 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
     struct __kernel_proc_struct_info * proc_info = __get_process_info();
     
     struct sock_proc_conn_info *curr_info = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_transfer_port);
+    struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
     if (!curr_info) {
        // bpf_printk("the src port for transfer is %d", src_transfer_port);
-        struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
         if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_NOEXIST) < 0) {
             #if DEBUG 
                  bpf_printk("Error updating the udp sock map for transfer traffic"); 
@@ -85,13 +85,10 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
         }
     }else {
      //   bpf_printk("the src port for transfer fd is  %d", src_transfer_port);
-        if (curr_info->pid != proc_info->procId || curr_info->dport != dest_transport_port) {
-            struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);
-            if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_ANY) < 0) {
-                #if DEBUG 
-                    bpf_printk("Error updating the udp sock map for transfer traffic"); 
-                #endif
-            }
+        if (bpf_map_update_elem(&exfil_sock_udp_conn_map, &src_transfer_port, &sock_proc_conn_info, BPF_ANY) < 0) {
+            #if DEBUG 
+                bpf_printk("Error updating the udp sock map for transfer traffic"); 
+            #endif
         }
     }
 }

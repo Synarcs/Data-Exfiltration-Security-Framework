@@ -167,6 +167,7 @@ func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 
 func main() {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	ctx := context.Background()
 	ctx, agentCancelFunc := context.WithCancel(ctx)
 	utils.NewLogger(ctx)

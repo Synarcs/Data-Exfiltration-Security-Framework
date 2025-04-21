@@ -48,7 +48,8 @@ type TCHandler struct {
 	GlobalMalC2L3addressChannelIpv4 chan net.IP
 	GlobalMalC2L3addressChannelIpv6 chan net.IP
 
-	config conf.AgentConfig
+	TaskCommTCEgressKernelSupport bool
+	config                        conf.AgentConfig
 
 	CryptoAgentLSMHandler *crypto.CryptoBpfLsm
 }
@@ -91,6 +92,7 @@ func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
 		Hash:                            config.AgentHash,
 		config:                          config.AgentConfig,
 		CryptoAgentLSMHandler:           config.CryptoAgentLSMHandler,
+		TaskCommTCEgressKernelSupport:   utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
 	}
 	if dnsPacketGen.XdpSocketSendFd != nil {
 		tcHandler.IsEgressXdpSupport = true
@@ -274,11 +276,8 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 					}
 				}
 			default:
-				{
-				}
+				time.Sleep(time.Second * 2)
 			}
-
-			time.Sleep(time.Second)
 		}
 	}
 }
@@ -414,14 +413,17 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}
 
 	errMapPollChannel := make(chan error)
-	for _, maps := range spec.Maps {
-		// process all the maps which needs to monitoted or polled from kernel for events without explicity events for ring buffer
-		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP) {
-			go tc.PollVxlanRingBuffer(ctx, maps)
-		}
-		if strings.Contains(maps.String(), events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP) || strings.Contains(maps.String(), events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP) {
-			go tc.PollMonitoringMaps(ctx, maps, errMapPollChannel)
-		}
+
+	if fd := tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP]; fd != nil {
+		go tc.PollVxlanRingBuffer(ctx, tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP])
+	}
+
+	if fd := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]; fd != nil {
+		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
+	}
+
+	if fd := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP]; fd != nil {
+		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
 	}
 
 	go func() {
@@ -440,33 +442,42 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		}
 	}()
 
+	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
+
 	if INIT_KERNEL_SOCKET {
-		if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-			utils.Log("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan will use port  for mal process monitor in kernel")
-			return
-		}
-		tc_tunnel := NewTcTunnelFactory(tc, iface,
-			tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel)
-		tc.TcTunnelNonStandardPortScan = tc_tunnel
-
-		// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
-		for _, maps := range spec.Maps {
-			if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
-				// an ring event buffer
-				go tc_tunnel.PollRingBuffer(ctx, maps)
-			}
-		}
-
-		go tc_tunnel.SniffPacketsForTunnelDPI() // start the packet sniffing for non standard ports bpf_redirect_clone from kernel space
-
-		if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-			tracepoint_sched := tracepoint.GenerateTracePointHandlers()
-			tracepoint_sched.AttachTracePointHandlers(ctx, iface)
-		}
-
-		tc.ProcessSniffDPIPacketCapture(ctx, iface, nil)
-		INIT_KERNEL_SOCKET = false
+		tc.InitTCTunnelExfilPrevention(ctx, false)
 	}
+}
+
+/*
+Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
+*/
+func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassive bool) {
+	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		utils.Log("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan will use port  for mal process monitor in kernel")
+		return
+	}
+	tc_tunnel := NewTcTunnelFactory(tc, tc.Interfaces,
+		tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel, isPassive)
+	tc.TcTunnelNonStandardPortScan = tc_tunnel
+
+	// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
+	for _, maps := range tc.TcCollection.Maps {
+		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
+			// an ring event buffer
+			go tc_tunnel.PollRingBuffer(ctx, maps)
+		}
+	}
+
+	go tc_tunnel.SniffPacketsForTunnelDPI() // start the packet sniffing for non standard ports bpf_redirect_clone from kernel space
+
+	if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
+		tracepoint_sched := tracepoint.GenerateTracePointHandlers()
+		tracepoint_sched.AttachTracePointHandlers(ctx, tc.Interfaces)
+	}
+
+	tc.ProcessSniffDPIPacketCapture(ctx, tc.Interfaces, nil)
+	INIT_KERNEL_SOCKET = false
 }
 
 func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfig map[uint32]uint32) error {
@@ -496,6 +507,18 @@ func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
 }
 
 /*
+Link the kernel if_index with the packet skb_mark to send it back post enhanced deep scan
+*/
+func (tc *TCHandler) GetEgressIfindex(ctx context.Context, globalLinkChecksumMp *ebpf.Map) (int, error) {
+	// TODO default send the first link for the physical netdev on the endpoint
+	if len(tc.Interfaces.PhysicalLinks) == 0 {
+		return -1, fmt.Errorf("The ednpoint does not have any physical netdev attach to resent write via AF_PACKET / AF_XDP to device tx queues")
+	}
+
+	return tc.Interfaces.PhysicalLinks[0].Attrs().Index, nil
+}
+
+/*
 Aggressive DPI for processing L3 UDP packet over DNS live redirected from kernel
 */
 func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_id uint16, isIpv6 bool,
@@ -503,7 +526,7 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 
 	err := dnsMapRedirectMap.Lookup(&dns_packet_id, ip_layer3_checksum_kernel_ts)
 	if err != nil {
-		utils.Log("Required redirected packet id is not found in the map", err, dnsMapRedirectMap)
+		utils.Log("Required redirected packet id is not found in the map or unkown error", err, dnsMapRedirectMap)
 	} else {
 		if utils.DEBUG {
 			utils.Log("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
@@ -540,13 +563,13 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 }
 
 func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, ifaceHandler *netinet.NetIface,
-	handler *pcap.Handle, isPhysicalNetDevSniff bool) error {
+	handler *pcap.Handle, isPhysicalNetDevSniff bool) {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
 	var isUdp bool
 	if eth == nil {
-		return nil
+		return
 	}
 
 	var ipPacket *layers.IPv4
@@ -576,7 +599,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			isUdp = true
 		} else {
 			utils.Log("the packet is malformed")
-			return nil
+			return
 		}
 	} else if isPhysicalNetDevSniff {
 		transportLayer = packet.Layer(layers.LayerTypeTCP)
@@ -592,8 +615,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
 
 		if len(payload) < 2 {
-			utils.Log("errror ", len(payload))
-			return fmt.Errorf("TCP payload too short for dns parsing")
+			utils.Log("TCP payload too short for dns parsing", len(payload))
+			return
 		}
 
 		dnsLengthTcp = binary.BigEndian.Uint16(payload[0:2])
@@ -614,7 +637,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		ipv4Address := ipPacket.DstIP.To4().String()
 		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
 			utils.Log("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
-			return fmt.Errorf("packet is not destined for the userspace DPI on the bridge Interface")
+			return
 		}
 
 		if ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2) {
@@ -622,7 +645,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			events.HandleKernelDroppedPacket(
 				dnsLayer, isIpv4, isUdp, "DNS",
 			)
-			return nil
 		}
 
 	} else {
@@ -632,8 +654,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			events.HandleKernelDroppedPacket(
 				dnsLayer, isIpv4, isUdp, "DNS",
 			)
-
-			return nil
 		}
 	}
 
@@ -655,12 +675,17 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			}
 		}
 
+		egressIfIndexPostSend, err := tc.GetEgressIfindex(ctx, nil)
+		if err != nil {
+			tc.GlobalErrorKernelHandlerChannel <- err
+			return
+		}
 		if isIpv4 && isUdp {
 			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff)
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend)
 			// ipv4 and udp
 		}
 		if !isIpv4 && isUdp {
@@ -669,7 +694,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff)
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend)
 		}
 	}
 
@@ -679,7 +704,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
 		if err != nil {
 			utils.Log("Error decoding the dns packet over the tcp stream", err)
-			return err
+			return
 		}
 
 		var dns_packet_id uint16 = uint16(dns.ID)
@@ -690,13 +715,14 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			utils.Log(fmt.Sprintf("Error processing the dns packet over tcp stream %+v", err))
 		}
 
+		egressIfIndexPostSend, err := tc.GetEgressIfindex(ctx, nil)
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
@@ -704,13 +730,13 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 	}
 
 processPacketForNonAggresiveDPI:
 	tc.ProcessEachPacketPassiveDpi(ctx)
-	return nil
+	return
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,

@@ -31,7 +31,7 @@ import com.synarcs.controller.service.UpdateBenignSld;
 @RestController
 public class DnsSecController implements Serializable {
 
-    private Logger logger = LoggerFactory.getLogger(DnsSecController.class);
+    private final Logger logger = LoggerFactory.getLogger(DnsSecController.class);
 
     @Autowired
     private BlacklistDomain dnsBlockMaliciousDomainService;

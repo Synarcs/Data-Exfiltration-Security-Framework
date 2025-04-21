@@ -189,11 +189,14 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 	}
 }
 
-// only use for l3 -> ipv4 and l4 -> udp
+/*
+Rns inference over DL model and esends if non malicious ove AF_XDP OR AF_PACKET
+*/
 func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
-	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool) error {
+	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool,
+	egressIfIndexPostSend int) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -364,7 +367,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 			// first check and bind the xdp kernel socket to tx queue for the interface
 			sockAddr := syscall.SockaddrLinklayer{
 				Protocol: syscall.ETH_P_ALL,
-				Ifindex:  d.IfaceHandler.PhysicalLinks[0].Attrs().Index,
+				Ifindex:  egressIfIndexPostSend,
 			}
 
 			if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {

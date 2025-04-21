@@ -76,9 +76,10 @@ const (
 )
 
 const (
-	DNS_EGRESS_PORT           = 53
-	DOT_EGRESS_PORT           = 853
-	DNS_EGRESS_MULTICAST_PORT = 5353
+	DNS_EGRESS_PORT                   = 53
+	DOT_EGRESS_PORT                   = 853
+	DNS_EGRESS_MULTICAST_PORT         = 5353
+	LLMNR_EGRESS_LOCAL_MULTICAST_PORT = 5355
 )
 
 const (

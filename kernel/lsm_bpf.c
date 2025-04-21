@@ -38,6 +38,12 @@
 #define USER_KEYRING_IDX 0
 #define SYSTEM_KEYRING_IDX 1
 
+extern struct bpf_key *bpf_lookup_system_key(__u64 id) __ksym;
+extern void bpf_key_put(struct bpf_key *key) __ksym;
+extern int bpf_verify_pkcs7_signature(struct bpf_dynptr *data_ptr,
+				      struct bpf_dynptr *sig_ptr,
+				      struct bpf_key *trusted_keyring) __ksym;
+
 SEC("lsm.s/bpf")
 int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size){
 

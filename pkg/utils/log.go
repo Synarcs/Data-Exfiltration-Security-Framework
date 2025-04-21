@@ -26,7 +26,6 @@ func InitLogger() {
 		TimeFormat:      time.RFC822,
 	})
 	Logger.SetFormatter(log.TextFormatter)
-	Logger.SetPrefix("msg")
 }
 
 // add functional optional pattern if more customized logger is required

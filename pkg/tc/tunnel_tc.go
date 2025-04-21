@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -38,6 +37,8 @@ type TCCloneTunnel struct {
 
 	TaskCommTCEgressKernelSupport bool
 	IngressTunnelSniffer          *xdp.IngressSniffHandler
+
+	AgentOperationPassiveMode bool // passive DPI stop breaches over both random and default UDP port over DNS
 }
 
 func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
@@ -47,7 +48,7 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 // this is meant for stopping exfiltration over random ports
 // the root kernel single tc handler is advacned to stop exfiltration over both standard and random UDP ports
 func NewTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan error,
-	streamClient *stream.StreamProducer, onnx *model.OnnxModel) *TCCloneTunnel {
+	streamClient *stream.StreamProducer, onnx *model.OnnxModel, isPassive bool) *TCCloneTunnel {
 
 	// sniff for random port traffic when detected to be malicious until other wise suspended and terminated
 
@@ -58,6 +59,7 @@ func NewTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChann
 		StreamClient:                  streamClient,
 		Onnx:                          onnx,
 		TaskCommTCEgressKernelSupport: utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
+		AgentOperationPassiveMode:     isPassive,
 	}
 
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
@@ -313,6 +315,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 
 func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) error {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	ringBuffer, err := ringbuf.NewReader(ebpfEvents)
 
 	if err != nil {
@@ -343,14 +346,14 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 				if err != nil {
-					log.Fatalf("Failed to parse event: %v", err)
+					utils.Logger.Fatalf("Failed to parse event: %v", err)
 					return err
 				}
 			} else {
 				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
 				if err != nil {
-					log.Fatalf("Failed to parse event: %v", err)
+					utils.Logger.Fatalf("Failed to parse event: %v", err)
 					return err
 				}
 			}
@@ -426,7 +429,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 			}
 			requestPayload, err := json.Marshal(inferRequest)
 			if err != nil {
-				log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
+				utils.Logger.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
 				return err
 			}
 
@@ -653,8 +656,17 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 	// make the  packet pass through remote inferencing via the unix socket to be inferred with remote unix inference
 	if udpPack != nil {
 		destPort := udpPack.(*layers.UDP).DstPort
+
 		var destPortGenTypeValue uint16 = uint16(destPort)
 		var srcPortGenTypeValue uint16 = uint16(udpPack.(*layers.UDP).SrcPort)
+
+		if tun.AgentOperationPassiveMode {
+			if destPortGenTypeValue != utils.DNS_EGRESS_PORT ||
+				destPortGenTypeValue != utils.DNS_EGRESS_MULTICAST_PORT ||
+				destPortGenTypeValue != utils.LLMNR_EGRESS_LOCAL_MULTICAST_PORT {
+				return
+			}
+		}
 
 		var maliciousTunnelDNSEvent events.ExfilRawPacketMirror // a sniff packet struct not event from ring buffer
 
