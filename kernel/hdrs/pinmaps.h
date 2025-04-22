@@ -56,3 +56,11 @@ struct exfil_security_egress_nsp_map {
         __uint(pinning, LIBBPF_PIN_BY_NAME);
     } exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter SEC(".maps");
 #endif 
+
+struct exfil_security_tc_bridge_config_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32); // constant kernel key 
+    __type(value, __u32);   // layer ifindex for the kenrle bridge route;
+    __uint(max_entries, 1);
+    __uint(pinning, LIBBPF_PIN_BY_NAME);
+} exfil_security_tc_bridge_config_map SEC(".maps");

@@ -280,3 +280,22 @@ func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 func ForceGcPacketBufferZerocopyUserspace() {
 	runtime.GC()
 }
+
+/*
+Removes the pinned eBPF maps mounts from bpf fs
+*/
+func UnPingPinnedMaps(collection *ebpf.Collection, unupinMaps []string) error {
+
+	for _, pinMaps := range unupinMaps {
+		if _, fd := collection.Maps[pinMaps]; fd {
+			if collection.Maps[pinMaps].IsPinned() {
+				if err := collection.Maps[pinMaps].Unpin(); err != nil {
+					return err
+				}
+				collection.Maps[pinMaps].Close()
+			}
+		}
+	}
+
+	return nil
+}

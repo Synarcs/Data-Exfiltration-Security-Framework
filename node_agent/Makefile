@@ -3,10 +3,11 @@
 node_agent := main.go 
 output ?= main 
 debug ?= false 
+ARCH := $(shell uname -m)
 
 .PHONY: compile 
 compile:
-	@echo "Compiling the eBPF Node Agent for $(shell go env GOOS && go env GOARCH)"
+	@echo "Compiling the eBPF Node Agent for $(ARCH)"
 	go build $(node_agent) 
 
 .PHONY: run
@@ -16,7 +17,7 @@ run:
 
 .PHONY: compile-kernel-ebpf
 compile-kernel-ebpf:
-	@echo "Compiling all kernel ebpf programs"
+	@echo "Compiling all the eBPF kernel programs for $(shell uname -m) arch"
 	cd ../kernel && make
 
 .PHONY: build-cli 

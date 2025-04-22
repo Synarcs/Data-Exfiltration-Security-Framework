@@ -1,0 +1,51 @@
+@startuml
+' Set the skin parameters
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+}
+
+box "Remote Trust Infrastructure" #LightBlue
+  participant Controller
+end box
+
+box "Endpoint in Data Plane" #LightSalmon
+  actor "eBPF Loader\n(Node Agent)" as Loader
+  participant "Kernel Keyring" as Keyring
+  participant "Kernel (LSM Hook)\n (BPF_PROG-)" as Kernel
+end box
+
+== mTLS Handshake ==
+Loader -> Controller : Controller Cert request
+Controller -> Loader : Server cert + eBPF Loader cert request
+Loader -> Controller : eBPF Loader certificate + session key
+Controller -> Loader : Verify certificates 
+Controller -> Loader : gRPC over mTLS established
+
+== gRPC Signing Request ==
+Loader -> Loader : Read compiled eBPF bytecode
+Loader -> Controller : Request to sign eBPF program over mTLS
+Controller -> Controller : Sign eBPF binary + metadata
+' Controller -> Loader : Return signed cert + controller public key
+
+== Local PKI and Preparation ==
+Loader -> Loader : libbpf JIT eBPF code
+Loader -> Loader : Start Local CA 
+Loader -> Loader : Generate ephemeral ECDSA key
+Loader -> Loader : Generate ephemeral CSR
+Loader -> Loader : Generate ephemeral Cert
+Loader -> Loader : Self-sign JIT eBPF code
+Loader -> Loader : Bind cert to process (session keying)
+
+== Keyring Injection ==
+Loader -> Keyring : Store controller-signed cert
+Loader -> Keyring : Store ephemeral cert
+
+== Injection and Enforcement ==
+Loader -> Kernel : syscall: bpf_prog_load()
+Kernel -> Keyring : Fetch keys from session keyring
+Kernel -> Kernel : Verify controller cert 
+Kernel -> Kernel : Verify ephemeral cert
+Kernel -> Kernel : Enforce via LSM hook (allow/deny)
+
+@enduml

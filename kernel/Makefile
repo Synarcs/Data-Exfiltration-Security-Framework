@@ -23,7 +23,7 @@ sock_sdr := dns_sock_ops.c
 sock_sdr_out := sock.o
 
 CLANG := clang 
-CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER
+CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
 ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
 LLVM_IR_ARGS := -S -emit-llvm 
 KERNEL_HEADERS := /usr/src/linux-headers-$(shell uname -r)
@@ -37,7 +37,6 @@ BPF_CFLAGS := -target bpf \
 QDISC_RM := sudo tc qdisc del dev
 QDISC_ADD := sudo tc qdisc add dev
 QDISC := clsact
-
 
 # for arm compilation of cpu 
 .PHONY: compile

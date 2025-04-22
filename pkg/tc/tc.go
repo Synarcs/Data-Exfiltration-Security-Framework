@@ -110,6 +110,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_SECURITY_EGRESS_PROC_MAL,
 		events.EXFIL_SECURITY_EGRESS_NSP_MAP,
 		events.EXFIL_SOCK_UDP_CONN_MAP,
+		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
 	}
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
 		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER)
@@ -283,10 +284,6 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 
 func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIface, injectChan map[string]chan bool) {
 	utils.Log("Attaching a kernel Handler for the TC CLS_Act Qdisc")
-	if errors.Is(ctx.Err(), context.Canceled) {
-		utils.Log("Tc Egress Handler Qdisc Attach Event cancelled due to root context cancellation ...")
-		return
-	}
 
 	handler, err := utils.ReadEbpfFromSpec(ctx, utils.TC_EGRESS_ROOT_NETIFACE_INT)
 
@@ -316,8 +313,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	if err != nil {
 		panic(err)
 	}
-
-	defer spec.Close()
 
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
 	if prog == nil {
@@ -868,18 +863,12 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 			return err
 		}
 	}
-	for _, pinMaps := range mapsToPinSharedProcKillMap {
-		if tc.TcCollection != nil {
-			if _, fd := tc.TcCollection.Maps[pinMaps]; fd {
-				if tc.TcCollection.Maps[pinMaps].IsPinned() {
-					if err := tc.TcCollection.Maps[pinMaps].Unpin(); err != nil {
-						return err
-					}
-					tc.TcCollection.Maps[pinMaps].Close()
-				}
-			}
-		}
+
+	if err := utils.UnPingPinnedMaps(tc.TcCollection, mapsToPinSharedProcKillMap); err != nil {
+		return err
 	}
+
+	defer tc.TcCollection.Close()
 
 	return nil
 }

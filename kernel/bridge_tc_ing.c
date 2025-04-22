@@ -18,15 +18,9 @@
 #include "hdrs/utils.h" 
 #include "hdrs/dns.h"
 #include "hdrs/raw_proc.h"
+#include "hdrs/pinmaps.h"
 
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/cbpf/exfil_security_config_map"
-
-struct exfil_security_tc_bridge_config_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u32); // constant kernel key 
-    __type(value, __u32);   // layer ifindex for the kenrle bridge route;
-    __uint(max_entries, 1);
-} exfil_security_tc_bridge_config_map SEC(".maps");
 
 // allow only traffic having the custom mark and stop any other packets over the bridge 
 SEC("tc")
@@ -53,6 +47,7 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
         if (skb->mark != *skb_hash)  {
             return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
         }
+        bpf_printk("skb mark verified successfullly %d", skb->mark);
         return TC_FORWARD;
     }
 }

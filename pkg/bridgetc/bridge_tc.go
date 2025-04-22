@@ -23,6 +23,7 @@ type BridgeTCFilters struct {
 	TCBridgeSocketMap *ebpf.Map
 	Interfaces        *netinet.NetIface
 	Hash              *crypto.Hash
+	col               *ebpf.Collection
 }
 
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
@@ -71,7 +72,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 }
 
 func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, isEgress bool) {
-	utils.Log("Attaching the netfilter hook in kernel for ingress bridge PreRouting traffic")
+	utils.Log("Attaching the TC CLSACT qdisc for ingress bridge")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
@@ -88,7 +89,13 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 		panic(err.Error())
 	}
 
-	spec, err := ebpf.NewCollection(handler)
+	spec, err := ebpf.NewCollectionWithOptions(handler, ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			PinPath: utils.PINPATH,
+		},
+	})
+
+	btc.col = spec
 	if err != nil {
 		panic(err)
 	}
@@ -135,6 +142,8 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 }
 
 func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) error {
+	defer btc.col.Close()
+
 	for _, link := range btc.Interfaces.BridgeLinks {
 		err := netlink.QdiscDel(&netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
@@ -148,5 +157,10 @@ func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) er
 			return err
 		}
 	}
+
+	if err := utils.UnPingPinnedMaps(btc.col, []string{events.EXFIL_TC_BRIDGE_CONFIG_MAP}); err != nil {
+		return err
+	}
+
 	return nil
 }
