@@ -31,7 +31,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 		utils.Log("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		utils.Log("Attaching a qdisc handler for the bridge")
@@ -43,7 +43,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 			},
 		}
 		if err := netlink.QdiscReplace(qdisc_clsact); err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		tcBridgeFilter := netlink.BpfFilter{
@@ -64,7 +64,7 @@ func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Prog
 		}
 
 		if err := netlink.FilterReplace(&tcBridgeFilter); err != nil {
-			panic(err.Error())
+			return err
 		}
 	}
 	return nil

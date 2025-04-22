@@ -8,7 +8,7 @@ import (
 // Internally relies on kernel watchdog for fd emit over kqueue or async io to blocked poll socket
 // save from unwanted jargon continuous poll syscall for stats for wasting cpu cycles
 // rely on inotify and epoll for async io emit rather than polling
-func SysntemdResolveFsWatch() (*fsnotify.Watcher, error) {
+func NewInotifySystemWatcher() (*fsnotify.Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 
 	if err != nil {

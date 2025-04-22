@@ -700,10 +700,15 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count <= 2 && !c2c_check.isC2c) return BENIGN;
             
+            if (c2c_check.isC2c) {
+                if (c2c_check.deep_scan_mirror) return SUSPICIOUS;
+                if (c2c_check.drop) return MALICIOUS;
+                if (!c2c_check.deep_scan_mirror && !c2c_check.drop) return BENIGN;
+            }
 
             __u8 dns_query_labels =  parse_dns_qeury_type_section(skb, query_class, qtypes);
                 
-            // if (dns_query_labels == MALICIOUS) return MALICIOUS;
+            if (dns_query_labels == MALICIOUS) return MALICIOUS;
 
             __u64 prio_violate_bitset = 0x00; // mxset for now 
 
@@ -777,12 +782,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (prio_violate_bitset & 1)
                     return SUSPICIOUS; // violated an high prio feature filter
                 prio_violate_bitset >>= 1;
-            }
-
-            if (c2c_check.isC2c) {
-                if (c2c_check.deep_scan_mirror) return SUSPICIOUS;
-                if (c2c_check.drop) return MALICIOUS;
-                if (!c2c_check.deep_scan_mirror && !c2c_check.drop) return BENIGN;
             }
 
             return BENIGN;

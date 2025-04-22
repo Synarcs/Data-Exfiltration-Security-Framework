@@ -155,26 +155,33 @@ func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer
 }
 
 func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
-	utils.Log("received an event for systemd-resolved config change", ev.String())
-	if !ev.Has(fsnotify.Write) {
-		// only update on write event from kernel for the resolved config
+	utils.Log("received event for systemd-resolved config change:", ev.String())
+
+	if !(ev.Has(fsnotify.Write) || ev.Has(fsnotify.Rename) || ev.Has(fsnotify.Create)) {
+		// Only update on write, rename, or create events
 		return
 	}
+
+	time.Sleep(time.Second) // wait atomic until file is modified and flushed to disk,  in case of vim, vim generates a temp swp file and then update original one
 	sysetemdResolvedConfigUpdateGuard.Lock()
 	defer sysetemdResolvedConfigUpdateGuard.Unlock()
 
 	resolvedDnsChange, err := ReadDNSResolvedConf()
 	if err != nil {
-		return // suppress this dont change any agent config since the agent is love running  with all eBPF progs in kernel
+		// Suppress error: don't change agent config; agent is live with all eBPF programs loaded in kernel
+		return
 	}
 
-	nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
+	if resolvedDnsChange != nil {
+		// ensure the flushed change to disk has new modified content
+		nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
+	}
 }
 
 // updates the root process for eBPF node agent in user space which injected all kernel programs over any changes on disk for systemd resolved
 func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 	utils.Log("Starting the Inotify Systemd Resolved watcher")
-	inotifywatcher, err := iowatchers.SysntemdResolveFsWatch()
+	inotifywatcher, err := iowatchers.NewInotifySystemWatcher()
 
 	doneChan := make(chan bool)
 	if err != nil {
@@ -189,10 +196,13 @@ func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 				doneChan <- true
 				return
 			case ev, cls := <-inotifywatcher.Events:
-				doneChan <- true
 				if !cls {
 					utils.Log("Channel for fs notify event closed")
 					return
+				}
+				if ev.Op&fsnotify.Rename != 0 || ev.Op&fsnotify.Create != 0 {
+					inotifywatcher.Remove(SYSTEMD_RESOLVED_PATH)
+					inotifywatcher.Add(SYSTEMD_RESOLVED_PATH)
 				}
 				nf.UpdateAgentConfig(&ev)
 			case err := <-inotifywatcher.Errors:
@@ -203,12 +213,14 @@ func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 		}
 	}()
 
+	utils.Log("Adding FSNotify Watcher", SYSTEMD_RESOLVED_PATH)
 	if err := inotifywatcher.Add(SYSTEMD_RESOLVED_PATH); err != nil {
 		utils.Log("error adding watcher", SYSTEMD_RESOLVED_PATH)
 		doneChan <- true
 	}
 
 	<-doneChan
+	utils.Log("closing the watch func")
 	return nil
 }
 

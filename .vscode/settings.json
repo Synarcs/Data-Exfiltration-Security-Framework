@@ -149,7 +149,8 @@
         "errno.h": "c",
         "vmlinux.h": "c",
         "ipv6.h": "c",
-        "crypto_maps.h": "c"
+        "crypto_maps.h": "c",
+        "pwd.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "disabled"

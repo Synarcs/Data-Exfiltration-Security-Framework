@@ -275,9 +275,8 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 						utils.Log("Error Streaming the prometheus metrics", err)
 					}
 				}
-			default:
-				time.Sleep(time.Second * 2)
 			}
+			time.Sleep(time.Second * 5)
 		}
 	}
 }

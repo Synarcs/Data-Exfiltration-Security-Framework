@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/bridgetc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
@@ -434,33 +433,19 @@ func main() {
 
 	// TODO move this to uring or epoll fd listners for the remote inference server to emity socket close signal event consumed via unix trafer port
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		evalOnnxInferenceUnixSockMount := func() {
-			_, egressErr := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_EGRESS)
-			_, ingressErr := os.Stat(utils.ONNX_INFERENCE_UNIX_SOCKET_INGRESS)
-			if egressErr != nil || ingressErr != nil {
-				if errors.Is(egressErr, os.ErrNotExist) {
-					utils.Log("The Unix Local Unix Inference Socket is not available", egressErr.Error())
-					utils.Log("Gracefully shutting the Node agent and remove all kernel hooks")
-				} else if errors.Is(ingressErr, os.ErrNotExist) {
-					utils.Log("The Unix Local Unix Inference Socket is not available", ingressErr.Error())
-					utils.Log("Gracefully shutting the Node agent and remove all kernel hooks")
-				} else {
-					utils.Log("The Remote Unix Socket FD is not healthy", err.Error())
-				}
-				if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-					utils.Log(fmt.Sprintf("Error cleaning the injected kernel hooks %+v", err))
-				}
-				os.Exit(int(syscall.SIGTERM))
+		cleanMountedKernelHooks := func() {
+			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
+				utils.Log(fmt.Sprintf("Error cleaning the injected kernel hooks %+v", err))
 			}
+			os.Exit(int(syscall.SIGTERM))
 		}
-		for {
-			select {
-			case <-ticker.C:
-				evalOnnxInferenceUnixSockMount()
-			default:
-				time.Sleep(time.Second)
-			}
+
+		fsSockMntRemoveWatchChan := make(chan bool)
+		go onnx.OnnxModelFsUnixMountWatcher(ctx, fsSockMntRemoveWatchChan)
+
+		for range fsSockMntRemoveWatchChan {
+			utils.Log("The onnx model mount is required received Fs mont cl")
+			cleanMountedKernelHooks()
 		}
 	}()
 
@@ -477,8 +462,6 @@ func main() {
 	if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
 		utils.Logger.Printf("Error cleaning the injected kernel hooks %+v", err)
 	}
-
-	agentCancelFunc()
 
 	if err := cryptoLsmProgHandler.RemoveCryptoLSMProgs(); err != nil {
 		utils.Logger.Printf("Error removing the crypto lsm prog sig verifier progs %+v", err)

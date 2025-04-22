@@ -2,6 +2,7 @@ package netinet
 
 import (
 	"bufio"
+	"errors"
 	"net"
 	"os"
 	"strings"
@@ -22,7 +23,10 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 	// we dont need parallel i/o since the dns resolv is not much huge file
 	fd, err := os.Open(SYSTEMD_RESOLVED_PATH)
 	if err != nil {
-		utils.Log("Error Reading the fild descriptor for resolv.conf")
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		utils.Logger.Error("Error Reading the file descriptor for resolv.conf", err)
 		return nil, err
 	}
 	defer fd.Close()

@@ -231,6 +231,8 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 		return err
 	}
 
+	defer ringbuffer.Close()
+
 	closeSniffSignalHandler := func(event *events.DPIVxlanKernelEncapEvent, closeSniffSignalMap map[uint16]chan bool) {
 		// runs as the root cleanup sock event to ensure the associated fd are cleaned from the kernel
 		for {
@@ -255,7 +257,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				return nil
 			}
 			// likely the ring buff closed or there is a padding issue for reing buff value read
-			panic(err.Error())
+			break
 		}
 
 		var event events.DPIVxlanKernelEncapEvent
@@ -302,4 +304,6 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 			utils.Log("Vxland Event polled from kernel non standard port init sniff to ensure the port is not exfiltrating data", event)
 		}
 	}
+
+	return nil
 }
