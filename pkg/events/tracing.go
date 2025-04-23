@@ -87,6 +87,21 @@ type Malicious_Non_Stanard_Transfer struct {
 	IsUDPTransport bool
 }
 
+type RawDnsEvent struct {
+	Fqdn     string
+	Tld      string
+	IsEgress bool
+	Protocol Protocol
+}
+
+type KernelNetlinkSocket struct {
+	ProcessId     uint32
+	Uid           uint32
+	GroupId       uint32
+	ThreadGroupId uint32
+	ProcessInfo   [200]byte
+}
+
 type MaliciousDetectedUserSpaceCount int
 type Protocol string
 
@@ -103,21 +118,6 @@ type KernelPacketDropRedirectInterface interface {
 		MaliciousDetectedUserSpaceCount | KernelNetlinkSocket | RawDnsEvent | Malicious_Non_Stanard_Transfer | VxlanEncapKenrelEvent | MaliciousProcessAliveTime
 }
 
-type RawDnsEvent struct {
-	Fqdn     string
-	Tld      string
-	IsEgress bool
-	Protocol Protocol
-}
-
-type KernelNetlinkSocket struct {
-	ProcessId     uint32
-	Uid           uint32
-	GroupId       uint32
-	ThreadGroupId uint32
-	ProcessInfo   [200]byte
-}
-
 // CPU and memory metrics for the process
 var (
 	// CPU and memory metrics for the process
@@ -126,7 +126,7 @@ var (
 			Name: "process_cpu_usage_percent",
 			Help: "CPU usage percentage of the process",
 		},
-		[]string{"state"}, // "user", "system", "idle"
+		[]string{"state"}, // "user", "system", "idle" 
 	)
 
 	// Memory usage gauge

@@ -34,9 +34,9 @@ BPF_CFLAGS := -target bpf \
 
 
 # tc bpf qdisc iprotue2 comm 
-QDISC_RM := sudo tc qdisc del dev
-QDISC_ADD := sudo tc qdisc add dev
 QDISC := clsact
+QDISC_RM := sudo tc $(QDISC) del dev
+QDISC_ADD := sudo tc $(QDISC) add dev
 
 # for arm compilation of cpu 
 .PHONY: compile

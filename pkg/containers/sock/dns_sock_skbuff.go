@@ -46,7 +46,7 @@ func (sock *SockKernelProgs) InitEpfSockProg(ctx context.Context) (*ebpf.Collect
 	return spec, err
 }
 
-func (sock *SockKernelProgs) InjectKernelSockOps(ctx context.Context, bpfMountPath string, sockeBPFProg string) error {
+func (sock *SockKernelProgs) InjectKernelSockOps(ctx context.Context, sockeBPFProg string) error {
 	utils.Log("Injecting the sock Ops for UDP sock trace for the current kernel not supporting task_comm in egress Tc ")
 
 	if err := ctx.Err(); err != nil {

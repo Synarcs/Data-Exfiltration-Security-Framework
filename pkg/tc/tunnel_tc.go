@@ -137,6 +137,7 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 	}
 }
 
+// a placeholder for agent to help track via mpa the ingress sniff go routines booted to hunt all the potential malicious exfiltration attempts over random UDP ports
 type maliciousExfilPortIngressSniffCtx struct {
 	ctx         context.Context
 	cancelSniff context.CancelFunc
@@ -163,6 +164,8 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 				ctx:         ctx,
 				cancelSniff: cancel,
 			}
+			// make sure the whole context info struct is not passed for context missues ensure only the raw context for sniff session over this specifc port is passed
+			// the sniff session for this port internally uses pcap over AF_PACKET as link layer for live packet sniffing
 			go tun.IngressTunnelSniffer.SniffIgressForC2C(ctx, maliciousDestPort)
 		}
 	}

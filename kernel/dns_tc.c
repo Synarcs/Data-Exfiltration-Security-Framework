@@ -268,9 +268,6 @@ struct dns_volume_stats {
     __u32 packet_size;
 };
 
-// exfil rate limiter 
-
-
 // follows leaky bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing volume of traffic over a fixed 1 sec window
 // the packet does not matter (dns + tcpv4 / tcpv6) or (dns + udpv4 + udpv6)
 #if DNS_RATE_LIMIT_VOLUME 
@@ -294,26 +291,28 @@ struct dns_volume_stats {
 
 // Parse the RAW SKB for query classes 
 #define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)\ 
-        switch ((dns_query_class)){                 \
-                case 0x0001:                        \
-                case 0x0002:                        \
-                case 0x0005:                        \
-                case 0x0006:                        \
-                case 0x001C:                        \
-                case 0x0041:                        \
-                    return BENIGN;                  \
-                case 0x000F:                        \
-                case 0x0021:                        \
-                case 0x0023:                        \
-                case 0x0029:                        \
-                case 0x0010:                        \
-                    return SUSPICIOUS;              \
-                case 0x00FF:                        \
-                case 0x000A:                        \
-                    return MALICIOUS;               \
-                default:                            \
-                    return SUSPICIOUS;              \
-            }                                       
+        do {                                        \
+            switch ((dns_query_class)){                 \
+                    case 0x0001:                        \
+                    case 0x0002:                        \
+                    case 0x0005:                        \
+                    case 0x0006:                        \
+                    case 0x001C:                        \
+                    case 0x0041:                        \
+                        return BENIGN;                  \
+                    case 0x000F:                        \
+                    case 0x0021:                        \
+                    case 0x0023:                        \
+                    case 0x0029:                        \
+                    case 0x0010:                        \
+                        return SUSPICIOUS;              \
+                    case 0x00FF:                        \
+                    case 0x000A:                        \
+                        return MALICIOUS;               \
+                    default:                            \
+                        return SUSPICIOUS;              \
+            }                                           \                                
+        }while(0);
 
 #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER 
     // custom range order filtering for the DNS domains over the labels queries ssections 
@@ -389,6 +388,11 @@ struct dns_volume_stats {
             }                                                             \
         } while (0)
 #endif
+
+#define SKB_RANDOM_MARK_PER_NETFLOW(skb, mark_config) \
+        do {    \
+            __mark_skb_packet_buffer(skb, mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
+        } while(0);
 
 static 
 __always_inline void cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -1172,12 +1176,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port_tcp(struct skb_cursor *
 
         return 0;
     }else if (ans_count > 0 && ans_count <= (1 << 8) - 1)
-        return 1; 
-
-    // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
-    #if DEBUG
-        bpf_printk("Non standard transport DPI found for exfil remote c2c server");
-    #endif
+        return 1;
     // a malicious encap is used to mask the dns traffPic 
     return 0;
 }
@@ -1218,11 +1217,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
         __u32 out = skb->ifindex;
         struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
 
-        if (!config) {
-            __mark_skb_packet_buffer(skb, redirect_skb_mark);
-        }else {
-            __mark_skb_packet_buffer(skb, config->KernelTCSKBMark);
-        }
+        SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
     }
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
         bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
@@ -1388,7 +1383,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
                 // skip deep parsing of random UDP ports used by most common l7 protocols relying on UDP transport example 68 (DHCP) 
                 goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
             }
-        #endif 
+        #endif
     }
    
     __u16 udp_dst_transfer_key = __transport_dest_port;
@@ -2090,11 +2085,8 @@ int classify(struct __sk_buff *skb){
 
                     __handle_kernel_map_redirection_drop_count();
 
-                    if (!config) {
-                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                    }else {
-                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                    }
+                    SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
+
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
@@ -2136,11 +2128,7 @@ int classify(struct __sk_buff *skb){
 
                 __handle_kernel_map_redirection_count();
 
-                if (!config) {
-                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                }else {
-                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                }
+                SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
                 
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
@@ -2256,19 +2244,15 @@ int classify(struct __sk_buff *skb){
                     #endif
                     // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
                     __handle_kernel_map_redirection_drop_count();
-                    if (!config) {
-                        __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                    }else {
-                        __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                    }
+
+                    SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
                     
                     ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
                     return bpf_redirect(br_index, BPF_F_INGRESS);
                 }
 
-                if (isAggressiveExfilsec == 0){
+                if (isAggressiveExfilsec == 0)
                     goto threatHuntPotentialMaliciousProcessExfilIpv6;
-                }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
                 __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
@@ -2292,12 +2276,8 @@ int classify(struct __sk_buff *skb){
 
                 __handle_kernel_map_redirection_count();
 
-                if (!config) {
-                    __mark_skb_packet_buffer(skb, redirect_skb_mark);
-                }else {
-                    __mark_skb_packet_buffer(skb,  config->KernelTCSKBMark);
-                }
-                
+                SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
+
                 __skb_l3_dnat_v6(&ipv6);
 
                 __update_kernel_packet_redirection_time(transaction_id);

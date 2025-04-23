@@ -142,6 +142,8 @@ int process_potential_mal_c2_forks()  {
     struct task_struct *parent = NULL;
     pid_t ppid = 0;
 
+    struct __kernel_proc_struct_info *proc_infp = __get_process_info();
+
     return 0;
 }
 

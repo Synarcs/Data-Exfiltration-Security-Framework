@@ -388,7 +388,8 @@ func main() {
 	var sockProgs *sock.SockKernelProgs = new(sock.SockKernelProgs)
 	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
 		// ensure the kernel sock map is added for overlay proc task comm support in kernel tc layer
-		if err := sockProgs.InjectKernelSockOps(ctx, utils.PINPATH, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
+		// sock ops support all kernel socket layer progs (cgroups, sock_ops,skb_filters) etc
+		if err := sockProgs.InjectKernelSockOps(ctx, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
 			utils.Log("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
 			globalErrorKernelHandlerChannel <- err
 		}

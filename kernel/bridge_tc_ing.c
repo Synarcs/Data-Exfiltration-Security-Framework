@@ -47,7 +47,6 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
         if (skb->mark != *skb_hash)  {
             return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
         }
-        bpf_printk("skb mark verified successfullly %d", skb->mark);
         return TC_FORWARD;
     }
 }

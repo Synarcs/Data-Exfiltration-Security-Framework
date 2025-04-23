@@ -1,4 +1,5 @@
 @startuml
+!pragma teoz true
 ' Set the skin parameters
 skinparam rectangle {
   BackgroundColor White
@@ -9,8 +10,8 @@ box "Remote Trust Infrastructure" #LightBlue
   participant Controller
 end box
 
-box "Endpoint in Data Plane" #LightSalmon
-  actor "eBPF Loader\n(Node Agent)" as Loader
+box "Endpoint in Data Plane\n" #LightSalmon
+  participant "eBPF Loader\n(Node Agent)" as Loader
   participant "Kernel Keyring" as Keyring
   participant "Kernel (LSM Hook)\n (BPF_PROG-)" as Kernel
 end box
