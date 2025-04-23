@@ -41,6 +41,7 @@ func (mock *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgent
 }
 
 func TestMain(t *testing.M) {
+	utils.NewLogger(context.Background())
 	utils.Log("Starting the test for kernel netlink sockets and interfaces  ....")
 
 	linkHandler = netinet.NetIface{}

@@ -221,7 +221,7 @@ func main() {
 	envoy.InitTCPWasmFilter()
 
 	// rf Netlink packet parsing for the node agent
-	iface := netinet.NetIface{}
+	iface := netinet.NewNetIface()
 	iface.ReadInterfaces(nodeAgentCliOptions.ContainerRuntime || nodeAgentCliOptions.Sdr)
 	iface.ReadRoutes()
 	iface.ConfigureAgentDnsServerConfig(nil)
@@ -324,7 +324,7 @@ func main() {
 	// kernel traffic control clsact prior qdisc or prior egress ifinde called via netlink
 	// keep the iface for now only restrictive over the DNS egress layer
 	tc, err := tcl.NewTcEgressFactory(&tcl.KernelTcInjectConfig{
-		Iface:                           &iface,
+		Iface:                           iface,
 		OnnxModel:                       model,
 		StreamClient:                    streamProducer,
 		GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
@@ -339,7 +339,7 @@ func main() {
 	}
 
 	if globalConfig.EnhancedFeatures.Dns.EnableNxFloodPrevention {
-		xdpHandler := xdp.NewXdpHandler(&iface)
+		xdpHandler := xdp.NewXdpHandler(iface)
 		if err := xdpHandler.LinkXdp(); err != nil {
 			utils.Logger.Printf("Error Attach the XDP to physical link %+v", err)
 		}
@@ -348,7 +348,7 @@ func main() {
 	if globalConfig.EnhancedFeatures.Dns.EnableIngressSniff {
 		// ingress pcap based packet sniff layer for deep packet monitoring over the ingress traffic, rely on pcap and AF_PACKET for CAP_RAW to sniff packets and not real XDP kernel rate limiter
 		ingress := xdp.NewIngressSniffer(&xdp.IngressSnifferConfig{
-			Iface:                           &iface,
+			Iface:                           iface,
 			OnnxModel:                       model,
 			StreamClient:                    streamProducer,
 			GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
@@ -360,22 +360,22 @@ func main() {
 	kprobe := kprobe.NewKprobeEventFactory()
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
-	go tc.TcHandlerEbfpProg(ctx, &iface, globalEBPFProgInjectChan)
+	go tc.TcHandlerEbfpProg(ctx, iface, globalEBPFProgInjectChan)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
 	netfilter := &bridgetc.BridgeTCFilters{
-		Interfaces: &iface,
+		Interfaces: iface,
 		Hash:       hash,
 	}
 	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
 
 	// process pre default boot interfaces of type tunnels loaded pre in kernel
-	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, tc, &iface)
+	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, tc, iface)
 
 	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
-	go kprobe.ProcessTunnelEvent(ctx, &iface, tunnelSocketEventHandler, tc)
-	go kprobe.AttachNetlinkSockHandler(&iface, tunnelSocketEventHandler)
+	go kprobe.ProcessTunnelEvent(ctx, iface, tunnelSocketEventHandler, tc)
+	go kprobe.AttachNetlinkSockHandler(iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(agentConfigLoader.GetAgentConfig())
 
@@ -400,7 +400,7 @@ func main() {
 		nft:       netfilter,
 		kprobe:    kprobe,
 		sockProgs: sockProgs,
-		iface:     &iface,
+		iface:     iface,
 		cliSock:   cliSock,
 	}
 
@@ -418,7 +418,7 @@ func main() {
 		// load the node agent consumer from kafka topics which controller instructs all the data plane nodes for efiltration updates with node l3 information where exfiltration was stopeed and killed
 		utils.Log("Loading the consumer for consuming thrat events update from control plane")
 		for range globalEBPFProgInjectChan[progs.TC_PROG] {
-			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog, &iface)
+			streamConsumer.ConfigureeBPFEgressHandlerForDynamicL3Blacklist(ctx, tc.TcCollection, tc.Prog, iface)
 			if err := streamConsumer.ConsumeStreamAnalyzedThreatEvent(ctx); err != nil {
 				streamConsumer.CloseConsumer()
 			}

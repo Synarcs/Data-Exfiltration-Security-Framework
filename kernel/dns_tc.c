@@ -389,8 +389,8 @@ struct dns_volume_stats {
         } while (0)
 #endif
 
-#define SKB_RANDOM_MARK_PER_NETFLOW(skb, mark_config) \
-        do {    \
+#define SKB_RANDOM_MARK_PER_NETFLOW(skb, mark_config)                     \
+        do {                                                              \
             __mark_skb_packet_buffer(skb, mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
         } while(0);
 
@@ -570,8 +570,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         }
 
         if (add_count > 1) return SUSPICIOUS;
-        // each kernel config limit value internally stores (priority | value) --> (0x100 + priority) | limit
-
         // subdomain label count inference based on the state 
         __u32 label_key_subdomain_per_label_min = 2; __u32 label_key_subdomain_per_label_max = 3;
         __u32 label_key_subdomain_length_exclude_tld_min = 6; __u32 label_key_subdomain_length_exclude_tld_max = 7;
@@ -714,7 +712,21 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 
             if (dns_query_labels == MALICIOUS) return MALICIOUS;
 
-            __u64 prio_violate_bitset = 0x00; // mxset for now 
+            /*
+                Each kernel config limit value internally stores (priority | value)
+                the prio bitset is kept for max size of u64 to support upto (1 << 8) / 2 features values for every 8 bits storing features set and there values 
+
+                First 8 prio features 
+                Priority    Feature bitset                      Feature Value                               Priority
+                       1    (0x1 << 0xFF) | (feature_value)     ((0x1 << 0xFF) | (feature_value)) & 0xFF    (0xx1 << 0xFF)) >> 0xFF 
+                       2    (0x2 << 0xFF) | (feature_value)     ..                                          ..
+                       ...
+                Next octet for features 
+                Priority    Feature bitset                                          Feature Value                               Priority
+                       1    (0x8 << 0xFF) | (feature_value) | prio_violate_bitset   ..                                          ...
+            */
+
+            __u64 prio_violate_bitset = 0x00; 
 
             // subdomain length per label (min | max)
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
@@ -781,7 +793,10 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
-            // lsb --> msb == high prio --> low prio
+            /*
+                if any feature violated return suspicious
+                the reason to not straight of return for any of the features being violated for enhanced priority based filtering mapping to total number of violated features 
+            */
             for (int i =0; i < MAX_DNS_PRIO_KEYS; i++) {
                 if (prio_violate_bitset & 1)
                     return SUSPICIOUS; // violated an high prio feature filter
@@ -1507,7 +1522,6 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
         __u32 dest_port = bpf_ntohs(udp->dest);
      
-        // TODO: Fix hte code redundancy 
         __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, skb,
                             dns_payload, dns, udp);
         if (__non_standard_port_dpi == 0) {
@@ -1527,8 +1541,6 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
            ); // should forward the packet since the packet is cloned and deep scanned in user space 
         }   
         return __non_standard_port_dpi;
-
-        // do deep packet inspection on the packet contett and the associated payload 
 }
 
 
@@ -1923,9 +1935,8 @@ __always_inline bool __handle_non_aggresive_dpi_standard_dns_port(struct __skb_b
 #endif
 
 /*
-    TODO: the kernel should enforce active sensor security for traffic over udp
-          for tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
-            for DPI over TCP streams over DNS, started implemented user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security and parsing must be done over kernel cgroup/skb_egress.
+    For tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
+    For DPI over TCP streams over DNS, filter must be via user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security. in passive mode 
 */  
 static 
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
@@ -2091,7 +2102,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
-                __u16 transaction_id = (__u16) bpf_ntohs(dns->transaction_id);
+                __u16 transaction_id = bpf_ntohs(dns->transaction_id);
                 __u16 ip_checksum = bpf_ntohs(ip->check);
                 __u16 sport = bpf_ntohs(udp->source);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
@@ -2134,7 +2145,7 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
 
-                threatHuntPotentialMaliciousProcessExfil:
+		threatHuntPotentialMaliciousProcessExfil:
 
                 if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor))
                     return TC_FORWARD;

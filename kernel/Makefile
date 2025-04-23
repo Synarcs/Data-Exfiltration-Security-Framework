@@ -38,6 +38,9 @@ QDISC := clsact
 QDISC_RM := sudo tc $(QDISC) del dev
 QDISC_ADD := sudo tc $(QDISC) add dev
 
+# vmlinux for raw tc, rtkprobes, kprobes kernel eBPF programs 
+VMLINUX_MNT := /sys/kernel/btf/vmlinux
+
 # for arm compilation of cpu 
 .PHONY: compile
 compile:
@@ -59,7 +62,7 @@ compile:
 # kernel vmlinux compile for root struct header 
 .PHONY: vmlinux-btf 
 vmlinux-btf: 
-	bpftool btf dump file /sys/kernel/btf/vmlinux format c   > vmlinux.h	
+	bpftool btf dump file $(VMLINUX_MNT) format c   > vmlinux.h	
 
 .PHONY: compile-llvm-arch 
 compile-llvm-arch:
