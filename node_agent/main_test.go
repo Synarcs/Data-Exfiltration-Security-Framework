@@ -6,9 +6,11 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -16,6 +18,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// only covers the integration test required for the eBPF node agent to boot up at the endpoint
 
 // convers all the integration test for the user space entire node agent with kernel code, and kernel compatibility
 
@@ -86,6 +90,26 @@ func TestNetworkInterfaces(t *testing.T) {
 		assert.Fail("Error the node agent cannot boot and inject kernel programs until the required netlink links are found")
 	}
 	assert.True(true)
+}
+
+func TestOnnxDnsUnixMounts(t *testing.T) {
+	agentOnnxMountPaths := cli.LocalCliUnixSockPath
+	dirs, err := os.ReadDir(agentOnnxMountPaths)
+	if err != nil {
+		t.Fatalf("Error the required onnx unix mount paths not found %s", agentOnnxMountPaths)
+	}
+	assert := assert.New(t)
+	expectCt := 2
+	onnxMountsct := 0
+
+	for _, dir := range dirs {
+		// check for both ingress and egress onnx inference mounts
+		if strings.Contains(dir.Name(), "onnx-inference") {
+			onnxMountsct++
+		}
+	}
+
+	assert.EqualValues(expectCt, onnxMountsct)
 }
 
 func TestBridgeInterfaces(t *testing.T) {

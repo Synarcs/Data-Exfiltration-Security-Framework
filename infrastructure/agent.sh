@@ -83,6 +83,13 @@ sudo apt install -y \
     python3-virtualenv
 
 
+# Install bpftool for btf emit and vmlinux for kprobes and kernel sockets 
+echo "[✅] Building and installing bpftool"
+git clone --recurse-submodules https://github.com/libbpf/bpftool.git
+cd bpftool/src 
+make 
+sudo make install
+
 tcp_wasm_envoy_breach_sec=0 
 if [[ $tcp_wasm_envoy_breach_sec -eq 1 ]]; then 
     wget -O- https://apt.envoyproxy.io/signing.key | sudo gpg --dearmor -o /etc/apt/keyrings/envoy-keyring.gpg

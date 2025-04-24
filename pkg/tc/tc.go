@@ -76,8 +76,9 @@ type KernelTcInjectConfig struct {
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
 	dnsPacketGen, err := model.NewDnsPacketResendUtils(&model.DnsPacketGenConfig{
-		Iface:     config.Iface,
-		OnnxModel: config.OnnxModel,
+		Iface:        config.Iface,
+		OnnxModel:    config.OnnxModel,
+		StreamClient: config.StreamClient,
 	})
 
 	if err != nil {
@@ -447,10 +448,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
 */
 func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassive bool) {
-	if !utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
-		utils.Log("Kernel does not support the required egress tc clsact task com for secure malicious port DNS scan will use port  for mal process monitor in kernel")
-		return
-	}
 	tc_tunnel := NewTcTunnelFactory(tc, tc.Interfaces,
 		tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel, isPassive)
 	tc.TcTunnelNonStandardPortScan = tc_tunnel

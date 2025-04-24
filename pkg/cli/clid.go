@@ -202,7 +202,7 @@ func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusAccepted)
 	if len(currProcCount) == 0 {
 		json.NewEncoder(w).Encode(
-			sendResp("No malicious process Detected yet by the node-agent", []string{}),
+			sendResp(fmt.Sprintf("No malicious process Detected yet by the node-agent process %d", os.Getpid()), []string{}),
 		)
 		return
 	}

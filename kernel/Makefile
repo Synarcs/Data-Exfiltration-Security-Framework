@@ -35,8 +35,8 @@ BPF_CFLAGS := -target bpf \
 
 # tc bpf qdisc iprotue2 comm 
 QDISC := clsact
-QDISC_RM := sudo tc $(QDISC) del dev
-QDISC_ADD := sudo tc $(QDISC) add dev
+QDISC_RM := sudo tc qdisc del dev
+QDISC_ADD := sudo tc qdisc add dev
 
 # vmlinux for raw tc, rtkprobes, kprobes kernel eBPF programs 
 VMLINUX_MNT := /sys/kernel/btf/vmlinux

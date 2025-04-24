@@ -182,7 +182,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 		if val, fd := maliciousExfilProcessesRecCt[mapField.ProcessId]; fd {
 			maliciousExfilProcessesRecCt[mapField.ProcessId] = val + 1
 		} else {
-			maliciousExfilProcessesRecCt[mapField.ProcessId] = val + 1
+			maliciousExfilProcessesRecCt[mapField.ProcessId] = 1
 		}
 	} else {
 		if utils.DEBUG {
@@ -422,7 +422,10 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 
 			if err != nil {
 				utils.Log("Error Gettting report inference socket for inference")
+			}
 
+			if conn == nil || client == nil {
+				return fmt.Errorf("Error while getting the inference client for the onnx model")
 			}
 			defer conn.Close()
 

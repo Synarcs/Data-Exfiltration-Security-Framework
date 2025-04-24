@@ -173,10 +173,10 @@ func main() {
 
 	var nodeAgentCliOptions conf.NodeAgentCliOptions
 	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
-	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode")
-	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming")
-	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference")
-	flag.BoolVar(&nodeAgentCliOptions.Profile, "profile", false, "Runs pprof profile server for flamegraph based node agent profiling live once injected all progs in kernel")
+	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
+	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming (default: false)")
+	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference (default: false)")
+	flag.BoolVar(&nodeAgentCliOptions.Profile, "profile", false, "Runs pprof profile server for flamegraph based node agent profiling live once injected all progs in kernel (default: false)")
 
 	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods virtual net_device in kernel attached to either the host cni vxlan / bgp net_device or internal node to node communication on same pod
 	flag.BoolVar(&nodeAgentCliOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
@@ -186,7 +186,7 @@ func main() {
 	flag.IntVar(&nodeAgentCliOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
 
 	// kernel syscall layer interaction , needs kernel to support ring buffer emission for
-	flag.IntVar(&nodeAgentCliOptions.SigKill, "sigkill", 5, "Define the threshold for a process to be detected, post being sigkilled")
+	flag.IntVar(&nodeAgentCliOptions.SigKill, "sigkill", 5, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent, post being sigkilled")
 	flag.BoolVar(&nodeAgentCliOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
 	flag.Usage = func() {

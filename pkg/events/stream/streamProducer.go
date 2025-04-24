@@ -103,6 +103,7 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 }
 
 func (prod *StreamProducer) StreamThreadEvent(ctx context.Context, event []byte) error {
+	fmt.Println("the writer for prod is ", prod)
 	if prod.Writer == nil {
 		return fmt.Errorf("kafka writer not initialized")
 	}
