@@ -58,7 +58,8 @@ sudo apt update -y && sudo apt install -y \
 # Install x86_64 specific libraries
 arch=$(uname -m)
 if [ "$arch" = "amd64" ]; then
-    echo "[x] Installing x86_64 specific libraries"
+    sudo apt install -y libc6-dev-i386
+if [ "$arch" = "x86_64" ]; then
     sudo apt install -y libc6-dev-i386
 fi
 
@@ -89,6 +90,7 @@ git clone --recurse-submodules https://github.com/libbpf/bpftool.git
 cd bpftool/src 
 make 
 sudo make install
+rm -rf bpftool
 
 tcp_wasm_envoy_breach_sec=0 
 if [[ $tcp_wasm_envoy_breach_sec -eq 1 ]]; then 

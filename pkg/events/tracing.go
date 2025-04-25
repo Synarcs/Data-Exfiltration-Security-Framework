@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -126,7 +127,7 @@ var (
 			Name: "process_cpu_usage_percent",
 			Help: "CPU usage percentage of the process",
 		},
-		[]string{"state"}, // "user", "system", "idle" 
+		[]string{"state"}, // "user", "system", "idle"
 	)
 
 	// Memory usage gauge
@@ -225,10 +226,14 @@ var (
 			Help: "The malicious detected dns packet",
 		},
 		[]string{
+			// DNS features
 			"Fqdn", "SLD", "Subdomain", "TotalChars", "TotalCharsInSubdomain",
 			"NumberCount", "UCaseCount", "Entropy", "Periods",
 			"PeriodsInSubDomain", "LongestLabelDomain",
-			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers", "PhysicalNodeIpv4",
+			"AverageLabelLength", "IsEgress", "RecordType", "AuthZoneSoaservers",
+			// infrastructure endpoint location
+			"PhysicalNodeIpv4", "Hostname",
+			// process and thread level information
 			"Protocol", "ExfilPort", "ProcessId",
 		},
 	)
@@ -546,6 +551,12 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 		labels["ProcessId"] = strconv.Itoa(int(procInfo.ProcessId))
 	} else {
 		labels["ProcessId"] = "Nan"
+	}
+
+	if hostname, err := netinet.GetNodeHostName(); err != nil {
+		labels["Hostname"] = ""
+	} else {
+		labels["Hostname"] = hostname
 	}
 
 	switch protocol {

@@ -7,18 +7,14 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-
-
 #define isUpper(a) ((a) - 'A' >= 0 && 'Z' - (a) >= 0)
 #define isLower(a) ((a) - 'a' >= 0 && 'z' - (a) >= 0)
 #define isDigit(a) ((a) - '0' >= 0 && '9' - (a) >= 0)
-
 
 #define div(a, b) ((a) / (b))
 
 #define forn(x, type, i) for (type i = 0; i < (x); i++)
 #define forin(x, y, type, i) for (type i = (x); i < (y); i++)
-#define forine(x, y, type, i, ...) for (type i = (x); i <= (y); i++)
 
 // cursor to and other encap protocol information storing packet cursor information in skb 
 struct skb_cursor {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -180,6 +181,15 @@ func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
 		// ensure the flushed change to disk has new modified content
 		nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
 	}
+}
+
+func GetNodeHostName() (string, error) {
+	nodeName, err := os.Hostname()
+	if err != nil {
+		utils.Log("Error getting hostname", err)
+		return "", err
+	}
+	return nodeName, nil
 }
 
 // updates the root process for eBPF node agent in user space which injected all kernel programs over any changes on disk for systemd resolved
@@ -621,11 +631,6 @@ func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
 	}
 
 	return &fd, nil
-}
-
-func (nf *NetIface) GetBridgePcapHandle() (*pcap.Handle, error) {
-	cap, err := pcap.OpenLive(NETNS_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
-	return cap, err
 }
 
 func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {

@@ -91,7 +91,7 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 		if val, fd := maliciousExfilProcessesRecCt[procId]; fd {
 			maliciousExfilProcessesRecCt[procId] = val + 1
 		} else {
-			maliciousExfilProcessesRecCt[procId] = val + 1
+			maliciousExfilProcessesRecCt[procId] = 1
 		}
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
