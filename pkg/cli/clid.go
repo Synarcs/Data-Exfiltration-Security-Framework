@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -191,21 +192,26 @@ func GetMaliciousDetectedProcessCtOnNode(w http.ResponseWriter, r *http.Request)
 	currProcCount, procs := GetAllPreventedExfiltratedProcessids()
 	sendResp := func(msg string, procs []string) interface{} {
 		return struct {
-			Msg   string
-			Procs []string
+			MaliciousPreventedProcessCount string
+			Procs                          []string
 		}{
-			Msg:   msg,
-			Procs: procs,
+			MaliciousPreventedProcessCount: msg,
+			Procs:                          procs,
 		}
 	}
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	if len(currProcCount) == 0 {
 		json.NewEncoder(w).Encode(
-			sendResp(fmt.Sprintf("No malicious process Detected yet by the node-agent process %d", os.Getpid()), []string{}),
+			struct {
+				Msg string
+			}{
+				fmt.Sprintf("No malicious process Detected yet by the node-agent process %d", os.Getpid()),
+			},
 		)
 		return
 	}
+	slices.Sort(procs)
 	json.NewEncoder(w).Encode(
 		sendResp(fmt.Sprintf("%d", len(currProcCount)), procs),
 	)

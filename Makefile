@@ -1,6 +1,10 @@
 model_path ?= model/dns_sec.onnx
 DEBUG ?= false 
 
+CONTROLLER_PORT ?= 8080
+CONTROLLER_IMAGE_NAME ?= controller
+CONTROLLER_IMAGE_TAG ?= latest
+
 .PHONY: build 
 build:
 	bash build.sh 
@@ -20,6 +24,11 @@ run_node_agent:
 .PHONY: build-controller
 build-controller:
 	@echo "Building the controller"
+	@if [ -d "controller/bin" ]; then \
+		echo "Deleting directory for previous controller build"; \
+		rm -rf controller/bin; \
+	fi
+	@mkdir controller/bin
 	cd controller && mvn clean package && cp target/node-agent-controller-1.0-SNAPSHOT.jar bin/ && mvn clean 
 	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
 	cd controller/cmd && go build -o ../bin/main main.go 
@@ -37,12 +46,17 @@ run-controller-cni-sec:
 .PHONY: build-controller-image
 build-controller-image:
 	@echo "Building the controller docker image"
-	cd controller && docker build -t controller . 
+	cd controller && docker build -t $(CONTROLLER_IMAGE_NAME) . 
 
 .PHONY: run-controller-image
 run-controller-image:
 	@echo "Running the controller"
-	docker run --name controller -p 9000:9000 -d controller:latest 
+	docker run --name controller -p $(CONTROLLER_PORT):9000 -d $(CONTROLLER_IMAGE_NAME):$(CONTROLLER_IMAGE_TAG) 
+
+.PHONY: stop-controller-image
+run-controller-image:
+	@echo "Stopping the controller"
+	docker kill controller
 
 .PHONY: run-controller
 run-controller:
