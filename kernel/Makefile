@@ -32,6 +32,9 @@ BPF_CFLAGS := -target bpf \
               -I/usr/include/$(shell uname -m)-linux-gnu \
               -I$(KERNEL_HEADERS)
 
+TRACE_FS_PIPE := /sys/kernel/debug/tracing/trace_pipe
+BPF_FS_MNT := /sys/fs/bpf					 # map and xdp prog mount over kernel bpfs   
+
 
 # tc bpf qdisc iprotue2 comm 
 QDISC := clsact
@@ -104,7 +107,7 @@ tc-show:
 
 .PHONY: tc-tracing 
 tc-tracing:
-	sudo cat /sys/kernel/debug/tracing/trace_pipe
+	sudo cat $(TRACE_FS_PIPE)
 
 .PHONY: xdp
 xdp: 
@@ -113,7 +116,7 @@ xdp:
 .PHONY: xdp-mount
 xdp-mount:
 	make xdp 
-	sudo mount -t bpf bpf /sys/fs/bpf/
+	sudo mount -t bpf bpf $(BPF_FS_MNT)
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
 
 

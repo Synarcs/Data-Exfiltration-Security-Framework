@@ -18,14 +18,13 @@ log = logging.getLogger(__name__)
 DEBUG: bool = False 
 log.setLevel(logging.INFO if not DEBUG else logging.DEBUG)
 
-
 parser = ArgumentParser() 
 parser.add_argument('-c', '--controller', type=bool, required=False, default=False, help="Run the ONNX inference unix server for inference over controller server")
 parser.add_argument('-m', '--model_path', type=str, required=True, help="Path to the ONNX model")
 args = parser.parse_args()
-model: Path = Path('../model/dns_sec.onnx' if not os.path.exists(args.model_path) else args.model_path).absolute()
+model: Path = Path('../model/dns_sec_qint8.onnx' if not os.path.exists(args.model_path) else args.model_path).absolute()
 isControllerEnabled: bool = True if args.controller == True else False
-session = ort.InferenceSession(model) 
+session = ort.InferenceSession(model, providers=["CPUExecutionProvider"]) 
 
 if not os.path.exists(model):
     print('the required trained onnx model not found')
@@ -44,8 +43,8 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
         if feature_vec.shape != (1, 8):
             log.error('cannot infer a broken vector tensor for model inference')
             return 
-        return True if session.run([output_name], {input_name: feature_vec})[0][0][0] > 0.5 else False 
-
+        return True if session.run([output_name], {input_name: feature_vec})[0][0][0] > 0.5 else False
+      
     def do_POST(self) -> None:
         log.debug(f"Received POST request with path: {self.path}")
         if self.path == "/onnx/dns" or self.path == "/onnx/dns/ing": 

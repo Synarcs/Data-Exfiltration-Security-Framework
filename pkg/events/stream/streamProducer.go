@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"reflect"
 	"time"
@@ -16,6 +15,11 @@ import (
 const (
 	KAFKA_BROKER_CONN_TIMEOUT = time.Second * 2
 	KAFKA_BROKER_CTX_TIMEOUT  = time.Second * 4
+)
+
+var (
+	ErrEmptyAgentProducer         = errors.New("Kafka Producer not initialized")
+	ErrCloseUninitializedProducer = errors.New("Kafka Producer close error")
 )
 
 type StreamProducer struct {
@@ -104,7 +108,7 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 
 func (prod *StreamProducer) StreamThreadEvent(ctx context.Context, event []byte) error {
 	if prod.Writer == nil {
-		return fmt.Errorf("kafka writer not initialized")
+		return ErrEmptyAgentProducer
 	}
 
 	utils.Log("Publishing  to remote kafka broker ", prod.Writer.Addr.Network(), prod.Writer.Addr.String())
@@ -154,7 +158,7 @@ func (prod *StreamProducer) MarshallStreamThreadEvent(ctx context.Context, event
 
 func (prod *StreamProducer) CloseProducer() error {
 	if prod.conn == nil {
-		return fmt.Errorf("The kafka conn client is not initialized cannot close a non-existant open connection ....")
+		return ErrCloseUninitializedProducer
 	}
 
 	if prod.Writer == nil {

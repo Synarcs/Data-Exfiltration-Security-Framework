@@ -27,7 +27,7 @@ Controller -> Loader : gRPC over mTLS established
 Loader -> Loader : Read compiled eBPF bytecode
 Loader -> Controller : Request to sign eBPF program over mTLS
 Controller -> Controller : Sign eBPF binary + metadata
-' Controller -> Loader : Return signed cert + controller public key
+Controller -> Loader : Return signed eBPF bytecode + certificate
 
 == Local PKI and Preparation ==
 Loader -> Loader : libbpf JIT eBPF code
@@ -39,8 +39,8 @@ Loader -> Loader : Self-sign JIT eBPF code
 Loader -> Loader : Bind cert to process (session keying)
 
 == Keyring Injection ==
-Loader -> Keyring : Store controller-signed cert
-Loader -> Keyring : Store ephemeral cert
+Loader -> Keyring : Store controller-signed cert (raw eBPF code)
+Loader -> Keyring : Store ephemeral cert  (JIT eBPF code)
 
 == Injection and Enforcement ==
 Loader -> Kernel : syscall: bpf_prog_load()

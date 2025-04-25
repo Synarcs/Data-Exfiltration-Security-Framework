@@ -2,3 +2,6 @@ onnx
 onnxruntime
 scapy
 requests
+optimum[onnxruntime]
+onnxruntime-extensions
+numpy==1.26.4
