@@ -8,6 +8,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import com.synarcs.controller.cache.ControllerCache;
 import com.synarcs.controller.config.ControllerKafkaTopics;
 import com.synarcs.controller.config.yaml.Config;
 import com.synarcs.controller.repository.DNSBlacklistRepository;
@@ -40,6 +41,9 @@ public class BlacklistDomain {
 
     @Autowired 
     private DomainLexicalValidator validator;
+
+    @Autowired
+    private ControllerCache<String> controllerCache; 
 
     @Autowired
     public BlacklistDomain(Config config) {

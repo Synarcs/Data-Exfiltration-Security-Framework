@@ -112,6 +112,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_SECURITY_EGRESS_NSP_MAP,
 		events.EXFIL_SOCK_UDP_CONN_MAP,
 		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
+		events.EXFILL_SECURITY_KERNEL_CONFIG_MAP,
 	}
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
 		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER)

@@ -18,25 +18,28 @@ end box
 
 == mTLS Handshake ==
 Loader -> Controller : Controller Cert request
-Controller -> Loader : Server cert + eBPF Loader cert request
+Controller -> Loader : Server cert + eBPF Loader cert requestz
 Loader -> Controller : eBPF Loader certificate + session key
 Controller -> Loader : Verify certificates 
 Controller -> Loader : gRPC over mTLS established
 
 == gRPC Signing Request ==
-Loader -> Loader : Read compiled eBPF bytecode
+Loader -> Loader : Read compiled eBPF rawcode
 Loader -> Controller : Request to sign eBPF program over mTLS
 Controller -> Controller : Sign eBPF binary + metadata
 Controller -> Loader : Return signed eBPF bytecode + certificate
 
-== Local PKI and Preparation ==
-Loader -> Loader : libbpf JIT eBPF code
-Loader -> Loader : Start Local CA 
+== Start Self Sign PKI == 
+Loader -> Loader : Start Local CA
 Loader -> Loader : Generate ephemeral ECDSA key
-Loader -> Loader : Generate ephemeral CSR
-Loader -> Loader : Generate ephemeral Cert
-Loader -> Loader : Self-sign JIT eBPF code
-Loader -> Loader : Bind cert to process (session keying)
+
+== Sign eBPF JIT bytecode ==
+Loader -> Loader : libbpf JIT eBPF code
+Loader -> Loader : Generate Sign-Request on behalf of JIT eBPF code
+Loader -> Loader : Combine JIT eBPF code with controller-signed cert
+Loader -> Loader : Sign the combined payload
+Loader -> Loader : Get Signed Cert
+' Loader -> Loader : Bind cert to process (session keying)
 
 == Keyring Injection ==
 Loader -> Keyring : Store controller-signed cert (raw eBPF code)

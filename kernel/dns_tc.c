@@ -203,15 +203,6 @@ struct exfil_security_egress_redurect_ts_verify {
     __uint(max_entries, 1 << 15);
 } exfil_security_egress_redurect_ts_verify SEC(".maps");
 
-// kernel config map to load the config for the redirect links to egress and associated bridge if_index 
-struct exfil_security_config_map {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u32);
-    __type(value, struct exfil_kernel_config);
-    __uint(max_entries, 1 << 6);
-} exfil_security_config_map SEC(".maps");
-
-
 // useful to determine the loop back time from kernel packet redirection to user space enhanced scanning 
 // the totola kernel packet redirection time - userspace post DPI time
 // this is only used to find the effect of DPI scanning in userspace post redirect and then resend from user space.
@@ -290,9 +281,9 @@ struct dns_volume_stats {
 #endif 
 
 // Parse the RAW SKB for query classes 
-#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)\ 
-        do {                                        \
-            switch ((dns_query_class)){                 \
+#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(__dns_query_class)\ 
+        do {                                            \
+            switch ((__dns_query_class)){               \
                     case 0x0001:                        \
                     case 0x0002:                        \
                     case 0x0005:                        \
@@ -337,31 +328,31 @@ struct dns_volume_stats {
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip)                                   \
-        do {                                                                            \
-            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
-                if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
-                    if (!DEBUG) {                                                       \
-                        bpf_printk("dropping traffic for malicious c2 ipv4 remote c2"); \
-                    }                                                                   \
-                    return TC_DROP;                                                     \
-                }                                                                       \
-            }                                                                           \
+    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(__ip)                                   \
+        do {                                                                              \
+            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {    \
+                if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
+                    if (DEBUG)  {                                                         \
+                        bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
+                    }                                                                     \
+                    return TC_DROP;                                                       \
+                }                                                                         \
+            }                                                                             \
         } while(0)                                                                      
 #endif
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv6 header 
 #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
-    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ip)                                   \ 
-    do {                                                                                \
-            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {  \
-                if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(ip)) {            \
-                    if (DEBUG) {                                                        \
-                        bpf_printk("dropping traffic for malicious c2 ipv6 remote c2"); \
-                    }                                                                   \
-                    return TC_DROP;                                                     \
-                }                                                                       \
-            }                                                                           \
+    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(__ip)                                   \ 
+    do {                                                                                  \
+            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {    \
+                if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
+                    if (DEBUG) {                                                          \
+                        bpf_printk("dropping traffic for malicious c2 ipv6 remote c2");   \
+                    }                                                                     \
+                    return TC_DROP;                                                       \
+                }                                                                         \
+            }                                                                             \
     } while(0)        
 #endif 
 
@@ -389,9 +380,9 @@ struct dns_volume_stats {
         } while (0)
 #endif
 
-#define SKB_RANDOM_MARK_PER_NETFLOW(skb, mark_config)                     \
-        do {                                                              \
-            __mark_skb_packet_buffer(skb, mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
+#define SKB_RANDOM_MARK_PER_NETFLOW(__skb, __mark_config)                     \
+        do {                                                                  \
+            __mark_skb_packet_buffer(__skb, __mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
         } while(0);
 
 static 

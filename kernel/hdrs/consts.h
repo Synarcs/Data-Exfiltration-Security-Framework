@@ -26,29 +26,6 @@
 #define uc unsigned char 
 #define ll long 
 
-/*
-    If potential exfiltration is occuring over standard port, the kernel DPI runs in 2 modes
-        1. Aggresive: Uses Live redirect of DNS traffic post deep parse / raw parse DNS in kernel 
-        2. Passive: Uses clone redirect or passive redirect, but the node-agent in userspace and kernel 
-                aggresivelly hunts for any malicious activity which may occur over consecurity packets send from the same malicious process
-
-        Aggressive Mode:
-            Adds some latency due to kernel redirect, and read from virtual netdev, rx queues in userspace bypass network stack
-        Passive Mode:
-            Does not add latency but the kernel DPI aggresively start hunting for malicious activity from the process referred as kernel espionage for tracking most activity of malicious process.
-
-        The kernel DPI is vertically integrated with kernel syscall layer for performance
-*/
-
-struct exfil_kernel_config  {
-    __u32 BridgeIndexId;
-    __u32 NfNdpBridgeIndexId;
-    __be32 RedirectIpv4;
-    __be32 NfNdpBridgeRedirectIpv4;
-    __u32 KernelTCSKBMark;
-    __u32 IsAgressiveSec; // tells the kernel DPI to run the DNS DPI in aggresive mode,
-} __attribute__((packed));
-
 /* 
     Each key maps to the service limits for the dns traffic, for example 
     0 --> min_domain_lenth, 1 --> max_domain_length and so on

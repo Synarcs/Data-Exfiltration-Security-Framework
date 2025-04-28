@@ -50,7 +50,7 @@ lzo=2.10=h31becfc_1001
 mamba=2.0.2=hef03586_1
 mpc=1.3.1=h783934e_1
 mpfr=4.2.1=h2305555_3
-mpmath=1.3.0=pyhd8ed1ab_0
+mpmath=1.3.0
 ncurses=6.5=hcccb83c_1
 nlohmann_json=3.11.3=h0a1ffab_1
 numpy=2.1.2=py312h2eb110b_0

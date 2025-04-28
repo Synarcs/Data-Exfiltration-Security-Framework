@@ -16,7 +16,7 @@ public class DomainLexicalValidator {
     }
 
     public boolean validateSld(String sld) {
-
+        log.info("Controller validating sld: {}", sld);
         String[] labels = getLabels(sld);
         if (labels.length != 2) return false;
 
@@ -30,6 +30,8 @@ public class DomainLexicalValidator {
     }
 
     public boolean validateTld(String tld) {
+        log.info("Controller validating tld ", tld);
+
         String[] labels = getLabels(tld);
         return labels.length == 1 && labels[0].length() <= 63;
     }

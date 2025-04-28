@@ -182,7 +182,7 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 			feature.Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
 
 			feature.Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
-			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wont allow only tld to be redirected to user space for enhanced lexical scanning
 			mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
 			feature.LongestLabelDomain = mx_len
 			feature.AverageLabelLength = avgLen
@@ -224,7 +224,7 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool)
 			feature.Entropy = Entropy(dns_query_labels[:len(dns_query_labels)-2])
 
 			feature.Subdomain = strings.Join(dns_query_labels[:len(dns_query_labels)-2], ".")
-			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wount allow only tld to be redirected to user space for enhanced lexical scanning
+			feature.PeriodsInSubDomain = len(dns_query_labels) - 2 // kernel wont allow only tld to be redirected to user space for enhanced lexical scanning
 			mx_len, _, avgLen := LongestandTotoalLenSubdomains(dns_query_labels)
 			feature.LongestLabelDomain = mx_len
 			feature.AverageLabelLength = avgLen

@@ -182,7 +182,7 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 		KafkaBrokerConfig: globalKakfBrokerConfig,
 	}
 
-	if err := streamProducer.GenerateStreamKafkaProducer(ctx); err != nil {
+	if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
 		utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
 		assert.Fail(err.Error())
 	}

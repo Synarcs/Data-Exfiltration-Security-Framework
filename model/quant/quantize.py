@@ -1,14 +1,13 @@
-
 from abc import ABC, abstractmethod
-import os
+import os, time 
 from pathlib import Path
-import time 
+from argparse import ArgumentParser
 from onnxruntime.quantization import quantize_dynamic, QuantType
 from onnxruntime.quantization.preprocess import quant_pre_process
 import onnxruntime as ort 
 import numpy as np 
 
-class QuantizeProvider(ABC): 
+class QuantizeProvider(ABC):
     # quantize the model supporting different backends and cpu backends, to be implemented as per quantize backend requirement 
     @abstractmethod
     def quantize_onnx_model(self):
@@ -25,7 +24,7 @@ def test_quantize_inference() -> None:
     output_name = session.get_outputs()[0].name
 
     st = time.time()
-    for i in range(1 << 10):
+    for i in range(1 << 12):
         input_features = np.random.rand(8).astype(np.float32).reshape(1, -1)
         _ = session.run([output_name], {input_name: input_features})[0]
     
@@ -33,7 +32,7 @@ def test_quantize_inference() -> None:
     st = time.time()
 
     non_quantize_session = ort.InferenceSession(non_quantize_path, providers=["CPUExecutionProvider"])
-    for i in range(1 << 10):
+    for i in range(1 << 12):
         input_features = np.random.rand(8).astype(np.float32).reshape(1, -1)
         _ = session.run([output_name], {input_name: input_features})[0]
     
@@ -53,7 +52,8 @@ class CpuOptimiumQuantizer(QuantizeProvider):
     def quantize_onnx_model(self):
         quant_pre_process(
             input_model=self.model.absolute(),
-            output_model_path="dns_sec_qint_preproc.onnx"
+            output_model_path="dns_sec_qint_preproc.onnx",
+            verbose=True
         )
 
         quantize_dynamic(
@@ -66,3 +66,16 @@ class CpuOptimiumQuantizer(QuantizeProvider):
 
 def preprocessQuantizeOnnxModel() -> None:
     CpuOptimiumQuantizer("../dns_sec.onnx").quantize_onnx_model()
+
+
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('-q', '--quantize', type=bool, required=False, default=True, help="Quantize the onnx model")
+    parser.add_argument("-s", "--stress", type=bool, required=False, default=False, help="Run the stress test on the model")
+
+    args = parser.parse_args()
+    
+    preprocessQuantizeOnnxModel()
+    if args.stress:
+        test_quantize_inference()
+

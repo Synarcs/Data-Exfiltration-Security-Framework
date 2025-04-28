@@ -64,3 +64,37 @@ struct exfil_security_tc_bridge_config_map {
     __uint(max_entries, 1);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } exfil_security_tc_bridge_config_map SEC(".maps");
+
+
+/*
+    If potential exfiltration is occuring over standard port, the kernel DPI runs in 2 modes
+        1. Aggresive: Uses Live redirect of DNS traffic post deep parse / raw parse DNS in kernel 
+        2. Passive: Uses clone redirect or passive redirect, but the node-agent in userspace and kernel 
+                aggresivelly hunts for any malicious activity which may occur over consecurity packets send from the same malicious process
+
+        Aggressive Mode:
+            Adds some latency due to kernel redirect, and read from virtual netdev, rx queues in userspace bypass network stack
+        Passive Mode:
+            Does not add latency but the kernel DPI aggresively start hunting for malicious activity from the process referred as kernel espionage for tracking most activity of malicious process.
+
+        The kernel DPI is vertically integrated with kernel syscall layer for performance
+*/
+
+struct exfil_kernel_config  {
+    __u32 BridgeIndexId;
+    __u32 NfNdpBridgeIndexId;
+    __be32 RedirectIpv4;
+    __be32 NfNdpBridgeRedirectIpv4;
+    __u32 KernelTCSKBMark;
+    __u32 IsAgressiveSec; // tells the kernel DPI to run the DNS DPI in aggresive mode,
+} __attribute__((packed));
+
+
+// kernel config map to load the config for the redirect links to egress and associated bridge if_index 
+struct exfil_security_config_map {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, __u32);
+    __type(value, struct exfil_kernel_config);
+    __uint(max_entries, 1 << 6);
+} exfil_security_config_map SEC(".maps");
+

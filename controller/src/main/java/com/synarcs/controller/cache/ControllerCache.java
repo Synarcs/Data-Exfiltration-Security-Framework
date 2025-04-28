@@ -1,4 +1,4 @@
-package com.synarcs.controller;
+package com.synarcs.controller.cache;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -8,18 +8,23 @@ import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import com.synarcs.controller.protocols.ProtocolEnums;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
-public class NodeCache<T> implements Serializable {
+/*
+ *  Tracks the malicious blacklisted domains by controller in write-through cache to avoid unnecessary calls to the recursor interceptors on the DNS server for domain blacklisting. 
+ */
+@Component 
+public class ControllerCache<T> implements Serializable {
 
     private final Cache<String, Boolean> cache;
     private final int MAX_MAL_BLACK_DOM_CT = 10_000;
 
     // init cache for performance with lru cache eviction to reduce unwanted blacklisting calls to the recursor interceprors on the DNS server
-    public NodeCache() {
+    public ControllerCache() {
         cache = Caffeine
             .newBuilder()
             .maximumSize(MAX_MAL_BLACK_DOM_CT)
@@ -38,7 +43,7 @@ public class NodeCache<T> implements Serializable {
     private final Map<T, Map<ProtocolEnums, Integer>> nodeProtocolExfilCount = new HashMap<>();
     
     
-    Logger log = LoggerFactory.getLogger(NodeCache.class);
+    Logger log = LoggerFactory.getLogger(ControllerCache.class);
 
     public void addRecordInCache(T sld) {
         this.ct.put(sld, this.ct.getOrDefault(sld,  0) + 1);

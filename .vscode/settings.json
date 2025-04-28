@@ -152,7 +152,8 @@
         "crypto_maps.h": "c",
         "pwd.h": "c",
         "memory.h": "c",
-        "mman.h": "c"
+        "mman.h": "c",
+        "keyctl.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "disabled"

@@ -15,7 +15,7 @@
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
  * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER D EALINGS IN THE
  * SOFTWARE.
  *   -----------------------------
  *    Author: Synarcs
@@ -41,19 +41,26 @@
 #include "hdrs/consts.h"
 #include "hdrs/utils.h" 
 #include "hdrs/sockpin.h"
+#include "hdrs/pinmaps.h"
 
 #define DEBUG false
 
 #define UDP_SOCK_EGRESS_TC_PROC_ID_MAP_FORWARD true // used as a helper to aid kernel egress TC lower in stack to get current task comm / task_struct info shared via common map as packet lowers downward over egress stack
 #define TCP_SOCK_EGRESS_DNS_DPI_MAL_C2 false
 
-#define EGRESS_UDP_TASK_COMM_NON_STAND_DNS_PORT(udp, skb) \
-    do {        \
-        if (__verify_udp_ports_diff_stand_dns(udp)) {   \
-            __update_egress_sock_proc_map(skb, udp);    \
-        }                                               \
-    } while(0) 
-
+#define EGRESS_UDP_TASK_COMM_NON_STAND_DNS_PORT(udp, skb)                     \
+    do {                                                                      \
+        /* For non-aggressive or passive DPI to analyze traffic patterns      \
+           tied to a process, the skb must aid the TC program via pinned maps */ \
+        if (__is_downstream_tc_agressive_dpi(skb)) {                          \
+            __update_egress_sock_proc_map(skb, udp);                          \
+        } else {                                                              \
+            if (__verify_udp_ports_diff_stand_dns(udp)) {                   \
+                __update_egress_sock_proc_map(skb, udp);                      \
+            }                                                                 \
+        }                                                                     \
+    } while (0)
+    
 static 
 __always_inline struct sock_proc_conn_info  __get_sock_proc_conn_info(__u16 dest_transport_port, struct __kernel_proc_struct_info *proc_info) {
 
@@ -109,6 +116,17 @@ __always_inline bool __verify_udp_ports_diff_stand_dns(struct udphdr *udp) {
            dest_port != LLMNR_EGRESS_LOCAL_MULTICAST_PORT;
 }
 
+static 
+__always_inline bool __is_downstream_tc_agressive_dpi(struct __sk_buff *skb) {
+    __u32 out = skb->ifindex;
+    struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); 
+    if (!config) 
+        return false;
+
+    return !config->IsAgressiveSec;
+} 
+
+
 SEC("cgroup_skb/egress")
 int dns_udp_sock_ops(struct __sk_buff *skb) {
     void *data = (void *)(long)skb->data;
@@ -135,7 +153,7 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                 }
             #endif
 
-            #if TCP_SOCK_EGRESS_DNS_DPI_MAL_C2
+            if (TCP_SOCK_EGRESS_DNS_DPI_MAL_C2 && __is_downstream_tc_agressive_dpi(skb))
                 if (iph->protocol == IPPROTO_TCP) {
 
                     struct tcphdr *tcp = data + sizeof(struct iphdr);
@@ -144,7 +162,6 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                     if (!__dns_tcp_sock_dpi(skb)) 
                         return SK_PASS;
                 }
-            #endif
             return SK_PASS;
         case AF_INET6: // IPv6 packets
             struct ipv6hdr *ip6h = data;
@@ -162,7 +179,7 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                 }
             #endif
 
-            #if TCP_SOCK_EGRESS_DNS_DPI_MAL_C2
+            if (TCP_SOCK_EGRESS_DNS_DPI_MAL_C2 && __is_downstream_tc_agressive_dpi(skb))
                 if (iph->protocol == IPPROTO_TCP) {
 
                     struct tcphdr *tcp = data + sizeof(struct ipv6hdr);
@@ -171,7 +188,6 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
                     if (!__dns_tcp_sock_dpi(skb)) 
                         return SK_PASS;
                 }
-            #endif
             return SK_PASS;
         default:
             return SK_PASS; // not possible for a cgroup to receive 

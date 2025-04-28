@@ -134,7 +134,9 @@ int handle_mal_c2_proc_exit() {
     return 0;
 }
 
-
+/*
+    Map the ppid from task struct as real parent id for the process to prevent the amount of forsk a malicious process can do before being sigkilled and deteted malicious over in DPI at kernel TC and userspace 
+*/
 SEC("tracepoint/sched/sched_process_exec")
 int process_potential_mal_c2_forks()  {
 

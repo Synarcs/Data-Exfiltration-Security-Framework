@@ -35,9 +35,8 @@ type HostNetworkExfilFeatures struct {
 	PhysicalNodeIpv6 string
 }
 
-func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) error {
+func (prod *StreamProducer) NewStreamKafkaProducer(ctx context.Context) error {
 
-	connContext, _ := context.WithTimeout(ctx, KAFKA_BROKER_CTX_TIMEOUT)
 	connErrorChan := make(chan error)
 	connDone := make(chan bool)
 
@@ -84,15 +83,12 @@ func (prod *StreamProducer) GenerateStreamKafkaProducer(ctx context.Context) err
 
 	for {
 		select {
-		case <-connContext.Done():
+		case <-ctx.Done():
 			// channel is closed to ensure there is a timeout connect to remote kafka broker, since the kafka uses background context blocking node agent
-			utils.Log("Error connecting to the remote Kafka broker ", connContext.Err())
+			utils.Log("Error connecting to the remote Kafka broker ", ctx.Err())
+			close(connErrorChan)
 			return nil
 		case err := <-connErrorChan:
-			if connContext.Err(); err != nil {
-				// there is other error before the connection context with timeout has closed
-				utils.Log("Error connecting to remote kafka broker ", err.Error())
-			}
 			close(connErrorChan)
 			return err
 		case <-connDone:
