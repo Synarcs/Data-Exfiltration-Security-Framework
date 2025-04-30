@@ -117,10 +117,17 @@ func generateSelfSignedCert() (*x509.Certificate, *ecdsa.PrivateKey, error) {
 
 	block, _ := pem.Decode(cert)
 	if block == nil || block.Type != "CERTIFICATE" {
+		utils.Log("Error decoding certificate: the pem is malformed", err)
+		if utils.DEBUG {
+			for hName, val := range block.Headers {
+				utils.Log("Header:", hName, val)
+			}
+		}
 		return nil, nil, err
 	}
 	certificate, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
+		utils.Log("Error parsing certificate:", err)
 		return nil, nil, err
 	}
 

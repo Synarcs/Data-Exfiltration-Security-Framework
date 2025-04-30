@@ -319,7 +319,7 @@ func ProcessDnsFeatures(dns_packet *layers.DNS, isEgress bool) ([]DNSFeatures, e
 		features, _ = ParseDnsAuth(dns_packet, features, isEgress)
 	}
 
-	if utils.DEBUG && isEgress {
+	if !utils.DEBUG && isEgress {
 		// utils.Log("[x] Total Raw Process Features extracetd for the DNS Packet is ", len(features))
 		for _, feature := range features {
 			mrsh, _ := json.Marshal(feature)

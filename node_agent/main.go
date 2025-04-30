@@ -190,7 +190,7 @@ func main() {
 	flag.BoolVar(&nodeAgentCliOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
 	flag.Usage = func() {
-		fmt.Println("Usage: node_agent [options]")
+		utils.Log("Usage: node_agent [options]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -314,7 +314,6 @@ func main() {
 	}
 
 	// load the model from onnx lib
-	// TODO: fix this remove garbage unwanted memory load for the model
 	model, err := onnx.NewRemoteInferenceSocket(topDomains)
 	if err != nil {
 		utils.Log("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())

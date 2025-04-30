@@ -603,11 +603,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     char buff[MAX_DNS_LABEL_LENGTH];
                 #endif
 
-                bool parse_potential_tld = false;
-                if (label_len == 3) {
-                    parse_potential_tld = true;
-                }
-                #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN || parse_potential_tld
+                #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
                         __u8 iter_label_chars_ln = label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
                             iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
@@ -1321,6 +1317,7 @@ __always_inline bool __handle_malicious_egress_dns_port_random(__u16 dest_transp
 /*
     Used for older kernel not supporting task comm over kernel tc layer added in 6.10 
     The cgroup gets mounted and it loads the required sock op program to monitor all udp socket handling only for UDP 
+    The packet owned task info pid, tgid fetched via pinned map generated over the kernel socket layer, fetched in TC as packet moves lower layers in datapath 
 */
 static 
 __always_inline struct sock_proc_conn_info * __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__u16 src_port) {
@@ -1376,18 +1373,17 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     if (isUdp) {
         #if !DEEP_SCAN_DNS_UDP_OVERLAY
                 // allow an non overlay for fixed ports used by other protocols, for struct check mode, kernel will not process the packet DPI will scan each of them 
-                #pragma unroll(MAX_UDP_PROTOCOL_TRANSFERS)
-                for (int i=0; i < MAX_UDP_PROTOCOL_TRANSFERS; i++) {
-                    if (__transport_dest_port == UDP_PROTOCOLS[i].port) {
-                        isTunnelC2CStandardUdpTransport = true;
-                        break;
-                    } // no further scan from kernel is required to process the packet 
-                }
+            #pragma unroll(MAX_UDP_PROTOCOL_TRANSFERS)
+            for (int i=0; i < MAX_UDP_PROTOCOL_TRANSFERS; i++) {
+                if (__transport_dest_port == UDP_PROTOCOLS[i].port) {
+                    isTunnelC2CStandardUdpTransport = true;
+                    break;
+                } // no further scan from kernel is required to process the packet 
             }
 
-            if (isTunnelC2CStandardUdpTransport && !DEEP_SCAN_DNS_UDP_OVERLAY) {
+            if (isTunnelC2CStandardUdpTransport) {
                 // skip deep parsing of random UDP ports used by most common l7 protocols relying on UDP transport example 68 (DHCP) 
-                goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
+                goto SKIP_DEEP_PARSING_RANDOM_PORTS_STANDARD_L7_PROTOCOLS
             }
         #endif
     }
@@ -1436,6 +1432,10 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     }
         
     SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM:
+    #if !DEEP_SCAN_DNS_UDP_OVERLAY
+        SKIP_DEEP_PARSING_RANDOM_PORTS_STANDARD_L7_PROTOCOLS:
+    #endif
+
     return 1;
 }
 
@@ -1739,6 +1739,18 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
     }
 #endif
 
+#define L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, l3_checksum_payload) \
+       do { \
+        l3_checksum_payload.procId = proc_info->procId; \
+        l3_checksum_payload.threadId = proc_info->threadId; \
+       } while(0);
+    
+
+#define L3_CHECKSUM_MAP_UPDATE_DNAT_SOCK_TASK_INFO(sock_proc_conn_info, l3_checksum_payload) \
+    do { \
+        l3_checksum_payload.procId = sock_proc_conn_info->pid; \
+        l3_checksum_payload.threadId = sock_proc_conn_info->threadId; \
+    } while(0);
 
 static 
 __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id, __u16 sport){
@@ -1752,12 +1764,10 @@ __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_i
 
     if (verify_kernel_version_support_task_comm()) {
         struct __kernel_proc_struct_info * proc_info  = __get_process_info();
-        layer3_checksum_ipv6.procId = proc_info->procId;
-        layer3_checksum_ipv6.threadId = proc_info->threadId;
+        L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv6);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
-        layer3_checksum_ipv6.procId = sock_proc_conn_info->pid;
-        layer3_checksum_ipv6.threadId = sock_proc_conn_info->threadId;
+        L3_CHECKSUM_MAP_UPDATE_DNAT_SOCK_TASK_INFO(sock_proc_conn_info, layer3_checksum_ipv6);
     }
 
  
@@ -1774,12 +1784,10 @@ __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_i
     };
     if (verify_kernel_version_support_task_comm()) {
         struct __kernel_proc_struct_info * proc_info  = __get_process_info();
-        layer3_checksum_ipv4.procId = proc_info->procId;
-        layer3_checksum_ipv4.threadId = proc_info->threadId;
+        L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv4);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
-        layer3_checksum_ipv4.procId = sock_proc_conn_info->pid;
-        layer3_checksum_ipv4.threadId = sock_proc_conn_info->threadId;
+        L3_CHECKSUM_MAP_UPDATE_DNAT_SOCK_TASK_INFO(sock_proc_conn_info, layer3_checksum_ipv4);
     }
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv4, BPF_ANY);   
 }
@@ -1902,10 +1910,7 @@ __always_inline bool __handle_non_aggresive_dpi_standard_dns_port(struct __skb_b
 
         __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
         if (isDynamicBlacklisted) {
-            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {
-                bpf_printk("found a malicious transfer to a c2 server filter the l3 traffic");
-            }
-            return false;
+            return true;
         }
         return false;
     }

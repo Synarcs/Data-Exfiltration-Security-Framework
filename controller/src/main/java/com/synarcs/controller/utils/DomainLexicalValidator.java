@@ -1,15 +1,16 @@
 package com.synarcs.controller.utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import lombok.extern.slf4j.Slf4j;
 
 @Component
-@Slf4j
 public class DomainLexicalValidator {
 
     // Note the data plane eBPF node agent at endpoint will removed the fqdn dilimeter at end when streaming to topic consumed by controller eg (apple.com, not apple.com.)
     // all the validation follows DNS RFC 1035
+    private Logger log = LoggerFactory.getLogger(DomainLexicalValidator.class);
 
     public String[] getLabels(String domain) {
         return domain.split(".");
