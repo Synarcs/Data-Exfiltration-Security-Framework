@@ -902,17 +902,35 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 	// used for removal of tc qdisc and all nested filters to parent qdisc class/ classless filter form all the host interfacee
 	defer tc.CloseSocketFd()
 
-	for _, link := range tc.Interfaces.PhysicalLinks {
-		err := netlink.QdiscDel(&netlink.Clsact{
-			QdiscAttrs: netlink.QdiscAttrs{
-				LinkIndex: link.Attrs().Index,
-				Parent:    netlink.HANDLE_CLSACT,
-				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
-			},
-		})
-		if err != nil {
-			utils.Log("No Matching clsact desc found to delete")
-			return err
+	if !tc.HasDiffPriorityQdiscFilter {
+		for _, link := range tc.Interfaces.PhysicalLinks {
+			err := netlink.QdiscDel(&netlink.Clsact{
+				QdiscAttrs: netlink.QdiscAttrs{
+					LinkIndex: link.Attrs().Index,
+					Parent:    netlink.HANDLE_CLSACT,
+					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+				},
+			})
+			if err != nil {
+				utils.Log("No Matching clsact desc found to delete")
+				return err
+			}
+		}
+	} else {
+		// remove filters with matching handle  only
+		for _, link := range tc.Interfaces.PhysicalLinks {
+			netlink.FilterDel(&netlink.BpfFilter{
+				FilterAttrs: netlink.FilterAttrs{
+					LinkIndex: link.Attrs().Index,
+					Parent:    netlink.HANDLE_MIN_EGRESS,
+					Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
+					Protocol:  unix.ETH_P_ALL,
+					Priority:  utils.TC_CLSACT_PARENT_QDISC_PRIO,
+				},
+				Fd:           tc.Prog.FD(),
+				Name:         tc.Prog.String(),
+				DirectAction: true,
+			})
 		}
 	}
 	if utils.VerifyKernelEgressTCClsactTaskCommSuppert() {
