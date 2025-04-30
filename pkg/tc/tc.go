@@ -52,6 +52,8 @@ type TCHandler struct {
 	config                        conf.AgentConfig
 
 	CryptoAgentLSMHandler *crypto.CryptoBpfLsm
+
+	HasDiffPriorityQdiscFilter bool // default CNI is running qdisc filter for k8s node to ndoe communication, must disable XDP for egress send and rely on AF_PACKET for TC and eBPF filter to run
 }
 
 // init AF_PACKET, AF_XDP socket for the kernel
@@ -61,6 +63,10 @@ var (
 )
 
 var mapsToPinSharedProcKillMap []string
+
+var (
+	ATTACHED_QDISC_HIGHER_PRIO_ERROR = errors.New("Error the eBPF Exfil security framework cannot be attached with existing qdisc attached and having a TC egress filter with lowest priority, configure the filter to run with highest priority closest to default qdisc ")
+)
 
 // provide all input required to inject kernel tc qdisc eBPF programs in kernel
 type KernelTcInjectConfig struct {
@@ -172,6 +178,52 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			panic(err.Error())
 		}
 
+		// TODO: Add support for TCX kernel link over TC attach compared to legacy qdisc with prio order
+		/*
+		   For CNI processing and adding filter they should have have highe priority post the DNS security egress security qdisc for pod  to pod communication  across nodes
+		*/
+		qdiscs, err := netlink.QdiscList(link)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		hasClsactQdisc := false
+		var existingQdiscFilter *netlink.Clsact
+		for _, qdisc := range qdiscs {
+			if cls, ok := qdisc.(*netlink.Clsact); ok && cls.Parent == netlink.HANDLE_CLSACT {
+				hasClsactQdisc = true
+				existingQdiscFilter = cls
+			}
+		}
+
+		if hasClsactQdisc {
+			// increase the priory for the filter to be at leaf,
+			filters, err := netlink.FilterList(link, existingQdiscFilter.Parent)
+			if err != nil {
+				goto ATTACH_SECURITY_FILTER
+			}
+			var currPrio uint16 = (1 << 16) - 1
+			var currHandle uint32
+			for _, filter := range filters {
+				if fl, ok := filter.(*netlink.BpfFilter); ok {
+					if fl.Priority < currPrio {
+						currPrio = fl.Priority
+						currHandle = fl.Handle
+						break
+					}
+				}
+			}
+			if currPrio == 1 && currHandle != netlink.MakeHandle(0xffff, 0) {
+				// ensure the filter is removed and reattached with higher priority to ensure
+				utils.Log(ATTACHED_QDISC_HIGHER_PRIO_ERROR.Error())
+				panic(fmt.Errorf("the eBPF DNS exfiltration framework must have lower prio pre execution of any CNI attached tc hooks"))
+			} else if currPrio == 1 && currHandle == netlink.MakeHandle(0xffff, 0) {
+				goto ATTACH_SECURITY_FILTER
+			}
+			tc.HasDiffPriorityQdiscFilter = true
+		}
+
+	ATTACH_SECURITY_FILTER:
 		qdisc_clsact := &netlink.Clsact{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: link.Attrs().Index,
@@ -183,12 +235,16 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			panic(err.Error())
 		}
 
+		if !hasClsactQdisc {
+			utils.Log("Attaching CLSACT qdisc over link ", link.Attrs().Name, "in egress direction with parent", netlink.HANDLE_MIN_EGRESS)
+		}
 		filter := netlink.BpfFilter{
 			FilterAttrs: netlink.FilterAttrs{
 				LinkIndex: link.Attrs().Index,
 				Parent:    netlink.HANDLE_MIN_EGRESS,
 				Handle:    netlink.MakeHandle(utils.TC_CLSACT_PARENT_QDISC_HANDLE, 0),
 				Protocol:  unix.ETH_P_ALL,
+				Priority:  utils.TC_CLSACT_PARENT_QDISC_PRIO,
 			},
 			Fd:           prog.FD(),
 			Name:         prog.String(),
@@ -677,7 +733,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend)
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				tc.HasDiffPriorityQdiscFilter)
 			// ipv4 and udp
 		}
 		if !isIpv4 && isUdp {
@@ -686,7 +743,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend)
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				tc.HasDiffPriorityQdiscFilter)
 		}
 	}
 
@@ -714,7 +772,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
@@ -722,7 +781,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, egressIfIndexPostSend, tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 	}
 

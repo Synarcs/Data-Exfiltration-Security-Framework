@@ -32,6 +32,7 @@ const (
 
 	LSM_CRYPTO_VERIFY_PROG        = "bpf" // runs over lsm crypto for bpf_prog load
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
+	TC_CLSACT_PARENT_QDISC_PRIO   = 1
 	DEFAULT_SK_BUFF_NUONCE        = 0xffff
 )
 

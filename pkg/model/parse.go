@@ -196,7 +196,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
 	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool,
-	egressIfIndexPostSend int) error {
+	egressIfIndexPostSend int, allowXDP bool) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {

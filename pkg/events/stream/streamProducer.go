@@ -14,7 +14,7 @@ import (
 
 const (
 	KAFKA_BROKER_CONN_TIMEOUT = time.Second * 2
-	KAFKA_BROKER_CTX_TIMEOUT  = time.Second * 4
+	KAFKA_BROKER_CTX_TIMEOUT  = time.Second * 2
 )
 
 var (
