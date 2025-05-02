@@ -272,7 +272,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 				}
 			}
 			go d.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+				ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),

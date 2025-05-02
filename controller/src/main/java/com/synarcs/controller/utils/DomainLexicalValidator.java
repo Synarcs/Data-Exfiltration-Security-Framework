@@ -10,7 +10,7 @@ public class DomainLexicalValidator {
 
     // Note the data plane eBPF node agent at endpoint will removed the fqdn dilimeter at end when streaming to topic consumed by controller eg (apple.com, not apple.com.)
     // all the validation follows DNS RFC 1035
-    private Logger log = LoggerFactory.getLogger(DomainLexicalValidator.class);
+    private final Logger log = LoggerFactory.getLogger(DomainLexicalValidator.class);
 
     public String[] getLabels(String domain) {
         return domain.split(".");

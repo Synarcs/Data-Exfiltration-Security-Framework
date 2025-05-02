@@ -43,6 +43,17 @@ struct exfill_security_ppid_fork_ct {
     __uint(max_entries, 1 << 10);
 } exfill_security_ppid_fork_ct SEC(".maps");
 
+struct sched_process_fork {
+    unsigned short common_type;
+    unsigned char common_flags;
+    unsigned char common_preempt_count;
+    int common_pid;
+    char parent_comm[16];
+    __u32 parent_pid;
+    char child_comm[16];
+    __u32 child_pid;
+};
+
 typedef struct detected_malicious_process_forks {
     __u32 ppid;
     __u32 fork_count;
@@ -138,15 +149,30 @@ int handle_mal_c2_proc_exit() {
     Map the ppid from task struct as real parent id for the process to prevent the amount of forsk a malicious process can do before being sigkilled and deteted malicious over in DPI at kernel TC and userspace 
 */
 SEC("tracepoint/sched/sched_process_exec")
-int process_potential_mal_c2_forks()  {
+int process_potential_mal_c2_thread_spawn()  {
 
+  
     struct task_struct *task = (void *)bpf_get_current_task();
     struct task_struct *parent = NULL;
     pid_t ppid = 0;
 
     struct __kernel_proc_struct_info *proc_infp = __get_process_info();
+    if (proc_infp->procId != proc_infp->threadId) {
+        // a trhead spawn for the parent process in the parent task struct tgroup 
+    }
 
     return 0;
 }
+
+
+SEC("tracepoint/sched/sched_process_fork")
+int handle_potential_malicious_forks(struct sched_process_fork *proc_info) {
+    __u32 pid = proc_info->child_pid;
+    __u32 ppid = proc_info->parent_pid;
+
+    return 0;
+}
+
+
 
 char __license[] SEC("license") = "Dual MIT/GPL";

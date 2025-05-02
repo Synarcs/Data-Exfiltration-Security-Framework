@@ -70,9 +70,9 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 			// the same port as used for egrres will be used as src port for response from remote c2c malware
 			// dont monitro task comm and process struct over ingress traffic
 			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]),
-				&iface.PhysicalNodeBridgeIpv4, events.DNS, utils.DNS_EGRESS_PORT, nil)
+				&iface.PhysicalNodeBridgeIpv4, events.DNS, int(utils.DNS_EGRESS_PORT), nil)
 			go streamClient.MarshallStreamThreadEvent(ctx, rawFeatures[index], stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(utils.DNS_EGRESS_PORT),
+				ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
 				Protocol:         string(events.DNS),
 				PhysicalNodeIpv4: iface.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: iface.PhysicalNodeBridgeIpv6.String(),

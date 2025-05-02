@@ -704,7 +704,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 		}
 
 		// process nothing in userspace
-		// just cehck and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
+		// just check and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
 		// standard go packet does not parse any NB query records
 		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenTypeValue, srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel); err != nil {
 			if utils.DEBUG {

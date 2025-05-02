@@ -380,10 +380,29 @@ struct dns_volume_stats {
         } while (0)
 #endif
 
+/*
+    SKB Random mark per netflow prior TC redirect to rx queues for agent owned bridge netdev'x rx queues 
+*/
 #define SKB_RANDOM_MARK_PER_NETFLOW(__skb, __mark_config)                     \
         do {                                                                  \
             __mark_skb_packet_buffer(__skb, __mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
         } while(0);
+
+    
+#define READ_NETLINK_AGENT_LOADED_CONFIG(__skb, __dest_addr_route, __br_index) \
+        do {                \
+            __u32 out = __skb->ifindex;   \
+            struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); \
+            if (config) {   \
+                __be32 redirect_address_from_config = config->RedirectIpv4; \
+                __dest_addr_route = bpf_htonl(redirect_address_from_config);  \
+                __br_index = config->BridgeIndexId;   \
+                isAggressiveExfilsec = config->IsAgressiveSec;  \
+            }else {     \
+                if(DEBUG)   \
+                    bpf_printk("kernel cannot find the requred kernel config redirect map");   \
+            }   \
+        } while (0);
 
 static 
 __always_inline void cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
@@ -1858,7 +1877,7 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 } 
 
 // does l3 dnat over raw skb and recompute checksum to divert flow to the bridge link netdev 
-static 
+static
 __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_addr, __be32 * dest_addr_route) {
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, current_dest_addr, 4) < 0) {
         // 4 bytes for the ipv4 address offset 
@@ -1893,11 +1912,32 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
 /*
     Runs the DPI in non aggresive mode, relies on kernel link clone_redirect, to actively start hunting traffic from potential malicious transfer over the process 
     Similar to clone redirect vertically intergrate with kernel syscall layer for map prunning, and malicious process termination
+    Both active and passive mode in kernel are only designed for UDP for now, with envoy xds handling tcp in userspace 
 */
 static 
-__always_inline bool __handle_non_aggresive_dpi_standard_dns_port(struct __skb_buff *skb, 
-                struct skb_cursor *cursor) {
-    // TODO: Implement this
+__always_inline __u8 __handle_non_aggresive_dpi_standard_dns_port(struct __sk_buff *skb, 
+                struct skb_cursor *cursor, struct udphdr *udp, void *udp_payload, struct exfil_kernel_config *config) {
+    
+    __u16 dst_port = bpf_ntohs(udp->dest);
+    __u16 src_port = bpf_ntohs(udp->source);
+    
+    if ((void *) udp + 1 > cursor->data_end) return false;
+    if ((void *) udp_payload + 1 > cursor->data_end) return false;
+
+    struct dns_header *dns = (struct dns_header *) (udp_payload);
+    if ((void *) dns + 1 > cursor->data_end) return false;
+    void * dns_payload = dns + sizeof(struct dns_header);
+    if ((void *) dns_payload + 1 > cursor->data_end) return false;
+                    
+    // raw parse the DNS protocol over standard port for payload oexfiltration in packet in passive mode 
+    __u8 dns_payload_parse_act = parse_dns_payload_memsafet_payload(cursor, dns_payload, dns);
+
+    struct result_parse_dns_labels parse_label_actions = __parse_dns_flags_actions(dns_payload_parse_act);
+
+   #if 0
+   #endif 
+
+    // TODO: Add kernel l3 dnat , and cheksum modification over packet from skb 
     return true;
 }
 
@@ -2143,7 +2183,7 @@ int classify(struct __sk_buff *skb){
 
 		threatHuntPotentialMaliciousProcessExfil:
 
-                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor))
+                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp, udp_data, config))
                     return TC_FORWARD;
                 return TC_DROP;
             }else {
@@ -2293,7 +2333,7 @@ int classify(struct __sk_buff *skb){
                 
                 threatHuntPotentialMaliciousProcessExfilIpv6:
                 
-                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor))
+                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp, udp_data, config))
                     return TC_FORWARD;
                 return TC_DROP;
             }

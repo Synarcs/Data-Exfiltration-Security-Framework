@@ -38,6 +38,7 @@ sudo apt update -y && sudo apt install -y \
     inetutils-ping \
     bsdmainutils \
     liburing-dev \
+    libseccomp-dev \
     iptables \
     iproute2 \
     libssl-dev \

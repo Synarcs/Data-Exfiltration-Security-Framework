@@ -129,7 +129,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 	}
 }
 
-func (tc *TCHandler) PollMaliciousControllerAwareC2Address(errorChannel <-chan error) {
+func (tc *TCHandler) PollMaliciousControllerAwareC2Address(ctx context.Context, errorChannel <-chan error) {
 	// ipv4
 	go func() {
 		for ipv4 := range tc.GlobalMalC2L3addressChannelIpv4 {
@@ -827,7 +827,7 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	}
 	defer cap.Close()
 
-	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
+	if err := cap.SetBPFFilter("tcp dst port 53"); err != nil {
 		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
 	}
 

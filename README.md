@@ -17,8 +17,7 @@ KEDS provides real-time, kernel-level enforcement of dynamic network policies, f
 Kernel 
 * Kernel NEtwork Stack
     * XDP
-    * Traffic Control 
-    * Netfilter
+    * Traffic Control  (CLSACT)
     * Kernel Probes
     * Kernel Functions
     * Raw Tracepoints (kernel schedulers, software netdev device drivers)
@@ -35,15 +34,17 @@ Kernel
 UserLand 
 * Cilium eBPF 
 * Cilium CNI 
-* Envoy L7 Proxy, Filter chains, OPA (Open Policy Agents for L7 Security)
-* Kubernetes Client
-* Kubernetes Sidecars, Kubernetes Mutating Webhooks 
 * Kafka Streams Producers
 * Deep Learning
     * ONNX (Open Neural Network Exchange)
     * Tensorflow
     * Dense Neural Networks
+* Libseccomp runtime security fitlers 
 * Unix Domain Sockets ONNX Inference servers 
+* Over Cloud Orchestration Security
+    * Kubernetes Client-go
+    * Kubernetes Sidecars, Kubernetes Mutating Webhooks, operatirs
+    * Envoy L7 Proxy, Filter chains, OPA (Open Policy Agents for L7 Security)
 
 ## Distributed Infrastructure
 DNS Network Topologies
@@ -84,7 +85,9 @@ Threat Event Stream Message Analysis Control Plane Server
 * Cloud-Native orchestrated / containerized exfiltration security (via custom blacklist policy filters and CRD resources) using physical netdev Kernel eBPF programs.
 	* Kernel-enforced Dynamic Response (KDR) for cloud environments: leverages eBPF running over the host physical netdev to generate dynamic blacklist policy filters, intercepted in real-time via Kubernetes-based endpoint security operators. These controllers behave as wrappers to add layered security on top of the kernel network stack.
 	* Ongoing integration with Kubernetes using sidecar or guard containers for all pods — running eBPF over the kernel SOCK layer (skb_filter, skb_ops) — enabling real-time detection and prevention of malicious pods attempting data breaches across the entire Kubernetes cluster, thereby security nodes not running the eBPF DNS exfil agent at endpoint. Relies on layered security in kernel over each stages of packet processing from physical to virtual netdev.
-* Zero Trust Architecture with Dual Signatures and Mutual Authentication
+* Process-Aware Zero Trust Enforcement in Kernel Data Path
+    * integrates eBPF at the socket and TC layers to enforce packet-level security, dynamically correlating packets to originating processes using pinned maps and tracepoints. Malicious processes are contained via userspace-injected seccomp filters and fork tracking, enabling runtime threat response and process isolation across the kernel data path.
+* Zero Trust Architecture with Dual Signatures and Mutual Authentication for eBPF programs loading in cloud distributed systems
 	* Stage 1: Control Plane ↔ Data Plane
 	* gRPC over mutual TLS (mTLS) used for secure communication,
 	* Control plane signs eBPF programs, verified by the data plane during load.

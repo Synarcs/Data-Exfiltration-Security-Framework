@@ -25,6 +25,7 @@ import (
 	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint/uapimac"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/profile"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
@@ -126,6 +127,16 @@ func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 		}
 		return agentCryptoConfig, nil
 	}
+}
+
+func InitSeccompDynamicSeccomFilters() error {
+
+	// TODO: dynamic userspace enforced process aware security with dynamic security fitler values
+	_, err := uapimac.NewFilter(uint32(os.Getpid()))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
