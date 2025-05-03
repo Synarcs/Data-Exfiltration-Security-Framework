@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/cilium/ebpf"
+	"github.com/google/gopacket"
 )
 
 var DEBUG = false
@@ -85,7 +86,7 @@ const (
 
 const (
 	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL              = time.Second * 10 // use to prune the map which ensure the required
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD             = 3                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD             = 5                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
 	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT = 6                // higher threshold compared to tunnelle c2 for random DNS tunnel which must be lower to stop breach asap
 
 	EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD = 5
@@ -299,4 +300,8 @@ func UnPingPinnedMaps(collection *ebpf.Collection, unupinMaps []string) error {
 	}
 
 	return nil
+}
+
+func GetPacketPayloadSize(layer gopacket.Layer, protocol string) int {
+	return len(layer.LayerContents())
 }

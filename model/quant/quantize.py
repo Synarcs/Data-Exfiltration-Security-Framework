@@ -4,13 +4,14 @@ from pathlib import Path
 from argparse import ArgumentParser
 from onnxruntime.quantization import quantize_dynamic, QuantType
 from onnxruntime.quantization.preprocess import quant_pre_process
+from typing import NoReturn
 import onnxruntime as ort 
 import numpy as np 
 
 class QuantizeProvider(ABC):
     # quantize the model supporting different backends and cpu backends, to be implemented as per quantize backend requirement 
     @abstractmethod
-    def quantize_onnx_model(self):
+    def quantize_onnx_model(self) -> NoReturn:
         pass 
 
 
@@ -24,7 +25,7 @@ def test_quantize_inference() -> None:
     output_name = session.get_outputs()[0].name
 
     st = time.time()
-    for i in range(1 << 12):
+    for i in range(1 << 16):
         input_features = np.random.rand(8).astype(np.float32).reshape(1, -1)
         _ = session.run([output_name], {input_name: input_features})[0]
     

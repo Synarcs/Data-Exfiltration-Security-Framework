@@ -1484,8 +1484,7 @@ __always_inline void __submit_ring_buff_events_malicious_transfers(bool isStanda
             bpf_ringbuf_discard_dynptr(&dptr, 0);
             return;
         }
-        long _ = bpf_dynptr_write(&dptr, 0, &random_port_event, sizeof(struct dns_non_standard_transport_event), 0);
-
+        bpf_dynptr_write(&dptr, 0, &random_port_event, sizeof(struct dns_non_standard_transport_event), 0);
         bpf_ringbuf_submit_dynptr(&dptr, 0);
     }
 }
@@ -1933,9 +1932,6 @@ __always_inline __u8 __handle_non_aggresive_dpi_standard_dns_port(struct __sk_bu
     __u8 dns_payload_parse_act = parse_dns_payload_memsafet_payload(cursor, dns_payload, dns);
 
     struct result_parse_dns_labels parse_label_actions = __parse_dns_flags_actions(dns_payload_parse_act);
-
-   #if 0
-   #endif 
 
     // TODO: Add kernel l3 dnat , and cheksum modification over packet from skb 
     return true;

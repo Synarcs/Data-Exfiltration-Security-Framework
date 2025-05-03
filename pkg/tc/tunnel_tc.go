@@ -152,6 +152,8 @@ var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime =
 var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
 var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
 
+var exfilSizePriorSigKill int = 0
+
 func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort, maliciousDestPort uint16) {
 	maliciousProcCountguard.Lock()
 	defer maliciousProcCountguard.Unlock()
@@ -191,6 +193,8 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			var sigKillStdoutBuffer bytes.Buffer
 			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
+			utils.Log("Amount of data exfiltrated prior removal and send a sigkill to the process", exfilSizePriorSigKill)
+			exfilSizePriorSigKill = 0
 			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))
 			cmd.Stderr = &sigKillStdoutBuffer
 			if err := cmd.Run(); err != nil {
@@ -393,7 +397,10 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdateKernelProc(procComm 
 }
 
 func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx context.Context, features []model.DNSFeatures, destTransportPort uint16, srcTransportPort uint16,
-	event *events.ExfilRawPacketMirror, ev *events.DnsMapPayloadNonOverlayPort, errorChannel chan interface{}) error {
+	event *events.ExfilRawPacketMirror, ev *events.DnsMapPayloadNonOverlayPort,
+	errorChannel chan interface{}, layer gopacket.Layer) error {
+
+	dnsExfilPayloadSize := utils.GetPacketPayloadSize(layer, "DNS")
 
 	isAnySectionDomMalInCache := false
 	for _, feature := range features {
@@ -467,6 +474,12 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 
 			// detected malicious exfiltrated object
 			if inferenceResponse.ThreatType {
+				exfilSizePriorSigKill += dnsExfilPayloadSize
+
+				if utils.DEBUG {
+					// TODO: Enhance metrics to export the amount of payload being exfiltrated
+					utils.Log("Exfiltrated DNS payload size is ", dnsExfilPayloadSize)
+				}
 
 				for _, feature := range features {
 					if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
@@ -517,7 +530,12 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		}
 	} else {
 		// some section are already scanned and found to be malicious from different process or same process from user-space over the SLD domain exfiltrating date
+		exfilSizePriorSigKill += dnsExfilPayloadSize
 		utils.Log("SLD domain scanned to malicious not re scanning with remote unix inference server", features)
+		if utils.DEBUG {
+			// TODO: Enhance metrics to export the amount of payload being exfiltrated
+			utils.Log("Exfiltrated DNS payload size is ", dnsExfilPayloadSize)
+		}
 		for _, feature := range features {
 			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
 				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
@@ -706,7 +724,8 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 		// process nothing in userspace
 		// just check and deep parse the questions of the record for netbios kernel query because of random port process allow for this port in kernel
 		// standard go packet does not parse any NB query records
-		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenTypeValue, srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel); err != nil {
+		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenTypeValue,
+			srcPortGenTypeValue, &maliciousTunnelDNSEvent, ev, errorChannel, dns); err != nil {
 			if utils.DEBUG {
 				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 			}
@@ -745,7 +764,8 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 			}
 		}
 
-		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenType, srcPortGenType, &event, ev, errorChannel); err != nil {
+		if err := tun.ProcessMaliciousInferenceNonStandardPortfeatures(ctx, features, destPortGenType,
+			srcPortGenType, &event, ev, errorChannel, dns); err != nil {
 			if utils.DEBUG {
 				utils.Logger.Printf("Error in streaming the threat event for exfiltration attempt happened over non standard port %+v", err)
 

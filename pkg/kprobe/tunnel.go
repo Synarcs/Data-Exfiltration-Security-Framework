@@ -141,7 +141,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 			return err
 		}
 
-		if utils.CpuArch() == "arm64" {
+		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
 			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &netlinkEvent)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)

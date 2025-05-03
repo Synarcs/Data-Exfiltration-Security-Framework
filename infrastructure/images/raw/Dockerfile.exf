@@ -2,11 +2,15 @@ FROM python:2.7.18 as base_exf
 
 # put all the legacy raw exfiltration tools running over python2.7 
 
+ARG port=53 
 
-RUN git clone https://github.com/Arno0x/DNSExfiltrator.git
+RUN apt-get update && apt-get install -y dnsutils libpcap-dev vim
+RUN git clone https://github.com/sensepost/DET.git
 
-WORKDIR DNSExfiltrator
 
-RUN cd DNSExfiltrator && pip install -r requirements.txt && python dnsexfiltrator.py -d t.bleed.io -p complex
+WORKDIR DET
+RUN pip install -r requirements.txt 
 
-EXPOSE 53 
+EXPOSE 53/udp 5353/udp 143/udp 1232/udp 5000/udp 
+
+
