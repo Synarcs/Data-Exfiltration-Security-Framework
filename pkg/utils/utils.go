@@ -27,11 +27,11 @@ const (
 	TC_CONTROL_PROG_BRIDGE_INGRESS = "bridge_ingress_filter" // CLSACT  QDISC
 	TC_CONTROL_PROG_BRIDGE_EGRESS  = "bridge_ingress_filter" // CLSACT  QDISC
 
-	TRACEPOINT_PROC_KILL_TRACEPOINT = "handle_mal_c2_proc_exit"
-	SOCK_OPS_PROC_UDP_TRACEPOINT    = "dns_udp_sock_ops"
-	XDP_CONTROL_PROG                = "xdp" // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
+	TRACEPOINT_PROC_KILL_TRACEPOINT = "handle_mal_c2_proc_exit" // sched_process_exit
+	SOCK_OPS_PROC_UDP_TRACEPOINT    = "dns_udp_sock_ops"        // cgroups_skb/egress
+	XDP_CONTROL_PROG                = "xdp"                     // XDP Non Offloaded BXDINAUB Fkiid orevebtuib '
 
-	LSM_CRYPTO_VERIFY_PROG        = "bpf" // runs over lsm crypto for bpf_prog load
+	LSM_CRYPTO_VERIFY_PROG        = "bpf" // runs over lsm crypto for bpf_prog load lsm.o
 	TC_CLSACT_PARENT_QDISC_HANDLE = 0xffff
 	TC_CLSACT_PARENT_QDISC_PRIO   = 1
 	DEFAULT_SK_BUFF_NUONCE        = 0xffff
@@ -57,6 +57,7 @@ var (
 	GLOBAL_ROUTE_IPV4_TRANSFER_LINKS = []string{
 		"8.8.8.8",
 		"8.8.4.4",
+		"1.1.1.1",
 	}
 )
 
@@ -304,4 +305,19 @@ func UnPingPinnedMaps(collection *ebpf.Collection, unupinMaps []string) error {
 
 func GetPacketPayloadSize(layer gopacket.Layer, protocol string) int {
 	return len(layer.LayerContents())
+}
+
+func KillProc(procId uint32) error {
+	proc, err := os.FindProcess(int(procId))
+	if err != nil {
+		Log("The node agent cannot find the required process ", proc.Pid)
+		return err
+	}
+
+	// the agent runs in CAP_SYS_ADMIN with no internal mac via selinux policies to enforce limited security, thereby having full support to kill userspace malicious C2 implant process
+	if err := proc.Kill(); err != nil {
+		return err
+	}
+
+	return nil
 }

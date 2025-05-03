@@ -1,13 +1,11 @@
 package model
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
 	"net"
 	"net/netip"
-	"os/exec"
 	"strconv"
 	"sync"
 	"syscall"
@@ -96,11 +94,8 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 	} else {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
 			utils.Logger.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
-			cmd := exec.Command("kill", "-9", strconv.Itoa(int(procId)))
-			var sigKillStdoutBuffer bytes.Buffer
-			cmd.Stderr = &sigKillStdoutBuffer
-			if err := cmd.Run(); err != nil {
-				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, sigKillStdoutBuffer)
+			if err := utils.KillProc(procId); err != nil {
+				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, err.Error())
 			}
 			evTime := maliciousExfilProcessAliveTime[procId]
 			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)

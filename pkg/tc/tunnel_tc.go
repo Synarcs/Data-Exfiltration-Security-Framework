@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"sync"
@@ -191,14 +190,11 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 			utils.Log("Inc malicious count curr is ", maliciousExfilProcessCount[mapField.ProcessId])
 		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
-			var sigKillStdoutBuffer bytes.Buffer
 			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
 			utils.Log("Amount of data exfiltrated prior removal and send a sigkill to the process", exfilSizePriorSigKill)
 			exfilSizePriorSigKill = 0
-			cmd := exec.Command("kill", "-9", strconv.Itoa(int(mapField.ProcessId)))
-			cmd.Stderr = &sigKillStdoutBuffer
-			if err := cmd.Run(); err != nil {
-				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, sigKillStdoutBuffer)
+			if err := utils.KillProc(mapField.ProcessId); err != nil {
+				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, err.Error())
 			}
 			utils.Logger.Printf("The exfiltration was stopped send sigkill to the process %d was killed successfully", mapField.ProcessId)
 			evTime := maliciousExfilProcessAliveTime[mapField.ProcessId]

@@ -8,7 +8,7 @@ ARCH := $(shell uname -m)
 .PHONY: compile 
 compile:
 	@echo "Compiling the eBPF Node Agent for $(ARCH)"
-	go build $(node_agent) 
+	go build -ldflags="-s -w" -o $(output)  $(node_agent) 
 
 .PHONY: run
 run: 
