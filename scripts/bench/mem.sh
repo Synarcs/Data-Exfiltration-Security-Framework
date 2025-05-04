@@ -10,7 +10,7 @@ clean() {
 
 run() {
     clean
-    for i in $(seq 1 24); do
+    for i in $(seq 1 10); do
         timestamp=$i
         memory_kb=$(ps -o rss= -p "$pid")  
         memory_mb=$(echo "scale=2; $memory_kb / 1024" | bc)  

@@ -471,11 +471,11 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}
 
 	if fd := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]; fd != nil {
-		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
+//		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
 	}
 
 	if fd := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP]; fd != nil {
-		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
+//		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
 	}
 
 	go func() {

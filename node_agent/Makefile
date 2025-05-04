@@ -75,23 +75,10 @@ build-run:
 	make build
 	sudo ./main 
 
-.PHONY: build-run-x86 
-build-run-x86:
-	@echo "building and running eBPF node_agent"
-	make build-x86 
-	sudo ./main 
-
 .PHONY: build-run-pidns
 build-run-pidns:
 	@echo "building and runnign eBPF node_agent with isolated process namespace for security"
 	make build 
-	sudo unshare --pid --fork ./main
-
-
-.PHONY: build-run-pidns-x86
-build-run-pidns-x86:
-	@echo "building and runnign eBPF node_agent with isolated process namespace for security"
-	make build-x86 
 	sudo unshare --pid --fork ./main
 
 .PHONY: disas 

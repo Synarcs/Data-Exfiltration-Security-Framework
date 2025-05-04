@@ -1,6 +1,6 @@
-set terminal png size 1600,900
+set terminal png size 800,600
 set output "out/10k/memory_usage.png"
-set title "Process Memory Usage Over Time (MB)"
+set title "Process Memory Usage Over Time (MB) 10,000 DNS Req / Sec"
 set xlabel "Time (seconds)"
 set ylabel "Memory (MB)"
 set grid
