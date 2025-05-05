@@ -30,7 +30,7 @@ plt.plot(seconds, latency_std, label="Latency Std Dev (ms)", marker="o", color="
 
 plt.xlabel("Time (seconds)")
 plt.ylabel("Latency (ms)")
-plt.title("DNS Query Latency Metrics Over Time")
+plt.title("DNS TCP Query Latency Metrics Over Time")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()

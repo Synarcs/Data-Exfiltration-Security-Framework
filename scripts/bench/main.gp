@@ -1,7 +1,7 @@
 set terminal png size 800,600
 set output "qps_packet_loss.png"
 
-set title "DNS Queries Per Second and Packet Loss Over Time" offset 0,-1
+set title "DNS over TCP Queries Per Second and Packet Loss Over Time" offset 0,-1
 set xlabel "Time (seconds)"
 unset ylabel
 set y2label "Packets Lost"
