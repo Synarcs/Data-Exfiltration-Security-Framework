@@ -1915,26 +1915,36 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
 */
 static 
 __always_inline __u8 __handle_non_aggresive_dpi_standard_dns_port(struct __sk_buff *skb, 
-                struct skb_cursor *cursor, struct udphdr *udp, void *udp_payload, struct exfil_kernel_config *config) {
+                struct skb_cursor *cursor, struct udphdr *udp, 
+                void *udp_payload, struct exfil_kernel_config *config) {
     
     __u16 dst_port = bpf_ntohs(udp->dest);
     __u16 src_port = bpf_ntohs(udp->source);
     
-    if ((void *) udp + 1 > cursor->data_end) return false;
-    if ((void *) udp_payload + 1 > cursor->data_end) return false;
+    // just verifier checks this wont be ever clalled if there is no DNS layer in the skb 
+    if ((void *) udp + 1 > cursor->data_end) return BENIGN;
+    if ((void *) udp_payload + 1 > cursor->data_end) return BENIGN;
 
     struct dns_header *dns = (struct dns_header *) (udp_payload);
-    if ((void *) dns + 1 > cursor->data_end) return false;
+    if ((void *) dns + 1 > cursor->data_end) return BENIGN;
     void * dns_payload = dns + sizeof(struct dns_header);
-    if ((void *) dns_payload + 1 > cursor->data_end) return false;
+    if ((void *) dns_payload + 1 > cursor->data_end) return BENIGN;
                     
     // raw parse the DNS protocol over standard port for payload oexfiltration in packet in passive mode 
     __u8 dns_payload_parse_act = parse_dns_payload_memsafet_payload(cursor, dns_payload, dns);
 
     struct result_parse_dns_labels parse_label_actions = __parse_dns_flags_actions(dns_payload_parse_act);
 
+    if (parse_label_actions.drop || parse_label_actions.isC2c) {
+        return MALICIOUS;
+    }else if (parse_label_actions.deep_scan_mirror) {
+        // suspicious clone handleing 
+        __u32 bridge_out_index = config->BridgeIndexId; // netdev index in kernel 
+        return SUSPICIOUS; // process clone redirect over the packet for the bridge netdev 
+    }
+
     // TODO: Add kernel l3 dnat , and cheksum modification over packet from skb 
-    return true;
+    return BENIGN;
 }
 
 
@@ -2117,7 +2127,7 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                else if (result.drop){
+                else if (result.drop || result.isC2c){
                     #if DEBUG 
                         bpf_printk("Dropping the packet in Kernel Layer");
                     #endif
@@ -2179,9 +2189,27 @@ int classify(struct __sk_buff *skb){
 
 		threatHuntPotentialMaliciousProcessExfil:
 
-                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp, udp_data, config))
-                    return TC_FORWARD;
-                return TC_DROP;
+                switch (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp,
+                        udp_data, config)) {
+                    case MALICIOUS:
+                        __handle_kernel_map_redirection_drop_count();
+                        SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
+                        ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
+                        return bpf_redirect(br_index, BPF_F_INGRESS);
+                    case SUSPICIOUS:
+                        if (verify_kernel_version_support_task_comm()) {
+                            struct __kernel_proc_struct_info *proc_info = __get_process_info();
+                            // TODO: fix and process the smae for clone redirect map track to ensure packet processing 
+                        }else {
+                            // TODO: and use kernel socket layer via cgroup skb same as done for clone redirect 
+                        }
+                        __skb_l3_dnat_v6(&ipv6);
+                        __handle_kernel_map_clone_redirected_count(false);
+                        __clone_redirect_packet(skb, config->NfNdpBridgeIndexId, bpf_ntohl(config->NfNdpBridgeRedirectIpv4), true);
+                        return TC_FORWARD;
+                    default:
+                        return TC_FORWARD;
+                }
             }else {
                     // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
@@ -2281,7 +2309,7 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                else if (result.drop) {
+                else if (result.drop || result.isC2c) {
                     #if DEBUG
                         bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
                     #endif
@@ -2329,9 +2357,27 @@ int classify(struct __sk_buff *skb){
                 
                 threatHuntPotentialMaliciousProcessExfilIpv6:
                 
-                if (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp, udp_data, config))
-                    return TC_FORWARD;
-                return TC_DROP;
+                switch (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp,
+                    udp_data, config)) {
+                        case MALICIOUS:
+                            __handle_kernel_map_redirection_drop_count();
+                            SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
+                            ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
+                            return bpf_redirect(br_index, BPF_F_INGRESS);
+                        case SUSPICIOUS:
+                            if (verify_kernel_version_support_task_comm()) {
+                                struct __kernel_proc_struct_info *proc_info = __get_process_info();
+                                // TODO: fix and process the smae for clone redirect map track to ensure packet processing 
+                            }else {
+                                // TODO: and use kernel socket layer via cgroup skb same as done for clone redirect 
+                            }
+                            __skb_l3_dnat_v6(&ipv6);
+                            __handle_kernel_map_clone_redirected_count(false);
+                            __clone_redirect_packet(skb, config->NfNdpBridgeIndexId, bpf_ntohl(config->NfNdpBridgeRedirectIpv4), true);
+                            return TC_FORWARD;
+                        default:
+                            return TC_FORWARD;
+                    }
             }
             else {
 

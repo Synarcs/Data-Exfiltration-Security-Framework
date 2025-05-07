@@ -58,8 +58,8 @@ type TCHandler struct {
 
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
-	INIT_KERNEL_SOCKET        = true
-	INIT_LIMITS_KERNEL_CONFIG = false
+	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = true
+	INIT_LIMITS_KERNEL_CONFIG              = false
 )
 
 var mapsToPinSharedProcKillMap []string
@@ -471,11 +471,11 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}
 
 	if fd := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]; fd != nil {
-//		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
+		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
 	}
 
 	if fd := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP]; fd != nil {
-//		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
+		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
 	}
 
 	go func() {
@@ -496,7 +496,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 
 	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
 
-	if INIT_KERNEL_SOCKET {
+	if INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL {
 		tc.InitTCTunnelExfilPrevention(ctx, false)
 	}
 }
@@ -504,9 +504,13 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 /*
 Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
 */
-func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassive bool) {
-	tc_tunnel := NewTcTunnelFactory(tc, tc.Interfaces,
-		tc.GlobalErrorKernelHandlerChannel, tc.DnsPacketGen.StreamClient, tc.OnnxLoadedModel, isPassive)
+func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveStandardDNSPortUDPTransfer bool) {
+	tc_tunnel := NewTcTunnelFactory(tc,
+		tc.Interfaces,
+		tc.GlobalErrorKernelHandlerChannel,
+		tc.DnsPacketGen.StreamClient,
+		tc.OnnxLoadedModel,
+		isPassiveStandardDNSPortUDPTransfer)
 	tc.TcTunnelNonStandardPortScan = tc_tunnel
 
 	// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
@@ -525,7 +529,7 @@ func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassive 
 	}
 
 	tc.ProcessSniffDPIPacketCapture(ctx, tc.Interfaces, nil)
-	INIT_KERNEL_SOCKET = false
+	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = false
 }
 
 func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfig map[uint32]uint32) error {
