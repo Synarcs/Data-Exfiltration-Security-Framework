@@ -9,6 +9,15 @@ CONTROLLER_IMAGE_TAG ?= latest
 build:
 	bash build.sh 
 
+.PHONY: build-dep-agent
+build-dep-agent:
+	bash infrastructure/agent.sh
+
+
+.PHONY: build-dep-controller 
+build-dep-controller:
+	bash infrastructure/controller.sh
+
 .PHONY: node-metrics
 node-metrics:
 	@echo "starting the node exported metrics for monitor infrastructure at the node"

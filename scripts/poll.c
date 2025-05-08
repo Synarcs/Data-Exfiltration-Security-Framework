@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 
@@ -51,7 +52,6 @@ int main(void) {
 
     if (epoll_ctl(fd, EPOLL_CTL_ADD, 0, &event)) {
         perror("epoll_ctl");
-        return 1;
     }
 
     printf("Process ID adding epoll events over POLL STDIN: %d\n", proc); 
@@ -60,7 +60,7 @@ int main(void) {
     bool pool = true;
     while (pool) {
         memset(read_buffer, '\0', sizeof(read_buffer));
-        int read_buffer_size = sizeof(read_buffer) / sizeof(read_buffer[0]);
+        size_t read_buffer_size = sizeof(read_buffer) / sizeof(read_buffer[0]);
         if (read_buffer_size != READ_SIZE) READ_SIZE = read_buffer_size;
 		printf("\nPolling for input... with max consume read buffer size from fd %d\n", read_buffer_size);
 		event_count = epoll_wait(fd, events, MAX_EVENTS, 30000);
@@ -77,7 +77,10 @@ int main(void) {
 
     if (close(fd)){
         perror("close");
-        return 1; 
+        goto exit_error;
     }
-    return 0;
+    exit_error:
+      return EXIT_FAILURE;
+    exit_success:
+        return EXIT_SUCCESS;
 }

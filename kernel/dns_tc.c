@@ -1447,6 +1447,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             #if DEBUG
                 bpf_printk("kernel cannot clone the packet for the redirect"); 
             #endif
+            return 1;
         }
     }
         
@@ -1701,7 +1702,7 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
             __u16 rlimit_timer_tok_key = 0;
             bpf_map_update_elem(&exfil_security_rtl_time_init, &rlimit_timer_init_key, &reset_timer, BPF_ANY);
             info->MaxTokens = MIN_TB_TOKEN_CAP;
-        }
+	}
 
         bpf_printk("restarting the bpf timer for rate limiting");
         // Reschedule the timer to fire again in 1 second (time in nanoseconds)

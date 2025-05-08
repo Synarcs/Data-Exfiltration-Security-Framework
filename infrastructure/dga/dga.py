@@ -4,7 +4,7 @@ from typing import List
 import psycopg2 as pg 
 from argparse import ArgumentParser 
 from wonderwords import RandomWord
-import subprocess 
+import subprocess, base64
 
 DGA_FILE: str = 'dga.txt'
 PDNS_AUTH_DOMAIN_SERVER: str = '10.158.82.55' # ip where pdns auth server runs 
