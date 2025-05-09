@@ -404,6 +404,25 @@ struct dns_volume_stats {
             }   \
         } while (0);
 
+// drop in kernel and let the userspace agent monitor it in depth for packet drop cycle ipv4
+#define PROCESS_KERNEL_PACKET_DROP_IPV4(skb, current_dest_addr, dest_addr_route_malicious, config, br_index) \
+    do { \
+        if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route_malicious) == TC_DROP) \
+            return TC_DROP;                             \
+        __handle_kernel_map_redirection_drop_count();   \
+        SKB_RANDOM_MARK_PER_NETFLOW(skb, config)        \
+        return bpf_redirect(br_index, BPF_F_INGRESS);   \
+    } while(0); 
+
+// drop in kernel and let the userspace agent monitor it in depth for packet drop cycle ipv6
+#define PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index) \
+    do {                        \
+        __handle_kernel_map_redirection_drop_count();       \
+        SKB_RANDOM_MARK_PER_NETFLOW(skb, config)            \
+        ipv6->daddr = bridge_redirect_addr_ipv6_malicious;  \
+        return bpf_redirect(br_index, BPF_F_INGRESS);       \
+    } while(0);
+
 static 
 __always_inline void cursor_init(struct skb_cursor *cursor, struct __sk_buff *skb){
     cursor->data = (void *)(ll)(skb->data);
@@ -1367,7 +1386,8 @@ __always_inline bool __update_malicious_egress_dns_port_random_kernel_sock_ops_m
 
 // process the skb_clone redirect to user space to perform deep scan over the DNS packet for possible tunnel over this non standard port 
 static 
-__always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, __u16 __transport_dest_port, __u16 __transport_src_port) {
+__always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, 
+            __u16 __transport_dest_port, __u16 __transport_src_port, bool isPassiveDPIStandardPortTransfer) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
     __u32 br_index = 5;
     __u32 out = skb->ifindex;
@@ -1387,6 +1407,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         #endif
     }
 
+    if (isPassiveDPIStandardPortTransfer) 
+        goto SKIP_L7_DEEP_SCAN_DNS_UDP_OVERLAY;
 
     bool isTunnelC2CStandardUdpTransport = false;
     if (isUdp) {
@@ -1407,6 +1429,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         #endif
     }
    
+    SKIP_L7_DEEP_SCAN_DNS_UDP_OVERLAY:
+
     __u16 udp_dst_transfer_key = __transport_dest_port;
    
     if (verify_kernel_version_support_task_comm()) {
@@ -1447,7 +1471,6 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             #if DEBUG
                 bpf_printk("kernel cannot clone the packet for the redirect"); 
             #endif
-            return 1;
         }
     }
         
@@ -1547,7 +1570,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
             // add kernel packet clone for the user space to infer the l7 protocol in-depth after further packet dpi in user space 
            return __process_packet_clone_redirection_non_standard_port(
-                    skb, true, bpf_ntohs(udp->dest), bpf_ntohs(udp->source)
+                    skb, true, bpf_ntohs(udp->dest), bpf_ntohs(udp->source), false
            ); // should forward the packet since the packet is cloned and deep scanned in user space 
         }   
         return __non_standard_port_dpi;
@@ -1601,7 +1624,7 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
         bpf_ringbuf_submit(res, 0);
 
         __process_packet_clone_redirection_non_standard_port(
-                    skb, true, bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source)
+                    skb, true, bpf_ntohs(tcp->dest), bpf_ntohs(tcp->source), false
         );
     }
 
@@ -1702,7 +1725,7 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
             __u16 rlimit_timer_tok_key = 0;
             bpf_map_update_elem(&exfil_security_rtl_time_init, &rlimit_timer_init_key, &reset_timer, BPF_ANY);
             info->MaxTokens = MIN_TB_TOKEN_CAP;
-	}
+        }
 
         bpf_printk("restarting the bpf timer for rate limiting");
         // Reschedule the timer to fire again in 1 second (time in nanoseconds)
@@ -1909,45 +1932,6 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
 }
 
 
-/*
-    Runs the DPI in non aggresive mode, relies on kernel link clone_redirect, to actively start hunting traffic from potential malicious transfer over the process 
-    Similar to clone redirect vertically intergrate with kernel syscall layer for map prunning, and malicious process termination
-    Both active and passive mode in kernel are only designed for UDP for now, with envoy xds handling tcp in userspace 
-*/
-static 
-__always_inline __u8 __handle_non_aggresive_dpi_standard_dns_port(struct __sk_buff *skb, 
-                struct skb_cursor *cursor, struct udphdr *udp, 
-                void *udp_payload, struct exfil_kernel_config *config) {
-    
-    __u16 dst_port = bpf_ntohs(udp->dest);
-    __u16 src_port = bpf_ntohs(udp->source);
-    
-    // just verifier checks this wont be ever clalled if there is no DNS layer in the skb 
-    if ((void *) udp + 1 > cursor->data_end) return BENIGN;
-    if ((void *) udp_payload + 1 > cursor->data_end) return BENIGN;
-
-    struct dns_header *dns = (struct dns_header *) (udp_payload);
-    if ((void *) dns + 1 > cursor->data_end) return BENIGN;
-    void * dns_payload = dns + sizeof(struct dns_header);
-    if ((void *) dns_payload + 1 > cursor->data_end) return BENIGN;
-                    
-    // raw parse the DNS protocol over standard port for payload oexfiltration in packet in passive mode 
-    __u8 dns_payload_parse_act = parse_dns_payload_memsafet_payload(cursor, dns_payload, dns);
-
-    struct result_parse_dns_labels parse_label_actions = __parse_dns_flags_actions(dns_payload_parse_act);
-
-    if (parse_label_actions.drop || parse_label_actions.isC2c) {
-        return MALICIOUS;
-    }else if (parse_label_actions.deep_scan_mirror) {
-        // suspicious clone handleing 
-        __u32 bridge_out_index = config->BridgeIndexId; // netdev index in kernel 
-        return SUSPICIOUS; // process clone redirect over the packet for the bridge netdev 
-    }
-
-    // TODO: Add kernel l3 dnat , and cheksum modification over packet from skb 
-    return BENIGN;
-}
-
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
@@ -2128,20 +2112,13 @@ int classify(struct __sk_buff *skb){
                     #endif
                     return TC_FORWARD;
                 }
-                else if (result.drop || result.isC2c){
+                else if (result.drop){
                     #if DEBUG 
                         bpf_printk("Dropping the packet in Kernel Layer");
                     #endif
 
-                    if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route_malicious) == TC_DROP) {
-                         return TC_DROP;
-                    }
-
-                    __handle_kernel_map_redirection_drop_count();
-
-                    SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
-
-                    return bpf_redirect(br_index, BPF_F_INGRESS);
+                    PROCESS_KERNEL_PACKET_DROP_IPV4(skb, current_dest_addr, 
+                            dest_addr_route_malicious, config, br_index)
                 }
 
                 // perform dpi here and mirror the packet using bpf_redirect over veth kernel bridge for veth interface 
@@ -2190,27 +2167,22 @@ int classify(struct __sk_buff *skb){
 
 		threatHuntPotentialMaliciousProcessExfil:
 
-                switch (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp,
-                        udp_data, config)) {
-                    case MALICIOUS:
-                        __handle_kernel_map_redirection_drop_count();
-                        SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
-                        ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                        return bpf_redirect(br_index, BPF_F_INGRESS);
-                    case SUSPICIOUS:
-                        if (verify_kernel_version_support_task_comm()) {
-                            struct __kernel_proc_struct_info *proc_info = __get_process_info();
-                            // TODO: fix and process the smae for clone redirect map track to ensure packet processing 
-                        }else {
-                            // TODO: and use kernel socket layer via cgroup skb same as done for clone redirect 
-                        }
-                        __skb_l3_dnat_v6(&ipv6);
-                        __handle_kernel_map_clone_redirected_count(false);
-                        __clone_redirect_packet(skb, config->NfNdpBridgeIndexId, bpf_ntohl(config->NfNdpBridgeRedirectIpv4), true);
-                        return TC_FORWARD;
-                    default:
-                        return TC_FORWARD;
+                if (result.isBenign) {
+                    return TC_FORWARD;
+                }else if (result.drop){
+                    #if DEBUG
+                        bpf_printk("Dropping the packet in Kernel Layer");
+                    #endif
+                    PROCESS_KERNEL_PACKET_DROP_IPV4(skb, current_dest_addr, 
+                        dest_addr_route_malicious, config, br_index)
                 }
+
+                if (__process_packet_clone_redirection_non_standard_port(skb, true, bpf_ntohs(udp->dest), 
+                                bpf_ntohs(udp->source), config) == 1) {
+                    return TC_FORWARD;
+                }
+
+                return TC_DROP;
             }else {
                     // vxlan encap is always inside UDP for l3 (ipv4 , ipv6)
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
@@ -2301,26 +2273,21 @@ int classify(struct __sk_buff *skb){
                     #if DEBUG
                         bpf_printk("kernel cannot find the requred kernel config redirect map defaulting to kernel configured link netdev ifindex %d", br_index);
                     #endif
+                    return TC_FORWARD;
                 }
 
-                // bpf_printk("the init check for ipv6 udp dns packet passed to pass next deep parsing b:%d c:%d d:%d %d", result.isBenign, result.isC2c, result.drop, parse_flag);
                 if (result.isBenign) {
                     #if DEBUG 
                             bpf_printk("Benign packet found perform DPI UDP Layer over Ipv6 for action flag %u", parse_flag);
                     #endif
                     return TC_FORWARD;
                 }
-                else if (result.drop || result.isC2c) {
+                else if (result.drop) {
                     #if DEBUG
                         bpf_printk("Mirror the packet, dropped by kernel for event monitoring from userSpace ");
                     #endif
                     // ipv6 addr dont need layer 3 checksum recalculation via checksum replace processing 
-                    __handle_kernel_map_redirection_drop_count();
-
-                    SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
-                    
-                    ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                    return bpf_redirect(br_index, BPF_F_INGRESS);
+                    PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
                 }
 
                 if (isAggressiveExfilsec == 0)
@@ -2358,27 +2325,21 @@ int classify(struct __sk_buff *skb){
                 
                 threatHuntPotentialMaliciousProcessExfilIpv6:
                 
-                switch (__handle_non_aggresive_dpi_standard_dns_port(skb, &cursor, udp,
-                    udp_data, config)) {
-                        case MALICIOUS:
-                            __handle_kernel_map_redirection_drop_count();
-                            SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
-                            ipv6->daddr = bridge_redirect_addr_ipv6_malicious;
-                            return bpf_redirect(br_index, BPF_F_INGRESS);
-                        case SUSPICIOUS:
-                            if (verify_kernel_version_support_task_comm()) {
-                                struct __kernel_proc_struct_info *proc_info = __get_process_info();
-                                // TODO: fix and process the smae for clone redirect map track to ensure packet processing 
-                            }else {
-                                // TODO: and use kernel socket layer via cgroup skb same as done for clone redirect 
-                            }
-                            __skb_l3_dnat_v6(&ipv6);
-                            __handle_kernel_map_clone_redirected_count(false);
-                            __clone_redirect_packet(skb, config->NfNdpBridgeIndexId, bpf_ntohl(config->NfNdpBridgeRedirectIpv4), true);
-                            return TC_FORWARD;
-                        default:
-                            return TC_FORWARD;
-                    }
+                if (result.isBenign) {
+                    return TC_FORWARD;
+                }else if (result.drop){
+                    #if DEBUG
+                        bpf_printk("Dropping the packet in Kernel Layer");
+                    #endif
+                    PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
+                }
+
+                if (__process_packet_clone_redirection_non_standard_port(skb, true, bpf_ntohs(udp->dest), 
+                                bpf_ntohs(udp->source), config) == 1) {
+                    return TC_FORWARD;
+                }
+
+                return TC_DROP;
             }
             else {
 
