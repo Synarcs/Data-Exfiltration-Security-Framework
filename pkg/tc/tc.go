@@ -505,12 +505,15 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
 */
 func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveStandardDNSPortUDPTransfer bool) {
-	tc_tunnel := NewTcTunnelFactory(tc,
-		tc.Interfaces,
-		tc.GlobalErrorKernelHandlerChannel,
-		tc.DnsPacketGen.StreamClient,
-		tc.OnnxLoadedModel,
-		isPassiveStandardDNSPortUDPTransfer)
+	tc_tunnel := NewTcTunnelFactory(
+		&TCCloneTunnelConfig{
+			PhysicalTcInterfaceeBPFProgCollection: tc.TcCollection,
+			Iface:                                 tc.Interfaces,
+			GlobalErrorChannel:                    tc.GlobalErrorKernelHandlerChannel,
+			StreamClient:                          tc.DnsPacketGen.StreamClient,
+			Onnx:                                  tc.OnnxLoadedModel,
+			isPassiveStandardDNSPortUDPTransfer:   isPassiveStandardDNSPortUDPTransfer,
+		})
 	tc.TcTunnelNonStandardPortScan = tc_tunnel
 
 	// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports

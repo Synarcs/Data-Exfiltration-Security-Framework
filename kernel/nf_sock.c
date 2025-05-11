@@ -23,11 +23,6 @@
  * ---------------------------->
 */
 #include <linux/bpf.h>
-#include <linux/fs.h>
-
-#include <sys/socket.h>
-#include <linux/netlink.h>
-#include <signal.h>
 
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>

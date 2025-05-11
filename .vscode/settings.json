@@ -153,7 +153,8 @@
         "pwd.h": "c",
         "memory.h": "c",
         "mman.h": "c",
-        "keyctl.h": "c"
+        "keyctl.h": "c",
+        "dbus-bus.h": "c"
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "disabled"

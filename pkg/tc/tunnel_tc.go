@@ -27,12 +27,13 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
+// the tc clone is a child handler which same eBPF tc kernel program enforce dns exfil security with only different of preventing exfiltration over random ports
 type TCCloneTunnel struct {
-	IfaceHandler             *netinet.NetIface
-	GlobalKernelErrorChannel chan error
-	PhysicalTcInterface      *TCHandler
-	StreamClient             *stream.StreamProducer
-	Onnx                     *model.OnnxModel
+	IfaceHandler                          *netinet.NetIface
+	GlobalKernelErrorChannel              chan error
+	PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
+	StreamClient                          *stream.StreamProducer
+	Onnx                                  *model.OnnxModel
 
 	TaskCommTCEgressKernelSupport bool
 	IngressTunnelSniffer          *xdp.IngressSniffHandler
@@ -40,36 +41,43 @@ type TCCloneTunnel struct {
 	AgentOperationPassiveMode bool // passive DPI stop breaches over both random and default UDP port over DNS
 }
 
-func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
-	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
+type TCCloneTunnelConfig struct {
+	PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
+	Iface                                 *netinet.NetIface
+	GlobalErrorChannel                    chan error
+	StreamClient                          *stream.StreamProducer
+	Onnx                                  *model.OnnxModel
+	isPassiveStandardDNSPortUDPTransfer   bool
 }
 
 // this is meant for stopping exfiltration over random ports
 // the root kernel single tc handler is advacned to stop exfiltration over both standard and random UDP ports
-func NewTcTunnelFactory(tc *TCHandler, iface *netinet.NetIface, globalErrorChannel chan error,
-	streamClient *stream.StreamProducer, onnx *model.OnnxModel, isPassiveStandardDNSPortUDPTransfer bool) *TCCloneTunnel {
-
+func NewTcTunnelFactory(config *TCCloneTunnelConfig) *TCCloneTunnel {
 	// sniff for random port traffic when detected to be malicious until other wise suspended and terminated
 
 	tccloneTunnel := &TCCloneTunnel{
-		IfaceHandler:                  iface,
-		GlobalKernelErrorChannel:      globalErrorChannel,
-		PhysicalTcInterface:           tc,
-		StreamClient:                  streamClient,
-		Onnx:                          onnx,
-		TaskCommTCEgressKernelSupport: utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
-		AgentOperationPassiveMode:     isPassiveStandardDNSPortUDPTransfer,
+		IfaceHandler:                          config.Iface,
+		GlobalKernelErrorChannel:              config.GlobalErrorChannel,
+		PhysicalTcInterfaceeBPFProgCollection: config.PhysicalTcInterfaceeBPFProgCollection,
+		StreamClient:                          config.StreamClient,
+		Onnx:                                  config.Onnx,
+		TaskCommTCEgressKernelSupport:         utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
+		AgentOperationPassiveMode:             config.isPassiveStandardDNSPortUDPTransfer,
 	}
 
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
 		tccloneTunnel.IngressTunnelSniffer = xdp.NewIngressSniffer(&xdp.IngressSnifferConfig{
-			Iface:                           iface,
-			OnnxModel:                       onnx,
-			StreamClient:                    streamClient,
-			GlobalErrorKernelHandlerChannel: globalErrorChannel,
+			Iface:                           config.Iface,
+			OnnxModel:                       config.Onnx,
+			StreamClient:                    config.StreamClient,
+			GlobalErrorKernelHandlerChannel: config.GlobalErrorChannel,
 		})
 	}
 	return tccloneTunnel
+}
+
+func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
+	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
 }
 
 func GenerateCancellableSniffCtx() (context.Context, context.CancelFunc) {
@@ -113,12 +121,12 @@ func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procI
 		Dport:     dport,
 	}
 
-	malProcMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
+	malProcMap := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
 	if malProcMap == nil {
 		return
 	}
 
-	deepScanCloneProcPortMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP]
+	deepScanCloneProcPortMap := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP]
 	if deepScanCloneProcPortMap != nil {
 		return
 	}
@@ -226,7 +234,7 @@ func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {
 	var redirCountKey uint16 = 0
 	if !isCloneRedirectedAndMalicious {
-		cloneredirectMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP]
+		cloneredirectMap := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP]
 		if cloneredirectMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectMap.Lookup(&redirCountKey, &currCt); err != nil {
@@ -238,7 +246,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 			})
 		}
 	} else {
-		cloneredirectDropMap := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP]
+		cloneredirectDropMap := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP]
 		if cloneredirectDropMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectDropMap.Lookup(&redirCountKey, &currCt); err != nil {
@@ -290,13 +298,13 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
 	}()
 
 	var tunnelTrafficEBPFMaps []*ebpf.Map = []*ebpf.Map{
-		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP],
-		tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
+		tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP],
+		tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP],
 	}
 
-	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
-	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
-	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT])
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL])
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_NSP_MAP])
+	tunnelTrafficEBPFMaps = append(tunnelTrafficEBPFMaps, tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT])
 
 	// add more eBPF kernel maps if multiple traffic DPI for xfil events is required
 	for _, ebpfMap := range tunnelTrafficEBPFMaps {
@@ -380,8 +388,8 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdateKernelProc(procComm 
 	defer UpdateMapMaliciousProcId.Unlock()
 
 	// no need of mutex use atomic update to map values to control concurrent go routines
-	if _, fd := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]; fd {
-		exfil_mal_proc_map := tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
+	if _, fd := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]; fd {
+		exfil_mal_proc_map := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]
 		var curr_detected_proc_mal_count events.DnsMapPayloadNonOverlayPortValue
 		curr_detected_proc_mal_count.MalDetectedCount++
 		if err := exfil_mal_proc_map.Lookup(&procComm.ProcessId, &curr_detected_proc_mal_count); err != nil {
@@ -692,7 +700,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 		var maliciousTunnelDNSEvent events.ExfilRawPacketMirror // a sniff packet struct not event from ring buffer
 
 		// read and clean the srcport --> (procId, threadId)
-		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT],
+		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT],
 			srcPortGenTypeValue)
 
 		if err != nil {
@@ -741,7 +749,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 		var event events.ExfilRawPacketMirror
 		utils.Log("the dest port for packet transfer is ", uint16(destPort))
 
-		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterface.TcCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT], srcPortGenType)
+		ev, err := tun.EnsureCleanUpTunnelPortMap(tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGREES_CLONE_REDIRECT_MAP_NON_STANDARD_PORT], srcPortGenType)
 
 		if err != nil {
 			utils.Log("Error in deleting the map for this benign found packet", err)
