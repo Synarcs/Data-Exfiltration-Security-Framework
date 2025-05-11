@@ -65,7 +65,9 @@ func UpdateDomainNestedEgressCache(tld, fqdn string, isBlackListEgress bool) {
 			fdCache.Add(fqdn, true)
 		}
 	} else {
-		Log("Adding Benign Inferred Domain in the Cache with associated fqdn used for inference", tld)
+		if DEBUG {
+			Log("Adding Benign Inferred Domain in the Cache with associated fqdn used for inference", tld)
+		}
 		benginInternalinferdomainCache, fd := NODE_AGENT_REMOTE_INFERENCE_READ_THROUGH_CACHE.Get(tld)
 		if !fd {
 			newDomainCache, err := lru.New[string, bool](INFERENED_DOMAIN_CACHE_SIZE_PER_TLD)

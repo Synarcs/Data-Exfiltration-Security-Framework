@@ -24,7 +24,7 @@ func getFileChunks(fileSize int64, workers int) []ChunkRange {
 	chunkSize := fileSize / int64(workers)
 	var start int64 = 0
 
-	for i := 0; i < workers-1; i++ {
+	for range workers-1 {
 		chunks = append(chunks, ChunkRange{Start: start, End: start + chunkSize})
 		start += chunkSize
 	}

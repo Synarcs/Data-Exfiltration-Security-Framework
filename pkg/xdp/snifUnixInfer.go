@@ -77,6 +77,8 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 				PhysicalNodeIpv4: iface.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: iface.PhysicalNodeBridgeIpv6.String(),
 			})
+		} else {
+			utils.UpdateDomainNestedEgressCache(rawFeatures[index].Tld, rawFeatures[index].Fqdn, false)
 		}
 	}
 	return nil

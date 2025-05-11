@@ -44,13 +44,16 @@ struct __kernel_uid_struct_info {
 */
 static 
 __always_inline bool verify_kernel_version_support_task_comm() {
-    if (LINUX_VERSION_MAJOR >= LINUX_MAJOR_RELEASE_SUPPORT && LINUX_VERSION_SUBLEVEL >= LINUX_SUBRELEASE_SUPPORT) {
-        if (LINUX_VERSION_MAJOR == LINUX_MAJOR_RELEASE_SUPPORT && LINUX_VERSION_SUBLEVEL == LINUX_SUBRELEASE_SUPPORT)
+    if (LINUX_VERSION_MAJOR >= TC_TASK_LINUX_MAJOR_RELEASE_SUPPORT && LINUX_VERSION_SUBLEVEL >= TC_TASK_LINUX_SUBRELEASE_SUPPORT) {
+        if (LINUX_VERSION_MAJOR == TC_TASK_LINUX_MAJOR_RELEASE_SUPPORT && LINUX_VERSION_SUBLEVEL == TC_TASK_LINUX_SUBRELEASE_SUPPORT)
             return LINUX_VERSION_PATCHLEVEL >= 0;
         return true;
     }
     return false;
 }
+
+
+#define VERIFY_TCX_SUPPORT LINUX_VERSION_MAJOR >= TCX_LINUX_MAJOR_RELEASE_SUPPORT && LINUX_VERSION_SUBLEVEL >= TCX_LINUX_SUBRELEASE_SUPPORT
 
 /*
     Rely on kernel task comm for the tc running on whichever CPU handles and retrieve the process name and associated task struct

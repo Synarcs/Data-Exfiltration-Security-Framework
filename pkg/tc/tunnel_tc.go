@@ -80,11 +80,6 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
 }
 
-func GenerateCancellableSniffCtx() (context.Context, context.CancelFunc) {
-	ctx := context.Background()
-	return context.WithTimeout(ctx, time.Second*30)
-}
-
 // dont use spin lock user space write a map, and kernel always read it, and never write,
 var KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
 var KernelMaliciousTransferPortDelete sync.Mutex = sync.Mutex{}
@@ -168,7 +163,8 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 	// the sniff context uses same mutex for node agent to track detected malicous process and associated port
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
 		if _, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; !fd {
-			ctx, cancel := GenerateCancellableSniffCtx()
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
 			maliciousExfilPortIngressSniffCtxMap[maliciousDestPort] = &maliciousExfilPortIngressSniffCtx{
 				ctx:         ctx,
 				cancelSniff: cancel,

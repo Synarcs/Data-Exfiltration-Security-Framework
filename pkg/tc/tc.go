@@ -169,8 +169,17 @@ func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 	return nil
 }
 
-func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
+func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) error {
+	return nil
+}
 
+/*
+Relies on legacy TC via cls_bpf priority over legacy TC subsystem for bpf filter attachment
+*/
+func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
+	if utils.VerifyTcxSupportEgressLink() {
+		// TODO: Implement injection support over TCX vs prio based legacy TC cls_bpf filters
+	}
 	for _, link := range tc.Interfaces.PhysicalLinks {
 		utils.Log("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)

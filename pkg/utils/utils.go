@@ -136,6 +136,10 @@ const (
 	DEFAULT_IPV6_CHECKSUM_MAP = 0xff
 )
 
+func InitGlobalErrorControlChannel() chan error {
+	return make(chan error)
+}
+
 func ParseIp(saddr uint32) string {
 	var s1 uint8 = (uint8)(saddr>>24) & 0xFF
 	var s2 uint8 = (uint8)(saddr>>16) & 0xFF
@@ -260,6 +264,10 @@ func GenerateUniqueConsumerGroupId() string {
 	return hex.EncodeToString(rd)
 }
 
+func GetKernelReleaseSubVersions(release string) []string {
+	return strings.Split(release, ".")
+}
+
 func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 	release, err := GetKernelRelease()
 	if err != nil {
@@ -267,7 +275,7 @@ func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 		return false
 	}
 
-	release_patches := strings.Split(release, ".")
+	release_patches := GetKernelReleaseSubVersions(release)
 	majorRelease, err := strconv.Atoi(release_patches[0])
 	if err != nil {
 		return false
@@ -276,10 +284,24 @@ func VerifyKernelEgressTCClsactTaskCommSuppert() bool {
 	if err != nil {
 		return false
 	}
-	if majorRelease >= 6 && patchRelease >= 10 {
-		return true
+	return majorRelease >= 6 && patchRelease >= 10
+}
+
+func VerifyTcxSupportEgressLink() bool {
+	release, err := GetKernelRelease()
+	if err != nil {
+		return false
 	}
-	return false
+	release_patches := GetKernelReleaseSubVersions(release)
+	majorRelease, err := strconv.Atoi(release_patches[0])
+	if err != nil {
+		return false
+	}
+	patchRelease, err := strconv.Atoi(release_patches[1])
+	if err != nil {
+		return false
+	}
+	return majorRelease >= 6 && patchRelease >= 6
 }
 
 func ForceGcPacketBufferZerocopyUserspace() {

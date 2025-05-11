@@ -1989,7 +1989,12 @@ static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 }
 
 
+// the agent loader in userspace will load the direction via bpf link or tc ip route2 prio or tcx 
+#if !VERIFY_TCX_SUPPORT
+SEC("tcx")
+#else 
 SEC("tc")
+#endif
 int classify(struct __sk_buff *skb){
     
     struct skb_cursor cursor; 

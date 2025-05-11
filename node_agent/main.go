@@ -40,10 +40,6 @@ type KernelCleanHooks struct {
 	cliSock   *cli.NodeDaemonCli
 }
 
-func initGlobalErrorControlChannel() chan error {
-	return make(chan error)
-}
-
 // return a channel map for other events hook the node agent must inject post successfull injection of the required prog of interest
 func initKernelProgInjectComptionEvent() map[string]chan bool {
 	return map[string]chan bool{
@@ -268,7 +264,7 @@ func main() {
 		return
 	}
 
-	globalErrorKernelHandlerChannel := initGlobalErrorControlChannel()
+	globalErrorKernelHandlerChannel := utils.InitGlobalErrorControlChannel()
 	var agentConfigLoader conf.AgentConfig = &conf.Config{}
 	agentConfigLoader.ReadNodeAgentConfig()
 	globalConfig := agentConfigLoader.GetAgentConfig()
