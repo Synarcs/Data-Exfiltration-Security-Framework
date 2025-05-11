@@ -130,7 +130,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 
 ## Conferences
 * Accepted and was presented at [Netdev 0x19](https://netdevconf.info/0x19/sessions/bof/real-time-prevention-of-dns-based-data-exfiltration-bof.html) for innovation in Linux kernel advancing DNS security.
-* Accepted and will be presented at [Linux Security Summit](https://events.linuxfoundation.org/linux-security-summit-north-america/program/schedule/) for innovation in Linux kernel intersecting Kernel datapath, LSM, kprobes, tracepoints for advanced endpoint security solutions.
+* Accepted and will be presented at [Linux Security Summit](https://sched.co/1zamI) for innovation in Linux kernel intersecting Kernel datapath, LSM, kprobes, tracepoints for advanced endpoint security solutions.
 
 
 ## Disclaimer
