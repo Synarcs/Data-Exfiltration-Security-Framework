@@ -65,23 +65,17 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 
 		// calls the python unix socket for inferenceing against the onnx loaded deep learning model
 		processRemoteUnixInference := func(featureVectorsFloat [][]float32, direction bool) (bool, error) {
+
+			if StaticRuntimeMaliciousDomainChecks(dnsFeatures) {
+				return false, nil
+			}
+
 			client, conn, err := GetInferenceUnixClient(direction)
 			if err != nil {
 				panic(err.Error())
 			}
 
 			defer conn.Close()
-
-			for _, dnsFeature := range dnsFeatures {
-				if utils.GetKeyPresentInEgressCache(dnsFeature.Tld) {
-					// consider malicious if any section of DNS packet contains this malicious domain TLD and already blacklisted in egress cache
-					return false, nil
-				}
-				if utils.IngDeleteDomainBlackListInCache(dnsFeature.Tld) {
-					// if found in ingress cache as the tld should be blacklisted and dropped
-					return false, nil
-				}
-			}
 
 			inferRequest := InferenceRequest{
 				// pass all the 8 features which define the input layer for the inference in the onnx model
@@ -123,15 +117,19 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				// add in the threat cache map for nested lru
 				// marked all the dns features as malicious
 				for _, dnsFeature := range dnsFeatures {
-					utils.UpdateDomainBlacklistInEgressCache(dnsFeature.Tld, dnsFeature.Fqdn)
+					utils.UpdateDomainNestedEgressCache(dnsFeature.Tld, dnsFeature.Fqdn, true)
 				}
 				return false, nil
+			}
+			for _, dnsFeature := range dnsFeatures {
+				utils.UpdateDomainNestedEgressCache(dnsFeature.Tld, dnsFeature.Fqdn, false)
 			}
 			return true, nil
 		}
 
 		featureVectorsFloat := GenerateFloatVectors(dnsFeatures, onnx)
-		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING {
+		if onnx.StaticRuntimeChecks(featureVectorsFloat, dnsFeatures[0].IsEgress) == DEEP_LEXICAL_INFERENCING &&
+			!StaticRuntimeBenignDomainChecks((dnsFeatures)) {
 			eval, err := processRemoteUnixInference(featureVectorsFloat, direction)
 			if err != nil {
 				utils.Logger.Printf("Errpr in processing inference from remote unix socket  %v", err)

@@ -65,7 +65,7 @@ var (
 var mapsToPinSharedProcKillMap []string
 
 var (
-	ATTACHED_QDISC_HIGHER_PRIO_ERROR = errors.New("Error the eBPF Exfil security framework cannot be attached with existing qdisc attached and having a TC egress filter with lowest priority, configure the filter to run with highest priority closest to default qdisc ")
+	errAttachedQdiscHigherPrio = errors.New("error: the eBPF Exfil security framework cannot be attached with existing qdisc attached and having a TC egress filter with lowest priority, configure the filter to run with highest priority closest to default qdisc")
 )
 
 // provide all input required to inject kernel tc qdisc eBPF programs in kernel
@@ -215,7 +215,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			}
 			if currPrio == 1 && currHandle != netlink.MakeHandle(0xffff, 0) {
 				// ensure the filter is removed and reattached with higher priority to ensure
-				utils.Log(ATTACHED_QDISC_HIGHER_PRIO_ERROR.Error())
+				utils.Log(errAttachedQdiscHigherPrio.Error())
 				panic(fmt.Errorf("the eBPF DNS exfiltration framework must have lower prio pre execution of any CNI attached tc hooks"))
 			} else if currPrio == 1 && currHandle == netlink.MakeHandle(0xffff, 0) {
 				goto ATTACH_SECURITY_FILTER
@@ -798,10 +798,11 @@ processPacketForNonAggresiveDPI:
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
-	errorChannel chan<- error) error {
+	errorChannel chan<- error) {
 
 	if err := ctx.Err(); err != nil {
-		return err
+		errorChannel <- err
+		return
 	}
 
 	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
@@ -812,14 +813,22 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 	defer cap.Close()
 
 	utils.Log("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer DNS protocol from Node agent owned veth bridge driver")
+	if err := cap.SetDirection(pcap.DirectionIn); err != nil {
+		utils.Logger.Fatalf("Error setting BPF direction filter for netdev: %v", err)
+		errorChannel <- err
+		return
+	}
+
 	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
 		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
+		errorChannel <- err
+		return
 	}
+
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
 		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap, false) // snice processed over bridge
 	}
-	return nil
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Context, link netlink.Link, errorChannel chan error) {
@@ -834,8 +843,15 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	}
 	defer cap.Close()
 
+	if err := cap.SetDirection(pcap.DirectionIn); err != nil {
+		utils.Logger.Fatalf("Error setting BPF direction filter for netdev: %v", err)
+		errorChannel <- err
+		return
+	}
+
 	if err := cap.SetBPFFilter("tcp dst port 53"); err != nil {
 		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
+		errorChannel <- err
 	}
 
 	for pack := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {

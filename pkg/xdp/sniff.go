@@ -50,7 +50,8 @@ func NewIngressSniffer(config *IngressSnifferConfig) *IngressSniffHandler {
 func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
 	rawFeatures []model.DNSFeatures) error {
 
-	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING {
+	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING &&
+		!model.StaticRuntimeBenignDomainChecks(rawFeatures) {
 		IngressRemoteInferHandler(features, rawFeatures, ing.IfaceHandler, ing.StreamClient)
 	}
 	return nil
@@ -64,9 +65,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 	if eth == nil {
 		return fmt.Errorf("no ethernet layer")
 	}
-
-	// var ipPacket *layers.IPv4
-	// var ipv6Packet *layers.IPv6
 
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 	if ipLayer == nil {

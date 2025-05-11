@@ -330,29 +330,25 @@ struct dns_volume_stats {
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(__ip)                                   \
         do {                                                                              \
-            if (L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {    \
-                if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
-                    if (DEBUG)  {                                                         \
-                        bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
-                    }                                                                     \
-                    return TC_DROP;                                                       \
-                }                                                                         \
-            }                                                                             \
+            if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
+                if (DEBUG)  {                                                         \
+                    bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
+                }                                                                     \
+                return TC_DROP;                                                       \
+            }                                                                         \
         } while(0)                                                                      
 #endif
 
 // this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv6 header 
-#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
+#if !L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
     #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(__ip)                                   \ 
     do {                                                                                  \
-            if (L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS) {    \
-                if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
-                    if (DEBUG) {                                                          \
-                        bpf_printk("dropping traffic for malicious c2 ipv6 remote c2");   \
-                    }                                                                     \
-                    return TC_DROP;                                                       \
-                }                                                                         \
-            }                                                                             \
+        if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
+            if (DEBUG) {                                                          \
+                bpf_printk("dropping traffic for malicious c2 ipv6 remote c2");   \
+            }                                                                     \
+            return TC_DROP;                                                       \
+        }                                                                         \
     } while(0)        
 #endif 
 

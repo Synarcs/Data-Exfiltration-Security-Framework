@@ -27,7 +27,8 @@ CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
 ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
 LLVM_IR_ARGS := -S -emit-llvm 
 KERNEL_HEADERS := /usr/src/linux-headers-$(shell uname -r)
-BPF_CFLAGS := -target bpf \
+TARGET := bpf
+BPF_CFLAGS := -target $(TARGET) \
               -D__TARGET_ARCH_$(ARCH) \
               -I/usr/include/$(shell uname -m)-linux-gnu \
               -I$(KERNEL_HEADERS)

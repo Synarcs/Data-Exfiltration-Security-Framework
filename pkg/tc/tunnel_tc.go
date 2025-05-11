@@ -510,7 +510,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 
 				// add the sld in cache in user space to stop reference over again to the ONNX inference server
 				for _, feature := range features {
-					utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
+					utils.UpdateDomainNestedEgressCache(feature.Tld, feature.Fqdn, true)
 				}
 
 				utils.Log("Updating the process as it was detected carrying out breach ", ev)
@@ -568,7 +568,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		})
 
 		for _, feature := range features {
-			utils.UpdateDomainBlacklistInEgressCache(feature.Tld, feature.Fqdn)
+			utils.UpdateDomainNestedEgressCache(feature.Tld, feature.Fqdn, true)
 		}
 
 		utils.Log("Updating the process as it was detected carrying out breach ", ev)

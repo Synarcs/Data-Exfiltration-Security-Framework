@@ -127,7 +127,9 @@ type Utsname struct {
 
 // node agent caching from the userspace memory and not kernel heap pointed onto the kernel map FD
 const (
-	MAX_NODE_AGENT_CACHE_SIZE = 1000
+	MAX_NODE_AGENT_CACHE_SIZE           = 1000
+	INFERENED_DOMAIN_CACHE_SIZE_PER_TLD = 1000
+	MAX_NODE_AGENT_CACHE_LOOKUP_SIZE    = 1000
 )
 
 const (

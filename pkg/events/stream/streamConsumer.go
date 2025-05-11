@@ -147,7 +147,7 @@ func (c *StreamConsumer) ControllerInferMalTopicConsumer(ctx context.Context,
 
 		if !statefulAnalyzedStreeamEvent.IsForcedUnblock {
 			if egress := utils.GetKeyPresentInEgressCache(statefulAnalyzedStreeamEvent.Tld); !egress {
-				utils.UpdateDomainBlacklistInEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn)
+				utils.UpdateDomainNestedEgressCache(statefulAnalyzedStreeamEvent.Tld, statefulAnalyzedStreeamEvent.Fqdn, true)
 			}
 
 			if ingress := utils.IngGetKeyPresentInCache(statefulAnalyzedStreeamEvent.Tld); !ingress {
