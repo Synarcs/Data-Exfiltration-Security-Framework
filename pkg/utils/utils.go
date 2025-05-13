@@ -298,10 +298,10 @@ func VerifyTcxSupportEgressLink() bool {
 		return false
 	}
 	patchRelease, err := strconv.Atoi(release_patches[1])
-	if err != nil {
+	if err != nil {	
 		return false
 	}
-	return majorRelease >= 6 && patchRelease >= 6
+	return majorRelease >= 6 && patchRelease >= 6 && false // for now return fale until kernel prorga with eBPF section is modified
 }
 
 func ForceGcPacketBufferZerocopyUserspace() {

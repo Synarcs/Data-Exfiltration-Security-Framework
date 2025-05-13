@@ -21,6 +21,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -29,32 +30,46 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type TCHandler struct {
-	Interfaces      *netinet.NetIface
-	Prog            *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
-	TcCollection    *ebpf.Collection // ebpf tc program collection order spec
-	DnsPacketGen    *model.DnsPacketGen
-	OnnxLoadedModel *model.OnnxModel
+type (
+	TCHandler struct {
+		Interfaces      *netinet.NetIface
+		Prog            *ebpf.Program    // ebpf program for tc with clsact class BPF_PROG_TYPE_CLS_ACT
+		TcCollection    *ebpf.Collection // ebpf tc program collection order spec
+		DnsPacketGen    *model.DnsPacketGen
+		OnnxLoadedModel *model.OnnxModel
 
-	TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
-	GlobalErrorKernelHandlerChannel chan error     // handles all control channel created by main to kill any kernel code if found runtime panics
+		TcTunnelNonStandardPortScan     *TCCloneTunnel // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
+		GlobalErrorKernelHandlerChannel chan error     // handles all control channel created by main to kill any kernel code if found runtime panics
 
-	IsEgressXdpSupport   bool
-	TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
+		IsEgressXdpSupport   bool
+		TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
 
-	Hash *crypto.Hash // skb agent crypto hash for agent integrity of skb over each redirect
+		Hash *crypto.Hash // skb agent crypto hash for agent integrity of skb over each redirect
 
-	// the node agent consumer will ensure to send malicious ip address over this channel for node agent to inject them in kernel
-	GlobalMalC2L3addressChannelIpv4 chan net.IP
-	GlobalMalC2L3addressChannelIpv6 chan net.IP
+		// the node agent consumer will ensure to send malicious ip address over this channel for node agent to inject them in kernel
+		GlobalMalC2L3addressChannelIpv4 chan net.IP
+		GlobalMalC2L3addressChannelIpv6 chan net.IP
 
-	TaskCommTCEgressKernelSupport bool
-	config                        conf.AgentConfig
+		TaskCommTCEgressKernelSupport bool
+		config                        conf.AgentConfig
 
-	CryptoAgentLSMHandler *crypto.CryptoBpfLsm
+		CryptoAgentLSMHandler *crypto.CryptoBpfLsm
 
-	HasDiffPriorityQdiscFilter bool // default CNI is running qdisc filter for k8s node to ndoe communication, must disable XDP for egress send and rely on AF_PACKET for TC and eBPF filter to run
-}
+		HasDiffPriorityQdiscFilter bool // default CNI is running qdisc filter for k8s node to ndoe communication, must disable XDP for egress send and rely on AF_PACKET for TC and eBPF filter to run
+		TCXEgressLinks             []link.Link
+	}
+
+	// provide all input required to inject kernel tc qdisc eBPF programs in kernel
+	KernelTcInjectConfig struct {
+		Iface                           *netinet.NetIface
+		OnnxModel                       *model.OnnxModel
+		StreamClient                    *stream.StreamProducer
+		GlobalErrorKernelHandlerChannel chan error
+		AgentHash                       *crypto.Hash
+		AgentConfig                     conf.AgentConfig
+		CryptoAgentLSMHandler           *crypto.CryptoBpfLsm
+	}
+)
 
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
@@ -67,17 +82,6 @@ var mapsToPinSharedProcKillMap []string
 var (
 	errAttachedQdiscHigherPrio = errors.New("error: the eBPF Exfil security framework cannot be attached with existing qdisc attached and having a TC egress filter with lowest priority, configure the filter to run with highest priority closest to default qdisc")
 )
-
-// provide all input required to inject kernel tc qdisc eBPF programs in kernel
-type KernelTcInjectConfig struct {
-	Iface                           *netinet.NetIface
-	OnnxModel                       *model.OnnxModel
-	StreamClient                    *stream.StreamProducer
-	GlobalErrorKernelHandlerChannel chan error
-	AgentHash                       *crypto.Hash
-	AgentConfig                     conf.AgentConfig
-	CryptoAgentLSMHandler           *crypto.CryptoBpfLsm
-}
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
@@ -170,6 +174,27 @@ func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 }
 
 func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) error {
+	var tcxLinks []link.Link
+	for _, netlink := range tc.Interfaces.PhysicalLinks {
+		// the DNS security rpograms must have highest priority to be executed first over cls_bpf egress filters list  attached to netdev
+		ln, err := link.AttachTCX(link.TCXOptions{
+			Interface: netlink.Attrs().Index,
+			Program:   prog,
+			Attach:    ebpf.AttachTCXEgress,
+			Anchor:    link.Head(),
+		})
+		if err != nil {
+			goto clean
+		}
+		tcxLinks = append(tcxLinks, ln)
+	}
+	return nil
+clean:
+	for _, ln := range tcxLinks {
+		if err := ln.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -933,6 +958,15 @@ func (tc *TCHandler) CloseSocketFd() {
 func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 	// used for removal of tc qdisc and all nested filters to parent qdisc class/ classless filter form all the host interfacee
 	defer tc.CloseSocketFd()
+
+	if utils.VerifyTcxSupportEgressLink() {
+		for _, link := range tc.TCXEgressLinks {
+			if err := link.Close(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 
 	if !tc.HasDiffPriorityQdiscFilter {
 		for _, link := range tc.Interfaces.PhysicalLinks {

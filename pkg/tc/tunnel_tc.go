@@ -28,27 +28,29 @@ import (
 )
 
 // the tc clone is a child handler which same eBPF tc kernel program enforce dns exfil security with only different of preventing exfiltration over random ports
-type TCCloneTunnel struct {
-	IfaceHandler                          *netinet.NetIface
-	GlobalKernelErrorChannel              chan error
-	PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
-	StreamClient                          *stream.StreamProducer
-	Onnx                                  *model.OnnxModel
+type (
+	TCCloneTunnel struct {
+		IfaceHandler                          *netinet.NetIface
+		GlobalKernelErrorChannel              chan error
+		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
+		StreamClient                          *stream.StreamProducer
+		Onnx                                  *model.OnnxModel
 
-	TaskCommTCEgressKernelSupport bool
-	IngressTunnelSniffer          *xdp.IngressSniffHandler
+		TaskCommTCEgressKernelSupport bool
+		IngressTunnelSniffer          *xdp.IngressSniffHandler
 
-	AgentOperationPassiveMode bool // passive DPI stop breaches over both random and default UDP port over DNS
-}
+		AgentOperationPassiveMode bool // passive DPI stop breaches over both random and default UDP port over DNS
+	}
 
-type TCCloneTunnelConfig struct {
-	PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
-	Iface                                 *netinet.NetIface
-	GlobalErrorChannel                    chan error
-	StreamClient                          *stream.StreamProducer
-	Onnx                                  *model.OnnxModel
-	isPassiveStandardDNSPortUDPTransfer   bool
-}
+	TCCloneTunnelConfig struct {
+		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
+		Iface                                 *netinet.NetIface
+		GlobalErrorChannel                    chan error
+		StreamClient                          *stream.StreamProducer
+		Onnx                                  *model.OnnxModel
+		isPassiveStandardDNSPortUDPTransfer   bool
+	}
+)
 
 // this is meant for stopping exfiltration over random ports
 // the root kernel single tc handler is advacned to stop exfiltration over both standard and random UDP ports

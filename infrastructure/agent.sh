@@ -56,6 +56,12 @@ sudo apt update -y && sudo apt install -y \
     keyutils \
     libkeyutils-dev 
 
+# dependencies for pprof flamegraph and other graph visualization support 
+pprof=1
+if [[ $pprof -eq 1 ]]; then 
+    sudo apt install -y graphviz
+fi 
+
 # Install x86_64 specific libraries
 arch=$(uname -m)
 if [ "$arch" = "amd64" ]; then
