@@ -43,7 +43,8 @@ func exfil_client() {
 	}
 	defer conn.Close()
 
-	client := pb.NewNodeAgentServiceClient(conn)
+	client := pb.NewNodeAgentFeatureServiceClient(conn)
+	_ = pb.NewNodeAgentCryptoServiceClient(conn)
 	val, err := client.GetExfilDomains(context.Background(), &pb.ExfilDomains{
 		Tld:         "com",
 		Domain:      "google.com",

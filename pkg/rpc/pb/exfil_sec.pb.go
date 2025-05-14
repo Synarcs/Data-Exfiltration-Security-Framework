@@ -67,6 +67,55 @@ func (DNS_MALICIOUS_FLAGS) EnumDescriptor() ([]byte, []int) {
 	return file_exfil_sec_proto_rawDescGZIP(), []int{0}
 }
 
+type KERNEL_KEYRING_TYPE int32
+
+const (
+	KERNEL_KEYRING_TYPE_KEYCTL_REVOKE KERNEL_KEYRING_TYPE = 0
+	KERNEL_KEYRING_TYPE_KEYCTL_REJECT KERNEL_KEYRING_TYPE = 1
+	KERNEL_KEYRING_TYPE_KEYCTL_CLEAR  KERNEL_KEYRING_TYPE = 2
+)
+
+// Enum value maps for KERNEL_KEYRING_TYPE.
+var (
+	KERNEL_KEYRING_TYPE_name = map[int32]string{
+		0: "KEYCTL_REVOKE",
+		1: "KEYCTL_REJECT",
+		2: "KEYCTL_CLEAR",
+	}
+	KERNEL_KEYRING_TYPE_value = map[string]int32{
+		"KEYCTL_REVOKE": 0,
+		"KEYCTL_REJECT": 1,
+		"KEYCTL_CLEAR":  2,
+	}
+)
+
+func (x KERNEL_KEYRING_TYPE) Enum() *KERNEL_KEYRING_TYPE {
+	p := new(KERNEL_KEYRING_TYPE)
+	*p = x
+	return p
+}
+
+func (x KERNEL_KEYRING_TYPE) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (KERNEL_KEYRING_TYPE) Descriptor() protoreflect.EnumDescriptor {
+	return file_exfil_sec_proto_enumTypes[1].Descriptor()
+}
+
+func (KERNEL_KEYRING_TYPE) Type() protoreflect.EnumType {
+	return &file_exfil_sec_proto_enumTypes[1]
+}
+
+func (x KERNEL_KEYRING_TYPE) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use KERNEL_KEYRING_TYPE.Descriptor instead.
+func (KERNEL_KEYRING_TYPE) EnumDescriptor() ([]byte, []int) {
+	return file_exfil_sec_proto_rawDescGZIP(), []int{1}
+}
+
 type ExfilDomains struct {
 	state          protoimpl.MessageState         `protogen:"open.v1"`
 	Domain         string                         `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
@@ -143,29 +192,27 @@ func (x *ExfilDomains) GetStatus() map[string]DNS_MALICIOUS_FLAGS {
 	return nil
 }
 
-type ElfSignature struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
-	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=publicKey,proto3" json:"publicKey,omitempty"`
-	SignatureHash []byte                 `protobuf:"bytes,3,opt,name=signatureHash,proto3" json:"signatureHash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+type ElfSignatureRequest struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	EBPFProgramPayload []byte                 `protobuf:"bytes,1,opt,name=eBPFProgramPayload,proto3" json:"eBPFProgramPayload,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
-func (x *ElfSignature) Reset() {
-	*x = ElfSignature{}
+func (x *ElfSignatureRequest) Reset() {
+	*x = ElfSignatureRequest{}
 	mi := &file_exfil_sec_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ElfSignature) String() string {
+func (x *ElfSignatureRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ElfSignature) ProtoMessage() {}
+func (*ElfSignatureRequest) ProtoMessage() {}
 
-func (x *ElfSignature) ProtoReflect() protoreflect.Message {
+func (x *ElfSignatureRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_exfil_sec_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -177,28 +224,170 @@ func (x *ElfSignature) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ElfSignature.ProtoReflect.Descriptor instead.
-func (*ElfSignature) Descriptor() ([]byte, []int) {
+// Deprecated: Use ElfSignatureRequest.ProtoReflect.Descriptor instead.
+func (*ElfSignatureRequest) Descriptor() ([]byte, []int) {
 	return file_exfil_sec_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ElfSignature) GetSignature() []byte {
+func (x *ElfSignatureRequest) GetEBPFProgramPayload() []byte {
+	if x != nil {
+		return x.EBPFProgramPayload
+	}
+	return nil
+}
+
+type ElfSignatureResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
+	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=publicKey,proto3" json:"publicKey,omitempty"`
+	SignatureHash []byte                 `protobuf:"bytes,3,opt,name=signatureHash,proto3" json:"signatureHash,omitempty"`
+	SignatureOid  int32                  `protobuf:"varint,4,opt,name=signatureOid,proto3" json:"signatureOid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ElfSignatureResponse) Reset() {
+	*x = ElfSignatureResponse{}
+	mi := &file_exfil_sec_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ElfSignatureResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ElfSignatureResponse) ProtoMessage() {}
+
+func (x *ElfSignatureResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ElfSignatureResponse.ProtoReflect.Descriptor instead.
+func (*ElfSignatureResponse) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ElfSignatureResponse) GetSignature() []byte {
 	if x != nil {
 		return x.Signature
 	}
 	return nil
 }
 
-func (x *ElfSignature) GetPublicKey() []byte {
+func (x *ElfSignatureResponse) GetPublicKey() []byte {
 	if x != nil {
 		return x.PublicKey
 	}
 	return nil
 }
 
-func (x *ElfSignature) GetSignatureHash() []byte {
+func (x *ElfSignatureResponse) GetSignatureHash() []byte {
 	if x != nil {
 		return x.SignatureHash
+	}
+	return nil
+}
+
+func (x *ElfSignatureResponse) GetSignatureOid() int32 {
+	if x != nil {
+		return x.SignatureOid
+	}
+	return 0
+}
+
+type AgentKernelKeyringControllerCommandRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cmd           []KERNEL_KEYRING_TYPE  `protobuf:"varint,1,rep,packed,name=cmd,proto3,enum=exfil_kernel.KERNEL_KEYRING_TYPE" json:"cmd,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentKernelKeyringControllerCommandRequest) Reset() {
+	*x = AgentKernelKeyringControllerCommandRequest{}
+	mi := &file_exfil_sec_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentKernelKeyringControllerCommandRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentKernelKeyringControllerCommandRequest) ProtoMessage() {}
+
+func (x *AgentKernelKeyringControllerCommandRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentKernelKeyringControllerCommandRequest.ProtoReflect.Descriptor instead.
+func (*AgentKernelKeyringControllerCommandRequest) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AgentKernelKeyringControllerCommandRequest) GetCmd() []KERNEL_KEYRING_TYPE {
+	if x != nil {
+		return x.Cmd
+	}
+	return nil
+}
+
+type AgentKernelKeyringControllerCommandResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Response      []bool                 `protobuf:"varint,1,rep,packed,name=response,proto3" json:"response,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentKernelKeyringControllerCommandResponse) Reset() {
+	*x = AgentKernelKeyringControllerCommandResponse{}
+	mi := &file_exfil_sec_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentKernelKeyringControllerCommandResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentKernelKeyringControllerCommandResponse) ProtoMessage() {}
+
+func (x *AgentKernelKeyringControllerCommandResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentKernelKeyringControllerCommandResponse.ProtoReflect.Descriptor instead.
+func (*AgentKernelKeyringControllerCommandResponse) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AgentKernelKeyringControllerCommandResponse) GetResponse() []bool {
+	if x != nil {
+		return x.Response
 	}
 	return nil
 }
@@ -212,7 +401,7 @@ type ExfillSecurityLengthLimits struct {
 
 func (x *ExfillSecurityLengthLimits) Reset() {
 	*x = ExfillSecurityLengthLimits{}
-	mi := &file_exfil_sec_proto_msgTypes[2]
+	mi := &file_exfil_sec_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -224,7 +413,7 @@ func (x *ExfillSecurityLengthLimits) String() string {
 func (*ExfillSecurityLengthLimits) ProtoMessage() {}
 
 func (x *ExfillSecurityLengthLimits) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[2]
+	mi := &file_exfil_sec_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -237,7 +426,7 @@ func (x *ExfillSecurityLengthLimits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExfillSecurityLengthLimits.ProtoReflect.Descriptor instead.
 func (*ExfillSecurityLengthLimits) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{2}
+	return file_exfil_sec_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ExfillSecurityLengthLimits) GetDomainrangeExfilLimits() map[int32]int32 {
@@ -256,7 +445,7 @@ type ExfilDomainsLength struct {
 
 func (x *ExfilDomainsLength) Reset() {
 	*x = ExfilDomainsLength{}
-	mi := &file_exfil_sec_proto_msgTypes[3]
+	mi := &file_exfil_sec_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -268,7 +457,7 @@ func (x *ExfilDomainsLength) String() string {
 func (*ExfilDomainsLength) ProtoMessage() {}
 
 func (x *ExfilDomainsLength) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[3]
+	mi := &file_exfil_sec_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -281,7 +470,7 @@ func (x *ExfilDomainsLength) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExfilDomainsLength.ProtoReflect.Descriptor instead.
 func (*ExfilDomainsLength) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{3}
+	return file_exfil_sec_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ExfilDomainsLength) GetLen() int64 {
@@ -304,11 +493,18 @@ const file_exfil_sec_proto_rawDesc = "" +
 	"\x06status\x18\x05 \x03(\v2&.exfil_kernel.ExfilDomains.StatusEntryR\x06status\x1a\\\n" +
 	"\vStatusEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x127\n" +
-	"\x05value\x18\x02 \x01(\x0e2!.exfil_kernel.DNS_MALICIOUS_FLAGSR\x05value:\x028\x01\"p\n" +
-	"\fElfSignature\x12\x1c\n" +
+	"\x05value\x18\x02 \x01(\x0e2!.exfil_kernel.DNS_MALICIOUS_FLAGSR\x05value:\x028\x01\"E\n" +
+	"\x13ElfSignatureRequest\x12.\n" +
+	"\x12eBPFProgramPayload\x18\x01 \x01(\fR\x12eBPFProgramPayload\"\x9c\x01\n" +
+	"\x14ElfSignatureResponse\x12\x1c\n" +
 	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1c\n" +
 	"\tpublicKey\x18\x02 \x01(\fR\tpublicKey\x12$\n" +
-	"\rsignatureHash\x18\x03 \x01(\fR\rsignatureHash\"\xe5\x01\n" +
+	"\rsignatureHash\x18\x03 \x01(\fR\rsignatureHash\x12\"\n" +
+	"\fsignatureOid\x18\x04 \x01(\x05R\fsignatureOid\"a\n" +
+	"*AgentKernelKeyringControllerCommandRequest\x123\n" +
+	"\x03cmd\x18\x01 \x03(\x0e2!.exfil_kernel.KERNEL_KEYRING_TYPER\x03cmd\"I\n" +
+	"+AgentKernelKeyringControllerCommandResponse\x12\x1a\n" +
+	"\bresponse\x18\x01 \x03(\bR\bresponse\"\xe5\x01\n" +
 	"\x1aExfillSecurityLengthLimits\x12|\n" +
 	"\x16domainrangeExfilLimits\x18\x01 \x03(\v2D.exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntryR\x16domainrangeExfilLimits\x1aI\n" +
 	"\x1bDomainrangeExfilLimitsEntry\x12\x10\n" +
@@ -319,11 +515,18 @@ const file_exfil_sec_proto_rawDesc = "" +
 	"\x13DNS_MALICIOUS_FLAGS\x12\r\n" +
 	"\tMALICIOUS\x10\x00\x12\x0e\n" +
 	"\n" +
-	"SUSPICIOUS\x10\x012\xa3\x02\n" +
-	"\x10NodeAgentService\x12K\n" +
+	"SUSPICIOUS\x10\x01*M\n" +
+	"\x13KERNEL_KEYRING_TYPE\x12\x11\n" +
+	"\rKEYCTL_REVOKE\x10\x00\x12\x11\n" +
+	"\rKEYCTL_REJECT\x10\x01\x12\x10\n" +
+	"\fKEYCTL_CLEAR\x10\x022\xaa\x02\n" +
+	"\x17NodeAgentFeatureService\x12K\n" +
 	"\x0fGetExfilDomains\x12\x1a.exfil_kernel.ExfilDomains\x1a\x1a.exfil_kernel.ExfilDomains0\x01\x12U\n" +
 	"\x15GenExfilDomainsLength\x12\x1a.exfil_kernel.ExfilDomains\x1a .exfil_kernel.ExfilDomainsLength\x12k\n" +
-	"\x11BidirstreamLimits\x12(.exfil_kernel.ExfillSecurityLengthLimits\x1a(.exfil_kernel.ExfillSecurityLengthLimits(\x010\x01B9Z7github.com/Synarcs/Data-Exfiltration-Security-Frameworkb\x06proto3"
+	"\x11BidirstreamLimits\x12(.exfil_kernel.ExfillSecurityLengthLimits\x1a(.exfil_kernel.ExfillSecurityLengthLimits(\x010\x012\x82\x02\n" +
+	"\x16NodeAgentCryptoService\x12Y\n" +
+	"\x10EBPFElfSignature\x12!.exfil_kernel.ElfSignatureRequest\x1a\".exfil_kernel.ElfSignatureResponse\x12\x8c\x01\n" +
+	"\x15EBPFKeyringController\x128.exfil_kernel.AgentKernelKeyringControllerCommandRequest\x1a9.exfil_kernel.AgentKernelKeyringControllerCommandResponseB9Z7github.com/Synarcs/Data-Exfiltration-Security-Frameworkb\x06proto3"
 
 var (
 	file_exfil_sec_proto_rawDescOnce sync.Once
@@ -337,32 +540,41 @@ func file_exfil_sec_proto_rawDescGZIP() []byte {
 	return file_exfil_sec_proto_rawDescData
 }
 
-var file_exfil_sec_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_exfil_sec_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_exfil_sec_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_exfil_sec_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_exfil_sec_proto_goTypes = []any{
-	(DNS_MALICIOUS_FLAGS)(0),           // 0: exfil_kernel.DNS_MALICIOUS_FLAGS
-	(*ExfilDomains)(nil),               // 1: exfil_kernel.ExfilDomains
-	(*ElfSignature)(nil),               // 2: exfil_kernel.ElfSignature
-	(*ExfillSecurityLengthLimits)(nil), // 3: exfil_kernel.ExfillSecurityLengthLimits
-	(*ExfilDomainsLength)(nil),         // 4: exfil_kernel.ExfilDomainsLength
-	nil,                                // 5: exfil_kernel.ExfilDomains.StatusEntry
-	nil,                                // 6: exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntry
+	(DNS_MALICIOUS_FLAGS)(0),                            // 0: exfil_kernel.DNS_MALICIOUS_FLAGS
+	(KERNEL_KEYRING_TYPE)(0),                            // 1: exfil_kernel.KERNEL_KEYRING_TYPE
+	(*ExfilDomains)(nil),                                // 2: exfil_kernel.ExfilDomains
+	(*ElfSignatureRequest)(nil),                         // 3: exfil_kernel.ElfSignatureRequest
+	(*ElfSignatureResponse)(nil),                        // 4: exfil_kernel.ElfSignatureResponse
+	(*AgentKernelKeyringControllerCommandRequest)(nil),  // 5: exfil_kernel.AgentKernelKeyringControllerCommandRequest
+	(*AgentKernelKeyringControllerCommandResponse)(nil), // 6: exfil_kernel.AgentKernelKeyringControllerCommandResponse
+	(*ExfillSecurityLengthLimits)(nil),                  // 7: exfil_kernel.ExfillSecurityLengthLimits
+	(*ExfilDomainsLength)(nil),                          // 8: exfil_kernel.ExfilDomainsLength
+	nil,                                                 // 9: exfil_kernel.ExfilDomains.StatusEntry
+	nil,                                                 // 10: exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntry
 }
 var file_exfil_sec_proto_depIdxs = []int32{
-	5, // 0: exfil_kernel.ExfilDomains.status:type_name -> exfil_kernel.ExfilDomains.StatusEntry
-	6, // 1: exfil_kernel.ExfillSecurityLengthLimits.domainrangeExfilLimits:type_name -> exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntry
-	0, // 2: exfil_kernel.ExfilDomains.StatusEntry.value:type_name -> exfil_kernel.DNS_MALICIOUS_FLAGS
-	1, // 3: exfil_kernel.NodeAgentService.GetExfilDomains:input_type -> exfil_kernel.ExfilDomains
-	1, // 4: exfil_kernel.NodeAgentService.GenExfilDomainsLength:input_type -> exfil_kernel.ExfilDomains
-	3, // 5: exfil_kernel.NodeAgentService.BidirstreamLimits:input_type -> exfil_kernel.ExfillSecurityLengthLimits
-	1, // 6: exfil_kernel.NodeAgentService.GetExfilDomains:output_type -> exfil_kernel.ExfilDomains
-	4, // 7: exfil_kernel.NodeAgentService.GenExfilDomainsLength:output_type -> exfil_kernel.ExfilDomainsLength
-	3, // 8: exfil_kernel.NodeAgentService.BidirstreamLimits:output_type -> exfil_kernel.ExfillSecurityLengthLimits
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	9,  // 0: exfil_kernel.ExfilDomains.status:type_name -> exfil_kernel.ExfilDomains.StatusEntry
+	1,  // 1: exfil_kernel.AgentKernelKeyringControllerCommandRequest.cmd:type_name -> exfil_kernel.KERNEL_KEYRING_TYPE
+	10, // 2: exfil_kernel.ExfillSecurityLengthLimits.domainrangeExfilLimits:type_name -> exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntry
+	0,  // 3: exfil_kernel.ExfilDomains.StatusEntry.value:type_name -> exfil_kernel.DNS_MALICIOUS_FLAGS
+	2,  // 4: exfil_kernel.NodeAgentFeatureService.GetExfilDomains:input_type -> exfil_kernel.ExfilDomains
+	2,  // 5: exfil_kernel.NodeAgentFeatureService.GenExfilDomainsLength:input_type -> exfil_kernel.ExfilDomains
+	7,  // 6: exfil_kernel.NodeAgentFeatureService.BidirstreamLimits:input_type -> exfil_kernel.ExfillSecurityLengthLimits
+	3,  // 7: exfil_kernel.NodeAgentCryptoService.EBPFElfSignature:input_type -> exfil_kernel.ElfSignatureRequest
+	5,  // 8: exfil_kernel.NodeAgentCryptoService.EBPFKeyringController:input_type -> exfil_kernel.AgentKernelKeyringControllerCommandRequest
+	2,  // 9: exfil_kernel.NodeAgentFeatureService.GetExfilDomains:output_type -> exfil_kernel.ExfilDomains
+	8,  // 10: exfil_kernel.NodeAgentFeatureService.GenExfilDomainsLength:output_type -> exfil_kernel.ExfilDomainsLength
+	7,  // 11: exfil_kernel.NodeAgentFeatureService.BidirstreamLimits:output_type -> exfil_kernel.ExfillSecurityLengthLimits
+	4,  // 12: exfil_kernel.NodeAgentCryptoService.EBPFElfSignature:output_type -> exfil_kernel.ElfSignatureResponse
+	6,  // 13: exfil_kernel.NodeAgentCryptoService.EBPFKeyringController:output_type -> exfil_kernel.AgentKernelKeyringControllerCommandResponse
+	9,  // [9:14] is the sub-list for method output_type
+	4,  // [4:9] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_exfil_sec_proto_init() }
@@ -375,10 +587,10 @@ func file_exfil_sec_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exfil_sec_proto_rawDesc), len(file_exfil_sec_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      2,
+			NumMessages:   9,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_exfil_sec_proto_goTypes,
 		DependencyIndexes: file_exfil_sec_proto_depIdxs,

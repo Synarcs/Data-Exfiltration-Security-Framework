@@ -99,6 +99,12 @@ install-dep:
 	bash infrastructure/agent.sh
 	bash infrastructure/monitor.sh 
 
+
+.PHONY: build-agent-protos 
+build-agent-protos:
+	@cd pkg/rpc && make
+
+
 QPS ?= 100000
 DURATION ?= 20
 

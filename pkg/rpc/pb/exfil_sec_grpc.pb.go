@@ -19,31 +19,31 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	NodeAgentService_GetExfilDomains_FullMethodName       = "/exfil_kernel.NodeAgentService/GetExfilDomains"
-	NodeAgentService_GenExfilDomainsLength_FullMethodName = "/exfil_kernel.NodeAgentService/GenExfilDomainsLength"
-	NodeAgentService_BidirstreamLimits_FullMethodName     = "/exfil_kernel.NodeAgentService/BidirstreamLimits"
+	NodeAgentFeatureService_GetExfilDomains_FullMethodName       = "/exfil_kernel.NodeAgentFeatureService/GetExfilDomains"
+	NodeAgentFeatureService_GenExfilDomainsLength_FullMethodName = "/exfil_kernel.NodeAgentFeatureService/GenExfilDomainsLength"
+	NodeAgentFeatureService_BidirstreamLimits_FullMethodName     = "/exfil_kernel.NodeAgentFeatureService/BidirstreamLimits"
 )
 
-// NodeAgentServiceClient is the client API for NodeAgentService service.
+// NodeAgentFeatureServiceClient is the client API for NodeAgentFeatureService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type NodeAgentServiceClient interface {
+type NodeAgentFeatureServiceClient interface {
 	GetExfilDomains(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExfilDomains], error)
 	GenExfilDomainsLength(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (*ExfilDomainsLength, error)
 	BidirstreamLimits(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits], error)
 }
 
-type nodeAgentServiceClient struct {
+type nodeAgentFeatureServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewNodeAgentServiceClient(cc grpc.ClientConnInterface) NodeAgentServiceClient {
-	return &nodeAgentServiceClient{cc}
+func NewNodeAgentFeatureServiceClient(cc grpc.ClientConnInterface) NodeAgentFeatureServiceClient {
+	return &nodeAgentFeatureServiceClient{cc}
 }
 
-func (c *nodeAgentServiceClient) GetExfilDomains(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExfilDomains], error) {
+func (c *nodeAgentFeatureServiceClient) GetExfilDomains(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExfilDomains], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeAgentService_ServiceDesc.Streams[0], NodeAgentService_GetExfilDomains_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NodeAgentFeatureService_ServiceDesc.Streams[0], NodeAgentFeatureService_GetExfilDomains_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,21 +58,21 @@ func (c *nodeAgentServiceClient) GetExfilDomains(ctx context.Context, in *ExfilD
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeAgentService_GetExfilDomainsClient = grpc.ServerStreamingClient[ExfilDomains]
+type NodeAgentFeatureService_GetExfilDomainsClient = grpc.ServerStreamingClient[ExfilDomains]
 
-func (c *nodeAgentServiceClient) GenExfilDomainsLength(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (*ExfilDomainsLength, error) {
+func (c *nodeAgentFeatureServiceClient) GenExfilDomainsLength(ctx context.Context, in *ExfilDomains, opts ...grpc.CallOption) (*ExfilDomainsLength, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExfilDomainsLength)
-	err := c.cc.Invoke(ctx, NodeAgentService_GenExfilDomainsLength_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, NodeAgentFeatureService_GenExfilDomainsLength_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *nodeAgentServiceClient) BidirstreamLimits(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits], error) {
+func (c *nodeAgentFeatureServiceClient) BidirstreamLimits(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NodeAgentService_ServiceDesc.Streams[1], NodeAgentService_BidirstreamLimits_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NodeAgentFeatureService_ServiceDesc.Streams[1], NodeAgentFeatureService_BidirstreamLimits_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -81,113 +81,251 @@ func (c *nodeAgentServiceClient) BidirstreamLimits(ctx context.Context, opts ...
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeAgentService_BidirstreamLimitsClient = grpc.BidiStreamingClient[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]
+type NodeAgentFeatureService_BidirstreamLimitsClient = grpc.BidiStreamingClient[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]
 
-// NodeAgentServiceServer is the server API for NodeAgentService service.
-// All implementations should embed UnimplementedNodeAgentServiceServer
+// NodeAgentFeatureServiceServer is the server API for NodeAgentFeatureService service.
+// All implementations should embed UnimplementedNodeAgentFeatureServiceServer
 // for forward compatibility.
-type NodeAgentServiceServer interface {
+type NodeAgentFeatureServiceServer interface {
 	GetExfilDomains(*ExfilDomains, grpc.ServerStreamingServer[ExfilDomains]) error
 	GenExfilDomainsLength(context.Context, *ExfilDomains) (*ExfilDomainsLength, error)
 	BidirstreamLimits(grpc.BidiStreamingServer[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]) error
 }
 
-// UnimplementedNodeAgentServiceServer should be embedded to have
+// UnimplementedNodeAgentFeatureServiceServer should be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedNodeAgentServiceServer struct{}
+type UnimplementedNodeAgentFeatureServiceServer struct{}
 
-func (UnimplementedNodeAgentServiceServer) GetExfilDomains(*ExfilDomains, grpc.ServerStreamingServer[ExfilDomains]) error {
+func (UnimplementedNodeAgentFeatureServiceServer) GetExfilDomains(*ExfilDomains, grpc.ServerStreamingServer[ExfilDomains]) error {
 	return status.Errorf(codes.Unimplemented, "method GetExfilDomains not implemented")
 }
-func (UnimplementedNodeAgentServiceServer) GenExfilDomainsLength(context.Context, *ExfilDomains) (*ExfilDomainsLength, error) {
+func (UnimplementedNodeAgentFeatureServiceServer) GenExfilDomainsLength(context.Context, *ExfilDomains) (*ExfilDomainsLength, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenExfilDomainsLength not implemented")
 }
-func (UnimplementedNodeAgentServiceServer) BidirstreamLimits(grpc.BidiStreamingServer[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]) error {
+func (UnimplementedNodeAgentFeatureServiceServer) BidirstreamLimits(grpc.BidiStreamingServer[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]) error {
 	return status.Errorf(codes.Unimplemented, "method BidirstreamLimits not implemented")
 }
-func (UnimplementedNodeAgentServiceServer) testEmbeddedByValue() {}
+func (UnimplementedNodeAgentFeatureServiceServer) testEmbeddedByValue() {}
 
-// UnsafeNodeAgentServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to NodeAgentServiceServer will
+// UnsafeNodeAgentFeatureServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to NodeAgentFeatureServiceServer will
 // result in compilation errors.
-type UnsafeNodeAgentServiceServer interface {
-	mustEmbedUnimplementedNodeAgentServiceServer()
+type UnsafeNodeAgentFeatureServiceServer interface {
+	mustEmbedUnimplementedNodeAgentFeatureServiceServer()
 }
 
-func RegisterNodeAgentServiceServer(s grpc.ServiceRegistrar, srv NodeAgentServiceServer) {
-	// If the following call pancis, it indicates UnimplementedNodeAgentServiceServer was
+func RegisterNodeAgentFeatureServiceServer(s grpc.ServiceRegistrar, srv NodeAgentFeatureServiceServer) {
+	// If the following call pancis, it indicates UnimplementedNodeAgentFeatureServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&NodeAgentService_ServiceDesc, srv)
+	s.RegisterService(&NodeAgentFeatureService_ServiceDesc, srv)
 }
 
-func _NodeAgentService_GetExfilDomains_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _NodeAgentFeatureService_GetExfilDomains_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ExfilDomains)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(NodeAgentServiceServer).GetExfilDomains(m, &grpc.GenericServerStream[ExfilDomains, ExfilDomains]{ServerStream: stream})
+	return srv.(NodeAgentFeatureServiceServer).GetExfilDomains(m, &grpc.GenericServerStream[ExfilDomains, ExfilDomains]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeAgentService_GetExfilDomainsServer = grpc.ServerStreamingServer[ExfilDomains]
+type NodeAgentFeatureService_GetExfilDomainsServer = grpc.ServerStreamingServer[ExfilDomains]
 
-func _NodeAgentService_GenExfilDomainsLength_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _NodeAgentFeatureService_GenExfilDomainsLength_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ExfilDomains)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeAgentServiceServer).GenExfilDomainsLength(ctx, in)
+		return srv.(NodeAgentFeatureServiceServer).GenExfilDomainsLength(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: NodeAgentService_GenExfilDomainsLength_FullMethodName,
+		FullMethod: NodeAgentFeatureService_GenExfilDomainsLength_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeAgentServiceServer).GenExfilDomainsLength(ctx, req.(*ExfilDomains))
+		return srv.(NodeAgentFeatureServiceServer).GenExfilDomainsLength(ctx, req.(*ExfilDomains))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NodeAgentService_BidirstreamLimits_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(NodeAgentServiceServer).BidirstreamLimits(&grpc.GenericServerStream[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]{ServerStream: stream})
+func _NodeAgentFeatureService_BidirstreamLimits_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(NodeAgentFeatureServiceServer).BidirstreamLimits(&grpc.GenericServerStream[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NodeAgentService_BidirstreamLimitsServer = grpc.BidiStreamingServer[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]
+type NodeAgentFeatureService_BidirstreamLimitsServer = grpc.BidiStreamingServer[ExfillSecurityLengthLimits, ExfillSecurityLengthLimits]
 
-// NodeAgentService_ServiceDesc is the grpc.ServiceDesc for NodeAgentService service.
+// NodeAgentFeatureService_ServiceDesc is the grpc.ServiceDesc for NodeAgentFeatureService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var NodeAgentService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "exfil_kernel.NodeAgentService",
-	HandlerType: (*NodeAgentServiceServer)(nil),
+var NodeAgentFeatureService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "exfil_kernel.NodeAgentFeatureService",
+	HandlerType: (*NodeAgentFeatureServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "GenExfilDomainsLength",
-			Handler:    _NodeAgentService_GenExfilDomainsLength_Handler,
+			Handler:    _NodeAgentFeatureService_GenExfilDomainsLength_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "GetExfilDomains",
-			Handler:       _NodeAgentService_GetExfilDomains_Handler,
+			Handler:       _NodeAgentFeatureService_GetExfilDomains_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "BidirstreamLimits",
-			Handler:       _NodeAgentService_BidirstreamLimits_Handler,
+			Handler:       _NodeAgentFeatureService_BidirstreamLimits_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
+	Metadata: "exfil_sec.proto",
+}
+
+const (
+	NodeAgentCryptoService_EBPFElfSignature_FullMethodName      = "/exfil_kernel.NodeAgentCryptoService/EBPFElfSignature"
+	NodeAgentCryptoService_EBPFKeyringController_FullMethodName = "/exfil_kernel.NodeAgentCryptoService/EBPFKeyringController"
+)
+
+// NodeAgentCryptoServiceClient is the client API for NodeAgentCryptoService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type NodeAgentCryptoServiceClient interface {
+	EBPFElfSignature(ctx context.Context, in *ElfSignatureRequest, opts ...grpc.CallOption) (*ElfSignatureResponse, error)
+	EBPFKeyringController(ctx context.Context, in *AgentKernelKeyringControllerCommandRequest, opts ...grpc.CallOption) (*AgentKernelKeyringControllerCommandResponse, error)
+}
+
+type nodeAgentCryptoServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewNodeAgentCryptoServiceClient(cc grpc.ClientConnInterface) NodeAgentCryptoServiceClient {
+	return &nodeAgentCryptoServiceClient{cc}
+}
+
+func (c *nodeAgentCryptoServiceClient) EBPFElfSignature(ctx context.Context, in *ElfSignatureRequest, opts ...grpc.CallOption) (*ElfSignatureResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ElfSignatureResponse)
+	err := c.cc.Invoke(ctx, NodeAgentCryptoService_EBPFElfSignature_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *nodeAgentCryptoServiceClient) EBPFKeyringController(ctx context.Context, in *AgentKernelKeyringControllerCommandRequest, opts ...grpc.CallOption) (*AgentKernelKeyringControllerCommandResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AgentKernelKeyringControllerCommandResponse)
+	err := c.cc.Invoke(ctx, NodeAgentCryptoService_EBPFKeyringController_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// NodeAgentCryptoServiceServer is the server API for NodeAgentCryptoService service.
+// All implementations should embed UnimplementedNodeAgentCryptoServiceServer
+// for forward compatibility.
+type NodeAgentCryptoServiceServer interface {
+	EBPFElfSignature(context.Context, *ElfSignatureRequest) (*ElfSignatureResponse, error)
+	EBPFKeyringController(context.Context, *AgentKernelKeyringControllerCommandRequest) (*AgentKernelKeyringControllerCommandResponse, error)
+}
+
+// UnimplementedNodeAgentCryptoServiceServer should be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedNodeAgentCryptoServiceServer struct{}
+
+func (UnimplementedNodeAgentCryptoServiceServer) EBPFElfSignature(context.Context, *ElfSignatureRequest) (*ElfSignatureResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EBPFElfSignature not implemented")
+}
+func (UnimplementedNodeAgentCryptoServiceServer) EBPFKeyringController(context.Context, *AgentKernelKeyringControllerCommandRequest) (*AgentKernelKeyringControllerCommandResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EBPFKeyringController not implemented")
+}
+func (UnimplementedNodeAgentCryptoServiceServer) testEmbeddedByValue() {}
+
+// UnsafeNodeAgentCryptoServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to NodeAgentCryptoServiceServer will
+// result in compilation errors.
+type UnsafeNodeAgentCryptoServiceServer interface {
+	mustEmbedUnimplementedNodeAgentCryptoServiceServer()
+}
+
+func RegisterNodeAgentCryptoServiceServer(s grpc.ServiceRegistrar, srv NodeAgentCryptoServiceServer) {
+	// If the following call pancis, it indicates UnimplementedNodeAgentCryptoServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&NodeAgentCryptoService_ServiceDesc, srv)
+}
+
+func _NodeAgentCryptoService_EBPFElfSignature_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ElfSignatureRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeAgentCryptoServiceServer).EBPFElfSignature(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeAgentCryptoService_EBPFElfSignature_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeAgentCryptoServiceServer).EBPFElfSignature(ctx, req.(*ElfSignatureRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NodeAgentCryptoService_EBPFKeyringController_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AgentKernelKeyringControllerCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeAgentCryptoServiceServer).EBPFKeyringController(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeAgentCryptoService_EBPFKeyringController_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeAgentCryptoServiceServer).EBPFKeyringController(ctx, req.(*AgentKernelKeyringControllerCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// NodeAgentCryptoService_ServiceDesc is the grpc.ServiceDesc for NodeAgentCryptoService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var NodeAgentCryptoService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "exfil_kernel.NodeAgentCryptoService",
+	HandlerType: (*NodeAgentCryptoServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "EBPFElfSignature",
+			Handler:    _NodeAgentCryptoService_EBPFElfSignature_Handler,
+		},
+		{
+			MethodName: "EBPFKeyringController",
+			Handler:    _NodeAgentCryptoService_EBPFKeyringController_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "exfil_sec.proto",
 }

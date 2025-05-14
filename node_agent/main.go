@@ -283,7 +283,8 @@ func main() {
 		utils.DEBUG = nodeAgentCliOptions.CliFlag
 	}
 
-	var rpcServer rpc.NodeAgentService
+	var rpcServer rpc.NodeAgentServer
+
 	if nodeAgentCliOptions.StreamClient {
 		config := make(chan interface{})
 		rpcServer.ConfigChannel = config

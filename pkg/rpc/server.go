@@ -12,14 +12,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type NodeAgentService struct {
-	pb.UnimplementedNodeAgentServiceServer
+type NodeAgentServer struct {
+	pb.UnimplementedNodeAgentFeatureServiceServer
+	pb.UnimplementedNodeAgentCryptoServiceServer
 	ConfigChannel chan interface{}
-	Ctx           context.Context
 	Server        *grpc.Server
 }
 
-func (s *NodeAgentService) GetExfilDomains(domain *pb.ExfilDomains, stream pb.NodeAgentService_GetExfilDomainsServer) error {
+func (s *NodeAgentServer) GetExfilDomains(domain *pb.ExfilDomains, stream grpc.ServerStreamingServer[pb.ExfilDomains]) error {
 	for {
 		if err := stream.Send(&pb.ExfilDomains{
 			Domain:         domain.Domain,
@@ -35,15 +35,16 @@ func (s *NodeAgentService) GetExfilDomains(domain *pb.ExfilDomains, stream pb.No
 	}
 }
 
-func (s *NodeAgentService) BidirstreamLimits(stream pb.NodeAgentService_BidirstreamLimitsServer) error {
+func (s *NodeAgentServer) BidirstreamLimits(stream grpc.BidiStreamingServer[pb.ExfillSecurityLengthLimits,
+	pb.ExfillSecurityLengthLimits]) error {
 	return status.Errorf(codes.Unimplemented, "method BidirstreamLimits not implemented")
 }
 
-func (s *NodeAgentService) GenExfilDomainsLength(ctx context.Context, domain *pb.ExfilDomains) (*pb.ExfilDomainsLength, error) {
+func (s *NodeAgentServer) GenExfilDomainsLength(ctx context.Context, domain *pb.ExfilDomains) (*pb.ExfilDomainsLength, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GenExfilDomainsLength not implemented")
 }
 
-func (rpc *NodeAgentService) StartAgentStreamServer() {
+func (rpc *NodeAgentServer) StartAgentStreamServer() {
 	list, err := net.Listen("tcp", ":3200")
 	if err != nil {
 		panic(err.Error())
@@ -53,7 +54,7 @@ func (rpc *NodeAgentService) StartAgentStreamServer() {
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
 	rpc.Server = s
-	pb.RegisterNodeAgentServiceServer(s, &NodeAgentService{})
+	pb.RegisterNodeAgentFeatureServiceServer(s, &NodeAgentServer{})
 	if err := s.Serve(list); err != nil {
 		utils.Log(err.Error())
 		panic(err.Error())
@@ -61,7 +62,7 @@ func (rpc *NodeAgentService) StartAgentStreamServer() {
 
 }
 
-func (rpc *NodeAgentService) CloseRpcServer() {
+func (rpc *NodeAgentServer) CloseRpcServer() {
 	if rpc.Server == nil {
 		return
 	}

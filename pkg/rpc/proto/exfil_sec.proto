@@ -11,6 +11,12 @@ enum DNS_MALICIOUS_FLAGS {
     SUSPICIOUS = 1;
 }
 
+enum KERNEL_KEYRING_TYPE {
+    KEYCTL_REVOKE = 0;
+    KEYCTL_REJECT = 1;
+    KEYCTL_CLEAR = 2;
+}
+
 message ExfilDomains {
     string domain = 1;
     string tld = 2;
@@ -20,10 +26,22 @@ message ExfilDomains {
 };
 
 
-message ElfSignature { 
+message ElfSignatureRequest {
+    bytes eBPFProgramPayload = 1;
+}
+
+message ElfSignatureResponse { 
     bytes signature = 1;
     bytes publicKey = 2;
     bytes signatureHash = 3;
+    int32 signatureOid = 4;
+}
+
+message AgentKernelKeyringControllerCommandRequest {
+    repeated KERNEL_KEYRING_TYPE cmd = 1;
+}
+message AgentKernelKeyringControllerCommandResponse {
+    repeated bool response = 1;
 }
 
 message ExfillSecurityLengthLimits { 
@@ -34,8 +52,13 @@ message ExfilDomainsLength {
     int64 len = 1;
 }
 
-service NodeAgentService {
+service NodeAgentFeatureService {
     rpc GetExfilDomains(ExfilDomains) returns (stream ExfilDomains);
     rpc GenExfilDomainsLength(ExfilDomains) returns (ExfilDomainsLength);
     rpc BidirstreamLimits(stream ExfillSecurityLengthLimits) returns (stream ExfillSecurityLengthLimits);
 };
+
+service NodeAgentCryptoService {
+    rpc EBPFElfSignature(ElfSignatureRequest) returns (ElfSignatureResponse);
+    rpc EBPFKeyringController(AgentKernelKeyringControllerCommandRequest) returns (AgentKernelKeyringControllerCommandResponse);
+}
