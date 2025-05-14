@@ -15,7 +15,6 @@ import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 import com.synarcs.controller.config.yaml.Config;
-import com.synarcs.controller.streamserdes.DnsdataplaneBlk;
 
 @EnableKafka
 @Configuration

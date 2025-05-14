@@ -24,7 +24,7 @@ func getFileChunks(fileSize int64, workers int) []ChunkRange {
 	chunkSize := fileSize / int64(workers)
 	var start int64 = 0
 
-	for range workers-1 {
+	for range workers - 1 {
 		chunks = append(chunks, ChunkRange{Start: start, End: start + chunkSize})
 		start += chunkSize
 	}
@@ -62,9 +62,9 @@ func VerifyTopDomainsData() (string, error) {
 
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			Logger.Info("File does not exist")
+			Log("File does not exist")
 		} else {
-			Logger.Info("Runtime permission error please check the file stats and permission", err)
+			Log("Runtime permission error please check the file stats and permission", err)
 		}
 		return "", err
 	}
@@ -75,7 +75,7 @@ func VerifyTopDomainsData() (string, error) {
 func ReadTldDomainsData() (*TopDomains, error) {
 	fd, err := VerifyTopDomainsData()
 	if err != nil {
-		Logger.Info(err.Error())
+		Log(err.Error())
 		return nil, err
 	}
 
@@ -106,22 +106,22 @@ func ReadTldDomainsData() (*TopDomains, error) {
 			length++
 			return true
 		})
-		Logger.Info("Total domains found", length)
+		Log("Total domains found", length)
 	}
 
-	Logger.Info("File exists and Read via Parallel I/O for file stats", fileInfo.Name(), fileInfo.Size()/(1<<10)*3)
+	Log("File exists and Read via Parallel I/O for file stats", fileInfo.Name(), fileInfo.Size()/(1<<10)*3)
 
 	return topDomains, nil
 }
 
 func (t *TopDomains) UpdateDomainDomainTLDCache(domain string) {
 	if _, fd := t.TopDomains.Load(domain); fd {
-		Logger.Info("the Required domain already present as safe TLD in Node Agent Cache ", domain)
+		Log("the Required domain already present as safe TLD in Node Agent Cache ", domain)
 		return
 	}
 
 	if len(domain) == 0 || strings.Count(domain, ".") != 1 || len(strings.Split(domain, ".")) != 2 {
-		Logger.Info("cannot unblock an malformed SLD in the cache")
+		Log("cannot unblock an malformed SLD in the cache")
 		return
 	}
 

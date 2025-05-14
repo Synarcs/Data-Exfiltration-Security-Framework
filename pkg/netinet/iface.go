@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -181,15 +180,6 @@ func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
 		// ensure the flushed change to disk has new modified content
 		nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
 	}
-}
-
-func GetNodeHostName() (string, error) {
-	nodeName, err := os.Hostname()
-	if err != nil {
-		utils.Log("Error getting hostname", err)
-		return "", err
-	}
-	return nodeName, nil
 }
 
 // updates the root process for eBPF node agent in user space which injected all kernel programs over any changes on disk for systemd resolved

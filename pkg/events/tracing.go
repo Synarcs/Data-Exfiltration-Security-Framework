@@ -15,7 +15,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -553,7 +552,7 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 		labels["ProcessId"] = "Nan"
 	}
 
-	if hostname, err := netinet.GetNodeHostName(); err != nil {
+	if hostname, err := utils.GetNodeHostName(); err != nil {
 		labels["Hostname"] = ""
 	} else {
 		labels["Hostname"] = hostname

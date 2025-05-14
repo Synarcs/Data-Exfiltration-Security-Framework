@@ -164,6 +164,21 @@ func BigEndianToIPv4(ipInt uint32) string {
 	return net.IP(ipBytes).String()
 }
 
+func LittleEndianToIpv4(ipInt uint32) string {
+	ipBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(ipBytes, ipInt)
+	return net.IP(ipBytes).String()
+}
+
+func GetNodeHostName() (string, error) {
+	nodeName, err := os.Hostname()
+	if err != nil {
+		Log("Error getting hostname", err)
+		return "", err
+	}
+	return nodeName, nil
+}
+
 // generate the required chanel for controller to stream those remote ipv4 / ipv6 c2 server addresses
 func GenerateC2BlacklistAddressChannels() (chan net.IP, chan net.IP) {
 	return make(chan net.IP), make(chan net.IP)
@@ -298,7 +313,7 @@ func VerifyTcxSupportEgressLink() bool {
 		return false
 	}
 	patchRelease, err := strconv.Atoi(release_patches[1])
-	if err != nil {	
+	if err != nil {
 		return false
 	}
 	return majorRelease >= 6 && patchRelease >= 6 && false // for now return fale until kernel prorga with eBPF section is modified

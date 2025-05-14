@@ -342,4 +342,3 @@ function preresolve(dq)
     end
     return false
 end
-

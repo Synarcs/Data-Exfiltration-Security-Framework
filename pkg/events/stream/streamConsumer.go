@@ -48,25 +48,33 @@ func (consumer *StreamConsumer) InitLruUserSpaceL3Cache() error {
 
 func (consumer *StreamConsumer) NewStreamKafkaConsumer(ctx context.Context) error {
 
+	nodeHostname, err := utils.GetNodeHostName()
+	if err != nil {
+		return err
+	}
+
 	// all the malicious domains transfering over UDP to be blacklisted in local cache of LRU fo rnude agent
 	streamReader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: consumer.KafkaBrokerConfig.Brokers,
-		GroupID: "dataplane-controller-infer" + utils.GenerateUniqueConsumerGroupId(),
-		Topic:   STREAM_THREAT_TOPIC_INFER,
+		Brokers:     consumer.KafkaBrokerConfig.Brokers,
+		GroupID:     "dataplane-controller-infer" + nodeHostname,
+		Topic:       STREAM_THREAT_TOPIC_INFER,
+		StartOffset: kafka.FirstOffset,
 	})
 
 	// all the malicious domains transfering over TCP to be blacklisted in local cache of LRU fo rnude agent
 	streamReaderTcpRecursorInfer := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: consumer.KafkaBrokerConfig.Brokers,
-		GroupID: "dataplane-controller-infer-tcp" + utils.GenerateUniqueConsumerGroupId(),
-		Topic:   STREAM_THREAT_TOPIC_INFER_TCP,
+		Brokers:     consumer.KafkaBrokerConfig.Brokers,
+		GroupID:     "dataplane-controller-infer-tcp" + nodeHostname,
+		Topic:       STREAM_THREAT_TOPIC_INFER_TCP,
+		StartOffset: kafka.FirstOffset,
 	})
 
 	// process the topic which are meant for controller to update node agent caches for benign TLD domains
 	streamReaderSldBenignTopic := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: consumer.KafkaBrokerConfig.Brokers,
-		GroupID: "dataplane-controller-infer-sld-benign" + utils.GenerateUniqueConsumerGroupId(),
-		Topic:   STREAM_BENIGN_SLD_TOPIC,
+		Brokers:     consumer.KafkaBrokerConfig.Brokers,
+		GroupID:     "dataplane-controller-infer-sld-benign" + nodeHostname,
+		Topic:       STREAM_BENIGN_SLD_TOPIC,
+		StartOffset: kafka.FirstOffset,
 	})
 
 	consumer.Consumers = make(map[string]*kafka.Reader)
@@ -97,18 +105,18 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 	// configMapIpv6 := consumer.EgresseBPFKernelSockCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER]
 
 	if configMapIpv4 == nil {
-		utils.Log("Kernel is configured with l3 netpools for egress TC filter right now, please ensure L3 Netpool filter is enabled")
+		utils.Log("Kernel is not configured with l3 netpools for egress TC filter right now, please ensure L3 Netpool filter is enabled")
 		return
 	}
 
 	// controller will always stream a valid ipv4, ipv6 l3 address to data plane
 	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
 		// convert to network order
-		ipv4BigEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
+		ipv4littleEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
 		if _, fd := consumer.L3NodeFilterCache.Get(remoteIpAddressInferedMaliciousController); !fd {
-			utils.Log("Updating the malicious l3 filter in kernel ", utils.BigEndianToIPv4(ipv4BigEndianAddress))
-			consumer.L3NodeFilterCache.Add(remoteIpAddressInferedMaliciousController, ipv4BigEndianAddress)
-			if err := configMapIpv4.Update(ipv4BigEndianAddress, ipv4BigEndianAddress, ebpf.UpdateAny); err != nil {
+			utils.Log("Updating the malicious l3 filter in kernel ", utils.BigEndianToIPv4(ipv4littleEndianAddress), ipv4littleEndianAddress)
+			consumer.L3NodeFilterCache.Add(remoteIpAddressInferedMaliciousController, ipv4littleEndianAddress)
+			if err := configMapIpv4.Update(&ipv4littleEndianAddress, &ipv4littleEndianAddress, ebpf.UpdateAny); err != nil {
 				if !errors.Is(err, ebpf.ErrKeyExist) {
 					utils.Logger.Printf("Error while updating the malicious l3 filter in kernel %+v", err)
 				}
@@ -192,6 +200,7 @@ func (c *StreamConsumer) ControllErInferBenignConsumer(ctx context.Context,
 				return
 			}
 		}
+		utils.Log("eBPF Agent block to consume inferred malicious events from consumer")
 		msg, err := consumer.ReadMessage(ctx)
 		if err != nil {
 			c.ConsumerErroChan <- err

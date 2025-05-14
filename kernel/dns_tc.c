@@ -326,31 +326,32 @@ struct dns_volume_stats {
         } while(0)      
 #endif 
 
-// this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv4 header 
-#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(__ip)                                   \
-        do {                                                                              \
-            if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
-                if (DEBUG)  {                                                         \
-                    bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
-                }                                                                     \
-                return TC_DROP;                                                       \
-            }                                                                         \
-        } while(0)                                                                      
+
+// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
+#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    static 
+    __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
+        __u32 daddr = bpf_ntohl(ip->daddr); // userspace inject in network btyteorder over a eBPF map key with type __u32 not raw butes 
+        __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &daddr);
+        if (isDynamicBlacklisted) {
+            return DROP_L3_INTERNAL_FILTER_TRAFFIC == true ? true : false;
+        }
+        return false;
+    }
 #endif
 
-// this will used as a l3 netpool to filter any protocol overlay with this blocklisted ipaddress in its l3 ipv6 header 
-#if !L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS      
-    #define EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(__ip)                                   \ 
-    do {                                                                                  \
-        if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
-            if (DEBUG) {                                                          \
-                bpf_printk("dropping traffic for malicious c2 ipv6 remote c2");   \
-            }                                                                     \
-            return TC_DROP;                                                       \
-        }                                                                         \
-    } while(0)        
-#endif 
+// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
+// TODO: Add dynamic L3 IPv6 netpool c2 server filter over kernel tc layer, user space eBPF ndoe agent will create dynamic netpool for any k8s CNI to stop traffic over kernel sock (ebpf) or netfilter (ipv6) before it reach kernel traffic control 
+#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
+    static 
+    __always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
+        struct in6_addr dest_addr = ip->daddr;
+        __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
+        if (fd)
+            return true;
+        return false;
+    }
+#endif
 
 #if IS_VXLAN_PORTS_EXIST_BRIDGE
     #define EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb)          \
@@ -1928,35 +1929,6 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
 }
 
 
-
-// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
-#if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-    static 
-    __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
-        __u32 dst_addr = bpf_ntohs(ip->daddr); // user space inject l3 drop in kernel to be always in network byte order
-
-        __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &dst_addr);
-        if (isDynamicBlacklisted) {
-            return true;
-        }
-        return false;
-    }
-#endif
-
-// l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
-// TODO: Add dynamic L3 IPv6 netpool c2 server filter over kernel tc layer, user space eBPF ndoe agent will create dynamic netpool for any k8s CNI to stop traffic over kernel sock (ebpf) or netfilter (ipv6) before it reach kernel traffic control 
-#if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
-    static 
-    __always_inline bool __l3_ipv6_netpool_egress_filter_for_dns_c2_server(struct ipv6hdr *ip) {
-
-        struct in6_addr dest_addr = ip->daddr;
-        __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
-        if (fd)
-            return true;
-        return false;
-    }
-#endif
-
 /*
     For tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
     For DPI over TCP streams over DNS, filter must be via user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security. in passive mode 
@@ -2042,7 +2014,13 @@ int classify(struct __sk_buff *skb){
             
         // filter ay l3 traffic to prevent any l3 filter traffic to remote endpoint (security enforced from kernel)
         #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-            EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV4(ip);
+            if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
+                if (!DEBUG)  {                                                         \
+                    bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
+                }                                                                     \
+                bpf_printk("the current l3 address send %x", bpf_ntohs(ip->daddr));
+                return TC_DROP;                                                       \
+            } 
         #endif
 
         if (ip->protocol == IPPROTO_UDP) {
@@ -2206,7 +2184,12 @@ int classify(struct __sk_buff *skb){
 
         // dynamic L3 filter based for cross protocol c2 exfiltration security, to stop c2 exfiltration from these remote ip's over any protocol as well for encrypted channels
         #if L3_IPV6_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-                EXFIL_SECURITY_FILTER_L3_NETPOOL_IPV6(ipv6);
+            if (__l3_ipv6_netpool_egress_filter_for_dns_c2_server(__ip)) {            \
+                if (DEBUG) {                                                          \
+                    bpf_printk("dropping traffic for malicious c2 ipv6 remote c2");   \
+                }                                                                     \
+                return TC_DROP;                                                       \
+            }
         #endif
 
         if (ipv6->nexthdr == IPPROTO_UDP) {

@@ -174,7 +174,6 @@ func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 }
 
 func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) error {
-	var tcxLinks []link.Link
 	for _, netlink := range tc.Interfaces.PhysicalLinks {
 		// the DNS security rpograms must have highest priority to be executed first over cls_bpf egress filters list  attached to netdev
 		ln, err := link.AttachTCX(link.TCXOptions{
@@ -186,13 +185,14 @@ func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) e
 		if err != nil {
 			goto clean
 		}
-		tcxLinks = append(tcxLinks, ln)
+		tc.TCXEgressLinks = append(tc.TCXEgressLinks, ln)
 	}
 	return nil
 clean:
-	for _, ln := range tcxLinks {
+	for _, ln := range tc.TCXEgressLinks {
 		if err := ln.Close(); err != nil {
-			return err
+			utils.Log(err.Error())
+			continue
 		}
 	}
 	return nil
