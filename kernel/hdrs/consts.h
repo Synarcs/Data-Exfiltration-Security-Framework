@@ -54,7 +54,7 @@ struct exfil_security_egress_dns_limites {
 #define DEEP_SCAN_DNS_UDP_OVERLAY true
 #define DEEP_SCAN_DNS_TCP_OVERLAY true
 
-#define DROP_L3_INTERNAL_FILTER_TRAFFIC true 
+#define DROP_L3_INTERNAL_FILTER_TRAFFIC false
 
 // if enabled the eBPF node agent in user-space dynamically inject L3, inet in kernel over TC for eBPF in kernel tc to stop any DNS traffic with these l3 traffic 
 // For cloud the eBPF node agent dynamicaaly create netpools for l3 netpools, (eBPF sock / iptables / ipvs) for the CNI in k8s to block DNS upstream traffic to any of such Ip in the network 

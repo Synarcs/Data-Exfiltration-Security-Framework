@@ -236,7 +236,9 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 		if cloneredirectMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectMap.Lookup(&redirCountKey, &currCt); err != nil {
-				utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
+				if !errors.Is(err, ebpf.ErrKeyNotExist) {
+					utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
+				}
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionCountEvent](events.PacketDPICloneRedirectionCountEvent{
 				KernelCloneRedirectPacketCount: currCt,
