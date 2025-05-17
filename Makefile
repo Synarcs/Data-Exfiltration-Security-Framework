@@ -63,7 +63,7 @@ run-controller-image:
 	docker run --name controller -p $(CONTROLLER_PORT):9000 -d $(CONTROLLER_IMAGE_NAME):$(CONTROLLER_IMAGE_TAG) 
 
 .PHONY: stop-controller-image
-run-controller-image:
+stop-controller-image:
 	@echo "Stopping the controller"
 	docker kill controller
 

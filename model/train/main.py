@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 from typing import Any
 import pandas as pd 
 import os, time 
@@ -17,38 +11,30 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc, classification_report, precision_recall_curve, confusion_matrix
 from keras import Sequential, layers
+from keras.metrics import BinaryAccuracy, FalseNegatives, FalsePositives, TruePositives, TrueNegatives, Precision, Recall, F1Score, Accuracy, AUC
+from keras.optimizers import Adam
 import tf2onnx, onnx, keras 
 
-
-# In[2]:
-
-
+# %%
 GPU: Any = tf.config.list_logical_devices("GPU")
 if len(GPU) > 0:
     print(f'training the model on GPU {GPU} {tf.config.list_logical_devices("GPU")}')
-        # tf.config.experimental.set_memory_growth(gpu, True)
+    # tf.config.experimental.set_memory_growth(gpu, True)
 else:
     print("Using the default cpu runtime ", tf.config.list_physical_devices())
 
 
-# In[3]:
-
-
+# %%
 def calculate_entropy(domain: str) -> float:
     prob = pd.Series(list(domain)).value_counts(normalize=True)
     entropy = -np.sum(prob * np.log2(prob))
     return entropy
 
 
-# In[4]:
-
-
+# %%
 out = os.path.join(os.getcwd(),'datasets', 'combined.csv')
 
-
-# In[4]:
-
-
+# %%
 column_names_det = [
     "user_ip", "domain", "timestamp", "attack", "request", "len", 
     "subdomains_count", "w_count", "w_max", "entropy", "w_max_ratio", 
@@ -67,12 +53,11 @@ combined_columns = [
 ]
 
 
+# %% [markdown]
 # ### Benign dataset feature extract 
-# 
+#
 
-# In[55]:
-
-
+# %%
 def process(data, id):
     chunk = data[data['attack'] == False]
 
@@ -119,16 +104,14 @@ def process(data, id):
         
 
 
-# In[25]:
-
-
+# %%
 def process_mal(data, id):
     chunk = data[data['attack'] == True]
-
     cols_to_drop = [col for col in column_names_det if col != 'request']
     
     chunk.drop(columns=cols_to_drop, inplace=True)
     chunk.dropna(inplace=True)
+    chunk.drop_duplicates(subset='request', inplace=True)
     
     chunk['request'] = chunk['request']
     chunk['subdomain'] = chunk['request'].apply(lambda xx: ''.join(xx.split('.')[:-2]))
@@ -168,9 +151,7 @@ def process_mal(data, id):
         
 
 
-# In[36]:
-
-
+# %%
 def process_mal_sync(chunk):
     chunk.drop_duplicates(subset='request', inplace=True)
     
@@ -211,11 +192,10 @@ def process_mal_sync(chunk):
         
 
 
+# %% [markdown]
 # ### Cisco Top 1 million dataset
 
-# In[41]:
-
-
+# %%
 ### only keep this for vis the node agent in user space in go has parallel I/O over this we dont need this in ds 
 
 path = os.path.join(os.getcwd(),'datasets', 'top-1m.csv')
@@ -225,11 +205,8 @@ for chunk in data:
     print(chunk.head(20)) 
     break
 
-
-# In[92]:
-
-
-path = os.path.join(os.getcwd(),'datasets', 'dataset_modified.csv')
+# %%
+path = os.path.join(os.getcwd(),'datasets', 'dataset.csv')
 data = pd.read_csv(path, chunksize= 50_000, names=column_names_det,delimiter=",", on_bad_lines='skip')
 
 id = 0 
@@ -240,36 +217,40 @@ for chunk in data:
     
 
 
-# In[56]:
-
-
+# %%
 path = os.path.join(os.getcwd(),'datasets', 'dataset.csv')
 data = pd.read_csv(path, chunksize= 50_000, names=column_names_det,delimiter=",", on_bad_lines='skip')
 
 id = 0 
 for chunk in data: 
     # print('writing cleaned dataset chunk for malicious samples', os.getpid(), id)
-    if id > 12: break 
+    if id > 37: break 
     # print(chunk.columns)
     process(chunk, id)
     id += 1
     
 
 
+# %% [markdown]
 # ## Dataset Processing for malicious generated datasets using dnscat dnsteal and DET and raw exf 
 
-# In[37]:
-
-
+# %%
 mal = pd.read_csv('datasets/mal.csv')
 mal.rename(columns={'Domain': "request"}, inplace=True)
 
 process_mal_sync(mal)
 
 
-# In[57]:
+# %%
+mal_image_image =  pd.read_csv('datasets/mal_image.csv', chunksize= 50_000,delimiter=",", on_bad_lines='skip')
+chunkId = 0 
+for chunk in mal_image_image:
+    print('processing the chunk ', chunkId)
+    chunk.rename(columns={'Domain': "request"}, inplace=True)
+    process_mal_sync(chunk)
+    chunkId += 1    
 
-
+# %%
 path = os.path.join(os.getcwd(),'datasets', 'combined.csv')
 data = pd.read_csv(path, chunksize= 50_000, names=combined_columns,delimiter=",", on_bad_lines='skip')
 
@@ -293,28 +274,28 @@ print(f'sample ratio for malicious {(b + m) / m}%')
 total_records = b + m
 print(f'total records {b + m}')
 
-
+# %% [markdown]
 # ## train the model
 
-# In[7]:
-
-
+# %%
 {combined_columns[i]: i for i in range(len(combined_columns))}
 
 
-# In[ ]:
+
+# %%
+import nltk
+nltk.download('words')
+from nltk.corpus import words
+
+"information" in words.words()
 
 
-
-
-
-# In[5]:
-
-
+# %%
 class Features(object):
     def __init__(self) -> None:
         self.path = os.path.join(os.getcwd(),'datasets', 'combined.csv')
-        self.shuffleSize = 12_000  # You can adjust the shuffle buffer size if needed
+        self.total_records = 3_777_227
+        self.shuffle_size = self.total_records
 
     def readDetDataset(self, batchSize) -> None: 
         def parseData(record) -> Any:
@@ -324,9 +305,8 @@ class Features(object):
                 try:
                     return tf.strings.to_number(value, out_type=tf.float32)
                 except Exception:
-                    return tf.constant(0.0)  # Default value if conversion fails
+                    return tf.constant(0.0)  
             
-            # Process features with safe conversion
             total_chars = safe_float_conversion(values[4])
             total_chars_subdomain = safe_float_conversion(values[5])
             number = safe_float_conversion(values[6])
@@ -339,52 +319,76 @@ class Features(object):
             features = [total_chars, total_chars_subdomain, number, upper,
                     entropy, total_dots, max_label_length, labels_average]
     
-            # Standard scalar transform
             label = tf.cond(tf.equal(values[14], "True"), lambda: 1.0, lambda : 0.0)
             return tf.convert_to_tensor(features, dtype=tf.float32), label
         
-        # Read dataset and shuffle before batching
         dataset = tf.data.TextLineDataset(self.path)
         dataset = dataset.map(parseData, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         
-        # Shuffle the entire dataset (set the buffer size based on memory availability)
-        dataset = dataset.shuffle(buffer_size=10_000)
+        dataset = dataset.shuffle(buffer_size=self.shuffle_size, reshuffle_each_iteration=True)
         
-        # Batch the dataset
         dataset = dataset.batch(batch_size=batchSize)
         
-        # Prefetch data for performance optimization
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         
         return dataset
 
 
-# In[6]:
 
-
+# %%
 features = Features()
-batch_size = 8_000
+batch_size = 32_000
+dataset = features.readDetDataset(batchSize=batch_size)
 
-train_dataset = features.readDetDataset(batchSize=batch_size)
+# Compute splits
+total_batches = features.total_records // batch_size
+train_batches = int(total_batches * 0.7)
+val_batches = int(total_batches * 0.15)
+test_batches = total_batches - train_batches - val_batches
 
-total_batches = 1260643 // batch_size
+# Split deterministically after shuffle
+train_data = dataset.take(train_batches)
+val_data = dataset.skip(train_batches).take(val_batches)
+test_data = dataset.skip(train_batches + val_batches)
 
-train_batches = int(total_batches * 0.8)
-test_batches = total_batches - train_batches 
+# %%
+train_data
 
-# Split into training and test data
-train_data = train_dataset.take(train_batches)
-test_data = train_dataset.skip(train_batches)
+# %%
+malicious_count = 0
+benign_count = 0
+for _, label in train_data:
+    malicious_count += tf.reduce_sum(tf.cast(label == 1, tf.int32)).numpy()
+    benign_count += tf.reduce_sum(tf.cast(label == 0, tf.int32)).numpy()
 
+print(f"Malicious samples in train data: {malicious_count}")
+print(f"Benign samples in train data: {benign_count}")
 
-# In[7]:
+# %%
+malicious_count = 0
+benign_count = 0
+for _, label in val_data:
+    malicious_count += tf.reduce_sum(tf.cast(label == 1, tf.int32)).numpy()
+    benign_count += tf.reduce_sum(tf.cast(label == 0, tf.int32)).numpy()
 
+print(f"Malicious samples in val data: {malicious_count}")
+print(f"Benign samples in val data: {benign_count}")
 
-from keras.optimizers import Adam
+# %%
+malicious_count = 0
+benign_count = 0
+for _, label in test_data:
+    malicious_count += tf.reduce_sum(tf.cast(label == 1, tf.int32)).numpy()
+    benign_count += tf.reduce_sum(tf.cast(label == 0, tf.int32)).numpy()
 
+print(f"Malicious samples in test data: {malicious_count}")
+print(f"Benign samples in test data: {benign_count}")
+
+# %%
 strategy = tf.distribute.MirroredStrategy()
 
-
+metrics = [TruePositives(name='tp'), FalsePositives(name='fp'), FalseNegatives(name='fn'), TrueNegatives(name='tn'), BinaryAccuracy(name='ac'), 
+           Precision(name='precision'), Recall(name='recall'), AUC(name='auc')]
 with strategy.scope():
     model = Sequential() 
     model.add(layers.InputLayer(shape=(8,)))
@@ -393,38 +397,178 @@ with strategy.scope():
     model.add(layers.Dense(16, activation='relu'))
     model.add(layers.Dense(1, activation='sigmoid'))
     
-    model.compile(optimizer=Adam(learning_rate=0.0005), loss='binary_crossentropy', metrics=['accuracy', 'precision', 'recall'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='binary_crossentropy', 
+                          metrics=metrics)
 
-model.fit(train_data, epochs=20, verbose=1)
+model.summary()
+print(metrics)
 
+# %%
+history = model.fit(train_data, validation_data=val_data ,epochs=25, verbose=1)
 
-# In[27]:
+# %%
+print(history.history.keys())
 
+# %%
+plt.plot(history.history['ac'])
+plt.plot(history.history['val_ac'])
+plt.title('Model Accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='lower right')
+plt.show()
 
-for batch_features, batch_labels in test_data.take(1):
-    print(batch_labels)
+# %%
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model Training Loss')
+plt.ylabel('Loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper right')
+plt.show()
 
+# %%
+plt.plot(history.history['fp'])
+plt.plot(history.history['fn'])
+plt.title('Model Prediction Metrics')
+plt.ylabel('Prediction')
+plt.xlabel('epoch')
+plt.legend(['False Positive', 'False Negative'], loc='upper right')
+plt.show()
 
-# In[43]:
+# %%
+plt.plot(history.history['tp'])
+plt.plot(history.history['tn'])
+plt.title('Model Prediction Metrics')
+plt.ylabel('Prediction')
+plt.xlabel('epoch')
+plt.legend(['True Positive', 'True Negative'], loc='lower right')
+plt.show()
 
+# %%
+plt.plot(history.history['precision'])
+plt.plot(history.history['recall'])
+plt.title('Model Prediction Metrics')
+plt.ylabel('Prediction')
+plt.xlabel('epoch')
+plt.legend(['Precision', 'Recall'], loc='lower right')
+plt.show()
 
+# %%
+print(history.history.keys())
+
+# %%
+test_data
+
+# %%
 results = model.evaluate(test_data, verbose=1)
 
-print(results)
-loss = results[0]
-accuracy = results[1]
-precision = results[2]
-recall = results[3]
+# %%
+# true_labels = []
+# predict = []
 
-print(f"Test Loss: {loss:.4f}")
-print(f"Test Accuracy: {accuracy:.4f}")
-print(f"Test Precision: {precision:.4f}")
-print(f"Test Recall: {recall:.4f}")
+# for feature, label in test_data.as_numpy_iterator():
+#     true_labels.append(label)
+    
+#     pred = model.predict(feature)  
+#     pred = pred[:, 0]
+#     predict.append(pred)
 
+true_labels = []
+predictions = []
 
-# In[32]:
+for features, labels in test_data:
+    preds = model.predict(features, verbose=0).flatten()   # shape: (batch_size,)
+    predictions.extend(preds)
+    true_labels.extend(labels.numpy().flatten())           # shape: (batch_size,)
 
+# %%
+test_data.(20)
 
+# %%
+true_labels_mod = true_labels  # already flat
+predict_mod = predictions      # already flat
+
+print(len(true_labels_mod))
+print(len(predict_mod))
+
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import f1_score, precision_score, recall_score
+
+thresholds = np.linspace(0.15, 0.9, 50)
+f1_scores = []
+precisions = []
+recalls = []
+
+for thresh in thresholds:
+    preds_bin = (np.array(predict_mod) >= thresh).astype(int)
+    f1_scores.append(f1_score(true_labels_mod, preds_bin))
+    precisions.append(precision_score(true_labels_mod, preds_bin))
+    recalls.append(recall_score(true_labels_mod, preds_bin))
+
+plt.figure(figsize=(8, 6))
+plt.plot(thresholds, f1_scores, marker='o', label='F1 Score', color='purple')
+plt.plot(thresholds, precisions, marker='x', label='Precision', color='blue')
+plt.plot(thresholds, recalls, marker='s', label='Recall', color='green')
+
+plt.title("Precision, Recall, and F1 Score vs. Threshold")
+plt.xlabel("Threshold")
+plt.ylabel("Score")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# %%
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+
+threshold = 0.95
+preds_bin = (np.array(predict_mod) >= threshold).astype(int)
+cm = confusion_matrix(true_labels_mod, preds_bin)
+
+plt.figure(figsize=(6,5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+            xticklabels=['Predicted 0', 'Predicted 1'],
+            yticklabels=['True 0', 'True 1'])
+val = 0.85
+plt.title(f'Confusion Matrix at Threshold {val}')
+plt.ylabel('True Label')
+plt.xlabel('Predicted Label')
+plt.show()
+
+# %%
+true_labels = np.array(true_labels_mod).flatten()
+predictions = np.array(predict_mod).flatten()
+
+# %%
+fpr, tpr, thresholds = roc_curve(true_labels, predictions)
+roc_auc = auc(fpr, tpr)
+
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+
+# Add threshold labels every 1/5th
+for i in range(0, len(fpr), max(1, len(fpr)//5)):
+    plt.text(fpr[i], tpr[i], f'{thresholds[i]:.2f}', fontsize=8, color='black', ha='center')
+
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic')
+plt.legend(loc="lower right")
+plt.grid(True)
+plt.show()
+
+# %%
+print("Sample predictions:", predictions[20:100])
+print("Sample true labels:", true_labels[20:100])
+
+# %%
 import math
 import re
 
@@ -447,44 +591,41 @@ def calculate_entropy(domain: str):
     prob = [float(domain.count(c)) / len(domain) for c in set(domain)]
     return -sum(p * math.log(p, 2) for p in prob)
 
-domain = "ipv4-check-perf.radar.cloudflare.com"
+domain = "global.beat.apple.complex.dsdasdsdasdas.cloudflare.net"
 features = getFeatureDomain(domain)
 features
 
-
-# In[33]:
-
-
+# %%
 feature_vector = features.reshape(1, -1)  
 feature_vector.shape
 
-
-# In[34]:
-
-
+# %%
 feature_vector
 
-
-# In[35]:
-
-
+# %%
 predicted_prob = model.predict(feature_vector)[0, 0]
 predicted_prob
 
-
-# In[13]:
-
-
+# %%
 onnx_model_path = "dns_sec.onnx"
+tensort_model_path = "dns_sec.h5"
 model.output_names=['output']
 input_signature = (tf.TensorSpec([None, 8], tf.float32),)
-model.save('dns_sec.h5')
+model.save(tensort_model_path)
 #onnx_model, _ = tf2onnx.convert.from_keras(model=model, input_signature=input_signature, output_path=onnx_model_path)
 
-
-# In[14]:
-
-
+# %%
 onnx_model, _ = tf2onnx.convert.from_keras(model, input_signature=input_signature)
 with open(onnx_model_path, "wb") as f:
     f.write(onnx_model.SerializeToString())
+
+# %%
+import os
+if os.path.isfile(onnx_model_path): print("Model Onnx Saved to:: " , os.path.abspath(onnx_model_path))
+
+# %%
+if os.path.isfile(tensort_model_path): print("Model Saved to:: " , os.path.abspath(tensort_model_path))
+
+# %%
+
+# %%

@@ -82,13 +82,26 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 	return utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD > utils.EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD
 }
 
-// dont use spin lock user space write a map, and kernel always read it, and never write,
-var KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
-var KernelMaliciousTransferPortDelete sync.Mutex = sync.Mutex{}
+var (
+	// dont use spin lock user space write a map from userspace, and kernel always read it, and never write,
+	KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
+	KernelMaliciousTransferPortDelete     sync.Mutex = sync.Mutex{}
 
-// map 3  (proc --> isMal (bool))
-var UpdateMapMaliciousProcId sync.Mutex = sync.Mutex{}
-var CleanMapMaliciousProcId sync.Mutex = sync.Mutex{}
+	// map 3  (proc --> isMal (bool))
+	UpdateMapMaliciousProcId sync.Mutex = sync.Mutex{}
+	CleanMapMaliciousProcId  sync.Mutex = sync.Mutex{}
+	maliciousProcCountguard  sync.Mutex = sync.Mutex{}
+)
+
+var (
+	maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
+	// convert to an shared distributed cache over the enitr data plane if required
+	maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int) // the lifecycle is only until the agent is alive for in-mory log count, for detailed metrics, prometheus is exporting detailed kernel metrics of malicious detected count
+
+	maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
+
+	maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
+)
 
 func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
 
@@ -147,15 +160,6 @@ type maliciousExfilPortIngressSniffCtx struct {
 	cancelSniff context.CancelFunc
 }
 
-// convert to an shared distributed cache over the enitr data plane if required
-var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
-var maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int) // the lifecycle is only until the agent is alive for in-mory log count, for detailed metrics, prometheus is exporting detailed kernel metrics of malicious detected count
-
-var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
-
-var maliciousExfilPortIngressSniffCtxMap map[uint16]*maliciousExfilPortIngressSniffCtx = make(map[uint16]*maliciousExfilPortIngressSniffCtx) // sniff ctx port --> cancel ctx for cancel sniffing over port
-var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
-
 var exfilSizePriorSigKill int = 0
 
 func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort, maliciousDestPort uint16) {
@@ -197,7 +201,9 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 		}
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD {
 			// use the kernel syscall layer for SGKILL over the process from vmproc if kernel can't emit processId from traffic control layer, else send sigkill immediantley
-			utils.Log("Amount of data exfiltrated prior removal and send a sigkill to the process", exfilSizePriorSigKill)
+			if utils.DEBUG {
+				utils.Log("Amount of data exfiltrated prior removal and send a sigkill to the process", exfilSizePriorSigKill)
+			}
 			exfilSizePriorSigKill = 0
 			if err := utils.KillProc(mapField.ProcessId); err != nil {
 				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", mapField.ProcessId, err.Error())

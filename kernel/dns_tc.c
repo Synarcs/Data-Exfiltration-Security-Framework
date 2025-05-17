@@ -1800,16 +1800,16 @@ __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_i
         .kernel_timets = ip_kernel_time, 
     };
     // update the task comm 
-
     if (verify_kernel_version_support_task_comm()) {
         struct __kernel_proc_struct_info * proc_info  = __get_process_info();
         L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv6);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
+        if (!sock_proc_conn_info) goto out;
         L3_CHECKSUM_MAP_UPDATE_DNAT_SOCK_TASK_INFO(sock_proc_conn_info, layer3_checksum_ipv6);
     }
 
- 
+out:
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv6, BPF_ANY);   
 }
 
@@ -1826,8 +1826,10 @@ __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_i
         L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv4);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
+        if (!sock_proc_conn_info) goto out;
         L3_CHECKSUM_MAP_UPDATE_DNAT_SOCK_TASK_INFO(sock_proc_conn_info, layer3_checksum_ipv4);
     }
+out:
     return bpf_map_update_elem(&exfil_security_egress_redirect_map, &transaction_id, &layer3_checksum_ipv4, BPF_ANY);   
 }
 
@@ -1933,7 +1935,7 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
     For tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
     For DPI over TCP streams over DNS, filter must be via user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security. in passive mode 
 */  
-static 
+static
 __always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
     actions.cursor_init = &cursor_init;
     actions.parse_eth = &parse_eth;
@@ -1952,7 +1954,8 @@ __always_inline struct packet_actions packet_class_action(struct packet_actions 
     return actions;
 }
 
-static inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
+static 
+__always_inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 	__u16 frag_off;
 
 	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);

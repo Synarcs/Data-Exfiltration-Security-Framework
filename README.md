@@ -125,7 +125,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 * Data Plane (eBPF Node Agent): ``` infrastructure/agent.sh ```
 * Control Plane: ``` infrastructure/controller.sh ```
 
-## Authors
+## Author
 - [Vedang Parasnis](https://github.com/Synarcs/)
 
 ## Conferences

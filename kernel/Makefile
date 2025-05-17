@@ -39,8 +39,11 @@ BPF_FS_MNT := /sys/fs/bpf					 # map and xdp prog mount over kernel bpfs
 
 # tc bpf qdisc iprotue2 comm 
 QDISC := clsact
-QDISC_RM := sudo tc qdisc del dev
-QDISC_ADD := sudo tc qdisc add dev
+QDISC_RM := sudo tc qdisc del 
+QDISC_ADD := sudo tc qdisc add 
+QDISC_FILTER_ADD := sudo tc filter add 
+QDISC_FILTER_RM := sudo tc filter del 
+
 
 # vmlinux for raw tc, rtkprobes, kprobes kernel eBPF programs 
 VMLINUX_MNT := /sys/kernel/btf/vmlinux
@@ -96,8 +99,8 @@ tc-remove:
 
 .PHONY: tc-filter 
 tc-filter:
-	$(QDISC_ADD) enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
-	$(QDISC_ADD) br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
+	$(QDISC_FILTER_ADD) dev enp0s1 egress bpf direct-action obj $(tc_kernel_out) sec tc
+	$(QDISC_FILTER_ADD) dev br0 ingress bpf direct-action obj $(bridge_tc_kernel_ingress_out) sec tc
 	# sudo tc filter add dev br0 egress bpf direct-action obj bridge.o sec tc 
 
 .PHONY: tc-show 

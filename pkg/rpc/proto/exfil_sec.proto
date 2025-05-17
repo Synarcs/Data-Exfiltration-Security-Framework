@@ -25,7 +25,6 @@ message ExfilDomains {
     map<string, DNS_MALICIOUS_FLAGS> status = 5;
 };
 
-
 message ElfSignatureRequest {
     bytes eBPFProgramPayload = 1;
 }

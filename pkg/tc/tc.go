@@ -731,8 +731,9 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 		if ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2) {
 			// packet is malicious found from kernel and link redirected and no further DPI should be done on user space
-			events.HandleKernelDroppedPacket(
-				dnsLayer, isIpv4, isUdp, "DNS",
+			go model.HandleKernelDroppedPacket[events.Protocol](
+				ctx,
+				dnsLayer, isIpv4, isUdp, events.DNS, tc.Interfaces,
 			)
 		}
 
@@ -740,8 +741,9 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
 		if ipv6Address == utils.MALICIOUS_NETNS_IPV6 {
-			events.HandleKernelDroppedPacket(
-				dnsLayer, isIpv4, isUdp, "DNS",
+			go model.HandleKernelDroppedPacket[events.Protocol](
+				ctx,
+				dnsLayer, isIpv4, isUdp, events.DNS, tc.Interfaces,
 			)
 		}
 	}

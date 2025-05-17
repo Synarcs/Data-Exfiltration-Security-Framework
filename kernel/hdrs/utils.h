@@ -44,9 +44,8 @@ struct __kernel_uid_struct_info {
 */
 static 
 __always_inline bool verify_kernel_version_support_task_comm() {
-    if (LINUX_VERSION_MAJOR >= TC_TASK_LINUX_MAJOR_RELEASE_SUPPORT && (LINUX_VERSION_SUBLEVEL >= TC_TASK_LINUX_SUBRELEASE_SUPPORT || LINUX_VERSION_PATCHLEVEL >= TC_TASK_LINUX_SUBRELEASE_SUPPORT)) 
-        return true;
-    return false;
+    return LINUX_VERSION_MAJOR >= TC_TASK_LINUX_MAJOR_RELEASE_SUPPORT && 
+            (LINUX_VERSION_SUBLEVEL >= TC_TASK_LINUX_SUBRELEASE_SUPPORT || LINUX_VERSION_PATCHLEVEL >= TC_TASK_LINUX_SUBRELEASE_SUPPORT);
 }
 
 
@@ -97,4 +96,4 @@ __always_inline bool __has_skb_mark(struct __sk_buff *skb) {
     return skb->mark > 0;
 }
 
-#endif // __UTILS_H_ 
+#endif __UTILS_H_ 
