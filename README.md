@@ -131,7 +131,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 ## Conferences
 * Accepted and was presented at [Netdev 0x19](https://netdevconf.info/0x19/sessions/bof/real-time-prevention-of-dns-based-data-exfiltration-bof.html) for innovation in Linux kernel advancing DNS security.
 * Accepted and will be presented at [Linux Security Summit](https://sched.co/1zamI) for innovation in Linux kernel intersecting Kernel datapath, LSM, kprobes, tracepoints for advanced endpoint security solutions.
-
+* Accepted at [Black Hat Breifings](https://www.blackhat.com/us-25/briefings/schedule/#kernel-enforced-dns-exfiltration-security-framework-built-for-cloud-environments-to-stop-data-breaches-via-dns-at-scale-45566) with honororium for groundbreaking research termed as kernel enforced endpoint security for DNS to nuetralize emerging C2 attack vectors scalable in distribtued environments with strength combat complex C2 infrastructure attacks.
 
 ## Disclaimer
 * This project is under heavy development focusing on a longer vision (Kernel enforced dynamic  security for detection and response) a privileged wrapper aiding EDR / XDR solutions, hence expect some bugs around it 😀😀😀
