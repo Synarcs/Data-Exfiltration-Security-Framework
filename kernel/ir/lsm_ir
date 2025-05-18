@@ -1,0 +1,216 @@
+; ModuleID = '/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm_bpf.c'
+source_filename = "/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm_bpf.c"
+target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
+target triple = "bpf"
+
+%struct.anon = type { ptr, ptr, ptr, ptr, ptr }
+%struct.anon.0 = type { ptr, ptr, ptr, ptr, ptr }
+%struct.anon.1 = type { ptr, ptr, ptr, ptr, ptr }
+%struct.anon.2 = type { ptr, ptr, ptr, ptr, ptr }
+%struct.bpf_dynptr = type { [2 x i64] }
+%struct.anon.6 = type { i32, i32, i64, i64, i32, i32, i64, i32, i32, [16 x i8], i32, i32, i32, i32, i64, i32, i32, i64, i32, i32, %union.anon.7, i32, i64, i64, i32, i32, i32, i32 }
+%union.anon.7 = type { i32 }
+%struct.modified_sig = type { [4096 x i8], i32 }
+%struct.original_data = type { [1048576 x i8], i32, [4096 x i8], i32 }
+
+@_license = dso_local global [4 x i8] c"GPL\00", section "license", align 1
+@exfil_security_keyring_map = dso_local global %struct.anon zeroinitializer, section ".maps", align 8
+@exfil_security_modified_signature = dso_local global %struct.anon.0 zeroinitializer, section ".maps", align 8
+@exfil_security_original_program = dso_local global %struct.anon.1 zeroinitializer, section ".maps", align 8
+@exfil_security_combined_data_map = dso_local global %struct.anon.2 zeroinitializer, section ".maps", align 8
+@____bpf.____fmt = internal constant [29 x i8] c"yeah the ebpf sign key found\00", align 1
+@____bpf.____fmt.1 = internal constant [100 x i8] c"the lsm crypto verification hook called over BPF_PROG_LOAD kernel syscall %d ins ct %d, sig size %d\00", align 1
+@llvm.compiler.used = appending global [6 x ptr] [ptr @bpf, ptr @_license, ptr @exfil_security_keyring_map, ptr @exfil_security_modified_signature, ptr @exfil_security_original_program, ptr @exfil_security_combined_data_map], section "llvm.metadata"
+
+; Function Attrs: noinline nounwind optnone
+define dso_local i32 @bpf(ptr noundef %0) #0 section "lsm.s/bpf" {
+  %2 = alloca i32, align 4
+  %3 = alloca ptr, align 8
+  %4 = alloca i32, align 4
+  %5 = alloca ptr, align 8
+  %6 = alloca i32, align 4
+  %7 = alloca i32, align 4
+  %8 = alloca %struct.bpf_dynptr, align 8
+  %9 = alloca %struct.bpf_dynptr, align 8
+  %10 = alloca i32, align 4
+  %11 = alloca i32, align 4
+  %12 = alloca i32, align 4
+  %13 = alloca ptr, align 8
+  %14 = alloca ptr, align 8
+  %15 = alloca ptr, align 8
+  %16 = alloca i64, align 8
+  %17 = alloca i64, align 8
+  %18 = alloca ptr, align 8
+  store ptr %0, ptr %18, align 8
+  %19 = load ptr, ptr %18, align 8
+  %20 = load ptr, ptr %18, align 8
+  %21 = getelementptr inbounds i64, ptr %20, i64 0
+  %22 = load i64, ptr %21, align 8
+  %23 = trunc i64 %22 to i32
+  %24 = load ptr, ptr %18, align 8
+  %25 = getelementptr inbounds i64, ptr %24, i64 1
+  %26 = load i64, ptr %25, align 8
+  %27 = inttoptr i64 %26 to ptr
+  %28 = load ptr, ptr %18, align 8
+  %29 = getelementptr inbounds i64, ptr %28, i64 2
+  %30 = load i64, ptr %29, align 8
+  %31 = trunc i64 %30 to i32
+  store ptr %19, ptr %3, align 8
+  store i32 %23, ptr %4, align 4
+  store ptr %27, ptr %5, align 8
+  store i32 %31, ptr %6, align 4
+  %32 = load i32, ptr %4, align 4
+  %33 = icmp ne i32 %32, 5
+  br i1 %33, label %34, label %35
+
+34:                                               ; preds = %1
+  store i32 0, ptr %2, align 4
+  br label %116
+
+35:                                               ; preds = %1
+  %36 = call i64 inttoptr (i64 14 to ptr)() #1
+  %37 = lshr i64 %36, 32
+  %38 = trunc i64 %37 to i32
+  store i32 %38, ptr %10, align 4
+  %39 = call i64 inttoptr (i64 14 to ptr)() #1
+  %40 = and i64 %39, 4294967295
+  %41 = trunc i64 %40 to i32
+  store i32 %41, ptr %11, align 4
+  store i32 0, ptr %12, align 4
+  %42 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_keyring_map, ptr noundef %12) #1
+  store ptr %42, ptr %13, align 8
+  %43 = load ptr, ptr %13, align 8
+  %44 = icmp ne ptr %43, null
+  br i1 %44, label %46, label %45
+
+45:                                               ; preds = %35
+  store i32 0, ptr %2, align 4
+  br label %116
+
+46:                                               ; preds = %35
+  %47 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_modified_signature, ptr noundef %12) #1
+  store ptr %47, ptr %14, align 8
+  %48 = load ptr, ptr %14, align 8
+  %49 = icmp ne ptr %48, null
+  br i1 %49, label %51, label %50
+
+50:                                               ; preds = %46
+  store i32 0, ptr %2, align 4
+  br label %116
+
+51:                                               ; preds = %46
+  %52 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_original_program, ptr noundef %12) #1
+  store ptr %52, ptr %15, align 8
+  %53 = load ptr, ptr %15, align 8
+  %54 = icmp ne ptr %53, null
+  br i1 %54, label %56, label %55
+
+55:                                               ; preds = %51
+  store i32 0, ptr %2, align 4
+  br label %116
+
+56:                                               ; preds = %51
+  %57 = load ptr, ptr %5, align 8
+  %58 = getelementptr inbounds nuw %struct.anon.6, ptr %57, i32 0, i32 1
+  %59 = call i64 inttoptr (i64 113 to ptr)(ptr noundef %7, i32 noundef 4, ptr noundef %58) #1
+  %60 = icmp slt i64 %59, 0
+  br i1 %60, label %61, label %62
+
+61:                                               ; preds = %56
+  store i32 -1, ptr %2, align 4
+  br label %116
+
+62:                                               ; preds = %56
+  %63 = load ptr, ptr %14, align 8
+  %64 = getelementptr inbounds nuw %struct.modified_sig, ptr %63, i32 0, i32 1
+  %65 = load i32, ptr %64, align 4
+  %66 = zext i32 %65 to i64
+  %67 = icmp ugt i64 %66, 4096
+  br i1 %67, label %80, label %68
+
+68:                                               ; preds = %62
+  %69 = load ptr, ptr %15, align 8
+  %70 = getelementptr inbounds nuw %struct.original_data, ptr %69, i32 0, i32 1
+  %71 = load i32, ptr %70, align 4
+  %72 = zext i32 %71 to i64
+  %73 = icmp ugt i64 %72, 1048576
+  br i1 %73, label %80, label %74
+
+74:                                               ; preds = %68
+  %75 = load ptr, ptr %15, align 8
+  %76 = getelementptr inbounds nuw %struct.original_data, ptr %75, i32 0, i32 3
+  %77 = load i32, ptr %76, align 4
+  %78 = zext i32 %77 to i64
+  %79 = icmp ugt i64 %78, 4096
+  br i1 %79, label %80, label %81
+
+80:                                               ; preds = %74, %68, %62
+  store i32 -22, ptr %2, align 4
+  br label %116
+
+81:                                               ; preds = %74
+  %82 = load ptr, ptr %15, align 8
+  %83 = load ptr, ptr %15, align 8
+  %84 = getelementptr inbounds nuw %struct.original_data, ptr %83, i32 0, i32 1
+  %85 = load i32, ptr %84, align 4
+  %86 = call i64 inttoptr (i64 197 to ptr)(ptr noundef %82, i32 noundef %85, i64 noundef 0, ptr noundef %8) #1
+  %87 = icmp slt i64 %86, 0
+  br i1 %87, label %88, label %89
+
+88:                                               ; preds = %81
+  store i32 -7, ptr %2, align 4
+  br label %116
+
+89:                                               ; preds = %81
+  %90 = load ptr, ptr %15, align 8
+  %91 = getelementptr inbounds nuw %struct.original_data, ptr %90, i32 0, i32 3
+  %92 = load i32, ptr %91, align 4
+  %93 = and i32 %92, 4095
+  store i32 %93, ptr %91, align 4
+  %94 = load ptr, ptr %14, align 8
+  %95 = load ptr, ptr %15, align 8
+  %96 = getelementptr inbounds nuw %struct.original_data, ptr %95, i32 0, i32 3
+  %97 = load i32, ptr %96, align 4
+  %98 = call i64 inttoptr (i64 197 to ptr)(ptr noundef %94, i32 noundef %97, i64 noundef 0, ptr noundef %9) #1
+  %99 = icmp slt i64 %98, 0
+  br i1 %99, label %100, label %101
+
+100:                                              ; preds = %89
+  store i32 -7, ptr %2, align 4
+  br label %116
+
+101:                                              ; preds = %89
+  %102 = load ptr, ptr %14, align 8
+  %103 = getelementptr inbounds nuw %struct.modified_sig, ptr %102, i32 0, i32 1
+  %104 = load i32, ptr %103, align 4
+  %105 = and i32 %104, 4095
+  store i32 %105, ptr %103, align 4
+  %106 = call i64 (ptr, i32, ...) inttoptr (i64 6 to ptr)(ptr noundef @____bpf.____fmt, i32 noundef 29) #1
+  store i64 %106, ptr %16, align 8
+  %107 = load i64, ptr %16, align 8
+  %108 = load ptr, ptr %13, align 8
+  %109 = load i32, ptr %108, align 4
+  %110 = load i32, ptr %7, align 4
+  %111 = load ptr, ptr %15, align 8
+  %112 = getelementptr inbounds nuw %struct.original_data, ptr %111, i32 0, i32 3
+  %113 = load i32, ptr %112, align 4
+  %114 = call i64 (ptr, i32, ...) inttoptr (i64 6 to ptr)(ptr noundef @____bpf.____fmt.1, i32 noundef 100, i32 noundef %109, i32 noundef %110, i32 noundef %113) #1
+  store i64 %114, ptr %17, align 8
+  %115 = load i64, ptr %17, align 8
+  store i32 0, ptr %2, align 4
+  br label %116
+
+116:                                              ; preds = %34, %45, %50, %55, %61, %80, %88, %100, %101
+  %117 = load i32, ptr %2, align 4
+  ret i32 %117
+}
+
+attributes #0 = { noinline nounwind optnone "frame-pointer"="all" "no-trapping-math"="true" "stack-protector-buffer-size"="8" }
+attributes #1 = { nounwind }
+
+!llvm.module.flags = !{!0, !1}
+!llvm.ident = !{!2}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{i32 7, !"frame-pointer", i32 2}
+!2 = !{!"Ubuntu clang version 20.1.2 (0ubuntu1)"}

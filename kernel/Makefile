@@ -22,22 +22,25 @@ p2p_kernel_out := tun.o
 sock_sdr := dns_sock_ops.c 
 sock_sdr_out := sock.o
 
-CLANG := clang 
+crypto_kernel ?= $(shell pwd)/lsm_bpf.c
+crypto_kernel_out ?= lsm_bpf.o 
+
+CC := clang 
 CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
 ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
-LLVM_IR_ARGS := -S -emit-llvm 
+LLVM_CX_IR_ARGS := -S -emit-llvm 
 KERNEL_HEADERS := /usr/src/linux-headers-$(shell uname -r)
+KERNEL_HEADERS_DEFS := /usr/include/$(shell uname -m)-linux-gnu
 TARGET := bpf
 BPF_CFLAGS := -target $(TARGET) \
               -D__TARGET_ARCH_$(ARCH) \
-              -I/usr/include/$(shell uname -m)-linux-gnu \
+              -I$(KERNEL_HEADERS_DEFS) \
               -I$(KERNEL_HEADERS)
 
 TRACE_FS_PIPE := /sys/kernel/debug/tracing/trace_pipe
 BPF_FS_MNT := /sys/fs/bpf					 # map and xdp prog mount over kernel bpfs   
 
-
-# tc bpf qdisc iprotue2 comm 
+# tc 
 QDISC := clsact
 QDISC_RM := sudo tc qdisc del 
 QDISC_ADD := sudo tc qdisc add 
@@ -46,36 +49,58 @@ QDISC_FILTER_RM := sudo tc filter del
 
 
 # vmlinux for raw tc, rtkprobes, kprobes kernel eBPF programs 
-VMLINUX_MNT := /sys/kernel/btf/vmlinux
+VMLINUX_MNT ?= /sys/kernel/btf/vmlinux
+EBPF_PROG_OUT_PATH ?= ../node_agent/ebpf/
+
+.PHONY: compile vmlinux-btf bpf-compile compiled_loader clean-bpf-build
 
 # for arm compilation of cpu 
-.PHONY: compile
-compile:
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o $(tc_kernel_out) -c $(tc_kernel) 
-	make vmlinux-btf
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
-	make crypto
-	make netlink 
-	make tc_tun 
-	make tracepoints
-	make sock 
-	make xdp 
-	cp $(tc_kernel_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_egress_out) ../node_agent/ebpf/ 
-	cp $(bridge_tc_kernel_ingress_out) ../node_agent/ebpf/ 
-	make clean-bpf-build
+compile: vmlinux-btf bpf-compile compiled_loader clean-bpf-build
+
+bpf-compile:
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o $(tc_kernel_out) -c $(tc_kernel) 
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o $(xdp_kernel_out) -c $(xdp_kernel)
+	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(netlink_kernel_out) -c $(netlink_kernel) 
+	@echo "Compiling the ebpf tracepoints for arm64"
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
+	@echo "Compiling the tunnel tc egress filter"
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(p2p_kernel_out) -c $(p2p_kernel) 
+	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket"
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(sock_sdr_out) -c $(sock_sdr)
+	@echo "Compiling the crypto LSM hooks"
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(crypto_kernel_out) -c $(crypto_kernel) 
+
+compiled_loader:
+	cp $(tc_kernel_out) $(EBPF_PROG_OUT_PATH)
+	cp $(bridge_tc_kernel_egress_out) $(EBPF_PROG_OUT_PATH)
+	cp $(bridge_tc_kernel_ingress_out) $(EBPF_PROG_OUT_PATH)
+	cp $(netlink_kernel_out) $(EBPF_PROG_OUT_PATH)
+	cp $(p2p_kernel_out) $(EBPF_PROG_OUT_PATH)
+	cp $(sock_sdr_out) $(EBPF_PROG_OUT_PATH)
+	cp $(tracepoint_kernel_out) $(EBPF_PROG_OUT_PATH)
+	cp $(crypto_kernel_out) $(EBPF_PROG_OUT_PATH)
 
 # kernel vmlinux compile for root struct header 
-.PHONY: vmlinux-btf 
 vmlinux-btf: 
 	bpftool btf dump file $(VMLINUX_MNT) format c   > vmlinux.h	
 
-.PHONY: compile-llvm-arch 
-compile-llvm-arch:
+.PHONY: compile-llvm-ir 
+compile-llvm-ir:
 	@echo "emit llvm compile ir for the ebpf bytecode"
-	$(CLANG) $(LLVM_IR_ARGS) $(BPF_CFLAGS) -o ir/tc_ir -c $(tc_kernel)
-
+	make vmlinux-btf
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/tc_ir -c $(tc_kernel)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/bridge_in_ir -c $(bridge_tc_kernel_ingress)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/bridge_out_ir -c $(bridge_tc_kernel_egress)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/xdp_ir -c $(xdp_kernel)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/netlink_ir -c $(netlink_kernel)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/tracepoint_ir -c $(tracepoint_kernel)
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/p2p_ir -c $(p2p_kernel) # socker over p2p netdev in kernel 
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/sock_ir -c $(sock_sdr) 
+	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/lsm_ir -c $(crypto_kernel) 
+	make clean-bpf-build
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc
@@ -113,16 +138,11 @@ tc-show:
 tc-tracing:
 	sudo cat $(TRACE_FS_PIPE)
 
-.PHONY: xdp
-xdp: 
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o $(xdp_kernel_out) -c $(xdp_kernel)
-
 .PHONY: xdp-mount
 xdp-mount:
 	make xdp 
 	sudo mount -t bpf bpf $(BPF_FS_MNT)
 	sudo ip link set dev enp0s1 xdp obj $(xdp_kernel_out) sec xdp
-
 
 .PHONY: xdp-show
 xdp-show:
@@ -135,40 +155,8 @@ xdp-umount:
 	sudo ip link set dev enp0s1 xdp off 
 	sudo xdp-loader unload enp0s1 -all 
 
-.PHONY: netlink
-netlink: 
-	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(netlink_kernel_out) -c $(netlink_kernel) 
-	cp $(netlink_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: tracepoints
-tracepoints:
-	@echo "Compiling the ebpf tracepoints for arm64"
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
-	cp $(tracepoint_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: tc_tun 
-tc_tun:
-	@echo "Compiling the tunnel tc egress filter"
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	cp $(p2p_kernel_out) ../node_agent/ebpf/ 
-
-.PHONY: sock
-sock:
-	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket"
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(sock_sdr_out) -c $(sock_sdr)
-	cp $(sock_sdr_out) ../node_agent/ebpf/
-
-.PHONY: clean-bpf-build
 clean-bpf-build: 
 	rm -rf *.o 
 	rm -rf vmlinux.h 
 
-crypto_kernel ?= $(shell pwd)/lsm_bpf.c
-crypto_kernel_out ?= lsm_bpf.o 
 
-.PHONY: crypto 
-crypto:
-	@echo "Compiling the crypto LSM hooks"
-	$(CLANG) $(CXFLAGS) $(BPF_CFLAGS) -o  $(crypto_kernel_out) -c $(crypto_kernel) 
-	cp $(crypto_kernel_out) ../node_agent/ebpf/ 

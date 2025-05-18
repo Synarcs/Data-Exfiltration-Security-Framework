@@ -1,0 +1,363 @@
+; ModuleID = 'dns_xdp.c'
+source_filename = "dns_xdp.c"
+target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
+target triple = "bpf"
+
+%struct.qtypes = type { i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 }
+%struct.dns_record_limits_malicious = type { i32, i32, i32, i32, i32, i32, i32, i32 }
+%struct.exfil_security_egress_dns_limites = type { ptr, ptr, ptr, ptr }
+%struct.exfill_ingress_security_layer7_tld = type { ptr, ptr, ptr, ptr }
+%struct.cursosr = type { ptr, ptr }
+%struct.inet6_bridge_address = type { [2 x %struct.in6_addr] }
+%struct.in6_addr = type { %union.anon }
+%union.anon = type { [4 x i32] }
+%struct.xdp_md = type { i32, i32, i32, i32, i32, i32 }
+%struct.ethhdr = type { [6 x i8], [6 x i8], i16 }
+%struct.iphdr = type { i8, i8, i16, i16, i16, i8, i8, i16, %union.anon.0 }
+%union.anon.0 = type { %struct.anon }
+%struct.anon = type { i32, i32 }
+%struct.udphdr = type { i16, i16, i16, i16 }
+%struct.tcphdr = type { i16, i16, i32, i32, i16, i16, i16, i16 }
+%struct.ipv6hdr = type { i8, [3 x i8], i16, i8, i8, %union.anon.2 }
+%union.anon.2 = type { %struct.anon.3 }
+%struct.anon.3 = type { %struct.in6_addr, %struct.in6_addr }
+
+@bridge_redirect_addr_ipv6_suspicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -27027] } }, align 4
+@bridge_redirect_addr_ipv6_malicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26771] } }, align 4
+@bridge_redirect_addr_ipv6_malicious_tunnel = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26515] } }, align 4
+@qtypes = dso_local global %struct.qtypes { i8 1, i8 2, i8 5, i8 6, i8 12, i8 15, i8 16, i8 28, i8 33, i8 35, i8 41, i8 65, i8 -1, i8 10 }, align 1
+@valid_opcodes = dso_local constant [2 x i32] [i32 0, i32 6], align 4
+@DNS_RECORD_LIMITS = dso_local global %struct.dns_record_limits_malicious { i32 898, i32 1023, i32 517, i32 575, i32 271, i32 384, i32 1032, i32 1149 }, align 1
+@__license = dso_local global [10 x i8] c"MIT / GPL\00", section "license", align 1
+@exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
+@flags = dso_local global i32 0, align 4
+@exfil_security_detected_c2c_tld = dso_local global %struct.exfill_ingress_security_layer7_tld zeroinitializer, section ".maos", align 8
+@xdp_cursor = dso_local global %struct.cursosr zeroinitializer, align 1
+@llvm.compiler.used = appending global [4 x ptr] [ptr @xdp_process, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_detected_c2c_tld], section "llvm.metadata"
+
+; Function Attrs: noinline nounwind optnone
+define dso_local ptr @configure_global_ipv6_route_handlers() #0 {
+  %1 = alloca %struct.inet6_bridge_address, align 1
+  %2 = alloca %struct.in6_addr, align 4
+  %3 = alloca %struct.in6_addr, align 4
+  call void @llvm.memset.p0.i64(ptr align 1 %1, i8 0, i64 32, i1 false)
+  %4 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %5 = getelementptr inbounds [2 x %struct.in6_addr], ptr %4, i64 0, i64 0
+  %6 = getelementptr inbounds nuw %struct.in6_addr, ptr %2, i32 0, i32 0
+  store i16 288, ptr %6, align 2
+  %7 = getelementptr inbounds i16, ptr %6, i64 1
+  store i16 24648, ptr %7, align 2
+  %8 = getelementptr inbounds i16, ptr %6, i64 2
+  store i16 24648, ptr %8, align 2
+  %9 = getelementptr inbounds i16, ptr %6, i64 3
+  store i16 0, ptr %9, align 2
+  %10 = getelementptr inbounds i16, ptr %6, i64 4
+  store i16 0, ptr %10, align 2
+  %11 = getelementptr inbounds i16, ptr %6, i64 5
+  store i16 0, ptr %11, align 2
+  %12 = getelementptr inbounds i16, ptr %6, i64 6
+  store i16 0, ptr %12, align 2
+  %13 = getelementptr inbounds i16, ptr %6, i64 7
+  store i16 -30584, ptr %13, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %5, ptr align 4 %2, i64 16, i1 false)
+  %14 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %15 = getelementptr inbounds [2 x %struct.in6_addr], ptr %14, i64 0, i64 1
+  %16 = getelementptr inbounds nuw %struct.in6_addr, ptr %3, i32 0, i32 0
+  store i16 288, ptr %16, align 2
+  %17 = getelementptr inbounds i16, ptr %16, i64 1
+  store i16 24648, ptr %17, align 2
+  %18 = getelementptr inbounds i16, ptr %16, i64 2
+  store i16 24648, ptr %18, align 2
+  %19 = getelementptr inbounds i16, ptr %16, i64 3
+  store i16 0, ptr %19, align 2
+  %20 = getelementptr inbounds i16, ptr %16, i64 4
+  store i16 0, ptr %20, align 2
+  %21 = getelementptr inbounds i16, ptr %16, i64 5
+  store i16 0, ptr %21, align 2
+  %22 = getelementptr inbounds i16, ptr %16, i64 6
+  store i16 0, ptr %22, align 2
+  %23 = getelementptr inbounds i16, ptr %16, i64 7
+  store i16 17544, ptr %23, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %15, ptr align 4 %3, i64 16, i1 false)
+  ret ptr %1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg) #1
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #2
+
+; Function Attrs: noinline nounwind optnone
+define dso_local i32 @xdp_process(ptr noundef %0) #0 section "xdp" {
+  %2 = alloca i32, align 4
+  %3 = alloca ptr, align 8
+  %4 = alloca ptr, align 8
+  %5 = alloca ptr, align 8
+  %6 = alloca i32, align 4
+  %7 = alloca ptr, align 8
+  %8 = alloca ptr, align 8
+  %9 = alloca ptr, align 8
+  %10 = alloca i32, align 4
+  %11 = alloca ptr, align 8
+  %12 = alloca ptr, align 8
+  %13 = alloca ptr, align 8
+  %14 = alloca ptr, align 8
+  %15 = alloca ptr, align 8
+  %16 = alloca ptr, align 8
+  %17 = alloca ptr, align 8
+  %18 = alloca ptr, align 8
+  store ptr %0, ptr %3, align 8
+  %19 = load ptr, ptr %3, align 8
+  %20 = getelementptr inbounds nuw %struct.xdp_md, ptr %19, i32 0, i32 0
+  %21 = load i32, ptr %20, align 4
+  %22 = zext i32 %21 to i64
+  %23 = inttoptr i64 %22 to ptr
+  store ptr %23, ptr %4, align 8
+  %24 = load ptr, ptr %3, align 8
+  %25 = getelementptr inbounds nuw %struct.xdp_md, ptr %24, i32 0, i32 1
+  %26 = load i32, ptr %25, align 4
+  %27 = zext i32 %26 to i64
+  %28 = inttoptr i64 %27 to ptr
+  store ptr %28, ptr %5, align 8
+  %29 = load ptr, ptr %3, align 8
+  %30 = getelementptr inbounds nuw %struct.xdp_md, ptr %29, i32 0, i32 3
+  %31 = load i32, ptr %30, align 4
+  store i32 %31, ptr %6, align 4
+  %32 = load ptr, ptr %4, align 8
+  store ptr %32, ptr %7, align 8
+  %33 = load ptr, ptr %7, align 8
+  %34 = getelementptr inbounds %struct.ethhdr, ptr %33, i64 1
+  %35 = load ptr, ptr %5, align 8
+  %36 = icmp ugt ptr %34, %35
+  br i1 %36, label %37, label %38
+
+37:                                               ; preds = %1
+  store i32 1, ptr %2, align 4
+  br label %148
+
+38:                                               ; preds = %1
+  %39 = load ptr, ptr %7, align 8
+  %40 = getelementptr inbounds nuw %struct.ethhdr, ptr %39, i32 0, i32 2
+  %41 = load i16, ptr %40, align 1
+  %42 = zext i16 %41 to i32
+  switch i32 %42, label %146 [
+    i32 8, label %43
+    i32 56710, label %110
+  ]
+
+43:                                               ; preds = %38
+  %44 = load ptr, ptr %7, align 8
+  %45 = getelementptr inbounds %struct.ethhdr, ptr %44, i64 1
+  store ptr %45, ptr %8, align 8
+  %46 = load ptr, ptr %8, align 8
+  %47 = getelementptr inbounds %struct.iphdr, ptr %46, i64 1
+  %48 = load ptr, ptr %5, align 8
+  %49 = icmp ugt ptr %47, %48
+  br i1 %49, label %50, label %51
+
+50:                                               ; preds = %43
+  store i32 1, ptr %2, align 4
+  br label %148
+
+51:                                               ; preds = %43
+  %52 = load ptr, ptr %8, align 8
+  %53 = getelementptr inbounds nuw %struct.iphdr, ptr %52, i32 0, i32 6
+  %54 = load i8, ptr %53, align 1
+  %55 = zext i8 %54 to i32
+  switch i32 %55, label %109 [
+    i32 17, label %56
+    i32 6, label %91
+  ]
+
+56:                                               ; preds = %51
+  %57 = load ptr, ptr %8, align 8
+  %58 = getelementptr inbounds nuw i8, ptr %57, i64 20
+  store ptr %58, ptr %9, align 8
+  %59 = load ptr, ptr %9, align 8
+  %60 = getelementptr inbounds nuw %struct.udphdr, ptr %59, i64 8
+  %61 = load ptr, ptr %5, align 8
+  %62 = icmp ugt ptr %60, %61
+  br i1 %62, label %63, label %64
+
+63:                                               ; preds = %56
+  store i32 1, ptr %2, align 4
+  br label %148
+
+64:                                               ; preds = %56
+  %65 = load ptr, ptr %9, align 8
+  %66 = getelementptr inbounds nuw %struct.udphdr, ptr %65, i32 0, i32 1
+  %67 = load i16, ptr %66, align 2
+  %68 = zext i16 %67 to i32
+  %69 = icmp eq i32 %68, 13568
+  br i1 %69, label %70, label %80
+
+70:                                               ; preds = %64
+  %71 = load ptr, ptr %9, align 8
+  %72 = getelementptr inbounds nuw %struct.udphdr, ptr %71, i32 0, i32 2
+  %73 = load i16, ptr %72, align 2
+  %74 = zext i16 %73 to i32
+  store i32 %74, ptr %10, align 4
+  %75 = load i32, ptr %10, align 4
+  %76 = zext i32 %75 to i64
+  %77 = icmp ugt i64 12, %76
+  br i1 %77, label %78, label %79
+
+78:                                               ; preds = %70
+  store i32 1, ptr %2, align 4
+  br label %148
+
+79:                                               ; preds = %70
+  store i32 2, ptr %2, align 4
+  br label %148
+
+80:                                               ; preds = %64
+  %81 = load ptr, ptr %9, align 8
+  %82 = getelementptr inbounds nuw %struct.udphdr, ptr %81, i32 0, i32 1
+  %83 = load i16, ptr %82, align 2
+  %84 = zext i16 %83 to i32
+  %85 = icmp eq i32 %84, 59668
+  br i1 %85, label %86, label %87
+
+86:                                               ; preds = %80
+  store i32 2, ptr %2, align 4
+  br label %148
+
+87:                                               ; preds = %80
+  br label %88
+
+88:                                               ; preds = %87
+  %89 = load ptr, ptr %9, align 8
+  %90 = getelementptr inbounds nuw i8, ptr %89, i64 8
+  store ptr %90, ptr %11, align 8
+  store i32 2, ptr %2, align 4
+  br label %148
+
+91:                                               ; preds = %51
+  %92 = load ptr, ptr %8, align 8
+  %93 = getelementptr inbounds nuw i8, ptr %92, i64 20
+  store ptr %93, ptr %12, align 8
+  %94 = load ptr, ptr %12, align 8
+  %95 = getelementptr inbounds nuw %struct.tcphdr, ptr %94, i64 20
+  %96 = load ptr, ptr %5, align 8
+  %97 = icmp ugt ptr %95, %96
+  br i1 %97, label %98, label %99
+
+98:                                               ; preds = %91
+  store i32 1, ptr %2, align 4
+  br label %148
+
+99:                                               ; preds = %91
+  %100 = load ptr, ptr %12, align 8
+  %101 = getelementptr inbounds nuw %struct.tcphdr, ptr %100, i32 0, i32 1
+  %102 = load i16, ptr %101, align 2
+  %103 = zext i16 %102 to i32
+  %104 = icmp eq i32 %103, 13568
+  br i1 %104, label %105, label %108
+
+105:                                              ; preds = %99
+  %106 = load ptr, ptr %12, align 8
+  %107 = getelementptr inbounds nuw i8, ptr %106, i64 8
+  store ptr %107, ptr %13, align 8
+  store i32 2, ptr %2, align 4
+  br label %148
+
+108:                                              ; preds = %99
+  br label %109
+
+109:                                              ; preds = %51, %108
+  store i32 2, ptr %2, align 4
+  br label %148
+
+110:                                              ; preds = %38
+  %111 = load ptr, ptr %7, align 8
+  %112 = getelementptr inbounds %struct.ethhdr, ptr %111, i64 1
+  store ptr %112, ptr %14, align 8
+  %113 = load ptr, ptr %14, align 8
+  %114 = getelementptr inbounds %struct.ipv6hdr, ptr %113, i64 1
+  %115 = load ptr, ptr %5, align 8
+  %116 = icmp ugt ptr %114, %115
+  br i1 %116, label %117, label %118
+
+117:                                              ; preds = %110
+  store i32 1, ptr %2, align 4
+  br label %148
+
+118:                                              ; preds = %110
+  %119 = load ptr, ptr %14, align 8
+  %120 = getelementptr inbounds nuw %struct.ipv6hdr, ptr %119, i32 0, i32 3
+  %121 = load i8, ptr %120, align 2
+  %122 = zext i8 %121 to i32
+  switch i32 %122, label %145 [
+    i32 17, label %123
+    i32 6, label %134
+  ]
+
+123:                                              ; preds = %118
+  %124 = load ptr, ptr %14, align 8
+  %125 = getelementptr inbounds nuw %struct.ipv6hdr, ptr %124, i64 40
+  store ptr %125, ptr %15, align 8
+  %126 = load ptr, ptr %15, align 8
+  %127 = getelementptr inbounds nuw %struct.udphdr, ptr %126, i64 8
+  %128 = load ptr, ptr %5, align 8
+  %129 = icmp ugt ptr %127, %128
+  br i1 %129, label %130, label %131
+
+130:                                              ; preds = %123
+  store i32 1, ptr %2, align 4
+  br label %148
+
+131:                                              ; preds = %123
+  %132 = load ptr, ptr %15, align 8
+  %133 = getelementptr inbounds nuw i8, ptr %132, i64 8
+  store ptr %133, ptr %16, align 8
+  store i32 2, ptr %2, align 4
+  br label %148
+
+134:                                              ; preds = %118
+  %135 = load ptr, ptr %14, align 8
+  %136 = getelementptr inbounds nuw %struct.ipv6hdr, ptr %135, i64 40
+  store ptr %136, ptr %17, align 8
+  %137 = load ptr, ptr %17, align 8
+  %138 = getelementptr inbounds nuw i8, ptr %137, i64 8
+  store ptr %138, ptr %18, align 8
+  %139 = load ptr, ptr %17, align 8
+  %140 = getelementptr inbounds nuw %struct.tcphdr, ptr %139, i64 20
+  %141 = load ptr, ptr %5, align 8
+  %142 = icmp ugt ptr %140, %141
+  br i1 %142, label %143, label %144
+
+143:                                              ; preds = %134
+  store i32 1, ptr %2, align 4
+  br label %148
+
+144:                                              ; preds = %134
+  store i32 2, ptr %2, align 4
+  br label %148
+
+145:                                              ; preds = %118
+  br label %147
+
+146:                                              ; preds = %38
+  store i32 2, ptr %2, align 4
+  br label %148
+
+147:                                              ; preds = %145
+  store i32 2, ptr %2, align 4
+  br label %148
+
+148:                                              ; preds = %147, %146, %144, %143, %131, %130, %117, %109, %105, %98, %88, %86, %79, %78, %63, %50, %37
+  %149 = load i32, ptr %2, align 4
+  ret i32 %149
+}
+
+attributes #0 = { noinline nounwind optnone "frame-pointer"="all" "no-trapping-math"="true" "stack-protector-buffer-size"="8" }
+attributes #1 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+
+!llvm.module.flags = !{!0, !1}
+!llvm.ident = !{!2}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{i32 7, !"frame-pointer", i32 2}
+!2 = !{!"Ubuntu clang version 20.1.2 (0ubuntu1)"}

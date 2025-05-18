@@ -85,7 +85,7 @@ struct exfil_security_egress_dns_limites {
 #define EGRESS_MAL_PROC_EXFIL_SCHED 3 
 #define EGRESS_DETECTED_MAP_PROC_MAX_FORK_CT 3 
 
-__u32 redirect_skb_mark = 0xFFFF;
+#define REDIRECT_SKB_MARK 0xFFFF
 
 
 // use the kernel eBPF maps to inject the dynamic config to process all the l3 filters 

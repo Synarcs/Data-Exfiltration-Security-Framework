@@ -1,0 +1,163 @@
+; ModuleID = 'bridge_tc_ing.c'
+source_filename = "bridge_tc_ing.c"
+target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
+target triple = "bpf"
+
+%struct.qtypes = type { i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 }
+%struct.dns_record_limits_malicious = type { i32, i32, i32, i32, i32, i32, i32, i32 }
+%struct.exfil_security_tc_bridge_config_map = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_dns_limites = type { ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_proc_mal = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_nsp_map = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_config_map = type { ptr, ptr, ptr, ptr }
+%struct.inet6_bridge_address = type { [2 x %struct.in6_addr] }
+%struct.in6_addr = type { %union.anon }
+%union.anon = type { [4 x i32] }
+%struct.__sk_buff = type { i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, [5 x i32], i32, i32, i32, i32, i32, i32, i32, i32, [4 x i32], [4 x i32], i32, i32, i32, %union.anon.0, i64, i32, i32, %union.anon.1, i32, i8, [3 x i8], i64 }
+%union.anon.0 = type { ptr }
+%union.anon.1 = type { ptr }
+
+@bridge_redirect_addr_ipv6_suspicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -27027] } }, align 4
+@bridge_redirect_addr_ipv6_malicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26771] } }, align 4
+@bridge_redirect_addr_ipv6_malicious_tunnel = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26515] } }, align 4
+@qtypes = dso_local global %struct.qtypes { i8 1, i8 2, i8 5, i8 6, i8 12, i8 15, i8 16, i8 28, i8 33, i8 35, i8 41, i8 65, i8 -1, i8 10 }, align 1
+@valid_opcodes = dso_local constant [2 x i32] [i32 0, i32 6], align 4
+@DNS_RECORD_LIMITS = dso_local global %struct.dns_record_limits_malicious { i32 898, i32 1023, i32 517, i32 575, i32 271, i32 384, i32 1032, i32 1149 }, align 1
+@exfil_security_tc_bridge_config_map = dso_local global %struct.exfil_security_tc_bridge_config_map zeroinitializer, section ".maps", align 8
+@__license = dso_local global [13 x i8] c"Dual MIT/GPL\00", section "license", align 1
+@exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
+@flags = dso_local global i32 0, align 4
+@exfil_security_egress_proc_mal = dso_local global %struct.exfil_security_egress_proc_mal zeroinitializer, section ".maps", align 8
+@exfil_security_egress_nsp_map = dso_local global %struct.exfil_security_egress_nsp_map zeroinitializer, section ".maps", align 8
+@exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter = dso_local global %struct.exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter zeroinitializer, section ".maps", align 8
+@exfil_security_config_map = dso_local global %struct.exfil_security_config_map zeroinitializer, section ".maps", align 8
+@llvm.compiler.used = appending global [8 x ptr] [ptr @bridge_ingress_filter, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_egress_proc_mal, ptr @exfil_security_egress_nsp_map, ptr @exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, ptr @exfil_security_tc_bridge_config_map, ptr @exfil_security_config_map], section "llvm.metadata"
+
+; Function Attrs: noinline nounwind optnone
+define dso_local ptr @configure_global_ipv6_route_handlers() #0 {
+  %1 = alloca %struct.inet6_bridge_address, align 1
+  %2 = alloca %struct.in6_addr, align 4
+  %3 = alloca %struct.in6_addr, align 4
+  call void @llvm.memset.p0.i64(ptr align 1 %1, i8 0, i64 32, i1 false)
+  %4 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %5 = getelementptr inbounds [2 x %struct.in6_addr], ptr %4, i64 0, i64 0
+  %6 = getelementptr inbounds nuw %struct.in6_addr, ptr %2, i32 0, i32 0
+  store i16 288, ptr %6, align 2
+  %7 = getelementptr inbounds i16, ptr %6, i64 1
+  store i16 24648, ptr %7, align 2
+  %8 = getelementptr inbounds i16, ptr %6, i64 2
+  store i16 24648, ptr %8, align 2
+  %9 = getelementptr inbounds i16, ptr %6, i64 3
+  store i16 0, ptr %9, align 2
+  %10 = getelementptr inbounds i16, ptr %6, i64 4
+  store i16 0, ptr %10, align 2
+  %11 = getelementptr inbounds i16, ptr %6, i64 5
+  store i16 0, ptr %11, align 2
+  %12 = getelementptr inbounds i16, ptr %6, i64 6
+  store i16 0, ptr %12, align 2
+  %13 = getelementptr inbounds i16, ptr %6, i64 7
+  store i16 -30584, ptr %13, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %5, ptr align 4 %2, i64 16, i1 false)
+  %14 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %15 = getelementptr inbounds [2 x %struct.in6_addr], ptr %14, i64 0, i64 1
+  %16 = getelementptr inbounds nuw %struct.in6_addr, ptr %3, i32 0, i32 0
+  store i16 288, ptr %16, align 2
+  %17 = getelementptr inbounds i16, ptr %16, i64 1
+  store i16 24648, ptr %17, align 2
+  %18 = getelementptr inbounds i16, ptr %16, i64 2
+  store i16 24648, ptr %18, align 2
+  %19 = getelementptr inbounds i16, ptr %16, i64 3
+  store i16 0, ptr %19, align 2
+  %20 = getelementptr inbounds i16, ptr %16, i64 4
+  store i16 0, ptr %20, align 2
+  %21 = getelementptr inbounds i16, ptr %16, i64 5
+  store i16 0, ptr %21, align 2
+  %22 = getelementptr inbounds i16, ptr %16, i64 6
+  store i16 0, ptr %22, align 2
+  %23 = getelementptr inbounds i16, ptr %16, i64 7
+  store i16 17544, ptr %23, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %15, ptr align 4 %3, i64 16, i1 false)
+  ret ptr %1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg) #1
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #2
+
+; Function Attrs: noinline nounwind optnone
+define dso_local i32 @bridge_ingress_filter(ptr noundef %0) #0 section "tc" {
+  %2 = alloca i32, align 4
+  %3 = alloca ptr, align 8
+  %4 = alloca i32, align 4
+  %5 = alloca i32, align 4
+  %6 = alloca i32, align 4
+  %7 = alloca ptr, align 8
+  store ptr %0, ptr %3, align 8
+  %8 = load ptr, ptr %3, align 8
+  %9 = getelementptr inbounds nuw %struct.__sk_buff, ptr %8, i32 0, i32 10
+  %10 = load i32, ptr %9, align 8
+  store i32 %10, ptr %4, align 4
+  %11 = load ptr, ptr %3, align 8
+  %12 = getelementptr inbounds nuw %struct.__sk_buff, ptr %11, i32 0, i32 2
+  %13 = load i32, ptr %12, align 8
+  store i32 %13, ptr %5, align 4
+  store i32 0, ptr %6, align 4
+  %14 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_tc_bridge_config_map, ptr noundef %6)
+  store ptr %14, ptr %7, align 8
+  %15 = load ptr, ptr %7, align 8
+  %16 = icmp ne ptr %15, null
+  br i1 %16, label %26, label %17
+
+17:                                               ; preds = %1
+  %18 = load ptr, ptr %3, align 8
+  %19 = getelementptr inbounds nuw %struct.__sk_buff, ptr %18, i32 0, i32 2
+  %20 = load i32, ptr %19, align 8
+  %21 = icmp ne i32 %20, 65535
+  br i1 %21, label %22, label %25
+
+22:                                               ; preds = %17
+  %23 = call i64 inttoptr (i64 23 to ptr)(i32 noundef 0, i64 noundef 1)
+  %24 = trunc i64 %23 to i32
+  store i32 %24, ptr %2, align 4
+  br label %37
+
+25:                                               ; preds = %17
+  br label %37
+
+26:                                               ; preds = %1
+  %27 = load ptr, ptr %3, align 8
+  %28 = getelementptr inbounds nuw %struct.__sk_buff, ptr %27, i32 0, i32 2
+  %29 = load i32, ptr %28, align 8
+  %30 = load ptr, ptr %7, align 8
+  %31 = load i32, ptr %30, align 4
+  %32 = icmp ne i32 %29, %31
+  br i1 %32, label %33, label %36
+
+33:                                               ; preds = %26
+  %34 = call i64 inttoptr (i64 23 to ptr)(i32 noundef 0, i64 noundef 1)
+  %35 = trunc i64 %34 to i32
+  store i32 %35, ptr %2, align 4
+  br label %37
+
+36:                                               ; preds = %26
+  store i32 0, ptr %2, align 4
+  br label %37
+
+37:                                               ; preds = %22, %33, %36, %25
+  %38 = load i32, ptr %2, align 4
+  ret i32 %38
+}
+
+attributes #0 = { noinline nounwind optnone "frame-pointer"="all" "no-trapping-math"="true" "stack-protector-buffer-size"="8" }
+attributes #1 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+
+!llvm.module.flags = !{!0, !1}
+!llvm.ident = !{!2}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{i32 7, !"frame-pointer", i32 2}
+!2 = !{!"Ubuntu clang version 20.1.2 (0ubuntu1)"}

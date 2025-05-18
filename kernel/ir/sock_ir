@@ -1,0 +1,1108 @@
+; ModuleID = 'dns_sock_ops.c'
+source_filename = "dns_sock_ops.c"
+target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
+target triple = "bpf"
+
+%struct.qtypes = type { i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 }
+%struct.dns_record_limits_malicious = type { i32, i32, i32, i32, i32, i32, i32, i32 }
+%struct.exfil_security_egress_dns_limites = type { ptr, ptr, ptr, ptr }
+%struct.exfil_sock_udp_conn_map = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_proc_mal = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_nsp_map = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_tc_bridge_config_map = type { ptr, ptr, ptr, ptr, ptr }
+%struct.exfil_security_config_map = type { ptr, ptr, ptr, ptr }
+%struct.inet6_bridge_address = type { [2 x %struct.in6_addr] }
+%struct.in6_addr = type { %union.anon }
+%union.anon = type { [4 x i32] }
+%struct.__kernel_proc_struct_info = type { i32, i32 }
+%struct.sock_proc_conn_info = type { i32, i32, i16 }
+%struct.__sk_buff = type { i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, [5 x i32], i32, i32, i32, i32, i32, i32, i32, i32, [4 x i32], [4 x i32], i32, i32, i32, %union.anon.0, i64, i32, i32, %union.anon.1, i32, i8, [3 x i8], i64 }
+%union.anon.0 = type { ptr }
+%union.anon.1 = type { ptr }
+%struct.iphdr = type { i8, i8, i16, i16, i16, i8, i8, i16, %union.anon.2 }
+%union.anon.2 = type { %struct.anon }
+%struct.anon = type { i32, i32 }
+%struct.udphdr = type { i16, i16, i16, i16 }
+%struct.exfil_kernel_config = type { i32, i32, i32, i32, i32, i32 }
+%struct.ipv6hdr = type { i8, [3 x i8], i16, i8, i8, %union.anon.4 }
+%union.anon.4 = type { %struct.anon.5 }
+%struct.anon.5 = type { %struct.in6_addr, %struct.in6_addr }
+
+@qtypes = dso_local global %struct.qtypes { i8 1, i8 2, i8 5, i8 6, i8 12, i8 15, i8 16, i8 28, i8 33, i8 35, i8 41, i8 65, i8 -1, i8 10 }, align 1
+@valid_opcodes = dso_local constant [2 x i32] [i32 0, i32 6], align 4
+@DNS_RECORD_LIMITS = dso_local global %struct.dns_record_limits_malicious { i32 898, i32 1023, i32 517, i32 575, i32 271, i32 384, i32 1032, i32 1149 }, align 1
+@bridge_redirect_addr_ipv6_suspicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -27027] } }, align 4
+@bridge_redirect_addr_ipv6_malicious = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26771] } }, align 4
+@bridge_redirect_addr_ipv6_malicious_tunnel = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26515] } }, align 4
+@_license = dso_local global [4 x i8] c"GPL\00", section "license", align 1
+@flags = dso_local global i32 0, align 4
+@exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
+@exfil_sock_udp_conn_map = dso_local global %struct.exfil_sock_udp_conn_map zeroinitializer, section ".maps", align 8
+@exfil_security_egress_proc_mal = dso_local global %struct.exfil_security_egress_proc_mal zeroinitializer, section ".maps", align 8
+@exfil_security_egress_nsp_map = dso_local global %struct.exfil_security_egress_nsp_map zeroinitializer, section ".maps", align 8
+@exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter = dso_local global %struct.exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter zeroinitializer, section ".maps", align 8
+@exfil_security_tc_bridge_config_map = dso_local global %struct.exfil_security_tc_bridge_config_map zeroinitializer, section ".maps", align 8
+@exfil_security_config_map = dso_local global %struct.exfil_security_config_map zeroinitializer, section ".maps", align 8
+@llvm.compiler.used = appending global [9 x ptr] [ptr @dns_udp_sock_ops, ptr @_license, ptr @exfil_security_egress_dns_limites, ptr @exfil_sock_udp_conn_map, ptr @exfil_security_egress_proc_mal, ptr @exfil_security_egress_nsp_map, ptr @exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, ptr @exfil_security_tc_bridge_config_map, ptr @exfil_security_config_map], section "llvm.metadata"
+
+; Function Attrs: noinline nounwind optnone
+define dso_local ptr @configure_global_ipv6_route_handlers() #0 {
+  %1 = alloca %struct.inet6_bridge_address, align 1
+  %2 = alloca %struct.in6_addr, align 4
+  %3 = alloca %struct.in6_addr, align 4
+  call void @llvm.memset.p0.i64(ptr align 1 %1, i8 0, i64 32, i1 false)
+  %4 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %5 = getelementptr inbounds [2 x %struct.in6_addr], ptr %4, i64 0, i64 0
+  %6 = getelementptr inbounds nuw %struct.in6_addr, ptr %2, i32 0, i32 0
+  store i16 288, ptr %6, align 2
+  %7 = getelementptr inbounds i16, ptr %6, i64 1
+  store i16 24648, ptr %7, align 2
+  %8 = getelementptr inbounds i16, ptr %6, i64 2
+  store i16 24648, ptr %8, align 2
+  %9 = getelementptr inbounds i16, ptr %6, i64 3
+  store i16 0, ptr %9, align 2
+  %10 = getelementptr inbounds i16, ptr %6, i64 4
+  store i16 0, ptr %10, align 2
+  %11 = getelementptr inbounds i16, ptr %6, i64 5
+  store i16 0, ptr %11, align 2
+  %12 = getelementptr inbounds i16, ptr %6, i64 6
+  store i16 0, ptr %12, align 2
+  %13 = getelementptr inbounds i16, ptr %6, i64 7
+  store i16 -30584, ptr %13, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %5, ptr align 4 %2, i64 16, i1 false)
+  %14 = getelementptr inbounds nuw %struct.inet6_bridge_address, ptr %1, i32 0, i32 0
+  %15 = getelementptr inbounds [2 x %struct.in6_addr], ptr %14, i64 0, i64 1
+  %16 = getelementptr inbounds nuw %struct.in6_addr, ptr %3, i32 0, i32 0
+  store i16 288, ptr %16, align 2
+  %17 = getelementptr inbounds i16, ptr %16, i64 1
+  store i16 24648, ptr %17, align 2
+  %18 = getelementptr inbounds i16, ptr %16, i64 2
+  store i16 24648, ptr %18, align 2
+  %19 = getelementptr inbounds i16, ptr %16, i64 3
+  store i16 0, ptr %19, align 2
+  %20 = getelementptr inbounds i16, ptr %16, i64 4
+  store i16 0, ptr %20, align 2
+  %21 = getelementptr inbounds i16, ptr %16, i64 5
+  store i16 0, ptr %21, align 2
+  %22 = getelementptr inbounds i16, ptr %16, i64 6
+  store i16 0, ptr %22, align 2
+  %23 = getelementptr inbounds i16, ptr %16, i64 7
+  store i16 17544, ptr %23, align 2
+  call void @llvm.memcpy.p0.p0.i64(ptr align 1 %15, ptr align 4 %3, i64 16, i1 false)
+  ret ptr %1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: write)
+declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg) #1
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #2
+
+; Function Attrs: noinline nounwind optnone
+define dso_local i32 @dns_udp_sock_ops(ptr noundef %0) #0 section "cgroup_skb/egress" {
+  %2 = alloca %struct.__kernel_proc_struct_info, align 1
+  %3 = alloca i32, align 4
+  %4 = alloca i32, align 4
+  %5 = alloca %struct.__kernel_proc_struct_info, align 1
+  %6 = alloca i32, align 4
+  %7 = alloca i32, align 4
+  %8 = alloca %struct.__kernel_proc_struct_info, align 1
+  %9 = alloca i32, align 4
+  %10 = alloca i32, align 4
+  %11 = alloca %struct.__kernel_proc_struct_info, align 1
+  %12 = alloca i32, align 4
+  %13 = alloca i32, align 4
+  %14 = alloca i16, align 2
+  %15 = alloca ptr, align 8
+  %16 = alloca i16, align 2
+  %17 = alloca ptr, align 8
+  %18 = alloca i16, align 2
+  %19 = alloca ptr, align 8
+  %20 = alloca i16, align 2
+  %21 = alloca ptr, align 8
+  %22 = alloca ptr, align 8
+  %23 = alloca i16, align 2
+  %24 = alloca ptr, align 8
+  %25 = alloca i16, align 2
+  %26 = alloca ptr, align 8
+  %27 = alloca ptr, align 8
+  %28 = alloca i16, align 2
+  %29 = alloca i16, align 2
+  %30 = alloca ptr, align 8
+  %31 = alloca ptr, align 8
+  %32 = alloca %struct.sock_proc_conn_info, align 4
+  %33 = alloca ptr, align 8
+  %34 = alloca ptr, align 8
+  %35 = alloca i16, align 2
+  %36 = alloca i16, align 2
+  %37 = alloca ptr, align 8
+  %38 = alloca ptr, align 8
+  %39 = alloca %struct.sock_proc_conn_info, align 4
+  %40 = alloca ptr, align 8
+  %41 = alloca ptr, align 8
+  %42 = alloca i16, align 2
+  %43 = alloca i16, align 2
+  %44 = alloca ptr, align 8
+  %45 = alloca ptr, align 8
+  %46 = alloca %struct.sock_proc_conn_info, align 4
+  %47 = alloca ptr, align 8
+  %48 = alloca ptr, align 8
+  %49 = alloca i16, align 2
+  %50 = alloca i16, align 2
+  %51 = alloca ptr, align 8
+  %52 = alloca ptr, align 8
+  %53 = alloca %struct.sock_proc_conn_info, align 4
+  %54 = alloca i1, align 1
+  %55 = alloca ptr, align 8
+  %56 = alloca i32, align 4
+  %57 = alloca ptr, align 8
+  %58 = alloca i1, align 1
+  %59 = alloca ptr, align 8
+  %60 = alloca i32, align 4
+  %61 = alloca ptr, align 8
+  %62 = alloca i32, align 4
+  %63 = alloca ptr, align 8
+  %64 = alloca ptr, align 8
+  %65 = alloca ptr, align 8
+  %66 = alloca ptr, align 8
+  %67 = alloca ptr, align 8
+  %68 = alloca ptr, align 8
+  %69 = alloca ptr, align 8
+  %70 = alloca i16, align 2
+  store ptr %0, ptr %63, align 8
+  %71 = load ptr, ptr %63, align 8
+  %72 = getelementptr inbounds nuw %struct.__sk_buff, ptr %71, i32 0, i32 15
+  %73 = load i32, ptr %72, align 4
+  %74 = zext i32 %73 to i64
+  %75 = inttoptr i64 %74 to ptr
+  store ptr %75, ptr %64, align 8
+  %76 = load ptr, ptr %63, align 8
+  %77 = getelementptr inbounds nuw %struct.__sk_buff, ptr %76, i32 0, i32 16
+  %78 = load i32, ptr %77, align 8
+  %79 = zext i32 %78 to i64
+  %80 = inttoptr i64 %79 to ptr
+  store ptr %80, ptr %65, align 8
+  br i1 true, label %81, label %82
+
+81:                                               ; preds = %1
+  store i32 1, ptr %62, align 4
+  br label %656
+
+82:                                               ; preds = %1
+  %83 = load ptr, ptr %63, align 8
+  %84 = getelementptr inbounds nuw %struct.__sk_buff, ptr %83, i32 0, i32 18
+  %85 = load i32, ptr %84, align 8
+  switch i32 %85, label %655 [
+    i32 2, label %86
+    i32 10, label %355
+  ]
+
+86:                                               ; preds = %82
+  %87 = load ptr, ptr %64, align 8
+  store ptr %87, ptr %66, align 8
+  %88 = load ptr, ptr %66, align 8
+  %89 = getelementptr inbounds %struct.iphdr, ptr %88, i64 1
+  %90 = load ptr, ptr %65, align 8
+  %91 = icmp ugt ptr %89, %90
+  br i1 %91, label %92, label %93
+
+92:                                               ; preds = %86
+  store i32 0, ptr %62, align 4
+  br label %656
+
+93:                                               ; preds = %86
+  %94 = load ptr, ptr %66, align 8
+  %95 = getelementptr inbounds nuw %struct.iphdr, ptr %94, i32 0, i32 6
+  %96 = load i8, ptr %95, align 1
+  %97 = zext i8 %96 to i32
+  %98 = icmp eq i32 %97, 17
+  br i1 %98, label %99, label %354
+
+99:                                               ; preds = %93
+  %100 = load ptr, ptr %64, align 8
+  %101 = getelementptr inbounds nuw i8, ptr %100, i64 20
+  store ptr %101, ptr %67, align 8
+  %102 = load ptr, ptr %67, align 8
+  %103 = getelementptr inbounds %struct.udphdr, ptr %102, i64 1
+  %104 = load ptr, ptr %65, align 8
+  %105 = icmp ugt ptr %103, %104
+  br i1 %105, label %106, label %107
+
+106:                                              ; preds = %99
+  store i32 0, ptr %62, align 4
+  br label %656
+
+107:                                              ; preds = %99
+  br label %108
+
+108:                                              ; preds = %107
+  %109 = load ptr, ptr %63, align 8
+  store ptr %109, ptr %55, align 8
+  %110 = load ptr, ptr %55, align 8
+  %111 = getelementptr inbounds nuw %struct.__sk_buff, ptr %110, i32 0, i32 10
+  %112 = load i32, ptr %111, align 8
+  store i32 %112, ptr %56, align 4
+  %113 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_config_map, ptr noundef %56) #6
+  store ptr %113, ptr %57, align 8
+  %114 = load ptr, ptr %57, align 8
+  %115 = icmp ne ptr %114, null
+  br i1 %115, label %117, label %116
+
+116:                                              ; preds = %108
+  store i1 false, ptr %54, align 1
+  br label %123
+
+117:                                              ; preds = %108
+  %118 = load ptr, ptr %57, align 8
+  %119 = getelementptr inbounds nuw %struct.exfil_kernel_config, ptr %118, i32 0, i32 5
+  %120 = load i32, ptr %119, align 1
+  %121 = icmp ne i32 %120, 0
+  %122 = xor i1 %121, true
+  store i1 %122, ptr %54, align 1
+  br label %123
+
+123:                                              ; preds = %116, %117
+  %124 = load i1, ptr %54, align 1
+  br i1 %124, label %125, label %216
+
+125:                                              ; preds = %123
+  %126 = load ptr, ptr %63, align 8
+  %127 = load ptr, ptr %67, align 8
+  store ptr %126, ptr %26, align 8
+  store ptr %127, ptr %27, align 8
+  %128 = load ptr, ptr %27, align 8
+  %129 = load i16, ptr %128, align 2
+  %130 = call i1 @llvm.is.constant.i16(i16 %129)
+  br i1 %130, label %131, label %145
+
+131:                                              ; preds = %125
+  %132 = load ptr, ptr %27, align 8
+  %133 = load i16, ptr %132, align 2
+  %134 = zext i16 %133 to i32
+  %135 = shl i32 %134, 8
+  %136 = ashr i32 %135, 8
+  %137 = shl i32 %136, 8
+  %138 = load ptr, ptr %27, align 8
+  %139 = load i16, ptr %138, align 2
+  %140 = zext i16 %139 to i32
+  %141 = ashr i32 %140, 8
+  %142 = or i32 %137, %141
+  %143 = trunc i32 %142 to i16
+  %144 = zext i16 %143 to i32
+  br label %150
+
+145:                                              ; preds = %125
+  %146 = load ptr, ptr %27, align 8
+  %147 = load i16, ptr %146, align 2
+  %148 = call i16 @llvm.bswap.i16(i16 %147)
+  %149 = zext i16 %148 to i32
+  br label %150
+
+150:                                              ; preds = %145, %131
+  %151 = phi i32 [ %144, %131 ], [ %149, %145 ]
+  %152 = trunc i32 %151 to i16
+  store i16 %152, ptr %28, align 2
+  %153 = load ptr, ptr %27, align 8
+  %154 = getelementptr inbounds nuw %struct.udphdr, ptr %153, i32 0, i32 1
+  %155 = load i16, ptr %154, align 2
+  %156 = call i1 @llvm.is.constant.i16(i16 %155)
+  br i1 %156, label %157, label %173
+
+157:                                              ; preds = %150
+  %158 = load ptr, ptr %27, align 8
+  %159 = getelementptr inbounds nuw %struct.udphdr, ptr %158, i32 0, i32 1
+  %160 = load i16, ptr %159, align 2
+  %161 = zext i16 %160 to i32
+  %162 = shl i32 %161, 8
+  %163 = ashr i32 %162, 8
+  %164 = shl i32 %163, 8
+  %165 = load ptr, ptr %27, align 8
+  %166 = getelementptr inbounds nuw %struct.udphdr, ptr %165, i32 0, i32 1
+  %167 = load i16, ptr %166, align 2
+  %168 = zext i16 %167 to i32
+  %169 = ashr i32 %168, 8
+  %170 = or i32 %164, %169
+  %171 = trunc i32 %170 to i16
+  %172 = zext i16 %171 to i32
+  br label %179
+
+173:                                              ; preds = %150
+  %174 = load ptr, ptr %27, align 8
+  %175 = getelementptr inbounds nuw %struct.udphdr, ptr %174, i32 0, i32 1
+  %176 = load i16, ptr %175, align 2
+  %177 = call i16 @llvm.bswap.i16(i16 %176)
+  %178 = zext i16 %177 to i32
+  br label %179
+
+179:                                              ; preds = %173, %157
+  %180 = phi i32 [ %172, %157 ], [ %178, %173 ]
+  %181 = trunc i32 %180 to i16
+  store i16 %181, ptr %29, align 2
+  %182 = call i64 inttoptr (i64 14 to ptr)() #6
+  %183 = lshr i64 %182, 32
+  %184 = trunc i64 %183 to i32
+  store i32 %184, ptr %12, align 4
+  %185 = call i64 inttoptr (i64 14 to ptr)() #6
+  %186 = and i64 %185, 4294967295
+  %187 = trunc i64 %186 to i32
+  store i32 %187, ptr %13, align 4
+  %188 = load i32, ptr %12, align 4
+  store i32 %188, ptr %11, align 1
+  %189 = load i32, ptr %13, align 4
+  %190 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %11, i32 0, i32 1
+  store i32 %189, ptr %190, align 1
+  store ptr %11, ptr %30, align 8
+  %191 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %28) #6
+  store ptr %191, ptr %31, align 8
+  %192 = load i16, ptr %29, align 2
+  %193 = load ptr, ptr %30, align 8
+  call void @llvm.experimental.noalias.scope.decl(metadata !3)
+  store i16 %192, ptr %20, align 2, !noalias !3
+  store ptr %193, ptr %21, align 8, !noalias !3
+  %194 = load ptr, ptr %21, align 8, !noalias !3
+  %195 = load i32, ptr %194, align 1, !noalias !3
+  store i32 %195, ptr %32, align 4, !alias.scope !3
+  %196 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %32, i32 0, i32 1
+  %197 = load ptr, ptr %21, align 8, !noalias !3
+  %198 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %197, i32 0, i32 1
+  %199 = load i32, ptr %198, align 1, !noalias !3
+  store i32 %199, ptr %196, align 4, !alias.scope !3
+  %200 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %32, i32 0, i32 2
+  %201 = load i16, ptr %20, align 2, !noalias !3
+  store i16 %201, ptr %200, align 4, !alias.scope !3
+  %202 = getelementptr i8, ptr %32, i64 10
+  call void @llvm.memset.p0.i64(ptr align 2 %202, i8 0, i64 2, i1 false), !alias.scope !3
+  %203 = load ptr, ptr %31, align 8
+  %204 = icmp ne ptr %203, null
+  br i1 %204, label %210, label %205
+
+205:                                              ; preds = %179
+  %206 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %28, ptr noundef %32, i64 noundef 1) #6
+  %207 = icmp slt i64 %206, 0
+  br i1 %207, label %208, label %209
+
+208:                                              ; preds = %205
+  br label %209
+
+209:                                              ; preds = %208, %205
+  br label %215
+
+210:                                              ; preds = %179
+  %211 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %28, ptr noundef %32, i64 noundef 0) #6
+  %212 = icmp slt i64 %211, 0
+  br i1 %212, label %213, label %214
+
+213:                                              ; preds = %210
+  br label %214
+
+214:                                              ; preds = %213, %210
+  br label %215
+
+215:                                              ; preds = %209, %214
+  br label %352
+
+216:                                              ; preds = %123
+  %217 = load ptr, ptr %67, align 8
+  store ptr %217, ptr %22, align 8
+  %218 = load ptr, ptr %22, align 8
+  %219 = getelementptr inbounds nuw %struct.udphdr, ptr %218, i32 0, i32 1
+  %220 = load i16, ptr %219, align 2
+  %221 = call i1 @llvm.is.constant.i16(i16 %220)
+  br i1 %221, label %222, label %238
+
+222:                                              ; preds = %216
+  %223 = load ptr, ptr %22, align 8
+  %224 = getelementptr inbounds nuw %struct.udphdr, ptr %223, i32 0, i32 1
+  %225 = load i16, ptr %224, align 2
+  %226 = zext i16 %225 to i32
+  %227 = shl i32 %226, 8
+  %228 = ashr i32 %227, 8
+  %229 = shl i32 %228, 8
+  %230 = load ptr, ptr %22, align 8
+  %231 = getelementptr inbounds nuw %struct.udphdr, ptr %230, i32 0, i32 1
+  %232 = load i16, ptr %231, align 2
+  %233 = zext i16 %232 to i32
+  %234 = ashr i32 %233, 8
+  %235 = or i32 %229, %234
+  %236 = trunc i32 %235 to i16
+  %237 = zext i16 %236 to i32
+  br label %244
+
+238:                                              ; preds = %216
+  %239 = load ptr, ptr %22, align 8
+  %240 = getelementptr inbounds nuw %struct.udphdr, ptr %239, i32 0, i32 1
+  %241 = load i16, ptr %240, align 2
+  %242 = call i16 @llvm.bswap.i16(i16 %241)
+  %243 = zext i16 %242 to i32
+  br label %244
+
+244:                                              ; preds = %238, %222
+  %245 = phi i32 [ %237, %222 ], [ %243, %238 ]
+  %246 = trunc i32 %245 to i16
+  store i16 %246, ptr %23, align 2
+  %247 = load i16, ptr %23, align 2
+  %248 = zext i16 %247 to i32
+  %249 = icmp ne i32 %248, 53
+  br i1 %249, label %250, label %258
+
+250:                                              ; preds = %244
+  %251 = load i16, ptr %23, align 2
+  %252 = zext i16 %251 to i32
+  %253 = icmp ne i32 %252, 5353
+  br i1 %253, label %254, label %258
+
+254:                                              ; preds = %250
+  %255 = load i16, ptr %23, align 2
+  %256 = zext i16 %255 to i32
+  %257 = icmp ne i32 %256, 5355
+  br label %258
+
+258:                                              ; preds = %244, %250, %254
+  %259 = phi i1 [ false, %250 ], [ false, %244 ], [ %257, %254 ]
+  br i1 %259, label %260, label %351
+
+260:                                              ; preds = %258
+  %261 = load ptr, ptr %63, align 8
+  %262 = load ptr, ptr %67, align 8
+  store ptr %261, ptr %33, align 8
+  store ptr %262, ptr %34, align 8
+  %263 = load ptr, ptr %34, align 8
+  %264 = load i16, ptr %263, align 2
+  %265 = call i1 @llvm.is.constant.i16(i16 %264)
+  br i1 %265, label %266, label %280
+
+266:                                              ; preds = %260
+  %267 = load ptr, ptr %34, align 8
+  %268 = load i16, ptr %267, align 2
+  %269 = zext i16 %268 to i32
+  %270 = shl i32 %269, 8
+  %271 = ashr i32 %270, 8
+  %272 = shl i32 %271, 8
+  %273 = load ptr, ptr %34, align 8
+  %274 = load i16, ptr %273, align 2
+  %275 = zext i16 %274 to i32
+  %276 = ashr i32 %275, 8
+  %277 = or i32 %272, %276
+  %278 = trunc i32 %277 to i16
+  %279 = zext i16 %278 to i32
+  br label %285
+
+280:                                              ; preds = %260
+  %281 = load ptr, ptr %34, align 8
+  %282 = load i16, ptr %281, align 2
+  %283 = call i16 @llvm.bswap.i16(i16 %282)
+  %284 = zext i16 %283 to i32
+  br label %285
+
+285:                                              ; preds = %280, %266
+  %286 = phi i32 [ %279, %266 ], [ %284, %280 ]
+  %287 = trunc i32 %286 to i16
+  store i16 %287, ptr %35, align 2
+  %288 = load ptr, ptr %34, align 8
+  %289 = getelementptr inbounds nuw %struct.udphdr, ptr %288, i32 0, i32 1
+  %290 = load i16, ptr %289, align 2
+  %291 = call i1 @llvm.is.constant.i16(i16 %290)
+  br i1 %291, label %292, label %308
+
+292:                                              ; preds = %285
+  %293 = load ptr, ptr %34, align 8
+  %294 = getelementptr inbounds nuw %struct.udphdr, ptr %293, i32 0, i32 1
+  %295 = load i16, ptr %294, align 2
+  %296 = zext i16 %295 to i32
+  %297 = shl i32 %296, 8
+  %298 = ashr i32 %297, 8
+  %299 = shl i32 %298, 8
+  %300 = load ptr, ptr %34, align 8
+  %301 = getelementptr inbounds nuw %struct.udphdr, ptr %300, i32 0, i32 1
+  %302 = load i16, ptr %301, align 2
+  %303 = zext i16 %302 to i32
+  %304 = ashr i32 %303, 8
+  %305 = or i32 %299, %304
+  %306 = trunc i32 %305 to i16
+  %307 = zext i16 %306 to i32
+  br label %314
+
+308:                                              ; preds = %285
+  %309 = load ptr, ptr %34, align 8
+  %310 = getelementptr inbounds nuw %struct.udphdr, ptr %309, i32 0, i32 1
+  %311 = load i16, ptr %310, align 2
+  %312 = call i16 @llvm.bswap.i16(i16 %311)
+  %313 = zext i16 %312 to i32
+  br label %314
+
+314:                                              ; preds = %308, %292
+  %315 = phi i32 [ %307, %292 ], [ %313, %308 ]
+  %316 = trunc i32 %315 to i16
+  store i16 %316, ptr %36, align 2
+  %317 = call i64 inttoptr (i64 14 to ptr)() #6
+  %318 = lshr i64 %317, 32
+  %319 = trunc i64 %318 to i32
+  store i32 %319, ptr %9, align 4
+  %320 = call i64 inttoptr (i64 14 to ptr)() #6
+  %321 = and i64 %320, 4294967295
+  %322 = trunc i64 %321 to i32
+  store i32 %322, ptr %10, align 4
+  %323 = load i32, ptr %9, align 4
+  store i32 %323, ptr %8, align 1
+  %324 = load i32, ptr %10, align 4
+  %325 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %8, i32 0, i32 1
+  store i32 %324, ptr %325, align 1
+  store ptr %8, ptr %37, align 8
+  %326 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %35) #6
+  store ptr %326, ptr %38, align 8
+  %327 = load i16, ptr %36, align 2
+  %328 = load ptr, ptr %37, align 8
+  call void @llvm.experimental.noalias.scope.decl(metadata !6)
+  store i16 %327, ptr %18, align 2, !noalias !6
+  store ptr %328, ptr %19, align 8, !noalias !6
+  %329 = load ptr, ptr %19, align 8, !noalias !6
+  %330 = load i32, ptr %329, align 1, !noalias !6
+  store i32 %330, ptr %39, align 4, !alias.scope !6
+  %331 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %39, i32 0, i32 1
+  %332 = load ptr, ptr %19, align 8, !noalias !6
+  %333 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %332, i32 0, i32 1
+  %334 = load i32, ptr %333, align 1, !noalias !6
+  store i32 %334, ptr %331, align 4, !alias.scope !6
+  %335 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %39, i32 0, i32 2
+  %336 = load i16, ptr %18, align 2, !noalias !6
+  store i16 %336, ptr %335, align 4, !alias.scope !6
+  %337 = getelementptr i8, ptr %39, i64 10
+  call void @llvm.memset.p0.i64(ptr align 2 %337, i8 0, i64 2, i1 false), !alias.scope !6
+  %338 = load ptr, ptr %38, align 8
+  %339 = icmp ne ptr %338, null
+  br i1 %339, label %345, label %340
+
+340:                                              ; preds = %314
+  %341 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %35, ptr noundef %39, i64 noundef 1) #6
+  %342 = icmp slt i64 %341, 0
+  br i1 %342, label %343, label %344
+
+343:                                              ; preds = %340
+  br label %344
+
+344:                                              ; preds = %343, %340
+  br label %350
+
+345:                                              ; preds = %314
+  %346 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %35, ptr noundef %39, i64 noundef 0) #6
+  %347 = icmp slt i64 %346, 0
+  br i1 %347, label %348, label %349
+
+348:                                              ; preds = %345
+  br label %349
+
+349:                                              ; preds = %348, %345
+  br label %350
+
+350:                                              ; preds = %344, %349
+  br label %351
+
+351:                                              ; preds = %350, %258
+  br label %352
+
+352:                                              ; preds = %351, %215
+  br label %353
+
+353:                                              ; preds = %352
+  br label %354
+
+354:                                              ; preds = %353, %93
+  store i32 1, ptr %62, align 4
+  br label %656
+
+355:                                              ; preds = %82
+  %356 = load ptr, ptr %64, align 8
+  store ptr %356, ptr %68, align 8
+  %357 = load ptr, ptr %68, align 8
+  %358 = getelementptr inbounds %struct.ipv6hdr, ptr %357, i64 1
+  %359 = load ptr, ptr %65, align 8
+  %360 = icmp ugt ptr %358, %359
+  br i1 %360, label %361, label %362
+
+361:                                              ; preds = %355
+  store i32 0, ptr %62, align 4
+  br label %656
+
+362:                                              ; preds = %355
+  %363 = load ptr, ptr %68, align 8
+  %364 = getelementptr inbounds nuw %struct.ipv6hdr, ptr %363, i32 0, i32 3
+  %365 = load i8, ptr %364, align 2
+  %366 = zext i8 %365 to i32
+  %367 = icmp eq i32 %366, 17
+  br i1 %367, label %368, label %654
+
+368:                                              ; preds = %362
+  %369 = load ptr, ptr %64, align 8
+  %370 = getelementptr inbounds nuw i8, ptr %369, i64 40
+  store ptr %370, ptr %69, align 8
+  %371 = load ptr, ptr %69, align 8
+  %372 = getelementptr inbounds %struct.udphdr, ptr %371, i64 1
+  %373 = load ptr, ptr %65, align 8
+  %374 = icmp ugt ptr %372, %373
+  br i1 %374, label %375, label %376
+
+375:                                              ; preds = %368
+  store i32 0, ptr %62, align 4
+  br label %656
+
+376:                                              ; preds = %368
+  %377 = load ptr, ptr %69, align 8
+  %378 = getelementptr inbounds nuw %struct.udphdr, ptr %377, i32 0, i32 1
+  %379 = load i16, ptr %378, align 2
+  %380 = call i1 @llvm.is.constant.i16(i16 %379)
+  br i1 %380, label %381, label %399
+
+381:                                              ; preds = %376
+  %382 = load ptr, ptr %69, align 8
+  %383 = getelementptr inbounds nuw %struct.udphdr, ptr %382, i32 0, i32 1
+  %384 = load i16, ptr %383, align 2
+  %385 = zext i16 %384 to i32
+  %386 = shl i32 %385, 8
+  %387 = ashr i32 %386, 8
+  %388 = shl i32 %387, 8
+  %389 = load ptr, ptr %69, align 8
+  %390 = getelementptr inbounds nuw %struct.udphdr, ptr %389, i32 0, i32 1
+  %391 = load i16, ptr %390, align 2
+  %392 = zext i16 %391 to i32
+  %393 = shl i32 %392, 0
+  %394 = ashr i32 %393, 8
+  %395 = shl i32 %394, 0
+  %396 = or i32 %388, %395
+  %397 = trunc i32 %396 to i16
+  %398 = zext i16 %397 to i32
+  br label %405
+
+399:                                              ; preds = %376
+  %400 = load ptr, ptr %69, align 8
+  %401 = getelementptr inbounds nuw %struct.udphdr, ptr %400, i32 0, i32 1
+  %402 = load i16, ptr %401, align 2
+  %403 = call i16 @llvm.bswap.i16(i16 %402)
+  %404 = zext i16 %403 to i32
+  br label %405
+
+405:                                              ; preds = %399, %381
+  %406 = phi i32 [ %398, %381 ], [ %404, %399 ]
+  %407 = trunc i32 %406 to i16
+  store i16 %407, ptr %70, align 2
+  br label %408
+
+408:                                              ; preds = %405
+  %409 = load ptr, ptr %63, align 8
+  store ptr %409, ptr %59, align 8
+  %410 = load ptr, ptr %59, align 8
+  %411 = getelementptr inbounds nuw %struct.__sk_buff, ptr %410, i32 0, i32 10
+  %412 = load i32, ptr %411, align 8
+  store i32 %412, ptr %60, align 4
+  %413 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_security_config_map, ptr noundef %60) #6
+  store ptr %413, ptr %61, align 8
+  %414 = load ptr, ptr %61, align 8
+  %415 = icmp ne ptr %414, null
+  br i1 %415, label %417, label %416
+
+416:                                              ; preds = %408
+  store i1 false, ptr %58, align 1
+  br label %423
+
+417:                                              ; preds = %408
+  %418 = load ptr, ptr %61, align 8
+  %419 = getelementptr inbounds nuw %struct.exfil_kernel_config, ptr %418, i32 0, i32 5
+  %420 = load i32, ptr %419, align 1
+  %421 = icmp ne i32 %420, 0
+  %422 = xor i1 %421, true
+  store i1 %422, ptr %58, align 1
+  br label %423
+
+423:                                              ; preds = %416, %417
+  %424 = load i1, ptr %58, align 1
+  br i1 %424, label %425, label %516
+
+425:                                              ; preds = %423
+  %426 = load ptr, ptr %63, align 8
+  %427 = load ptr, ptr %69, align 8
+  store ptr %426, ptr %40, align 8
+  store ptr %427, ptr %41, align 8
+  %428 = load ptr, ptr %41, align 8
+  %429 = load i16, ptr %428, align 2
+  %430 = call i1 @llvm.is.constant.i16(i16 %429)
+  br i1 %430, label %431, label %445
+
+431:                                              ; preds = %425
+  %432 = load ptr, ptr %41, align 8
+  %433 = load i16, ptr %432, align 2
+  %434 = zext i16 %433 to i32
+  %435 = shl i32 %434, 8
+  %436 = ashr i32 %435, 8
+  %437 = shl i32 %436, 8
+  %438 = load ptr, ptr %41, align 8
+  %439 = load i16, ptr %438, align 2
+  %440 = zext i16 %439 to i32
+  %441 = ashr i32 %440, 8
+  %442 = or i32 %437, %441
+  %443 = trunc i32 %442 to i16
+  %444 = zext i16 %443 to i32
+  br label %450
+
+445:                                              ; preds = %425
+  %446 = load ptr, ptr %41, align 8
+  %447 = load i16, ptr %446, align 2
+  %448 = call i16 @llvm.bswap.i16(i16 %447)
+  %449 = zext i16 %448 to i32
+  br label %450
+
+450:                                              ; preds = %445, %431
+  %451 = phi i32 [ %444, %431 ], [ %449, %445 ]
+  %452 = trunc i32 %451 to i16
+  store i16 %452, ptr %42, align 2
+  %453 = load ptr, ptr %41, align 8
+  %454 = getelementptr inbounds nuw %struct.udphdr, ptr %453, i32 0, i32 1
+  %455 = load i16, ptr %454, align 2
+  %456 = call i1 @llvm.is.constant.i16(i16 %455)
+  br i1 %456, label %457, label %473
+
+457:                                              ; preds = %450
+  %458 = load ptr, ptr %41, align 8
+  %459 = getelementptr inbounds nuw %struct.udphdr, ptr %458, i32 0, i32 1
+  %460 = load i16, ptr %459, align 2
+  %461 = zext i16 %460 to i32
+  %462 = shl i32 %461, 8
+  %463 = ashr i32 %462, 8
+  %464 = shl i32 %463, 8
+  %465 = load ptr, ptr %41, align 8
+  %466 = getelementptr inbounds nuw %struct.udphdr, ptr %465, i32 0, i32 1
+  %467 = load i16, ptr %466, align 2
+  %468 = zext i16 %467 to i32
+  %469 = ashr i32 %468, 8
+  %470 = or i32 %464, %469
+  %471 = trunc i32 %470 to i16
+  %472 = zext i16 %471 to i32
+  br label %479
+
+473:                                              ; preds = %450
+  %474 = load ptr, ptr %41, align 8
+  %475 = getelementptr inbounds nuw %struct.udphdr, ptr %474, i32 0, i32 1
+  %476 = load i16, ptr %475, align 2
+  %477 = call i16 @llvm.bswap.i16(i16 %476)
+  %478 = zext i16 %477 to i32
+  br label %479
+
+479:                                              ; preds = %473, %457
+  %480 = phi i32 [ %472, %457 ], [ %478, %473 ]
+  %481 = trunc i32 %480 to i16
+  store i16 %481, ptr %43, align 2
+  %482 = call i64 inttoptr (i64 14 to ptr)() #6
+  %483 = lshr i64 %482, 32
+  %484 = trunc i64 %483 to i32
+  store i32 %484, ptr %6, align 4
+  %485 = call i64 inttoptr (i64 14 to ptr)() #6
+  %486 = and i64 %485, 4294967295
+  %487 = trunc i64 %486 to i32
+  store i32 %487, ptr %7, align 4
+  %488 = load i32, ptr %6, align 4
+  store i32 %488, ptr %5, align 1
+  %489 = load i32, ptr %7, align 4
+  %490 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %5, i32 0, i32 1
+  store i32 %489, ptr %490, align 1
+  store ptr %5, ptr %44, align 8
+  %491 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %42) #6
+  store ptr %491, ptr %45, align 8
+  %492 = load i16, ptr %43, align 2
+  %493 = load ptr, ptr %44, align 8
+  call void @llvm.experimental.noalias.scope.decl(metadata !9)
+  store i16 %492, ptr %16, align 2, !noalias !9
+  store ptr %493, ptr %17, align 8, !noalias !9
+  %494 = load ptr, ptr %17, align 8, !noalias !9
+  %495 = load i32, ptr %494, align 1, !noalias !9
+  store i32 %495, ptr %46, align 4, !alias.scope !9
+  %496 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %46, i32 0, i32 1
+  %497 = load ptr, ptr %17, align 8, !noalias !9
+  %498 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %497, i32 0, i32 1
+  %499 = load i32, ptr %498, align 1, !noalias !9
+  store i32 %499, ptr %496, align 4, !alias.scope !9
+  %500 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %46, i32 0, i32 2
+  %501 = load i16, ptr %16, align 2, !noalias !9
+  store i16 %501, ptr %500, align 4, !alias.scope !9
+  %502 = getelementptr i8, ptr %46, i64 10
+  call void @llvm.memset.p0.i64(ptr align 2 %502, i8 0, i64 2, i1 false), !alias.scope !9
+  %503 = load ptr, ptr %45, align 8
+  %504 = icmp ne ptr %503, null
+  br i1 %504, label %510, label %505
+
+505:                                              ; preds = %479
+  %506 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %42, ptr noundef %46, i64 noundef 1) #6
+  %507 = icmp slt i64 %506, 0
+  br i1 %507, label %508, label %509
+
+508:                                              ; preds = %505
+  br label %509
+
+509:                                              ; preds = %508, %505
+  br label %515
+
+510:                                              ; preds = %479
+  %511 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %42, ptr noundef %46, i64 noundef 0) #6
+  %512 = icmp slt i64 %511, 0
+  br i1 %512, label %513, label %514
+
+513:                                              ; preds = %510
+  br label %514
+
+514:                                              ; preds = %513, %510
+  br label %515
+
+515:                                              ; preds = %509, %514
+  br label %652
+
+516:                                              ; preds = %423
+  %517 = load ptr, ptr %69, align 8
+  store ptr %517, ptr %24, align 8
+  %518 = load ptr, ptr %24, align 8
+  %519 = getelementptr inbounds nuw %struct.udphdr, ptr %518, i32 0, i32 1
+  %520 = load i16, ptr %519, align 2
+  %521 = call i1 @llvm.is.constant.i16(i16 %520)
+  br i1 %521, label %522, label %538
+
+522:                                              ; preds = %516
+  %523 = load ptr, ptr %24, align 8
+  %524 = getelementptr inbounds nuw %struct.udphdr, ptr %523, i32 0, i32 1
+  %525 = load i16, ptr %524, align 2
+  %526 = zext i16 %525 to i32
+  %527 = shl i32 %526, 8
+  %528 = ashr i32 %527, 8
+  %529 = shl i32 %528, 8
+  %530 = load ptr, ptr %24, align 8
+  %531 = getelementptr inbounds nuw %struct.udphdr, ptr %530, i32 0, i32 1
+  %532 = load i16, ptr %531, align 2
+  %533 = zext i16 %532 to i32
+  %534 = ashr i32 %533, 8
+  %535 = or i32 %529, %534
+  %536 = trunc i32 %535 to i16
+  %537 = zext i16 %536 to i32
+  br label %544
+
+538:                                              ; preds = %516
+  %539 = load ptr, ptr %24, align 8
+  %540 = getelementptr inbounds nuw %struct.udphdr, ptr %539, i32 0, i32 1
+  %541 = load i16, ptr %540, align 2
+  %542 = call i16 @llvm.bswap.i16(i16 %541)
+  %543 = zext i16 %542 to i32
+  br label %544
+
+544:                                              ; preds = %538, %522
+  %545 = phi i32 [ %537, %522 ], [ %543, %538 ]
+  %546 = trunc i32 %545 to i16
+  store i16 %546, ptr %25, align 2
+  %547 = load i16, ptr %25, align 2
+  %548 = zext i16 %547 to i32
+  %549 = icmp ne i32 %548, 53
+  br i1 %549, label %550, label %558
+
+550:                                              ; preds = %544
+  %551 = load i16, ptr %25, align 2
+  %552 = zext i16 %551 to i32
+  %553 = icmp ne i32 %552, 5353
+  br i1 %553, label %554, label %558
+
+554:                                              ; preds = %550
+  %555 = load i16, ptr %25, align 2
+  %556 = zext i16 %555 to i32
+  %557 = icmp ne i32 %556, 5355
+  br label %558
+
+558:                                              ; preds = %544, %550, %554
+  %559 = phi i1 [ false, %550 ], [ false, %544 ], [ %557, %554 ]
+  br i1 %559, label %560, label %651
+
+560:                                              ; preds = %558
+  %561 = load ptr, ptr %63, align 8
+  %562 = load ptr, ptr %69, align 8
+  store ptr %561, ptr %47, align 8
+  store ptr %562, ptr %48, align 8
+  %563 = load ptr, ptr %48, align 8
+  %564 = load i16, ptr %563, align 2
+  %565 = call i1 @llvm.is.constant.i16(i16 %564)
+  br i1 %565, label %566, label %580
+
+566:                                              ; preds = %560
+  %567 = load ptr, ptr %48, align 8
+  %568 = load i16, ptr %567, align 2
+  %569 = zext i16 %568 to i32
+  %570 = shl i32 %569, 8
+  %571 = ashr i32 %570, 8
+  %572 = shl i32 %571, 8
+  %573 = load ptr, ptr %48, align 8
+  %574 = load i16, ptr %573, align 2
+  %575 = zext i16 %574 to i32
+  %576 = ashr i32 %575, 8
+  %577 = or i32 %572, %576
+  %578 = trunc i32 %577 to i16
+  %579 = zext i16 %578 to i32
+  br label %585
+
+580:                                              ; preds = %560
+  %581 = load ptr, ptr %48, align 8
+  %582 = load i16, ptr %581, align 2
+  %583 = call i16 @llvm.bswap.i16(i16 %582)
+  %584 = zext i16 %583 to i32
+  br label %585
+
+585:                                              ; preds = %580, %566
+  %586 = phi i32 [ %579, %566 ], [ %584, %580 ]
+  %587 = trunc i32 %586 to i16
+  store i16 %587, ptr %49, align 2
+  %588 = load ptr, ptr %48, align 8
+  %589 = getelementptr inbounds nuw %struct.udphdr, ptr %588, i32 0, i32 1
+  %590 = load i16, ptr %589, align 2
+  %591 = call i1 @llvm.is.constant.i16(i16 %590)
+  br i1 %591, label %592, label %608
+
+592:                                              ; preds = %585
+  %593 = load ptr, ptr %48, align 8
+  %594 = getelementptr inbounds nuw %struct.udphdr, ptr %593, i32 0, i32 1
+  %595 = load i16, ptr %594, align 2
+  %596 = zext i16 %595 to i32
+  %597 = shl i32 %596, 8
+  %598 = ashr i32 %597, 8
+  %599 = shl i32 %598, 8
+  %600 = load ptr, ptr %48, align 8
+  %601 = getelementptr inbounds nuw %struct.udphdr, ptr %600, i32 0, i32 1
+  %602 = load i16, ptr %601, align 2
+  %603 = zext i16 %602 to i32
+  %604 = ashr i32 %603, 8
+  %605 = or i32 %599, %604
+  %606 = trunc i32 %605 to i16
+  %607 = zext i16 %606 to i32
+  br label %614
+
+608:                                              ; preds = %585
+  %609 = load ptr, ptr %48, align 8
+  %610 = getelementptr inbounds nuw %struct.udphdr, ptr %609, i32 0, i32 1
+  %611 = load i16, ptr %610, align 2
+  %612 = call i16 @llvm.bswap.i16(i16 %611)
+  %613 = zext i16 %612 to i32
+  br label %614
+
+614:                                              ; preds = %608, %592
+  %615 = phi i32 [ %607, %592 ], [ %613, %608 ]
+  %616 = trunc i32 %615 to i16
+  store i16 %616, ptr %50, align 2
+  %617 = call i64 inttoptr (i64 14 to ptr)() #6
+  %618 = lshr i64 %617, 32
+  %619 = trunc i64 %618 to i32
+  store i32 %619, ptr %3, align 4
+  %620 = call i64 inttoptr (i64 14 to ptr)() #6
+  %621 = and i64 %620, 4294967295
+  %622 = trunc i64 %621 to i32
+  store i32 %622, ptr %4, align 4
+  %623 = load i32, ptr %3, align 4
+  store i32 %623, ptr %2, align 1
+  %624 = load i32, ptr %4, align 4
+  %625 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %2, i32 0, i32 1
+  store i32 %624, ptr %625, align 1
+  store ptr %2, ptr %51, align 8
+  %626 = call ptr inttoptr (i64 1 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %49) #6
+  store ptr %626, ptr %52, align 8
+  %627 = load i16, ptr %50, align 2
+  %628 = load ptr, ptr %51, align 8
+  call void @llvm.experimental.noalias.scope.decl(metadata !12)
+  store i16 %627, ptr %14, align 2, !noalias !12
+  store ptr %628, ptr %15, align 8, !noalias !12
+  %629 = load ptr, ptr %15, align 8, !noalias !12
+  %630 = load i32, ptr %629, align 1, !noalias !12
+  store i32 %630, ptr %53, align 4, !alias.scope !12
+  %631 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %53, i32 0, i32 1
+  %632 = load ptr, ptr %15, align 8, !noalias !12
+  %633 = getelementptr inbounds nuw %struct.__kernel_proc_struct_info, ptr %632, i32 0, i32 1
+  %634 = load i32, ptr %633, align 1, !noalias !12
+  store i32 %634, ptr %631, align 4, !alias.scope !12
+  %635 = getelementptr inbounds nuw %struct.sock_proc_conn_info, ptr %53, i32 0, i32 2
+  %636 = load i16, ptr %14, align 2, !noalias !12
+  store i16 %636, ptr %635, align 4, !alias.scope !12
+  %637 = getelementptr i8, ptr %53, i64 10
+  call void @llvm.memset.p0.i64(ptr align 2 %637, i8 0, i64 2, i1 false), !alias.scope !12
+  %638 = load ptr, ptr %52, align 8
+  %639 = icmp ne ptr %638, null
+  br i1 %639, label %645, label %640
+
+640:                                              ; preds = %614
+  %641 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %49, ptr noundef %53, i64 noundef 1) #6
+  %642 = icmp slt i64 %641, 0
+  br i1 %642, label %643, label %644
+
+643:                                              ; preds = %640
+  br label %644
+
+644:                                              ; preds = %643, %640
+  br label %650
+
+645:                                              ; preds = %614
+  %646 = call i64 inttoptr (i64 2 to ptr)(ptr noundef @exfil_sock_udp_conn_map, ptr noundef %49, ptr noundef %53, i64 noundef 0) #6
+  %647 = icmp slt i64 %646, 0
+  br i1 %647, label %648, label %649
+
+648:                                              ; preds = %645
+  br label %649
+
+649:                                              ; preds = %648, %645
+  br label %650
+
+650:                                              ; preds = %644, %649
+  br label %651
+
+651:                                              ; preds = %650, %558
+  br label %652
+
+652:                                              ; preds = %651, %515
+  br label %653
+
+653:                                              ; preds = %652
+  br label %654
+
+654:                                              ; preds = %653, %362
+  store i32 1, ptr %62, align 4
+  br label %656
+
+655:                                              ; preds = %82
+  store i32 1, ptr %62, align 4
+  br label %656
+
+656:                                              ; preds = %655, %654, %375, %361, %354, %106, %92, %81
+  %657 = load i32, ptr %62, align 4
+  ret i32 %657
+}
+
+; Function Attrs: convergent nocallback nofree nosync nounwind willreturn memory(none)
+declare i1 @llvm.is.constant.i16(i16) #3
+
+; Function Attrs: nocallback nofree nosync nounwind speculatable willreturn memory(none)
+declare i16 @llvm.bswap.i16(i16) #4
+
+; Function Attrs: nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: readwrite)
+declare void @llvm.experimental.noalias.scope.decl(metadata) #5
+
+attributes #0 = { noinline nounwind optnone "frame-pointer"="all" "no-trapping-math"="true" "stack-protector-buffer-size"="8" }
+attributes #1 = { nocallback nofree nounwind willreturn memory(argmem: write) }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+attributes #3 = { convergent nocallback nofree nosync nounwind willreturn memory(none) }
+attributes #4 = { nocallback nofree nosync nounwind speculatable willreturn memory(none) }
+attributes #5 = { nocallback nofree nosync nounwind willreturn memory(inaccessiblemem: readwrite) }
+attributes #6 = { nounwind }
+
+!llvm.module.flags = !{!0, !1}
+!llvm.ident = !{!2}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{i32 7, !"frame-pointer", i32 2}
+!2 = !{!"Ubuntu clang version 20.1.2 (0ubuntu1)"}
+!3 = !{!4}
+!4 = distinct !{!4, !5, !"__get_sock_proc_conn_info: argument 0"}
+!5 = distinct !{!5, !"__get_sock_proc_conn_info"}
+!6 = !{!7}
+!7 = distinct !{!7, !8, !"__get_sock_proc_conn_info: argument 0"}
+!8 = distinct !{!8, !"__get_sock_proc_conn_info"}
+!9 = !{!10}
+!10 = distinct !{!10, !11, !"__get_sock_proc_conn_info: argument 0"}
+!11 = distinct !{!11, !"__get_sock_proc_conn_info"}
+!12 = !{!13}
+!13 = distinct !{!13, !14, !"__get_sock_proc_conn_info: argument 0"}
+!14 = distinct !{!14, !"__get_sock_proc_conn_info"}

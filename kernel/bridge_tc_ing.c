@@ -40,7 +40,7 @@ int bridge_ingress_filter(struct __sk_buff *skb) {
     __u32 skb_mark_key = 0;
     __u32 * skb_hash = bpf_map_lookup_elem(&exfil_security_tc_bridge_config_map, &skb_mark_key);
     if (!skb_hash) {
-        if (skb->mark != redirect_skb_mark)  {
+        if (skb->mark != REDIRECT_SKB_MARK)  {
             return bpf_redirect(0, BPF_F_INGRESS); // lo service loopback a dead end loop for egress kenrel gc over the rx queue for the packet 
         }
     }else {

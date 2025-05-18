@@ -382,7 +382,7 @@ struct dns_volume_stats {
 */
 #define SKB_RANDOM_MARK_PER_NETFLOW(__skb, __mark_config)                     \
         do {                                                                  \
-            __mark_skb_packet_buffer(__skb, __mark_config == NULL ? redirect_skb_mark : config->KernelTCSKBMark);\
+            __mark_skb_packet_buffer(__skb, __mark_config == NULL ? REDIRECT_SKB_MARK : config->KernelTCSKBMark);\
         } while(0);
 
     
@@ -973,7 +973,7 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
         return;
 
     if (skb_redir_hash == 0) {
-        skb->mark = redirect_skb_mark; // unqiue mark for redirection configured via crypto random gen from userspace 
+        skb->mark = REDIRECT_SKB_MARK; // unqiue mark for redirection configured via crypto random gen from userspace 
         return;
     }
     __u32 rand_mark = __get_random_skb_u32_hash();
@@ -1023,7 +1023,7 @@ __always_inline __u8 __parse_encap_vxlan_tunnel_header(struct skb_cursor *skb,
     */
 
     struct vxlanhdr *vxlan = (struct vxlanhdr *)transport_payload;
-    if ((void *)vxlan + sizeof(struct vxlanhdr) > skb->data_end)  return BENIGN;
+    if ((void *)vxlan + sizeof(struct vxlanhdr) > skb->data_end) return BENIGN;
 
     if (__parse_vxlan_flag__hdr(transport_payload, vxlan, skb->data_end) == 0) return BENIGN;
 
