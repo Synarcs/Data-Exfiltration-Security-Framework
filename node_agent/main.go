@@ -180,6 +180,7 @@ func main() {
 
 	var nodeAgentCliOptions conf.NodeAgentCliOptions
 	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
+	flag.StringVar(&nodeAgentCliOptions.BPFProgPath, "bpf_prog_path", "", "the path containing all the eBPF compiled programs")
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference (default: false)")
@@ -201,6 +202,12 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	if nodeAgentCliOptions.BPFProgPath != "" {
+		if err := utils.ConfigureCustomEBPFProgOutputPath(nodeAgentCliOptions.BPFProgPath); err != nil {
+			panic(err.Error())
+		}
+	}
 
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 

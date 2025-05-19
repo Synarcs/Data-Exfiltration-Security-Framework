@@ -37,6 +37,8 @@ BPF_CFLAGS := -target $(TARGET) \
               -I$(KERNEL_HEADERS_DEFS) \
               -I$(KERNEL_HEADERS)
 
+LLVM_STAT_COMPILER := llc 
+
 TRACE_FS_PIPE := /sys/kernel/debug/tracing/trace_pipe
 BPF_FS_MNT := /sys/fs/bpf					 # map and xdp prog mount over kernel bpfs   
 
@@ -101,6 +103,19 @@ compile-llvm-ir:
 	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/sock_ir -c $(sock_sdr) 
 	$(CC) $(LLVM_CX_IR_ARGS) $(BPF_CFLAGS) -o ir/lsm_ir -c $(crypto_kernel) 
 	make clean-bpf-build
+
+# builds bpf object compiled back from llvm ir 
+.PHONY: llvm-bpf
+llvm-bpf:
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(sock_sdr_out)  ir/sock_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(p2p_kernel_out) ir/p2p_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(tracepoint_kernel_out) ir/tracepoint_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(netlink_kernel_out) ir/netlink_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(crypto_kernel_out)  ir/lsm_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(bridge_tc_kernel_ingress_out) ir/bridge_in_ir
+	$(LLVM_STAT_COMPILER) -march=bpf -filetype=obj -o $(bridge_tc_kernel_egress_out) ir/bridge_out_ir
+	make clean-bpf-build
+
 
 # Kernel traffic ccontrol layer agnostic to CPU architecture 
 .PHONY: tc

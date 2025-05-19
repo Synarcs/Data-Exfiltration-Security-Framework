@@ -12,6 +12,7 @@ import (
 
 type (
 	NodeAgentCliOptions struct {
+		BPFProgPath              string
 		CliFlag                  bool
 		Debug                    bool
 		StreamClient             bool
