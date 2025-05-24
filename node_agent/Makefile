@@ -5,6 +5,13 @@ output ?= main
 debug ?= false 
 ARCH := $(shell uname -m)
 
+CC ?= clang 
+CXX ?= clang++
+CFLAGS ?= -O2 -Wall
+
+MODEL_PATH ?= "../dns_sec.onnx"
+DNS_SERVER_DIR ?= "/etc/powerdns" # for running the DNS over TCP lua interceptor over the DNS recursor config build path 
+
 .PHONY: compile 
 compile:
 	@echo "Compiling the eBPF Node Agent for $(ARCH)"
@@ -40,12 +47,12 @@ build:
 .PHONY: run-inference
 run-inference:
 	@echo "Running the Remote unix socket inference server" 
-	sudo python3 ../model/infer/inference.py  -m "../dns_sec.onnx"
+	sudo python3 ../model/infer/inference.py -m $(MODEL_PATH)
 
 .PHONY: run-inference-controller
 run-inference-controller:
 	@echo "Running the Remote unix socket inference server on controller server"
-	sudo python3 ../model/infer/inference.py  -m "../dns_sec.onnx" -c true &
+	sudo python3 ../model/infer/inference.py  -m $(MODEL_PATH) -c true  &
 	@echo "Configure the Unix socket permissions and ownership  for inference"
 	sleep 1.5 && sudo chmod 777 /etc/powerdns/onnx-inference-out.sock && sudo chmod 777 /etc/powerdns/onnx-inference-in.sock
 
@@ -81,10 +88,7 @@ build-run-pidns:
 	make build 
 	sudo unshare --pid --fork ./main
 
-.PHONY: disas 
-disas:
-	if [ "$(debug)" = "true" ]; then llvm-objdump -d $(node_agent); fi
-	gdb main 
+# kernel crypto config for kernel keyring and LSM
 
 KEY_DIR := keys
 PRIVATE_KEY := $(KEY_DIR)/private.key

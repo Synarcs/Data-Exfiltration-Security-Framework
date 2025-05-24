@@ -1852,7 +1852,7 @@ __always_inline void __update_kernel_packet_redirection_time(__u32 dns_query_id)
 
 
 static 
-__always_inline void  __handle_kernel_map_redirection_count(){
+__always_inline  void  __handle_kernel_map_redirection_count(){
     __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
     __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_count_map, &redirection_count_key);
     if (ct_val) {
@@ -1863,7 +1863,7 @@ __always_inline void  __handle_kernel_map_redirection_count(){
     }
 }
 
-static 
+static
 __always_inline void __handle_kernel_map_redirection_drop_count() {
      __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
     __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_redirect_drop_count_map, &redirection_count_key);
@@ -1987,8 +1987,6 @@ int classify(struct __sk_buff *skb){
     if (actions.parse_eth(&cursor) == 0) return TC_DROP;
     eth = cursor.data;
     __u32 nhoff = ETH_HLEN;
-
-	// bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, protocol), &e->ip_proto, 1);
 
     struct udphdr *udp; struct tcphdr *tcp;
 

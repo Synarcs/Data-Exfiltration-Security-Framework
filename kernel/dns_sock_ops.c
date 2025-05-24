@@ -73,8 +73,7 @@ __always_inline struct sock_proc_conn_info  __get_sock_proc_conn_info(__u16 dest
     return sock_proc_conn_info;
 }
 
-
-static 
+static
 __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct udphdr *udp) {
     __u16 src_transfer_port = bpf_ntohs(udp->source);
     __u16 dest_transport_port = bpf_ntohs(udp->dest);
@@ -194,4 +193,4 @@ int dns_udp_sock_ops(struct __sk_buff *skb) {
     }
 }
 
-char _license[] SEC("license") = "GPL";
+char _license[] SEC("license") = "MIT / GPL";

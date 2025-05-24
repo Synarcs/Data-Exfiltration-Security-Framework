@@ -1,28 +1,28 @@
 tc_kernel := dns_tc.c 
-tc_kernel_out := tc.o 
+tc_kernel_out ?= tc.o
 
 bridge_tc_kernel_ingress := bridge_tc_ing.c
-bridge_tc_kernel_ingress_out := bridge_ing.o 
+bridge_tc_kernel_ingress_out ?= bridge_ing.o 
 
 bridge_tc_kernel_egress := bridge_tc_egress.c
-bridge_tc_kernel_egress_out := bridge_egress.o 
+bridge_tc_kernel_egress_out ?= bridge_egress.o 
 
 xdp_kernel := dns_xdp.c 
-xdp_kernel_out := xdp.o 
+xdp_kernel_out ?= xdp.o 
 
 netlink_kernel := nf_sock.c
-netlink_kernel_out := netlink.o
+netlink_kernel_out ?= netlink.o
 
 tracepoint_kernel := prockill.c 
-tracepoint_kernel_out := tracepoint.o
+tracepoint_kernel_out ?= tracepoint.o
 
 p2p_kernel := dns_tun.c
-p2p_kernel_out := tun.o
+p2p_kernel_out ?= tun.o
 
 sock_sdr := dns_sock_ops.c 
-sock_sdr_out := sock.o
+sock_sdr_out ?= sock.o
 
-crypto_kernel ?= $(shell pwd)/lsm_bpf.c
+crypto_kernel := $(shell pwd)/lsm_bpf.c
 crypto_kernel_out ?= lsm_bpf.o 
 
 CC := clang 
@@ -37,7 +37,8 @@ BPF_CFLAGS := -target $(TARGET) \
               -I$(KERNEL_HEADERS_DEFS) \
               -I$(KERNEL_HEADERS)
 
-LLVM_STAT_COMPILER := llc 
+LLVM_STAT_COMPILER := llc
+
 
 TRACE_FS_PIPE := /sys/kernel/debug/tracing/trace_pipe
 BPF_FS_MNT := /sys/fs/bpf					 # map and xdp prog mount over kernel bpfs   
@@ -60,10 +61,10 @@ EBPF_PROG_OUT_PATH ?= ../node_agent/ebpf/
 compile: vmlinux-btf bpf-compile compiled_loader clean-bpf-build
 
 bpf-compile:
-	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o $(tc_kernel_out) -c $(tc_kernel) 
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tc_kernel_out) -c $(tc_kernel) 
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
-	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o $(xdp_kernel_out) -c $(xdp_kernel)
+	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(xdp_kernel_out) -c $(xdp_kernel)
 	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(netlink_kernel_out) -c $(netlink_kernel) 
 	@echo "Compiling the ebpf tracepoints for arm64"

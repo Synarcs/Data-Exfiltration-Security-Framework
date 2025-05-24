@@ -1,6 +1,0 @@
-Linux 6.11.0-18-generic (synarcs) 	02/26/2025 	_aarch64_	(8 CPU)
-
-11:34:11 PM    idgm/s    odgm/s  noport/s idgmerr/s
-11:34:12 PM      0.00      0.00      0.00      0.00
-11:34:13 PM      0.00      0.00      0.00      0.00
-11:34:14 PM      1.00      1.00      1.00      0.00

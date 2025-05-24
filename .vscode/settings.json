@@ -2,6 +2,7 @@
     "files.associations": {
         "*.p4": "p4",
         "stdio.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "unistd.h": "c"
     }
 }

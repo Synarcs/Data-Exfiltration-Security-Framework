@@ -25,7 +25,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -83,6 +82,8 @@ var (
 	errAttachedQdiscHigherPrio = errors.New("error: the eBPF Exfil security framework cannot be attached with existing qdisc attached and having a TC egress filter with lowest priority, configure the filter to run with highest priority closest to default qdisc")
 )
 
+var KerneleBPFMapMonitorPollChannel map[string]chan string = make(map[string]chan string)
+
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
 	dnsPacketGen, err := model.NewDnsPacketResendUtils(&model.DnsPacketGenConfig{
@@ -130,6 +131,15 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 
 	if config.GetL3FiltersConfig().EnabledL3v6Filtering {
 		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV6_DYNAMIC_NETPOOL_C2_FILTER)
+	}
+}
+
+func PacketTcKernelDPICountMaps() []string {
+	// the agent holds a global control channel for polling drop kernel malicious events to emitted to the kafka controller with respective channel for each map polling from kernel, compared plain timer based busy polling
+	// add the maps for deep kernel monitoring as required
+	return []string{
+		events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP,
+		events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP,
 	}
 }
 
@@ -303,56 +313,37 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 	return nil
 }
 
-func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, errorEventChannel chan error) error {
+func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, errorEventChannel chan error) {
 	var KernelPacketRedirectCount uint16 = 0
 
 	runtime.LockOSThread()
-
 	defer runtime.UnlockOSThread()
-	localCache, err := lru.New[uint32, bool](5)
 
-	if err != nil {
-		utils.Log("Error allocating local packet count kernel cache", err)
-		return err
+	geteBPFMapFromCollection := func(mpName string) (*ebpf.Map, error) {
+		if mp, fd := tc.TcCollection.Maps[mpName]; !fd {
+			return nil, fmt.Errorf("The required map not found %s", mpName)
+		} else {
+			return mp, nil
+		}
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			var PacketCountKernel uint32 = 0
-			if err := ebpfMap.Lookup(KernelPacketRedirectCount, &PacketCountKernel); err != nil {
-				if errors.Is(err, ebpf.ErrKeyNotExist) {
-					continue
-				} else {
-					utils.Log("Error polling metric for redirected kernel count", err)
-					errorEventChannel <- err
+	pollMapKernelCountMetrics := func(mapName string) {
+		for range KerneleBPFMapMonitorPollChannel[mapName] {
+			var CurrentPacketCountKernel uint32 = 0
+			if mp, err := geteBPFMapFromCollection(mapName); err != nil {
+				errorEventChannel <- err
+			} else {
+				if err := mp.Lookup(KernelPacketRedirectCount, &CurrentPacketCountKernel); err != nil {
+					if !errors.Is(err, ebpf.ErrKeyNotExist) {
+						utils.Log("Error polling metric for redirected kernel count", err)
+						errorEventChannel <- err
+					}
 				}
 			}
-			_, ok := localCache.Get(PacketCountKernel)
-			if ok {
-				continue
-			}
-			info, err := ebpfMap.Info()
-
-			if err != nil {
-				utils.Log(fmt.Sprintf("error getting the kernel ebpf map info %+v", err))
-				return err
-			}
-
-			mapName := strings.Replace((strings.Replace(strings.Replace(ebpfMap.String(), info.Type.String(), "", -1), "(", "", -1)), ")", "", -1)
-			mapName = strings.TrimSpace(mapName)
-			mapName = strings.Split(mapName, "#")[0]
-			if utils.DEBUG {
-				utils.Log("The current Redirected count of packets is ", mapName, PacketCountKernel)
-			}
-			localCache.Add(PacketCountKernel, true)
-
 			switch mapName {
 			case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
 				if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
-					KernelRedirectPacketCount: PacketCountKernel,
+					KernelRedirectPacketCount: CurrentPacketCountKernel,
 					EvenTime:                  time.Now().Format(time.RFC3339),
 				}); err != nil {
 					if !utils.DEBUG {
@@ -361,7 +352,7 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 				}
 			case events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP:
 				if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIKernelDropCountEvent](events.PacketDPIKernelDropCountEvent{
-					KernelDropPacketCount: PacketCountKernel,
+					KernelDropPacketCount: CurrentPacketCountKernel,
 					EvenTime:              time.Now().Format(time.RFC3339),
 				}); err != nil {
 					if !utils.DEBUG {
@@ -369,7 +360,23 @@ func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, ebpfMap *ebpf.Map, 
 					}
 				}
 			}
-			time.Sleep(time.Second * 5)
+		}
+	}
+
+	for _, mapName := range PacketTcKernelDPICountMaps() {
+		go pollMapKernelCountMetrics(mapName)
+	}
+
+	// block the poller until the core agent thread dont cancel polling from kernel and all kernel programs are ejected
+	<-ctx.Done()
+}
+
+func (tc *TCHandler) ExportKernelPacketProcessCountEvents() {
+
+	// only poll for the ring buffers and kernel maps over non-encap traffic from kernel, once gopacket receive packet from the tap rx queue netdev
+	for _, mp := range PacketTcKernelDPICountMaps() {
+		if fd := tc.TcCollection.Maps[mp]; fd != nil {
+			KerneleBPFMapMonitorPollChannel[mp] <- time.Now().String()
 		}
 	}
 }
@@ -504,13 +511,12 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		go tc.PollVxlanRingBuffer(ctx, tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP])
 	}
 
-	if fd := tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP]; fd != nil {
-		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP], errMapPollChannel)
+	// init the kernel polling channels to poll packet metrics
+	for _, mp := range PacketTcKernelDPICountMaps() {
+		KerneleBPFMapMonitorPollChannel[mp] = make(chan string)
 	}
 
-	if fd := tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP]; fd != nil {
-		go tc.PollMonitoringMaps(ctx, tc.TcCollection.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP], errMapPollChannel)
-	}
+	go tc.PollMonitoringMaps(ctx, errMapPollChannel)
 
 	go func() {
 		for {
@@ -529,7 +535,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
-
 	if INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL {
 		tc.InitTCTunnelExfilPrevention(ctx, false)
 	}
@@ -863,7 +868,8 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 
 	packets := gopacket.NewPacketSource(cap, cap.LinkType())
 	for packet := range packets.Packets() {
-		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap, false) // snice processed over bridge
+		go tc.ExportKernelPacketProcessCountEvents()                   // let the agent start polling for monitor the kernel exported packet count metrcis
+		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap, false) // start deep packet userspace analysis over the packet
 	}
 }
 
