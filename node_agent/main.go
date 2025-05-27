@@ -129,7 +129,7 @@ func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 	}
 }
 
-func InitSeccompDynamicSeccomFilters() error {
+func initSeccompDynamicSeccomFilters() error {
 
 	// TODO: dynamic userspace enforced process aware security with dynamic security fitler values
 	_, err := uapimac.NewFilter(uint32(os.Getpid()))
@@ -139,7 +139,7 @@ func InitSeccompDynamicSeccomFilters() error {
 	return nil
 }
 
-func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
+func populateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 	sessionIdInjectedRing, err := crypto.GetKeyRingSessionId()
 	if err != nil {
 		utils.Log("Error getting the kernel keyring session id", err.Error())
@@ -175,6 +175,23 @@ func PopulateInjectedKeyringMetaInfo() (*crypto.KernelCryptoKeyRingIds, error) {
 	}, nil
 }
 
+// only configure varibales or thresholds of the agent and not the core kernel injection  program security
+func configureGlobalAgentConfigOpts(nodeAgentCliOptions *conf.NodeAgentCliOptions) {
+	if nodeAgentCliOptions.BPFProgPath != "" {
+		if err := utils.ConfigureCustomEBPFProgOutputPath(nodeAgentCliOptions.BPFProgPath); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	if nodeAgentCliOptions.SigKillBenignPortThreshold != utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD {
+		utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT = nodeAgentCliOptions.SigKillBenignPortThreshold
+	}
+
+	if nodeAgentCliOptions.SigKillTunnelPortThreshold != utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD {
+		utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = nodeAgentCliOptions.SigKillTunnelPortThreshold
+	}
+}
+
 func main() {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -198,7 +215,9 @@ func main() {
 	flag.IntVar(&nodeAgentCliOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
 
 	// kernel syscall layer interaction , needs kernel to support ring buffer emission for
-	flag.IntVar(&nodeAgentCliOptions.SigKill, "sigkill", 5, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent, post being sigkilled")
+	flag.IntVar(&nodeAgentCliOptions.SigKillBenignPortThreshold, "sigkill_benign", utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent for benign DNS port tunnelling, post being sigkilled")
+	flag.IntVar(&nodeAgentCliOptions.SigKillTunnelPortThreshold, "sigkill_tunnel", utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent for malicious port tunnelling, post being sigkilled")
+
 	flag.BoolVar(&nodeAgentCliOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
 	flag.Usage = func() {
@@ -207,12 +226,7 @@ func main() {
 	}
 	flag.Parse()
 
-	if nodeAgentCliOptions.BPFProgPath != "" {
-		if err := utils.ConfigureCustomEBPFProgOutputPath(nodeAgentCliOptions.BPFProgPath); err != nil {
-			panic(err.Error())
-		}
-	}
-
+	configureGlobalAgentConfigOpts(&nodeAgentCliOptions)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
 	// configure the global logger
@@ -223,7 +237,7 @@ func main() {
 		panic(err.Error())
 	}
 
-	_, err = PopulateInjectedKeyringMetaInfo()
+	_, err = populateInjectedKeyringMetaInfo()
 	if err != nil {
 		utils.Log("Error populating the keyring meta info", err.Error())
 		panic(err.Error())

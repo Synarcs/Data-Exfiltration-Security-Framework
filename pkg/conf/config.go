@@ -26,7 +26,8 @@ type (
 		// support for the eBPF ndoe agent running over host net_device dynamically reconfigure netpools for k8s CNI stop exfiltration from pod in user space or kernel sock layer, before it even reaches kernel host net_device traffic control
 		Cni bool
 		// used for sigkill with threshold limit for maslicious exfil detection
-		SigKill int
+		SigKillBenignPortThreshold int
+		SigKillTunnelPortThreshold int
 
 		Profile bool
 	}

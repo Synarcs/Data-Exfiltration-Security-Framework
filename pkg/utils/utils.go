@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package utils
 
 import (
@@ -86,9 +90,13 @@ const (
 )
 
 const (
-	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL              = time.Second * 10 // use to prune the map which ensure the required
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD             = 5                // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process
-	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT = 6                // higher threshold compared to tunnelle c2 for random DNS tunnel which must be lower to stop breach asap
+	DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD = 5
+)
+
+var (
+	EXFIL_PROCESS_CACHE_CLEAN_INTERVAL              = time.Second * 10                          // use to prune the map which ensure the required
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD             = DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD // ideally the c2 implant malware would starve and kill itself, but if keeps retrying the security node agent will kill the process, used for overlayed DNS over random UDP port
+	EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT = DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD // higher threshold compared to tunnelle c2 for random DNS tunnel which must be lower to stop breach asap
 
 	EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD = 5
 )
