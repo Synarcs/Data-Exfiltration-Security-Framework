@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package events
 
 var DNS_LIMITS_CONFIG map[uint32]uint32 = map[uint32]uint32{

@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package tc
 
 import (
@@ -314,7 +318,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 }
 
 func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, errorEventChannel chan error) {
-	var KernelPacketRedirectCount uint16 = 0
+	const KernelPacketRedirectCount uint16 = 0
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -598,6 +602,7 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
 func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
+
 }
 
 /*
@@ -678,7 +683,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		ipPacket = (packet.Layer(layers.LayerTypeIPv4)).(*layers.IPv4)
 		isIpv4 = true
 		if utils.DEBUG {
-			fmt.Println("current packet checksum", ipPacket.Checksum)
+			utils.Log("current packet checksum", ipPacket.Checksum)
 		}
 	}
 
@@ -706,7 +711,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 		payload := tcpPacket.Payload
 
-		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
+		utils.Log("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
 
 		if len(payload) < 2 {
 			utils.Log("TCP payload too short for dns parsing", len(payload))
@@ -835,7 +840,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 processPacketForNonAggresiveDPI:
 	tc.ProcessEachPacketPassiveDpi(ctx)
-	return
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
@@ -846,9 +850,9 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 		return
 	}
 
-	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+	cap, err := tc.Interfaces.GetPcapHandleoverNetDevByName(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU))
 	if err != nil {
-		fmt.Println("error opening packet capture over hz,te interface from kernel")
+		utils.Log("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
 	}
 	defer cap.Close()
@@ -866,8 +870,7 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 		return
 	}
 
-	packets := gopacket.NewPacketSource(cap, cap.LinkType())
-	for packet := range packets.Packets() {
+	for packet := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {
 		go tc.ExportKernelPacketProcessCountEvents()                   // let the agent start polling for monitor the kernel exported packet count metrcis
 		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap, false) // start deep packet userspace analysis over the packet
 	}
@@ -880,7 +883,7 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 
 	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
-		fmt.Println("error opening packet capture over hz,te interface from kernel")
+		utils.Log("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
 	}
 	defer cap.Close()
@@ -925,7 +928,8 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHand
 					if !ok {
 						return
 					}
-					fmt.Println(paylaod.Error())
+					// TODO: have proper error clean up absorb and handling
+					utils.Log(paylaod.Error())
 				}
 			default:
 				time.Sleep(time.Second * 1)

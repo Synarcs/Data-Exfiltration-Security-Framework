@@ -1,4 +1,4 @@
-/* Copyright (c) 2024-2025 Synarcs
+/* Copyright (c) 2024–2025 Synarcs. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -562,7 +562,7 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
 }
 
 static
-__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
+__always_inline __bpf_fastcall __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
@@ -835,7 +835,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
 
 static 
-__always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, 
+__always_inline __bpf_fastcall __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, 
             struct dns_header_tcp *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
 

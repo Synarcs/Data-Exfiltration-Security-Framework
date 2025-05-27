@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package netinet
 
 import (
@@ -7,6 +11,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
+// core bridge link utils to find free ipam disjoint from core netdev l3 addr
 // use netlink to find discrete ipam over all briges and links on the device for discete IPAM over the virtual NS and bridges ofr the Deep scan
 
 type IpamBlock struct {

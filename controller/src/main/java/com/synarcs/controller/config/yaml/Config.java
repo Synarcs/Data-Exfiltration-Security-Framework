@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package com.synarcs.controller.config.yaml;
 
 import com.synarcs.controller.config.yaml.k8s.CloudOrchestration;

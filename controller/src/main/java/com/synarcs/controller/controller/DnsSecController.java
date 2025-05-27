@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package com.synarcs.controller.controller;
 
 import java.io.Serializable;

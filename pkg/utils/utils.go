@@ -136,6 +136,28 @@ const (
 	DEFAULT_IPV6_CHECKSUM_MAP = 0xff
 )
 
+func GenerateBpfFIlterDnsOverUdp(isEgress bool, isudp bool) string {
+	var dir string
+	var transport string
+	if isEgress {
+		dir = "dst"
+	} else {
+		dir = "src"
+	}
+	if isudp {
+		transport = "udp"
+	} else {
+		transport = "tcp"
+	}
+	bpf_filter := strings.Builder{}
+	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_PORT))
+	bpf_filter.WriteString("and ")
+	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_MULTICAST_PORT))
+	bpf_filter.WriteString("and ")
+	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, LLMNR_EGRESS_LOCAL_MULTICAST_PORT))
+	return bpf_filter.String()
+}
+
 func InitGlobalErrorControlChannel() chan error {
 	return make(chan error)
 }

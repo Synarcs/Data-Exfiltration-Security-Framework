@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package tc
 
 // DPI over the clone redirect over tc from kernel done via the tc layer
@@ -357,17 +361,18 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 				utils.Logger.Printf("Error reading ring buffer: %s", err)
 				return err
 			}
+			if utils.DEBUG {
+				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
+			}
 
 			var event events.DnsEvent
 			if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 				if err != nil {
 					utils.Logger.Fatalf("Failed to parse event: %v", err)
 					return err
 				}
 			} else {
-				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
 				if err != nil {
 					utils.Logger.Fatalf("Failed to parse event: %v", err)

@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package containers
 
 // used to guard exfiltration against pod veth net_device for egress traffic
@@ -10,7 +14,7 @@ package containers
 	lo		(local pod loopback interface)
 
 	gx@xx 	(guard net_devices added as by the container in the same pod for multi container steup where all the container share same net_device and overall pod networking ns, ipc, hts etc)
-			 This all relies on containerd and containerd rungime followed with kube pause to ensure all these net_device get shared networking if_index
+			 This all relies on containerd and containerd runtime followed with kube pause to ensure all these net_device get shared networking if_index
 			 the guard container inject eBPF programs over this link which holds skbb_reidrect in kernel to redirect to different net-device do DPI and resent from host net_device if found benign, if it has istio it will take l7 to be forwarded upstream for dns case it
 			 			systemd-resolved on host net_deivce forwarded via  kube_dns
 
