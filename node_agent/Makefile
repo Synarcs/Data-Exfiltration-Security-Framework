@@ -35,7 +35,7 @@ build-cli:
 .PHONY: test
 test:
 	@echo "Running the eBPF Node Agent Unit Tests"
-	go test --timeout 10s
+	go test --timeout 10s 
 
 .PHONY: build
 build:

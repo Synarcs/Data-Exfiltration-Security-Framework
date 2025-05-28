@@ -26,6 +26,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -216,6 +217,10 @@ clean:
 Relies on legacy TC via cls_bpf priority over legacy TC subsystem for bpf filter attachment
 */
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
+	if err := rlimit.RemoveMemlock(); err != nil {
+		panic(err.Error())
+	}
+
 	if utils.VerifyTcxSupportEgressLink() {
 		// TODO: Implement injection support over TCX vs prio based legacy TC cls_bpf filters
 	}

@@ -1,3 +1,7 @@
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 #ifndef __CONST_H_ 
 #define __CONST_H_ 
 
@@ -68,6 +72,10 @@ struct exfil_security_egress_dns_limites {
 // rate limit config
 #define DNS_RATE_LIMIT_VOLUME false
 #define DNS_RATE_LIMIT_TOCKEN_BUCKET false
+
+
+// skb netflow handling 
+#define SKB_B32_KERNEL_RAND_PER_NETFLOW true 
 
 #define IPV6_ROUTE 1 
 
@@ -151,35 +159,37 @@ typedef struct inet6_bridge_address {
 } __attribute__((packed)) inet6_bridge_address;
 
 
-// configrue the global ipv6 range and forward for the global googl's ipv6 address. 
-inet6_bridge_address * configure_global_ipv6_route_handlers() {
-    inet6_bridge_address inet_addr_map = {};
-    inet_addr_map.inet_addr[0] = (struct in6_addr){
-        .in6_u.u6_addr16 = {
-           bpf_ntohs(0x2001), 
-           bpf_ntohs(0x4860), 
-           bpf_ntohs(0x4860), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x8888), 
-        }
-    };
-    inet_addr_map.inet_addr[1] = (struct in6_addr){
-        .in6_u.u6_addr16 = {
-           bpf_ntohs(0x2001), 
-           bpf_ntohs(0x4860), 
-           bpf_ntohs(0x4860), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x0000), 
-           bpf_ntohs(0x8844), 
-        }
-    };
-    return &inet_addr_map;
-}
+#ifdef IPV6_ROUTE 
+    // configrue the global ipv6 range and forward for the global googl's ipv6 address. 
+    inet6_bridge_address * configure_global_ipv6_route_handlers() {
+        inet6_bridge_address inet_addr_map = {};
+        inet_addr_map.inet_addr[0] = (struct in6_addr){
+            .in6_u.u6_addr16 = {
+            bpf_ntohs(0x2001), 
+            bpf_ntohs(0x4860), 
+            bpf_ntohs(0x4860), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x8888), 
+            }
+        };
+        inet_addr_map.inet_addr[1] = (struct in6_addr){
+            .in6_u.u6_addr16 = {
+            bpf_ntohs(0x2001), 
+            bpf_ntohs(0x4860), 
+            bpf_ntohs(0x4860), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x0000), 
+            bpf_ntohs(0x8844), 
+            }
+        };
+        return &inet_addr_map;
+    }
+#endif
 
 struct result_parse_dns_labels {
     bool deep_scan_mirror;

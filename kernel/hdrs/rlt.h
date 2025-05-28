@@ -1,3 +1,7 @@
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 #ifndef __RTL_H_ 
     #define __RTL_H_
 
@@ -12,6 +16,11 @@
 // TB config for bucket of rate limiter 
 #define MAX_TB_TOKEN_REFILL 10000
 #define MIN_TB_TOKEN_CAP 0 
+
+/*
+    The core rate limit in the kernel will be useing EDT_BPF, with HTB and timer pinning to CPU
+        to prevent true rate limiter in kernel for per packet processing over CPU 
+*/
 
 #if DNS_RATE_LIMIT_TOCKEN_BUCKET 
     struct token_bucket_dns_rl {

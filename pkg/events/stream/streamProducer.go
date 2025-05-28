@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
 	"time"
@@ -91,7 +92,7 @@ func (prod *StreamProducer) NewStreamKafkaProducer(ctx context.Context) error {
 			// channel is closed to ensure there is a timeout connect to remote kafka broker, since the kafka uses background context blocking node agent
 			utils.Log("Error connecting to the remote Kafka broker ", ctx.Err())
 			close(connErrorChan)
-			return nil
+			return fmt.Errorf("Error connecting to the remote broker deadline exceeded")
 		case err := <-connErrorChan:
 			close(connErrorChan)
 			return err

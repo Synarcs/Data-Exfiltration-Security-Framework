@@ -1,5 +1,8 @@
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
 #ifndef __DNS_H__ 
-#define __DNS_H__ 
+    #define __DNS_H__ 
 
 #include <linux/in.h>
 #include <linux/types.h>
@@ -270,4 +273,4 @@ struct dns_non_standard_transport_event {
     __u32 threadId;
 } __attribute__((packed));
 
-#endif
+#endif /* __DNS_H__ */

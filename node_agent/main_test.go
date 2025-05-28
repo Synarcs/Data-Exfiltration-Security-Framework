@@ -6,11 +6,12 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
@@ -24,6 +25,12 @@ import (
 // convers all the integration test for the user space entire node agent with kernel code, and kernel compatibility
 
 var linkHandler netinet.NetIface
+
+type TestConifgOptions struct {
+	agentConfigPath string
+}
+
+var configOpts TestConifgOptions
 
 // cover most of the integration test with kernel netlink sockets / interfaces and ebpf  compiled programs loader to be inject into the kernel network stack
 type KernelEbpfMockInjectors struct {
@@ -42,6 +49,15 @@ func (k *KernelEbpfMockInjectors) TestKernelTCEbpfInject(prog string) error {
 func (mock *NodeAgentMockInjectors) ReadGlobalNodeAgentConfig() (*conf.NodeAgentConfig, error) {
 	args := mock.Called()
 	return args.Get(0).(*conf.NodeAgentConfig), args.Error(1)
+}
+
+func init() {
+	for i := 1; i < len(os.Args); i++ {
+		if strings.HasPrefix(os.Args[i], "-test") && strings.Split(os.Args[i], ".")[1] == "config" {
+			configOpts.agentConfigPath = strings.Split(os.Args[i], ".")[1]
+		}
+	}
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func TestMain(t *testing.M) {
@@ -93,7 +109,7 @@ func TestNetworkInterfaces(t *testing.T) {
 }
 
 func TestOnnxDnsUnixMounts(t *testing.T) {
-	agentOnnxMountPaths := cli.LocalCliUnixSockPath
+	agentOnnxMountPaths := "/run/dnsobelisk"
 	dirs, err := os.ReadDir(agentOnnxMountPaths)
 	if err != nil {
 		t.Fatalf("Error the required onnx unix mount paths not found %s", agentOnnxMountPaths)
@@ -132,7 +148,13 @@ func TestBridgeInterfaces(t *testing.T) {
 }
 
 func TestRequireNodeAgentConfig(t *testing.T) {
-	if _, err := os.Stat("config.yaml"); err != nil {
+	var path string
+	if configOpts.agentConfigPath != "" {
+		path = configOpts.agentConfigPath
+	} else {
+		path = "config.yaml"
+	}
+	if _, err := os.Stat(path); err != nil {
 		assert.Fail(t, "Error the Node Agent cannot be booted without loadable config ...")
 	}
 	assert.True(t, true)
@@ -145,26 +167,39 @@ func TestEachNodeAgentConfigAddress(t *testing.T) {
 	config.ReadNodeAgentConfig()
 	globalConfig := config.GetAgentConfig()
 
-	// verify connection upstream dns server
-	_, err := net.Dial("udp", fmt.Sprintf("%s:%d", globalConfig.DNSServer.Ip, 53))
-	if err != nil {
-		assert.Error(err)
-	}
+	var wg sync.WaitGroup
 
-	// verify connection upstream metric server (prometheus)
-	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.MetricServer.Ip, globalConfig.MetricServer.Port))
-	if err != nil {
-		assert.Error(err)
-	}
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		// verify connection upstream dns server
+		_, err := net.Dial("udp", fmt.Sprintf("%s:%d", globalConfig.DNSServer.Ip, 53))
+		if err != nil {
+			utils.Log("error connecting to dns server")
+			assert.Error(err)
+		}
+	}()
 
-	// verify connection upstream metric explore server (grafana)
-	_, err = net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.GrafanaServer.Ip, globalConfig.MetricServer.Port))
-	if err != nil {
-		assert.Error(err)
-	}
+	go func() {
+		defer wg.Done()
+		// verify connection upstream metric server (prometheus)
+		_, err := net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.MetricServer.Ip, globalConfig.MetricServer.Port))
+		if err != nil {
+			assert.Error(err)
+		}
+	}()
 
+	go func() {
+		defer wg.Done()
+		// verify connection upstream metric explore server (grafana)
+		_, err := net.Dial("tcp", fmt.Sprintf("%s:%s", globalConfig.GrafanaServer.Ip, globalConfig.MetricServer.Port))
+		if err != nil {
+			assert.Error(err)
+		}
+	}()
+
+	wg.Wait()
 	assert.True(true)
-
 }
 
 func TestNodeAgentStreamProducerConn(t *testing.T) {

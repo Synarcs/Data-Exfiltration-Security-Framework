@@ -1,3 +1,6 @@
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
 #include <linux/bpf.h>
 
 #include <bpf/bpf_helpers.h>

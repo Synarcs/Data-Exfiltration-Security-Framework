@@ -47,6 +47,7 @@ typedef struct packedOptimized {
 } handler __attribute((packed));
 
 __attribute__((always_inline))
+static 
 int test_runner(void *__restrict size_ptr) {
     double *cast = (double *)(size_ptr);
     if (*cast > (double) (1 << 4)) 

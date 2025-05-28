@@ -3,6 +3,8 @@
         "*.p4": "p4",
         "stdio.h": "c",
         "stdbool.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "types.h": "c",
+        "bpf_tracing.h": "c"
     }
 }

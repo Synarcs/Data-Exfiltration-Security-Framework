@@ -1,3 +1,6 @@
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
 #ifndef __UTILS_H_ 
     #define __UTILS_H_ 
 

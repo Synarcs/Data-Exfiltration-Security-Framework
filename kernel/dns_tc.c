@@ -976,12 +976,14 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
         skb->mark = REDIRECT_SKB_MARK; // unqiue mark for redirection configured via crypto random gen from userspace 
         return;
     }
-    __u32 rand_mark = __get_random_skb_u32_hash();
-    skb->mark = rand_mark;
-    __u32 skb_hash_map_bridge_default_key = 0;
-    if (bpf_map_update_elem(&exfil_security_tc_bridge_config_map, &skb_hash_map_bridge_default_key, &rand_mark, BPF_ANY) < 0) {
-        skb->mark = skb_redir_hash;
-    }
+    #if SKB_B32_KERNEL_RAND_PER_NETFLOW
+        __u32 rand_mark = __get_random_skb_u32_hash();
+        skb->mark = rand_mark;
+        __u32 skb_hash_map_bridge_default_key = 0;
+        if (bpf_map_update_elem(&exfil_security_tc_bridge_config_map, &skb_hash_map_bridge_default_key, &rand_mark, BPF_ANY) < 0) {
+            skb->mark = skb_redir_hash;
+        }
+    #endif 
 }
 
 /*

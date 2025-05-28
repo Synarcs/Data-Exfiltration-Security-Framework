@@ -31,6 +31,9 @@ type BridgeTCFilters struct {
 }
 
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
+	if err := rlimit.RemoveMemlock(); err != nil {
+		panic(err.Error())
+	}
 
 	for _, link := range btc.Interfaces.BridgeLinks {
 		utils.Log("Attaching TC qdisc to the interface ", link.Attrs().Name)
