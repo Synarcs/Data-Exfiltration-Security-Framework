@@ -125,6 +125,9 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 * Data Plane (eBPF Node Agent): ``` infrastructure/agent.sh ```
 * Control Plane: ``` infrastructure/controller.sh ```
 
+## WhitePaper and supporting Paper
+* [Security Framewok WhitePaper](https://github.com/Synarcs/DNSObelisk_Report) provides detailed internals of the security framework.
+
 ## Author
 - [Vedang Parasnis](https://github.com/Synarcs/)
 
