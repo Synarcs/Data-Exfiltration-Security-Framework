@@ -201,6 +201,7 @@ func main() {
 	var nodeAgentCliOptions conf.NodeAgentCliOptions
 	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
 	flag.StringVar(&nodeAgentCliOptions.BPFProgPath, "bpf_prog_path", "", "the path containing all the eBPF compiled programs")
+	flag.StringVar(&nodeAgentCliOptions.AgentConfigPath, "agent_config_path", "", "custom path absolute path for booting up the agent | must be yaml as per Agent required format")
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference (default: false)")
@@ -291,7 +292,15 @@ func main() {
 
 	globalErrorKernelHandlerChannel := utils.InitGlobalErrorControlChannel()
 	var agentConfigLoader conf.AgentConfig = &conf.Config{}
-	agentConfigLoader.ReadNodeAgentConfig()
+	if nodeAgentCliOptions.AgentConfigPath != "" {
+		if err := agentConfigLoader.ReadNodeAgentConfig(nodeAgentCliOptions.AgentConfigPath); err != nil {
+			panic(err.Error())
+		}
+	} else {
+		if err := agentConfigLoader.ReadNodeAgentConfig(""); err != nil {
+			panic(err.Error())
+		}
+	}
 	globalConfig := agentConfigLoader.GetAgentConfig()
 
 	if utils.DEBUG {

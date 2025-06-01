@@ -17,6 +17,7 @@ import (
 type (
 	NodeAgentCliOptions struct {
 		BPFProgPath              string
+		AgentConfigPath          string
 		CliFlag                  bool
 		Debug                    bool
 		StreamClient             bool
@@ -37,7 +38,7 @@ type (
 		GetAgentAggressiveDpiMode() bool
 		GetAddonFeaturesConfig() *EnhancedFeatures
 		GetAgentConfig() *NodeAgentConfig
-		ReadNodeAgentConfig() error
+		ReadNodeAgentConfig(customConfigPath string) error
 		GetL3FiltersConfig() *L3EnhancedFeatures
 		GetRLimitConfig() *RlimitConfig
 	}
@@ -119,9 +120,14 @@ func NewNodeAgentConfig() *NodeAgentConfig {
 	return &NodeAgentConfig{}
 }
 
-func (nn *Config) ReadNodeAgentConfig() error {
-
-	if _, err := os.Stat(utils.NODE_CONFIG_FILE); err != nil {
+func (nn *Config) ReadNodeAgentConfig(customConfigPath string) error {
+	var path string
+	if customConfigPath != "" {
+		path = customConfigPath
+	} else {
+		path = utils.NODE_CONFIG_FILE
+	}
+	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			utils.Log("Error cannot boot node daemon of ebpf with the base config file required {metrics, streamserver, dnsserver}")
 			return err
@@ -132,7 +138,7 @@ func (nn *Config) ReadNodeAgentConfig() error {
 
 	var config *NodeAgentConfig = NewNodeAgentConfig()
 
-	ff, _ := os.ReadFile(utils.NODE_CONFIG_FILE)
+	ff, _ := os.ReadFile(path)
 
 	if err := yaml.Unmarshal(ff, &config); err != nil {
 		return err

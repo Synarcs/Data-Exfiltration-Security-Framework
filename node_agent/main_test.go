@@ -151,13 +151,18 @@ func TestBridgeInterfaces(t *testing.T) {
 	assert.Fail("Error Required Kernel Bridge interfaces not found managed by the node agent")
 }
 
-func TestRequireNodeAgentConfig(t *testing.T) {
+func getConfigAgentPath() string {
 	var path string
 	if configOpts.agentConfigPath != "" {
 		path = configOpts.agentConfigPath
 	} else {
 		path = "config.yaml"
 	}
+	return path
+}
+
+func TestRequireNodeAgentConfig(t *testing.T) {
+	path := getConfigAgentPath()
 	if _, err := os.Stat(path); err != nil {
 		assert.Fail(t, "Error the Node Agent cannot be booted without loadable config ...")
 	}
@@ -166,9 +171,11 @@ func TestRequireNodeAgentConfig(t *testing.T) {
 
 func TestEachNodeAgentConfigAddress(t *testing.T) {
 	assert := assert.New(t)
-	var config conf.AgentConfig = &conf.Config{}
 
-	config.ReadNodeAgentConfig()
+	path := getConfigAgentPath()
+
+	var config conf.AgentConfig = &conf.Config{}
+	config.ReadNodeAgentConfig(path)
 	globalConfig := config.GetAgentConfig()
 
 	var wg sync.WaitGroup
@@ -216,14 +223,28 @@ func TestAgentBenignDomainCacheLoaded(t *testing.T) {
 	assert.True(true)
 }
 
+func TestControllerRpcReach(t *testing.T) {
+	assert := assert.New(t)
+	path := getConfigAgentPath()
+
+	var agentConfigLoader conf.AgentConfig = &conf.Config{}
+	if err := agentConfigLoader.ReadNodeAgentConfig(path); err != nil {
+		panic(err.Error())
+	}
+
+	assert.True(true)
+}
+
 func TestNodeAgentStreamProducerConn(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, time.Second*3)
 
+	path := getConfigAgentPath()
+
 	var config conf.AgentConfig = &conf.Config{}
 
-	config.ReadNodeAgentConfig()
+	config.ReadNodeAgentConfig(path)
 	globalConfig := config.GetAgentConfig()
 	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
 
