@@ -90,6 +90,7 @@ var (
 	// dont use spin lock user space write a map from userspace, and kernel always read it, and never write,
 	KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
 	KernelMaliciousTransferPortDelete     sync.Mutex = sync.Mutex{}
+	KernelUpdateMaliciousReferenceLock    sync.Mutex = sync.Mutex{}
 
 	// map 3  (proc --> isMal (bool))
 	UpdateMapMaliciousProcId sync.Mutex = sync.Mutex{}
@@ -240,6 +241,9 @@ func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {
+	KernelUpdateMaliciousReferenceLock.Lock()
+	defer KernelUpdateMaliciousReferenceLock.Unlock()
+
 	var redirCountKey uint16 = 0
 	if !isCloneRedirectedAndMalicious {
 		cloneredirectMap := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP]

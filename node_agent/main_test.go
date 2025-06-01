@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package main
 
 import (
@@ -199,6 +203,16 @@ func TestEachNodeAgentConfigAddress(t *testing.T) {
 	}()
 
 	wg.Wait()
+	assert.True(true)
+}
+
+func TestAgentBenignDomainCacheLoaded(t *testing.T) {
+	assert := assert.New(t)
+
+	_, err := utils.VerifyTopDomainsData()
+	if err != nil {
+		assert.Fail(err.Error())
+	}
 	assert.True(true)
 }
 

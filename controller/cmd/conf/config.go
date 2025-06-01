@@ -1,4 +1,10 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+*/
+
 package conf
+
+import pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api"
 
 // only extreact what the controller unix cni netpool handler needs from root controller
 type GlobalControllerConfig struct {
@@ -16,4 +22,9 @@ type GlobalControllerConfig struct {
 			Name string `json:"name"`
 		} `json:"cni"`
 	} `json:"k8s"`
+}
+
+func TestHandler() {
+	var _ pb.UnimplementedNodeAgentCryptoServiceServer
+
 }

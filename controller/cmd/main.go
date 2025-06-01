@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -16,6 +15,7 @@ import (
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/consumer"
 	"github.com/Synarcs/DNSObelisk/controller/k8s"
+	"github.com/Synarcs/DNSObelisk/controller/rpc"
 )
 
 const (
@@ -75,19 +75,23 @@ func main() {
 	}
 
 	// read the controller config from the kafka consumer for infer controller events
-	globalControllerConfig, streamConsumer := LoadConfigFromController()
+	// globalControllerConfig, streamConsumer := LoadConfigFromController()
 
-	serverMux := http.NewServeMux()
-
-	server := &http.Server{
-		Handler: serverMux,
-		BaseContext: func(l net.Listener) context.Context {
-			return context.WithValue(ctx, "BootTime", time.Now().String())
-		},
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
+	configRpcChan := make(chan interface{})
+	nodeAgentServer := rpc.NodeAgentServer{
+		ConfigChannel: configRpcChan,
 	}
+	go nodeAgentServer.StartControllerRpcServer()
+
+	// server := &http.Server{
+	// 	Handler: serverMux,
+	// 	BaseContext: func(l net.Listener) context.Context {
+	// 		return context.WithValue(ctx, "BootTime", time.Now().String())
+	// 	},
+	// 	TLSConfig: &tls.Config{
+	// 		InsecureSkipVerify: true,
+	// 	},
+	// }
 
 	k8sClientSet, err := k8s.InitK8sClientSet("")
 
@@ -95,31 +99,34 @@ func main() {
 		log.Println("the cni netpool handler for controller cannot load without valid k8ss client set provided")
 	} else {
 
-		log.Println("the broker config for unix sock server consume events from controller ", streamConsumer.KafkaBrokerConfig.Brokers)
-		var cniNetworkPolicyHandler cni.NetworkPolicies = CreateCniClientSet(globalControllerConfig, k8sClientSet)
+		// log.Println("the broker config for unix sock server consume events from controller ", streamConsumer.KafkaBrokerConfig.Brokers)
+		// var cniNetworkPolicyHandler cni.NetworkPolicies = CreateCniClientSet(globalControllerConfig, k8sClientSet)
 
-		go func() {
-			if err := server.Serve(sock); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server error: %v", err)
-			}
-			// the parrent or main go routine will gracefully shutdown the server and underlying unix sock transport server
-		}()
+		// go func() {
+		// 	if err := server.Serve(sock); err != nil && err != http.ErrServerClosed {
+		// 		log.Fatalf("Server error: %v", err)
+		// 	}
+		// 	// the parrent or main go routine will gracefully shutdown the server and underlying unix sock transport server
+		// }()
 
-		go func() {
-			if err := streamConsumer.ConsumeStreamControllerTopic(ctx, cniNetworkPolicyHandler); err != nil {
-				errChan <- err
-				return
-			}
-		}()
+		// go func() {
+		// 	if err := streamConsumer.ConsumeStreamControllerTopic(ctx, cniNetworkPolicyHandler); err != nil {
+		// 		errChan <- err
+		// 		return
+		// 	}
+		// }()
 	}
 
 	defer func() {
 		log.Println("Closing the controller unix socket stream Consumer")
-		streamConsumer.CloseConsumer()
+		// streamConsumer.CloseConsumer()
+		nodeAgentServer.CloseRpcServer()
 
 		log.Println("Closing the Unix Socket Server for the controller")
-		server.Close()
-		sock.Close()
+		// server.Close()
+		if sock != nil {
+			sock.Close()
+		}
 		if _, err := os.Stat(CNI_CONTROLLER_SOCK); err == nil {
 			if err := os.Remove(CNI_CONTROLLER_SOCK); err != nil {
 				log.Println("Error removing mounted CNI socket:", err)

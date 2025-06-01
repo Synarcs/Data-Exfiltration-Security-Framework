@@ -27,7 +27,6 @@ import (
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint/uapimac"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -270,6 +269,7 @@ func main() {
 	if err := utils.InitCache(); err != nil {
 		panic(err.Error())
 	}
+
 	topDomains, err := utils.ReadTldDomainsData()
 
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
@@ -306,16 +306,6 @@ func main() {
 
 	if nodeAgentCliOptions.Debug {
 		utils.DEBUG = nodeAgentCliOptions.CliFlag
-	}
-
-	var rpcServer rpc.NodeAgentServer
-
-	if nodeAgentCliOptions.StreamClient {
-		config := make(chan interface{})
-		rpcServer.ConfigChannel = config
-
-		// ideally the node agent works for handling receiveing streaming server side events from remote control plane endpoints
-		go rpcServer.StartAgentStreamServer()
 	}
 
 	tst := make(chan os.Signal, 1)
@@ -510,10 +500,6 @@ func main() {
 
 	streamProducer.CloseProducer()
 	streamConsumer.CloseConsumer()
-
-	if nodeAgentCliOptions.StreamClient {
-		rpcServer.CloseRpcServer()
-	}
 
 	// cancel ctx for the profiler running
 	if nodeAgentCliOptions.Profile {

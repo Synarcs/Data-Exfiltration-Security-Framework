@@ -40,7 +40,7 @@ build-controller:
 	@mkdir controller/bin
 	cd controller && mvn clean package && cp target/node-agent-controller-1.0-SNAPSHOT.jar bin/ && mvn clean 
 	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
-	cd controller/cmd && go build -o ../bin/main main.go 
+	cd controller/cmd && go build -ldflags="-s -w" -o ../bin/main main.go 
 
 .PHONY: build-controller-cni-sec
 build-controller-cni-sec:
@@ -99,10 +99,23 @@ install-dep:
 	bash infrastructure/agent.sh
 	bash infrastructure/monitor.sh 
 
+proto_path ?= exfil_sec_api/proto
+go_out ?= exfil_sec_api
+proto_file ?= exfil_sec.proto
 
-.PHONY: build-agent-protos 
+.PHONY: build-agent-protos
 build-agent-protos:
-	@cd pkg/rpc && make
+	@echo "Generating all the protos for the exfil_sec framework endpoint security for control plane and data plane"
+	protoc --proto_path="$(proto_path)" \
+		--go_out="paths=source_relative:$(go_out)" \
+		--go-grpc_out="paths=source_relative,require_unimplemented_servers=false:$(go_out)" \
+		"$(proto_path)/$(proto_file)"
+
+.PHONY: build-proto-dep
+build-proto-dep: 
+	@echo "Installing all the required proto build deps" 
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 
 QPS ?= 100000

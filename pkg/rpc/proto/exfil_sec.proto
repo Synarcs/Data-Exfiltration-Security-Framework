@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package exfil_kernel;
 
-option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework";
+option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api";
 
 // the proto is initially written for multi-layer security with control plane verifying progs, and signatures for the eBPF progs at the endpoint over the data plane
 
@@ -11,10 +11,22 @@ enum DNS_MALICIOUS_FLAGS {
     SUSPICIOUS = 1;
 }
 
-enum KERNEL_KEYRING_TYPE {
+enum KERNEL_KEYRING_OPS_TYPES {
     KEYCTL_REVOKE = 0;
     KEYCTL_REJECT = 1;
     KEYCTL_CLEAR = 2;
+}
+
+enum KERNEL_KEYRING_TYPES {
+    USER = 0;
+    SESSION = 1;
+    PROCESS = 2;
+}
+
+enum KERNEL_KEYRING_KEY_TYPES { 
+    K_USER = 0;
+    K_LOGONG = 1;
+    K_ASYMMETRIC = 2;
 }
 
 message ExfilDomains {
@@ -37,8 +49,11 @@ message ElfSignatureResponse {
 }
 
 message AgentKernelKeyringControllerCommandRequest {
-    repeated KERNEL_KEYRING_TYPE cmd = 1;
+    repeated KERNEL_KEYRING_OPS_TYPES cmd = 1;
+    repeated KERNEL_KEYRING_TYPES ringTypes = 2;
+    repeated KERNEL_KEYRING_KEY_TYPES keyTypes = 3;
 }
+
 message AgentKernelKeyringControllerCommandResponse {
     repeated bool response = 1;
 }

@@ -1,10 +1,9 @@
 module github.com/Synarcs/Data-Exfiltration-Security-Framework
 
-go 1.23.0
-
-toolchain go1.23.2
+go 1.23.2
 
 require (
+	github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api v0.0.0
 	github.com/asavie/xdp v0.3.3
 	github.com/charmbracelet/log v0.4.1
 	github.com/cilium/ebpf v0.17.1
@@ -26,8 +25,7 @@ require (
 	go.mozilla.org/pkcs7 v0.9.0
 	golang.org/x/net v0.38.0
 	golang.org/x/sys v0.31.0
-	google.golang.org/grpc v1.70.0
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/grpc v1.72.2
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -73,13 +71,14 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zmap/zcrypto v0.0.0-20230310154051-c8b263fd8300 // indirect
 	github.com/zmap/zlint/v3 v3.5.0 // indirect
-	go.opentelemetry.io/otel v1.34.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250212204824-5a70512c5d8b // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a // indirect
+	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 )
+
+replace github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api => ./exfil_sec_api

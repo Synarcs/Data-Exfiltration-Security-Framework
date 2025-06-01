@@ -9,7 +9,8 @@ import (
 	"os"
 	"time"
 
-	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/pb"
+	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api"
+
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
