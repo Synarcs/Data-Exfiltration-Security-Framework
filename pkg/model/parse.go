@@ -143,10 +143,6 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 	return nil
 }
 
-func (d *DnsPacketGen) CleanRedirectEgressMapsForXdp() error {
-	return nil
-}
-
 func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS, customNsFdHandle *int) layers.DNS {
 	return layers.DNS{
 		ID:           dns.ID,
@@ -169,7 +165,7 @@ func (d *DnsPacketGen) GenerateDnsPacket(dns layers.DNS, customNsFdHandle *int) 
 	}
 }
 
-func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.Collection) {
+func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.Collection, enforceNetworkPolicyTime bool) {
 
 	redirectTimeMap := spec.Maps[events.EXFILL_SECURITY_EGRESS_REDIRECT_LOOP_TIME]
 	if redirectTimeMap != nil {
@@ -184,7 +180,14 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 		if utils.DEBUG {
 			utils.Logger.Printf("The round trip time for the dns packet %fms", roundProcessTime)
 		}
-		events.UpdateLatencyMetricEvents(roundProcessTime)
+		if !enforceNetworkPolicyTime {
+			events.UpdateLatencyMetricEvents(roundProcessTime)
+		} else {
+			if utils.DEBUG {
+				roundProcessTime = roundProcessTime / 1_000 // ust measure in millsecond for tracking response time when first network policy was enforced and userspace dropped packet, when instructed by kernel program for inferencing
+				utils.Log(fmt.Sprintf("the first network policy was enforced after time :: %fms", roundProcessTime))
+			}
+		}
 	}
 }
 
@@ -276,7 +279,9 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
 				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
 			})
+			// perform force garbage collection for go runtime to clean userspace memory during processing from kernel packet data in zero-copy mode
 			go utils.ForceGcPacketBufferZerocopyUserspace()
+			d.EvalOverallPacketProcessTime(*dns, spec, true)
 		}
 		return nil
 	} else {
@@ -306,7 +311,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	dnsPacket := d.GenerateDnsPacket(*dns, nil)
 
 	if isEgress && isBenign {
-		d.EvalOverallPacketProcessTime(*dns, spec)
+		d.EvalOverallPacketProcessTime(*dns, spec, false)
 	}
 
 	buffer := gopacket.NewSerializeBuffer()

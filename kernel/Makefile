@@ -26,6 +26,7 @@ crypto_kernel := $(shell pwd)/lsm_bpf.c
 crypto_kernel_out ?= lsm_bpf.o 
 
 CC := clang 
+CXX := clang++
 CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
 ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
 LLVM_CX_IR_ARGS := -S -emit-llvm 
@@ -127,7 +128,7 @@ tc:
 
 .PHONY: tc-remove-vm
 tc-remove-vm:
-	$(QDISC_RM) eth0 $(QDISC) 
+	$(QDISC_RM) dev eth0 $(QDISC) 
 	# cloud vm usually have eth0 for receiver link name 
 
 

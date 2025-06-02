@@ -26,6 +26,8 @@ infrastructure/dga/*.conf
 
 
 pkg/envoy/target/*
+pkg/envoy/target/target-rust-analyzer
+
 pkg/envoy/*.lock
 pkg/rpc/keys/*
 
