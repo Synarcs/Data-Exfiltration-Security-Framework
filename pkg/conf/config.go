@@ -30,6 +30,10 @@ type (
 		SigKillBenignPortThreshold int
 		SigKillTunnelPortThreshold int
 
+		// enables the agent in data plane to enforce zero trust enforcement via a layered CA cert verification chain integrate LSM, keyring with global CA and PKI
+		ControllerEnabledZtEnfoce bool
+		ControllerRPCPort         int
+
 		Profile bool
 	}
 

@@ -1225,13 +1225,13 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
     #if DEBUG
         bpf_printk("Updating the kernel maps for clone redirection from kernel ");
     #endif 
+    const __u32 init_map_redirect_count = 1;
     __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
     if (isRedirectedDropped) {
         __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key);
         if (ct_val) 
             __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
         else {
-            const __u32 init_map_redirect_count = 1;
             bpf_map_update_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
         }
     }else {
@@ -1239,7 +1239,6 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
         if (ct_val) 
             __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
         else {
-            const __u32 init_map_redirect_count = 1;
             bpf_map_update_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
         }
     }

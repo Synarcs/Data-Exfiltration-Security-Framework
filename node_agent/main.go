@@ -27,6 +27,7 @@ import (
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
+	controllerrpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint/uapimac"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
@@ -189,6 +190,18 @@ func configureGlobalAgentConfigOpts(nodeAgentCliOptions *conf.NodeAgentCliOption
 	if nodeAgentCliOptions.SigKillTunnelPortThreshold != utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD {
 		utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = nodeAgentCliOptions.SigKillTunnelPortThreshold
 	}
+
+	if nodeAgentCliOptions.ControllerRPCPort != controllerrpc.CONTROLLER_RPC_PORT {
+		controllerrpc.CONTROLLER_RPC_PORT = nodeAgentCliOptions.ControllerRPCPort
+	}
+}
+
+func InitControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControllerRpcServices, error) {
+	rpcClient := controllerrpc.NewAgentControllerRpcServices()
+	if err := rpcClient.NodeAgentControllerEnforceSecRpc(ctx); err != nil {
+		return nil, err
+	}
+	return rpcClient, nil
 }
 
 func main() {
@@ -218,6 +231,10 @@ func main() {
 	flag.IntVar(&nodeAgentCliOptions.SigKillBenignPortThreshold, "sigkill_benign", utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent for benign DNS port tunnelling, post being sigkilled")
 	flag.IntVar(&nodeAgentCliOptions.SigKillTunnelPortThreshold, "sigkill_tunnel", utils.DEFAULT_SIGKILL_MALICIOUS_EXFIL_THRESHOLD, "Defines the threshold for the number of times exfiltration through a process to be prevented by eBPF node agent for malicious port tunnelling, post being sigkilled")
 
+	// crypto lsm kernel integrate with pki for custom bootstreap ec CA or global cloud PKI config
+	flag.BoolVar(&nodeAgentCliOptions.ControllerEnabledZtEnfoce, "controller_cz", false, "Enables the controller enabled LSM and cloud gobal CA for eBPF prog load integrity verification")
+	flag.IntVar(&nodeAgentCliOptions.ControllerRPCPort, "controller_rpc_port", 3200, "Port used for rpc between data plane and controller")
+
 	flag.BoolVar(&nodeAgentCliOptions.ContainerRuntime, "crt", false, "Run the eBPF Node Agent as a container relying on bridge networking overlay from OCI pl;ugin mounted on host to stop exfiltration on host")
 
 	flag.Usage = func() {
@@ -242,7 +259,27 @@ func main() {
 		utils.Log("Error populating the keyring meta info", err.Error())
 		panic(err.Error())
 	}
-	cryptoLsmProgHandler := crypto.NewCryptoBpfLsm(agentCryptoConfig)
+
+	var cryptoLsmProgHandler *crypto.CryptoBpfLsm
+
+	if !nodeAgentCliOptions.ControllerEnabledZtEnfoce {
+		cryptoLsmProgHandler = crypto.New(
+			crypto.NewCryptoBpfLsmWithLocalCAConfig(ctx, agentCryptoConfig),
+		)
+	} else {
+		rpcClient, err := InitControllerRpcClient(ctx)
+		if err != nil {
+			panic(err.Error())
+		}
+		cryptoLsmProgHandler = crypto.New(
+			crypto.NewCryptoBpfLsmWithLocalControllerRpcConfig(ctx, nodeAgentCliOptions.ControllerEnabledZtEnfoce, rpcClient),
+		)
+	}
+
+	if err != nil {
+		// if the core crypto lsm utils for init keyring break any bpf prog cannot be loaded in kernel in runtime for endpoint security to ensure highest security of programs injected in the kernel
+		panic(err.Error())
+	}
 
 	// // inject the crypto lsm program in kernel for all ebpf prog verification
 	// if err := cryptoLsmProgHandler.InjectLsmProg(ctx); err != nil {

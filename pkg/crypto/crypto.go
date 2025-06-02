@@ -6,6 +6,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/binary"
@@ -16,6 +17,7 @@ import (
 	"os"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -280,27 +282,59 @@ func (lsm *CryptoBpfLsm) computeModifiedSignature(instructions asm.Instructions,
 }
 
 type CryptoBpfLsm struct {
-	PinnedMaps        []string
-	LsmProgCollection *ebpf.Collection
-	AgentCryptoConfig *NodeAgentCryptoConfig
-	Program           *ebpf.Program
-	Link              link.Link
+	PinnedMaps                []string
+	LsmProgCollection         *ebpf.Collection
+	AgentCryptoConfig         *NodeAgentCryptoConfig
+	Program                   *ebpf.Program
+	Link                      link.Link
+	ControllerEnabledZtEnfoce bool
+	AgentRpcClient            *rpc.AgentControllerRpcServices
 }
 
-func NewCryptoBpfLsm(agentCryptoConfig *NodeAgentCryptoConfig) *CryptoBpfLsm {
-	return &CryptoBpfLsm{
-		PinnedMaps: []string{
-			events.EXFIL_SECURITY_KEYRING_MAP,
-			events.EXFIL_SECURITY_MODIFIED_SIGNATURE,
-			events.EXFIL_SECURITY_KEYRING_MAP,
-			events.EXFIL_SECURITY_COMBINED_DATA_MAP,
-		},
-		AgentCryptoConfig: agentCryptoConfig,
+var cryptoMaps []string = []string{
+	events.EXFIL_SECURITY_KEYRING_MAP,
+	events.EXFIL_SECURITY_MODIFIED_SIGNATURE,
+	events.EXFIL_SECURITY_KEYRING_MAP,
+	events.EXFIL_SECURITY_COMBINED_DATA_MAP,
+}
+
+func New(options ...func(*CryptoBpfLsm)) *CryptoBpfLsm {
+	cryptoLsm := &CryptoBpfLsm{
+		PinnedMaps: cryptoMaps,
 	}
+	for _, funcOpt := range options {
+		funcOpt(cryptoLsm)
+	}
+	return cryptoLsm
+}
+
+func NewCryptoBpfLsmWithLocalCAConfig(ctx context.Context, agentCryptoConfig *NodeAgentCryptoConfig) func(*CryptoBpfLsm) {
+	return func(cbl *CryptoBpfLsm) {
+		cbl.AgentCryptoConfig = agentCryptoConfig
+	}
+}
+
+func NewCryptoBpfLsmWithLocalControllerRpcConfig(ctx context.Context,
+	controllerEnabledZtEnfoce bool, rpcClient *rpc.AgentControllerRpcServices) func(*CryptoBpfLsm) {
+	return func(cbl *CryptoBpfLsm) {
+		cbl.AgentRpcClient = rpcClient
+		cbl.ControllerEnabledZtEnfoce = controllerEnabledZtEnfoce
+	}
+}
+
+// this is the global layered bpf prog enforcement for the agent in datapalne request controller to sign the raw bytecode before inject in LSM
+func (lsm *CryptoBpfLsm) RequestControllerForBpfProgSign(ebpfProgRaw []byte,
+	progInfo *ebpf.ProgramInfo) error {
+		// TODO: Ask the controller to sign the required eBPF progs raw bytecode establish first chain of trust 
+	return nil
 }
 
 func (lsm *CryptoBpfLsm) InjectLSMProgsPostSignatureGenerate(ebpfProgRaw []byte,
 	ebpfProg *ebpf.ProgramInfo, keyringconfigInfo *KernelCryptoKeyRingIds) error {
+
+	if lsm.ControllerEnabledZtEnfoce {
+		return lsm.RequestControllerForBpfProgSign(ebpfProgRaw, ebpfProg)
+	}
 
 	var org CompiledProgInfo
 

@@ -36,11 +36,6 @@ func VerifyKeyRinggenerated() (string, error) {
 	return file, err
 }
 
-const (
-	KEYCTL_JOIN_SESSION_KEYRING = 1
-	KEYCTL_LINK                 = 8
-)
-
 func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	utils.Log("Configuring the kernel keyring for all prog verification in kernel ")
 
@@ -49,7 +44,7 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	}
 
 	// create a new session keyring ID in the kernel, the keyring should be ephemeral and lived only until the node agent is alive in kernel
-	sessionID, err := unix.KeyctlInt(KEYCTL_JOIN_SESSION_KEYRING, 0, 0, 0, 0)
+	sessionID, err := unix.KeyctlInt(unix.KEYCTL_JOIN_SESSION_KEYRING, 0, 0, 0, 0)
 	if err != nil {
 		utils.Logger.Fatalf("Failed to create new session keyring: %v", err)
 	}
@@ -67,7 +62,8 @@ func AddKernelKeyRing(config *NodeAgentCryptoConfig) error {
 	keyDesc := ".ebpf:signing:x509"
 
 	// Add the asymmetric key to the session keyring
-	keyID, err := unix.AddKey("asymmetric", keyDesc, val, unix.KEY_SPEC_SESSION_KEYRING)
+	keyID, err := unix.AddKey("asymmetric", keyDesc, val, unix.KEY_SPEC_PROCESS_KEYRING)
+
 	if err != nil {
 		utils.Logger.Fatalf("Failed to add key: %v", err)
 	}

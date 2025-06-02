@@ -54,7 +54,9 @@ sudo apt update -y && sudo apt install -y \
     libc6-dev \
     libbz2-dev \
     keyutils \
-    libkeyutils-dev 
+    libkeyutils-dev \
+    policycoreutils-dev \
+    policycoreutils-gui 
 
 # dependencies for pprof flamegraph and other graph visualization support 
 pprof=1

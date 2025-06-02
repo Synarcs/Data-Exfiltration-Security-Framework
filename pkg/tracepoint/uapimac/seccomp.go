@@ -29,6 +29,7 @@ func GetSyscallIds(procId uint32) (*[]seccomp.ScmpSyscall, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vfork syscall: %w", err)
 	}
+
 	syscallIds = append(syscallIds, vfork)
 	cloneCall, err := seccomp.GetSyscallFromName("clone")
 	if err != nil {

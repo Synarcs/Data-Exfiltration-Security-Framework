@@ -5,7 +5,9 @@
     #define __UTILS_H_ 
 
 #include <stdbool.h>
+#include <linux/kernel.h>
 #include <linux/version.h>
+
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))

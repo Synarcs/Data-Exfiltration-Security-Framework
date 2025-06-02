@@ -7,22 +7,30 @@ package rpc
 import (
 	"context"
 	"crypto/x509"
-	"flag"
-	"fmt"
-	"io"
 	"os"
-	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api"
 
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+const (
+	CERT_DIR = "keys/certificate.pem"
+)
+
+type AgentControllerRpcServices struct {
+	conn           *grpc.ClientConn
+	CryptoServices pb.NodeAgentCryptoServiceClient
+}
+
+func NewAgentControllerRpcServices() *AgentControllerRpcServices {
+	return &AgentControllerRpcServices{}
+}
+
 func readCerts() (credentials.TransportCredentials, error) {
-	cert, err := os.ReadFile("keys/certificate.pem")
+	cert, err := os.ReadFile(CERT_DIR)
 	if err != nil {
 		return nil, err
 	}
@@ -36,56 +44,24 @@ func readCerts() (credentials.TransportCredentials, error) {
 	return cred, nil
 }
 
-// the stream client is control my node agent to receive server side streams from server
-// the kernel will detach and remove fd for the socket once the parent process is killed of the node agent
-func exfil_client() {
-	clientId := flag.Int("id", 0, "the client id to use for streaming")
-	flag.Parse()
-	fmt.Println("connected with client id ", *clientId)
+func (client *AgentControllerRpcServices) NodeAgentControllerEnforceSecRpc(ctx context.Context) error {
 	conn, err := grpc.NewClient(":3200", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(err.Error())
-	}
-	defer conn.Close()
-
-	client := pb.NewNodeAgentFeatureServiceClient(conn)
-	_ = pb.NewNodeAgentCryptoServiceClient(conn)
-	val, err := client.GetExfilDomains(context.Background(), &pb.ExfilDomains{
-		Tld:         "com",
-		Domain:      "google.com",
-		TotalLength: 10,
-	})
-	if err != nil {
-		utils.Log(err)
+		return err
 	}
 
-	var reader chan os.Signal = make(chan os.Signal)
+	// Implement the core crypot kernel LSM services with the controller
+	_ = pb.NewNodeAgentFeatureServiceClient(conn)
+	client.CryptoServices = pb.NewNodeAgentCryptoServiceClient(conn)
 
-	ctx := context.Background()
-	ctx, cancel := context.WithDeadline(ctx, time.Now().Add(time.Second*30))
-	go func(ctx context.Context, cancel context.CancelFunc) {
-		var domains []string = []string{"google.com", "apple.com"}
-		stream, err := client.GetExfilDomains(ctx, &pb.ExfilDomains{Domain: domains[0]})
-		if err != nil {
-			panic(err.Error())
+	return nil
+}
+
+func (client *AgentControllerRpcServices) CloseAgentRpcClient() error {
+	if client.conn != nil {
+		if err := client.conn.Close(); err != nil {
+			return err
 		}
-		for {
-
-			val, err := stream.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				utils.Log("error receive froms erver side stream ", err)
-				return
-			}
-			if val != nil {
-				utils.Log(val.Domain, val.Tld)
-			}
-			fmt.Println(val.Status)
-		}
-	}(ctx, cancel)
-
-	<-reader
-	fmt.Println(val)
+	}
+	return nil
 }

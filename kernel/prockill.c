@@ -19,7 +19,7 @@
  * SOFTWARE.
  * -----------------------------
  * Author: Synarcs
- * Data:   10/25/2024, 2:59:15 AM
+ * Date:   10/25/2024, 2:59:15 AM
  * ---------------------------->
 */
 #include <linux/bpf.h>
@@ -64,13 +64,20 @@ struct exfill_security_kill_proc_tree {
     __uint(max_entries, 1 << 12);
 } exfill_security_kill_proc_tree SEC(".maps");
 
+static 
+__always_inline struct kill_proc_mal_payload * is_process_found_malicious(__u32 proc_id) {
+    struct kill_proc_mal_payload * mal_detected_proc = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
+    if (!mal_detected_proc) return NULL;
+
+    return mal_detected_proc;
+}
+
 static
 __always_inline void is_mal_proc_below_detect_threshold_killed() {
     __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
     __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
 
-    
-    struct kill_proc_mal_payload * mal_detected_count = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
+    struct kill_proc_mal_payload * mal_detected_count = is_process_found_malicious(proc_id);
     if (mal_detected_count) {
         // remove if the proc was SIGTERM before reaching malicious threshold, otherwise will be SIGKILL if it exceed the malicious threshold 
         if (mal_detected_count < EGRESS_MAL_PROC_EXFIL_SCHED) {
@@ -170,6 +177,15 @@ int handle_potential_malicious_forks(struct sched_process_fork *proc_info) {
     __u32 pid = proc_info->child_pid;
     __u32 ppid = proc_info->parent_pid;
 
+    struct kill_proc_mal_payload * is_process_mal = is_process_found_malicious(pid);
+    if (!is_process_mal) {
+        return 0;
+    }
+
+    __u32 * fork_count = bpf_map_lookup_elem(&exfill_security_ppid_fork_ct, &ppid);
+    if (!fork_count) return 0;
+
+    __sync_fetch_and_add(fork_count, 1);
     return 0;
 }
 

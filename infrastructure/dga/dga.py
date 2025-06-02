@@ -1,10 +1,16 @@
+'''
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+''' 
+
 #holds and process all thhe mutation exfil domains 
 import os , random 
 from typing import List 
 import psycopg2 as pg 
 from argparse import ArgumentParser 
 from wonderwords import RandomWord
-import subprocess, base64
+import subprocess, base64, sys
+
+sys.path.append(__name__) 
 
 DGA_FILE: str = 'dga.txt'
 PDNS_AUTH_DOMAIN_SERVER: str = '10.158.82.55' # ip where pdns auth server runs 
