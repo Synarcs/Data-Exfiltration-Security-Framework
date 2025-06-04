@@ -151,7 +151,7 @@ struct exfil_raw_packet_mirror {
     __u16 src_port;
     __u8 isUdp;
     __u8 isPacketRescanedAndMalicious;
-};
+} __attribute__((packed));
 
 // process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
 struct proc_info_non_standard_port {
@@ -174,7 +174,8 @@ struct checkSum_redirect_struct_value {
     __u64 kernel_timets; // 
     __u32 procId; // send the process info to user space for layer over kernel syscall layer to kill this process if found malicious 
     __u32 threadId; // thread inn process task_struct comm used for sending this packet 
-};
+    __u32 skb_index;
+} __attribute__((packed));
 
 // stores inofrmation regarding checksum and the redirection of the packet from kernel 
 struct exfil_security_egress_redirect_map {
@@ -1793,12 +1794,13 @@ __always_inline struct result_parse_dns_labels  __parse_dns_flags_actions(__u8 p
     } while(0);
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id, __u16 sport){
+__always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_id, __u16 sport, __u32 skb_if_index){
     __u16 ip_checksum = bpf_ntohs(bpf_htons(DEFAULT_IPV6_CHECKSUM_MAP)); // an ipv6 checksum layer has no checksum for faster packet processing as per ipv6 rfc and ipv6 neigh traffic discovery over switch bridge 
     __u64 ip_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv6 = { 
         .checksum =  ip_checksum, 
-        .kernel_timets = ip_kernel_time, 
+        .kernel_timets = ip_kernel_time,
+        .skb_index = skb_if_index,
     };
     // update the task comm 
     if (verify_kernel_version_support_task_comm()) {
@@ -1816,11 +1818,12 @@ out:
 
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum, __u16 sport){
+__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum, __u16 sport, __u32 skb_if_index){
     __u64 ipv4_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv4 = { 
         .checksum =  ipv4_checksum, 
         .kernel_timets = ipv4_kernel_time,
+        .skb_index = skb_if_index
     };
     if (verify_kernel_version_support_task_comm()) {
         struct __kernel_proc_struct_info * proc_info  = __get_process_info();
@@ -2108,7 +2111,7 @@ int classify(struct __sk_buff *skb){
                 __u16 sport = bpf_ntohs(udp->source);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport) < 0) { // kernel parsed dns query id within kernel 
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport, skb->ifindex) < 0) { // kernel parsed dns query id within kernel 
                         #if DEBUG 
                             bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");
@@ -2285,7 +2288,7 @@ int classify(struct __sk_buff *skb){
 
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport) < 0) {
+                    if (__update_checksum_dns_redirect_map_ipv6(transaction_id, sport, skb->ifindex) < 0) {
                         #if DEBUG 
                                 bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");

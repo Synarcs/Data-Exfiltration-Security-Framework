@@ -190,13 +190,12 @@ func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
 func (nf *NetIface) UpdateResolvedConfigForAgent(ctx context.Context) error {
 	utils.Log("Starting the Inotify Systemd Resolved watcher")
 	inotifywatcher, err := iowatchers.NewInotifySystemWatcher()
-
-	doneChan := make(chan bool)
 	if err != nil {
 		return err
 	}
-
 	defer inotifywatcher.Close()
+	doneChan := make(chan bool)
+
 	go func() {
 		for {
 			select {
@@ -480,6 +479,25 @@ func (nf *NetIface) GetRootNamespace() (*netns.NsHandle, error) {
 	}
 
 	return &rootNs, nil
+}
+
+/*
+Link the kernel if_index with the packet skb_mark to send it back post enhanced deep scan
+*/
+func (nf *NetIface) GetEgressLinkFromIfIndex(ifIndex uint32) (*netlink.Link, error) {
+
+	utils.Log("Searching the physical netdev for skb with ifindex ", ifIndex)
+	if len(nf.PhysicalLinks) == 0 {
+		return nil, fmt.Errorf("the ednpoint does not have any physical netdev attach to resent write via AF_PACKET / AF_XDP to device tx queues")
+	}
+
+	for _, link := range nf.PhysicalLinks {
+		if link.Attrs().Index == int(ifIndex) {
+			return &link, nil
+		}
+	}
+
+	return nil, fmt.Errorf("the required netdev for skb not found on the host")
 }
 
 func (nf *NetIface) ListRootnetlinkNetworkNamespaces() map[string]int {

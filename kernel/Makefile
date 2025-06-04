@@ -134,9 +134,9 @@ tc-remove-vm:
 
 .PHONY: tc-remove
 tc-remove:
-	$(QDISC_RM) enp0s1 $(QDISC)
-	$(QDISC_RM) docker0 $(QDISC)
-	$(QDISC_RM) br0 $(QDISC)
+	$(QDISC_RM) dev enp0s1 $(QDISC)
+	$(QDISC_RM) dev docker0 $(QDISC)
+	$(QDISC_RM) dev br0 $(QDISC)
 
 
 .PHONY: tc-filter 

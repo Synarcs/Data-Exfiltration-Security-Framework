@@ -2,7 +2,7 @@
 
 set -eo
 
-echo "[✅] Installing LLVM, Clang, and kernel bindings for eBPF"
+echo "[✅] Installing Libraries, LLVM, Clang, and kernel bindings for eBPF to compile the eBPF agent"
 
 sudo apt update -y && sudo apt install -y \
     build-essential \
@@ -55,8 +55,7 @@ sudo apt update -y && sudo apt install -y \
     libbz2-dev \
     keyutils \
     libkeyutils-dev \
-    policycoreutils-dev \
-    policycoreutils-gui 
+    policycoreutils-dev 
 
 # dependencies for pprof flamegraph and other graph visualization support 
 pprof=1

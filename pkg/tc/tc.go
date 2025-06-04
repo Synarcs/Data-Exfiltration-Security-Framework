@@ -593,33 +593,23 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 				index, limit)
 			if err != nil {
 				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+				return err
 			}
 		}
 
 		if utils.DEBUG {
 			utils.Log("The Node Agent loaded the dns limits in Kernel successfully")
 		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("cannot Loading DPI kernel sec unless kernel DNS dPI features are populated")
 }
 
 /*
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
-func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
-
-}
-
-/*
-Link the kernel if_index with the packet skb_mark to send it back post enhanced deep scan
-*/
-func (tc *TCHandler) GetEgressIfindex(ctx context.Context, globalLinkChecksumMp *ebpf.Map) (int, error) {
-	// TODO default send the first link for the physical netdev on the endpoint
-	if len(tc.Interfaces.PhysicalLinks) == 0 {
-		return -1, fmt.Errorf("The ednpoint does not have any physical netdev attach to resent write via AF_PACKET / AF_XDP to device tx queues")
-	}
-
-	return tc.Interfaces.PhysicalLinks[0].Attrs().Index, nil
+func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) error {
+	return nil
 }
 
 /*
@@ -633,13 +623,13 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 		utils.Log("Required redirected packet id is not found in the map or unkown error", err, dnsMapRedirectMap)
 	} else {
 		if utils.DEBUG {
-			utils.Log("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.Kernel_timets)))
+			utils.Log("found the required key from BPF Hash fd ", ip_layer3_checksum_kernel_ts.Checksum, time.Unix(0, int64(ip_layer3_checksum_kernel_ts.KernelTimets)))
 		}
 
 		if isIpv6 {
 			// support for ipv6
 			if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
-				return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
+				return errors.New("error in Ipv6 header checksum verification ipv6 has no default checksum")
 			}
 		}
 
@@ -653,7 +643,7 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 		} else {
 			// will again pass through kernel AF_PACKET via kernel TC
 			timeVal := events.DPIRedirectionTimestampVerify{
-				Kernel_timets:           ip_layer3_checksum_kernel_ts.Kernel_timets,
+				Kernel_timets:           ip_layer3_checksum_kernel_ts.KernelTimets,
 				UserSpace_Egress_Loaded: 1,
 			}
 
@@ -666,8 +656,8 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 	return nil
 }
 
-func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, ifaceHandler *netinet.NetIface,
-	handler *pcap.Handle, isPhysicalNetDevSniff bool) {
+func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, handler *pcap.Handle, isPhysicalNetDevSniff bool,
+	physicalSniffNetdev *netlink.Link) {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -781,8 +771,10 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			}
 		}
 
-		egressIfIndexPostSend, err := tc.GetEgressIfindex(ctx, nil)
+		// TODO:: FIX the kernel memory map aligned padding for pull from userspace
+		egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
 		if err != nil {
+			utils.Logger.Error(err.Error())
 			tc.GlobalErrorKernelHandlerChannel <- err
 			return
 		}
@@ -791,7 +783,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				}, isPhysicalNetDevSniff, *egressLink,
 				tc.HasDiffPriorityQdiscFilter)
 			// ipv4 and udp
 		}
@@ -801,7 +793,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				}, isPhysicalNetDevSniff, *egressLink,
 				tc.HasDiffPriorityQdiscFilter)
 		}
 	}
@@ -823,14 +815,19 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			utils.Log(fmt.Sprintf("Error processing the dns packet over tcp stream %+v", err))
 		}
 
-		egressIfIndexPostSend, err := tc.GetEgressIfindex(ctx, nil)
+		egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(uint32((*physicalSniffNetdev).Attrs().Index))
+		if err != nil {
+			utils.Logger.Error(err.Error())
+			tc.GlobalErrorKernelHandlerChannel <- err
+			return
+		}
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend,
+				}, isPhysicalNetDevSniff, *egressLink,
 				tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 		if !isIpv4 && !isUdp {
@@ -839,7 +836,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressIfIndexPostSend, tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, *egressLink, tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 	}
 
@@ -876,8 +873,8 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 	}
 
 	for packet := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {
-		go tc.ExportKernelPacketProcessCountEvents()                   // let the agent start polling for monitor the kernel exported packet count metrcis
-		go tc.ProcessEachPacket(ctx, packet, ifaceHandler, cap, false) // start deep packet userspace analysis over the packet
+		go tc.ExportKernelPacketProcessCountEvents()          // let the agent start polling for monitor the kernel exported packet count metrcis
+		go tc.ProcessEachPacket(ctx, packet, cap, false, nil) // start deep packet userspace analysis over the packet
 	}
 }
 
@@ -886,7 +883,7 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	utils.Log("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer DNS protocol over ysical netdev")
 	// cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 
-	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
+	cap, err := tc.Interfaces.GetPcapHandleoverNetDev(link)
 	if err != nil {
 		utils.Log("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
@@ -905,7 +902,7 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	}
 
 	for pack := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {
-		go tc.ProcessEachPacket(ctx, pack, nil, cap, true)
+		go tc.ProcessEachPacket(ctx, pack, cap, true, &link)
 	}
 }
 

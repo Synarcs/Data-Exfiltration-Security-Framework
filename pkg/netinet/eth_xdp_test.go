@@ -5,7 +5,11 @@
 package netinet
 
 import (
+	"fmt"
 	"testing"
+
+	"github.com/asavie/xdp"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestXDPEthtoollQueues(t *testing.T) {
@@ -16,4 +20,20 @@ func TestXDPEthtoollQueues(t *testing.T) {
 	}
 
 	t.Log("XDP sockets are supported on this interface", queue)
+}
+
+func TestXskSockCreate(t *testing.T) {
+	assert := assert.New(t)
+	// phsyical wire of the netdev
+	xsk, err := xdp.NewSocket(2, 0, nil)
+	if err != nil {
+		assert.Fail(err.Error())
+	}
+
+	// slots downstream for xsk framew
+	desc := xsk.GetDescs(xsk.NumFreeTxSlots())
+	for _ = range desc {
+	}
+
+	fmt.Println(xsk.FD())
 }

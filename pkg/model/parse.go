@@ -25,6 +25,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
 
@@ -198,7 +199,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
 	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool,
-	egressIfIndexPostSend int, allowXDP bool) error {
+	egressLink netlink.Link, allowXDP bool) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -371,7 +372,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 			// first check and bind the xdp kernel socket to tx queue for the interface
 			sockAddr := syscall.SockaddrLinklayer{
 				Protocol: syscall.ETH_P_ALL,
-				Ifindex:  egressIfIndexPostSend,
+				Ifindex:  egressLink.Attrs().Index,
 			}
 
 			if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
