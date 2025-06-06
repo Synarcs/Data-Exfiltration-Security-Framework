@@ -1,3 +1,7 @@
+'''
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+'''
+
 from concurrent.futures import Future, ThreadPoolExecutor
 from functools import cache
 import numpy as np 

@@ -1,3 +1,7 @@
+'''
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+'''
+
 import  sys 
 import onnxruntime as ort
 import math

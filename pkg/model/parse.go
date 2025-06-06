@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package model
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conntrack"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
@@ -122,7 +124,7 @@ func (d *DnsPacketGen) CleanStaleOlderPacketRescheduleConnEntry(customNsFdHandle
 	if customNsFdHandle != nil {
 		connSockHandle, fd := d.IfaceHandler.ConnTrackNsHandles[int(netns.NsHandle(*customNsFdHandle))]
 		if !fd {
-			return fmt.Errorf("The Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index %d", *customNsFdHandle)
+			return fmt.Errorf("the Conntrack Map not initialized correctly lacking Fd for the conntrack over if_index %d", *customNsFdHandle)
 		}
 		if utils.DEBUG {
 			utils.Log("clean the stale entry for conntrack ", connSockHandle)
@@ -274,12 +276,16 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 						events.DNS, int(udpPacket.DstPort), nil)
 				}
 			}
-			go d.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
-				Protocol:         string(events.DNS),
-				PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
-				PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
-			})
+
+			// ensure the agent booted with isolated mode to prevent stream threat events to centralized message broker
+			if !conf.GlobalAgentCliConfig.DisableThreadEventStream {
+				go d.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: d.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: d.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+				})
+			}
 			// perform force garbage collection for go runtime to clean userspace memory during processing from kernel packet data in zero-copy mode
 			go utils.ForceGcPacketBufferZerocopyUserspace()
 			d.EvalOverallPacketProcessTime(*dns, spec, true)

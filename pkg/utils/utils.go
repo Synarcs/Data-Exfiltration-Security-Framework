@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package utils
@@ -10,7 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"runtime"
@@ -144,7 +144,8 @@ const (
 	DEFAULT_IPV6_CHECKSUM_MAP = 0xff
 )
 
-func GenerateBpfFIlterDnsOverUdp(isEgress bool, isudp bool) string {
+// Generate the bpf filter for sniff in zero copy of DNS over udp or TCP
+func GenerateBpfFIlterForDNS(isEgress bool, isudp bool) string {
 	var dir string
 	var transport string
 	if isEgress {
@@ -159,9 +160,9 @@ func GenerateBpfFIlterDnsOverUdp(isEgress bool, isudp bool) string {
 	}
 	bpf_filter := strings.Builder{}
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_PORT))
-	bpf_filter.WriteString("and ")
+	bpf_filter.WriteString(" and ")
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_MULTICAST_PORT))
-	bpf_filter.WriteString("and ")
+	bpf_filter.WriteString(" and ")
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, LLMNR_EGRESS_LOCAL_MULTICAST_PORT))
 	return bpf_filter.String()
 }
@@ -178,7 +179,7 @@ func ParseIp(saddr uint32) string {
 	return fmt.Sprintf("%d.%d.%d.%d", uint8(s1), uint8(s2), uint8(s3), uint8(s4))
 }
 
-func ParseIpV6(saddr uint32) string {
+func ParseIpV6(saddr uint64) string {
 	var s1 uint16 = (uint16)(saddr>>40) & 0xFF
 	var s2 uint16 = (uint16)(saddr>>32) & 0xFF
 	var s3 uint16 = (uint16)(saddr>>24) & 0xFF
@@ -217,7 +218,7 @@ func GenerateC2BlacklistAddressChannels() (chan net.IP, chan net.IP) {
 func GenerateBigEndianIpv4(ipv4 string) uint32 {
 	ip := net.ParseIP(ipv4).To4()
 	if ip == nil {
-		log.Fatalln("Cannot configure incorrect Ipv4 l3 address in ebPF map for kernel for deep scan")
+		Logger.Fatalf("Cannot configure incorrect Ipv4 l3 address in ebPF map for kernel for deep scan")
 	}
 	// convert to big endian for the kernel to store dest address
 	return binary.BigEndian.Uint32(ip)
@@ -226,7 +227,7 @@ func GenerateBigEndianIpv4(ipv4 string) uint32 {
 func GenerateLittelEndianIpv4(ipv4 string) uint32 {
 	ip := net.ParseIP(ipv4).To4()
 	if ip == nil {
-		log.Fatalln("Cannot configure incorrect Ipv4 l3 address in ebPF map for kernel for deep scan")
+		Logger.Fatalf("Cannot configure incorrect Ipv4 l3 address in ebPF map for kernel for deep scan")
 	}
 	// convert to big endian for the kernel to store dest address
 	return binary.LittleEndian.Uint32(ip)

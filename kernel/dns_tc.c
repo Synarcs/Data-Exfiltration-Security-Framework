@@ -1,4 +1,6 @@
-/* Copyright (c) 2024–2025 Synarcs. All rights reserved.
+/* 
+    Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -258,7 +260,7 @@ struct exfil_security_egress_vxlan_dns_transport {
 struct dns_volume_stats {
     __u64 last_timestamp;
     __u32 packet_size;
-};
+} __attribute__((packed));
 
 // follows leaky bucket algortihm with ebpf lru map inside kernel operating anf moniting dns traffic over single window utilizing volume of traffic over a fixed 1 sec window
 // the packet does not matter (dns + tcpv4 / tcpv6) or (dns + udpv4 + udpv6)

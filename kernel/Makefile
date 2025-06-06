@@ -28,6 +28,7 @@ crypto_kernel_out ?= lsm_bpf.o
 CC := clang 
 CXX := clang++
 CXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
+CXXFLAGS := -g -O2 -Wall -DLLVM_USE_LINKER -fomit-frame-pointer
 ARCH := $(shell uname -m | sed 's/x86_64/x86/' | sed 's/aarch64/arm64/')
 LLVM_CX_IR_ARGS := -S -emit-llvm 
 KERNEL_HEADERS := /usr/src/linux-headers-$(shell uname -r)
@@ -62,19 +63,20 @@ EBPF_PROG_OUT_PATH ?= ../node_agent/ebpf/
 compile: vmlinux-btf bpf-compile compiled_loader clean-bpf-build
 
 bpf-compile:
+	@echo "compiling the core kernel egress endpoitn security kernel tc programs on $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tc_kernel_out) -c $(tc_kernel) 
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_ingress_out) -c $(bridge_tc_kernel_ingress)
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(bridge_tc_kernel_egress_out) -c $(bridge_tc_kernel_egress)
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(xdp_kernel_out) -c $(xdp_kernel)
-	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for arm64"
+	@echo "Compiling the ebpf kprobe for tun/tap driver kernel for tun_chr_ioctl open socket for $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(netlink_kernel_out) -c $(netlink_kernel) 
-	@echo "Compiling the ebpf tracepoints for arm64"
+	@echo "Compiling the ebpf tracepoints for $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(tracepoint_kernel_out) -c $(tracepoint_kernel) 
-	@echo "Compiling the tunnel tc egress filter"
+	@echo "Compiling the tunnel tc egress filter for $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(p2p_kernel_out) -c $(p2p_kernel) 
-	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket"
+	echo "Compiling the sock ebpf program for exfil security over kernel sock o setup operation for UDP socket on $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(sock_sdr_out) -c $(sock_sdr)
-	@echo "Compiling the crypto LSM hooks"
+	@echo "Compiling the crypto LSM hooks on $(ARCH)"
 	$(CC) $(CXFLAGS) $(BPF_CFLAGS) -o  $(crypto_kernel_out) -c $(crypto_kernel) 
 
 compiled_loader:

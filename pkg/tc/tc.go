@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package tc
@@ -866,7 +867,7 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 		return
 	}
 
-	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
+	if err := cap.SetBPFFilter(utils.GenerateBpfFIlterForDNS(true, true)); err != nil {
 		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
 		errorChannel <- err
 		return

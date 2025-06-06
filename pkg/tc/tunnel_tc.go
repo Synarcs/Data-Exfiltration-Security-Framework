@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package tc
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
@@ -512,12 +514,14 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 							int(destTransportPort), nil)
 					}
 
-					go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
-						ExfilPort:        strconv.Itoa(int(destTransportPort)),
-						Protocol:         string(events.DNS),
-						PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
-						PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
-					})
+					if !conf.GlobalAgentCliConfig.DisableThreadEventStream {
+						go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
+							ExfilPort:        strconv.Itoa(int(destTransportPort)),
+							Protocol:         string(events.DNS),
+							PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+							PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+						})
+					}
 				}
 
 				// update as the clone redirect as this is found malicious a potential DNS tunnel in kernel
@@ -567,13 +571,15 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 					"DNS", int(destTransportPort), nil) //
 			}
 
-			// even though found continous stream the events for any detected malicious events in the data plane for incident response and tracking every packet level  malicious activity
-			go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(int(destTransportPort)),
-				Protocol:         string(events.DNS),
-				PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
-				PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
-			})
+			if !conf.GlobalAgentCliConfig.DisableThreadEventStream {
+				// even though found continous stream the events for any detected malicious events in the data plane for incident response and tracking every packet level  malicious activity
+				go tun.StreamClient.MarshallStreamThreadEvent(ctx, feature, stream.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(int(destTransportPort)),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: tun.IfaceHandler.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: tun.IfaceHandler.PhysicalNodeBridgeIpv6.String(),
+				})
+			}
 		}
 
 		go events.ExportPromeEbpfExporterEvents[events.Malicious_Non_Stanard_Transfer](events.Malicious_Non_Stanard_Transfer{

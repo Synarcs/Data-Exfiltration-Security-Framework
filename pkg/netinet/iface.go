@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package netinet
@@ -486,7 +487,6 @@ Link the kernel if_index with the packet skb_mark to send it back post enhanced 
 */
 func (nf *NetIface) GetEgressLinkFromIfIndex(ifIndex uint32) (*netlink.Link, error) {
 
-	utils.Log("Searching the physical netdev for skb with ifindex ", ifIndex)
 	if len(nf.PhysicalLinks) == 0 {
 		return nil, fmt.Errorf("the ednpoint does not have any physical netdev attach to resent write via AF_PACKET / AF_XDP to device tx queues")
 	}

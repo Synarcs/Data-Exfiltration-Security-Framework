@@ -6,25 +6,34 @@ skinparam rectangle {
   BorderColor Black
 }
 
+skinparam sequence {
+    ParticipantFontSize 16
+  MessageFontSize 18
+  TitleFontSize 18
+  ParticipantPadding 20
+  LifeLineStrategy solid
+}
+
 box "Remote Trust Infrastructure" #LightBlue
   participant Controller
 end box
 
 box "Endpoint in Data Plane\n" #LightSalmon
-  participant "eBPF Loader\n(Node Agent)" as Loader
-  participant "Kernel Keyring" as Keyring
-  participant "Kernel (LSM Hook)\n (BPF_PROG-)" as Kernel
+  participant "eBPF Endpoint \n Security Agent" as Loader
+  participant "Kernel Process Keyring" as Keyring
+  participant "Kernel (LSM Hook)\n (BPF_PROG_LOAD)" as Kernel
+  participant "Endpoint Security\n eBPF Programs" as Kernel_Enforced_Endpoint_Security
 end box
 
 == mTLS Handshake ==
 Loader -> Controller : Controller Cert request
-Controller -> Loader : Server cert + eBPF Loader cert requests
+Controller -> Loader : Server cert + eBPF\n endpoint agent cert requests
 Loader -> Controller : eBPF Loader certificate + session key
 Controller -> Controller : Verify eBPF Loader certificate
 Loader -> Loader  : Verify controller certificate 
 Controller -> Loader : gRPC over mTLS established
 
-== gRPC Signing Request ==
+== eBPF Program Signing Request\n (gRPC over mtls) ==
 Loader -> Loader : Read compiled eBPF rawcode
 Loader -> Controller : Request to sign eBPF program over mTLS
 Controller -> Controller : Sign eBPF binary + metadata
@@ -46,11 +55,19 @@ Loader -> Loader : Get Signed Cert
 Loader -> Keyring : Store controller-signed cert (raw eBPF code)
 Loader -> Keyring : Store ephemeral cert  (JIT eBPF code)
 
-== Injection and Enforcement ==
+== Integrity Verification and Enforcement ==
 Loader -> Kernel : syscall: bpf_prog_load()
 Kernel -> Keyring : Fetch keys from process keyring
-Kernel -> Kernel : Verify controller cert 
-Kernel -> Kernel : Verify ephemeral cert
-Kernel -> Kernel : Enforce via LSM hook (allow/deny)
+Kernel -> Kernel : Verify controller signed cert 
+Kernel -> Kernel : Verify ephemeral signed cert
+
+alt Signature valid and policy allows
+  ' Kernel -> Kernel_Enforced_Endpoint_Security : Inject and monitor
+  Kernel -> Kernel : Enforce via LSM hook (allow)
+  Kernel -> Kernel_Enforced_Endpoint_Security : Allow endpoint security \n programs injection.
+else Signature invalid or policy denies
+  Kernel -> Kernel : Reject program load (abort)
+  Kernel -> Loader : Export Malicious Tampered Injection Attempts
+end
 
 @enduml

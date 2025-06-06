@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package xdp
@@ -13,6 +14,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
@@ -75,12 +77,15 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 			// dont monitro task comm and process struct over ingress traffic
 			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]),
 				&iface.PhysicalNodeBridgeIpv4, events.DNS, int(utils.DNS_EGRESS_PORT), nil)
-			go streamClient.MarshallStreamThreadEvent(ctx, rawFeatures[index], stream.HostNetworkExfilFeatures{
-				ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
-				Protocol:         string(events.DNS),
-				PhysicalNodeIpv4: iface.PhysicalNodeBridgeIpv4.String(),
-				PhysicalNodeIpv6: iface.PhysicalNodeBridgeIpv6.String(),
-			})
+
+			if !conf.GlobalAgentCliConfig.DisableThreadEventStream {
+				go streamClient.MarshallStreamThreadEvent(ctx, rawFeatures[index], stream.HostNetworkExfilFeatures{
+					ExfilPort:        strconv.Itoa(int(utils.DNS_EGRESS_PORT)),
+					Protocol:         string(events.DNS),
+					PhysicalNodeIpv4: iface.PhysicalNodeBridgeIpv4.String(),
+					PhysicalNodeIpv6: iface.PhysicalNodeBridgeIpv6.String(),
+				})
+			}
 		} else {
 			utils.UpdateDomainNestedEgressCache(rawFeatures[index].Tld, rawFeatures[index].Fqdn, false)
 		}

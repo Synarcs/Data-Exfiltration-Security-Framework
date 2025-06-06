@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package main
@@ -216,9 +217,9 @@ func main() {
 	flag.StringVar(&nodeAgentCliOptions.BPFProgPath, "bpf_prog_path", "", "the path containing all the eBPF compiled programs")
 	flag.StringVar(&nodeAgentCliOptions.AgentConfigPath, "agent_config_path", "", "custom path absolute path for booting up the agent | must be yaml as per Agent required format")
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
-	flag.BoolVar(&nodeAgentCliOptions.StreamClient, "streamClient", false, "Load the GRPC stream server over the node agent for threat streaming (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.Profile, "profile", false, "Runs pprof profile server for flamegraph based node agent profiling live once injected all progs in kernel (default: false)")
+	flag.BoolVar(&nodeAgentCliOptions.DisableThreadEventStream, "disable_thread_stream", false, "Assumes the endpoint security agent is isolated and does not streams threat events to centralized message broker")
 
 	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods virtual net_device in kernel attached to either the host cni vxlan / bgp net_device or internal node to node communication on same pod
 	flag.BoolVar(&nodeAgentCliOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
@@ -244,6 +245,7 @@ func main() {
 	flag.Parse()
 
 	configureGlobalAgentConfigOpts(&nodeAgentCliOptions)
+	conf.ConfigureGlobalAgentCLiConfig(&nodeAgentCliOptions)
 	globalEBPFProgInjectChan := initKernelProgInjectComptionEvent()
 
 	// configure the global logger
@@ -274,11 +276,6 @@ func main() {
 		cryptoLsmProgHandler = crypto.New(
 			crypto.NewCryptoBpfLsmWithLocalControllerRpcConfig(ctx, nodeAgentCliOptions.ControllerEnabledZtEnfoce, rpcClient),
 		)
-	}
-
-	if err != nil {
-		// if the core crypto lsm utils for init keyring break any bpf prog cannot be loaded in kernel in runtime for endpoint security to ensure highest security of programs injected in the kernel
-		panic(err.Error())
 	}
 
 	// // inject the crypto lsm program in kernel for all ebpf prog verification
@@ -316,7 +313,7 @@ func main() {
 			The sdr mode is used specifically for kubernetes following sidecar, well aligned with l7 service mesh sidecar envoy proxies
 			This inject a sidecar via the k8s mutation webhook to load in kernel which runs in NET_ADMIN cap, and runs DNS exfiltration security, with eBPF kernel code sock ops egress security for DPI and packet filtering over the pod internal virtual phsycial link attach to the host vhost (for example cilium vxlan over cilium_host)
 		*/
-		panic(fmt.Errorf("Cannot inject sidecar guards on the pod physical link with enabled CNI filter , please select either CNI or Sdr mode"))
+		panic(fmt.Errorf("cannot inject sidecar guards on the pod physical link with enabled CNI filter , please select either CNI or Sdr mode"))
 	}
 
 	if nodeAgentCliOptions.Sdr || nodeAgentCliOptions.Cni {
@@ -493,7 +490,7 @@ func main() {
 		}
 	}(tc)
 
-	signal.Notify(tst, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(tst, syscall.SIGABRT, syscall.SIGINT, syscall.SIGTERM)
 
 	go func(term chan os.Signal, tst chan os.Signal) {
 		sig := <-tst

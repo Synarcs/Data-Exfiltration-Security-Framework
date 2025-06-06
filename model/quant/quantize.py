@@ -1,3 +1,6 @@
+'''
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+'''
 from abc import ABC, abstractmethod
 import os, time 
 from pathlib import Path

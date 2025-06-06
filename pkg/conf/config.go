@@ -1,5 +1,6 @@
 /*
 	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
 */
 
 package conf
@@ -13,6 +14,9 @@ import (
 )
 
 // cli agent config for booting the node agent at the endpoitn
+var (
+	GlobalAgentCliConfig *NodeAgentCliOptions
+)
 
 type (
 	NodeAgentCliOptions struct {
@@ -20,10 +24,10 @@ type (
 		AgentConfigPath          string
 		CliFlag                  bool
 		Debug                    bool
-		StreamClient             bool
 		Sdr                      bool
 		K8sControllerWebhookPort int
 		ContainerRuntime         bool
+		DisableThreadEventStream bool
 		// support for the eBPF ndoe agent running over host net_device dynamically reconfigure netpools for k8s CNI stop exfiltration from pod in user space or kernel sock layer, before it even reaches kernel host net_device traffic control
 		Cni bool
 		// used for sigkill with threshold limit for maslicious exfil detection
@@ -119,6 +123,11 @@ type (
 		} `yaml:"tb" reflect:"tb"`
 	}
 )
+
+// for global to be used by all endpoint security agent for live security enforcement
+func ConfigureGlobalAgentCLiConfig(config *NodeAgentCliOptions) {
+	GlobalAgentCliConfig = config
+}
 
 func NewNodeAgentConfig() *NodeAgentConfig {
 	return &NodeAgentConfig{}
