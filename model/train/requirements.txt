@@ -65,7 +65,7 @@ python_abi=3.12=5_cp312
 readline=8.2=h8fc344f_1
 reproc=14.2.4.post0=h31becfc_1
 reproc-cpp=14.2.4.post0=h2f0025b_1
-setuptools=75.1.0=pyhd8ed1ab_0
+setuptools=78.1.1=pyhd8ed1ab_0
 simdjson=3.10.1=h17cf362_0
 spdlog=1.14.1=h9d9cc24_1
 sympy=1.13.3=pyh2585a3b_104
