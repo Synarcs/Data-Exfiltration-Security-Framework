@@ -339,7 +339,6 @@ type ElfSignatureResponse struct {
 	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
 	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=publicKey,proto3" json:"publicKey,omitempty"`
 	SignatureHash []byte                 `protobuf:"bytes,3,opt,name=signatureHash,proto3" json:"signatureHash,omitempty"`
-	SignatureOid  int32                  `protobuf:"varint,4,opt,name=signatureOid,proto3" json:"signatureOid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -393,13 +392,6 @@ func (x *ElfSignatureResponse) GetSignatureHash() []byte {
 		return x.SignatureHash
 	}
 	return nil
-}
-
-func (x *ElfSignatureResponse) GetSignatureOid() int32 {
-	if x != nil {
-		return x.SignatureOid
-	}
-	return 0
 }
 
 type AgentKernelKeyringControllerCommandRequest struct {
@@ -609,12 +601,11 @@ const file_exfil_sec_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x127\n" +
 	"\x05value\x18\x02 \x01(\x0e2!.exfil_kernel.DNS_MALICIOUS_FLAGSR\x05value:\x028\x01\"E\n" +
 	"\x13ElfSignatureRequest\x12.\n" +
-	"\x12eBPFProgramPayload\x18\x01 \x01(\fR\x12eBPFProgramPayload\"\x9c\x01\n" +
+	"\x12eBPFProgramPayload\x18\x01 \x01(\fR\x12eBPFProgramPayload\"x\n" +
 	"\x14ElfSignatureResponse\x12\x1c\n" +
 	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1c\n" +
 	"\tpublicKey\x18\x02 \x01(\fR\tpublicKey\x12$\n" +
-	"\rsignatureHash\x18\x03 \x01(\fR\rsignatureHash\x12\"\n" +
-	"\fsignatureOid\x18\x04 \x01(\x05R\fsignatureOid\"\xec\x01\n" +
+	"\rsignatureHash\x18\x03 \x01(\fR\rsignatureHash\"\xec\x01\n" +
 	"*AgentKernelKeyringControllerCommandRequest\x128\n" +
 	"\x03cmd\x18\x01 \x03(\x0e2&.exfil_kernel.KERNEL_KEYRING_OPS_TYPESR\x03cmd\x12@\n" +
 	"\tringTypes\x18\x02 \x03(\x0e2\".exfil_kernel.KERNEL_KEYRING_TYPESR\tringTypes\x12B\n" +

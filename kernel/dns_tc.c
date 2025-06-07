@@ -146,15 +146,6 @@ struct exfil_security_egress_malicious_dns_events {
     __uint(max_entries, 1 << 12);
 } exfil_security_egress_malicious_dns_events SEC(".maps"); 
 
-
-// 
-struct exfil_raw_packet_mirror {
-    __u16 dst_port;
-    __u16 src_port;
-    __u8 isUdp;
-    __u8 isPacketRescanedAndMalicious;
-} __attribute__((packed));
-
 // process Id and thread ID for clone redirected packet to user space for deep scan for exfiltration attempt 
 struct proc_info_non_standard_port {
     __u32 processId; 
@@ -1388,7 +1379,7 @@ __always_inline bool __update_malicious_egress_dns_port_random_kernel_sock_ops_m
 // process the skb_clone redirect to user space to perform deep scan over the DNS packet for possible tunnel over this non standard port 
 static 
 __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct __sk_buff *skb, bool isUdp, 
-            __u16 __transport_dest_port, __u16 __transport_src_port, bool isPassiveDPIStandardPortTransfer) {
+                __u16  __transport_dest_port, __u16 __transport_src_port, bool isPassiveDPIStandardPortTransfer) {
     // make the kernel process the packet and map update and kernel clone redirection for the packet since kernel cannot determine the encapsulation for the packet over dns 
     __u32 br_index = 5;
     __u32 out = skb->ifindex;

@@ -474,7 +474,9 @@ func main() {
 		for err := range globalErrorKernelHandlerChannel {
 			utils.Logger.Error("Error receieved in node agent global error chan ", err.Error())
 			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
-				utils.Logger.Printf("Error receieved in node agent global error chan closing ... %+v", err)
+				utils.Logger.Errorf("Error receieved in node agent global error chan closing ... %+v", err)
+				agentCancelFunc()
+				// TODO: Add kernel hooks proper cleanup for all the agent owned FD
 			}
 		}
 	}()

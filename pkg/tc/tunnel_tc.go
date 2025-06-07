@@ -31,6 +31,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
 
 // the tc clone is a child handler which same eBPF tc kernel program enforce dns exfil security with only different of preventing exfiltration over random ports
@@ -277,22 +278,47 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 	return nil
 }
 
-func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI() {
+func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiveDPIStandardPort bool) {
 	runtime.LockOSThread()
 
-	handler, err := tun.IfaceHandler.GetBridgePcapHandleClone()
+	var handler *pcap.Handle
+	var pcapErr error
 
-	ctx := context.Background()
-	if err != nil {
-		utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_RAW_NETLINK_BRIDGE_DPI)
-		tun.GlobalKernelErrorChannel <- err
+	if !isPassiveDPIStandardPort {
+		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
+		if pcapErr != nil {
+			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI)
+			tun.GlobalKernelErrorChannel <- pcapErr
+			return
+		}
+	} else {
+		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
+		if pcapErr != nil {
+			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI)
+			tun.GlobalKernelErrorChannel <- pcapErr
+			return
+		}
 	}
 
+	if err := handler.SetDirection(pcap.DirectionIn); err != nil {
+		utils.Logger.Errorf("Error setting up the bpf filter :: %v", err)
+		tun.GlobalKernelErrorChannel <- err
+		return
+	}
 	defer handler.Close()
 
-	if err := handler.SetBPFFilter("udp or tcp"); err != nil {
-		utils.Log("Error while setting the bpf filter")
-		tun.GlobalKernelErrorChannel <- err
+	if isPassiveDPIStandardPort {
+		if err := handler.SetBPFFilter(utils.GenerateBpfFIlterForDNS(true, true)); err != nil {
+			utils.Logger.Error("error setting the bpf filter for overlay random exfil DNS traffic in passive DPI mode")
+			tun.GlobalKernelErrorChannel <- err
+			return
+		}
+	} else {
+		if err := handler.SetBPFFilter("udp or tcp"); err != nil {
+			utils.Logger.Error("Error while setting the bpf filter")
+			tun.GlobalKernelErrorChannel <- err
+			return
+		}
 	}
 
 	packetSource := gopacket.NewPacketSource(handler, handler.LinkType())
@@ -410,8 +436,8 @@ func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdateKernelProc(procComm 
 		var curr_detected_proc_mal_count events.DnsMapPayloadNonOverlayPortValue
 		curr_detected_proc_mal_count.MalDetectedCount++
 		if err := exfil_mal_proc_map.Lookup(&procComm.ProcessId, &curr_detected_proc_mal_count); err != nil {
-			exfil_mal_proc_map.Update(&procComm.ProcessId, &curr_detected_proc_mal_count, ebpf.UpdateAny) // user space is only updating guarded with user synchronize lock or mutex
-			// 	 hence alwys synchronized for any map updates in kernel
+			exfil_mal_proc_map.Update(&procComm.ProcessId, &curr_detected_proc_mal_count, ebpf.UpdateAny)
+			// user space is only updating guarded with user synchronize lock or mutex ensure the updates are always synchronized for any map updates in kernel
 		}
 	}
 	return nil

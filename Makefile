@@ -103,8 +103,8 @@ proto_path ?= exfil_sec_api/proto
 go_out ?= exfil_sec_api
 proto_file ?= exfil_sec.proto
 
-.PHONY: build-agent-protos
-build-agent-protos:
+.PHONY: build-framework-protos
+build-framework-protos:
 	@echo "Generating all the protos for the exfil_sec framework endpoint security for control plane and data plane"
 	protoc --proto_path="$(proto_path)" \
 		--go_out="paths=source_relative:$(go_out)" \

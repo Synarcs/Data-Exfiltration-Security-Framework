@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/Synarcs/DNSObelisk/controller/cni"
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/segmentio/kafka-go"
 )
@@ -76,27 +75,6 @@ func (consumer *StreamConsumer) GenerateStreamKafkaConsumer(ctx context.Context)
 		Topic:   STREAM_THREAT_TOPIC_INFER,
 	})
 	consumer.Consumers[STREAM_THREAT_TOPIC_INFER] = streamReader
-}
-
-func (consumer *StreamConsumer) ConsumeStreamControllerTopic(ctx context.Context, cniPolicyHandler cni.NetworkPolicies) error {
-	if consumer.Consumers[STREAM_THREAT_TOPIC_INFER] == nil {
-		return nil
-	}
-	log.Println("Started consuming events from the inferred controller sock for malicious domains to data plane ",
-		STREAM_THREAT_TOPIC_INFER)
-	for {
-		if err := ctx.Err(); err != nil {
-			return ctx.Err()
-		}
-
-		msg, err := consumer.Consumers[STREAM_THREAT_TOPIC_INFER].ReadMessage(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		log.Println(msg)
-	}
 }
 
 func (c *StreamConsumer) CloseConsumer() error {

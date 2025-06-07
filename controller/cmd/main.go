@@ -7,40 +7,30 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
+	"flag"
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/Synarcs/DNSObelisk/controller/cni"
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/consumer"
 	"github.com/Synarcs/DNSObelisk/controller/k8s"
 	"github.com/Synarcs/DNSObelisk/controller/rpc"
+	"github.com/Synarcs/DNSObelisk/controller/utils"
+	"github.com/cloudflare/cfssl/csr"
+	"github.com/cloudflare/cfssl/initca"
 )
 
 const (
 	CNI_CONTROLLER_SOCK = "/tmp/controller-cni.sock"
 	Version             = "0.0.1"
 )
-
-type Router struct {
-	NetworkPolicy cni.NetworkPolicies
-}
-
-func (router *Router) version(w http.ResponseWriter, r *http.Request) {
-	if err := r.Context().Err(); err != nil {
-		log.Println("cannnot process the request due to context error", err.Error())
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
-	w.Header().Add("Content-Type", "text/plain")
-	w.Write([]byte(Version))
-}
 
 func LoadConfigFromController() (*conf.GlobalControllerConfig, *consumer.StreamConsumer) {
 	if err := consumer.VerifyControllerSockHealthy(); err != nil {
@@ -53,19 +43,71 @@ func LoadConfigFromController() (*conf.GlobalControllerConfig, *consumer.StreamC
 	return globalControllerConfig, streamConsumerConfig
 }
 
-func CreateCniClientSet(globalControllerConfig *conf.GlobalControllerConfig, k8sClientSet *k8s.K8sClientSet) cni.NetworkPolicies {
-	var cniNetworkPolicyHandler cni.NetworkPolicies
-	switch globalControllerConfig.K8sCniConfig.Cni.Name {
-	case "cilium":
-		cniNetworkPolicyHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
-	default:
-		cniNetworkPolicyHandler = cni.NewCiliunNetworkPolicy(k8sClientSet)
+// Start the local CA for processing the request and signing eBPF program raw payload
+// this can be replaced with any CA and trust store at global level for signing request
+func InitLocalCa() (*utils.ControlelrCertConfig, error) {
+	key := &csr.KeyRequest{
+		A: "ecdsa",
+		S: 1 << 8,
 	}
-	return cniNetworkPolicyHandler
+
+	// generate csr
+	req := &csr.CertificateRequest{
+		CN:         "synarcs.controlelr",
+		KeyRequest: key,
+		Names: []csr.Name{
+			{O: "controller eBPF security"},
+		},
+		CA: &csr.CAConfig{
+			Expiry: fmt.Sprintf("%dh", 365*24),
+		},
+	}
+
+	cert, _, privateKey, err := initca.New(req)
+
+	block, _ := pem.Decode(cert)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, err
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	pblock, _ := pem.Decode(privateKey)
+	if pblock == nil || pblock.Type != "EC PRIVATE KEY" {
+		return nil, err
+	}
+
+	pKey, err := x509.ParseECPrivateKey(pblock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &utils.ControlelrCertConfig{
+		Cert:     certificate,
+		Key:      pKey,
+		Duration: 365 * 24,
+		KeySize:  (1 << 8),
+	}, nil
+
 }
 
 func main() {
 	log.Print("Add the required network policies enforced by the eBPF Node Agent to controller for dynamic network policies for remote c2 servers")
+	var opts conf.ControllerCliOpts
+	flag.IntVar(&opts.Port, "rpc_port", 3200, "Port for handling data plane sign requests for eBPF bytecode")
+	flag.Parse()
+	flag.Usage = func() {
+		flag.PrintDefaults()
+	}
+
+	controllerCa, err := InitLocalCa()
+	if err != nil {
+		log.Println("Cannot start controller unless the the controller has started local or connected to remote CA")
+		panic(err.Error())
+	}
+
 	sock, err := net.Listen("unix", CNI_CONTROLLER_SOCK)
 
 	controlSigKillChan := make(chan os.Signal, 1)
@@ -85,41 +127,15 @@ func main() {
 	configRpcChan := make(chan interface{})
 	nodeAgentServer := rpc.NodeAgentServer{
 		ConfigChannel: configRpcChan,
+		CryptoConfig:  controllerCa,
 	}
-	go nodeAgentServer.StartControllerRpcServer()
 
-	// server := &http.Server{
-	// 	Handler: serverMux,
-	// 	BaseContext: func(l net.Listener) context.Context {
-	// 		return context.WithValue(ctx, "BootTime", time.Now().String())
-	// 	},
-	// 	TLSConfig: &tls.Config{
-	// 		InsecureSkipVerify: true,
-	// 	},
-	// }
+	go nodeAgentServer.StartControllerRpcServer(opts.Port, controllerCa)
 
 	k8sClientSet, err := k8s.InitK8sClientSet("")
 
 	if err != nil || k8sClientSet == nil {
 		log.Println("the cni netpool handler for controller cannot load without valid k8ss client set provided")
-	} else {
-
-		// log.Println("the broker config for unix sock server consume events from controller ", streamConsumer.KafkaBrokerConfig.Brokers)
-		// var cniNetworkPolicyHandler cni.NetworkPolicies = CreateCniClientSet(globalControllerConfig, k8sClientSet)
-
-		// go func() {
-		// 	if err := server.Serve(sock); err != nil && err != http.ErrServerClosed {
-		// 		log.Fatalf("Server error: %v", err)
-		// 	}
-		// 	// the parrent or main go routine will gracefully shutdown the server and underlying unix sock transport server
-		// }()
-
-		// go func() {
-		// 	if err := streamConsumer.ConsumeStreamControllerTopic(ctx, cniNetworkPolicyHandler); err != nil {
-		// 		errChan <- err
-		// 		return
-		// 	}
-		// }()
 	}
 
 	defer func() {

@@ -44,7 +44,6 @@ message ElfSignatureResponse {
     bytes signature = 1;
     bytes publicKey = 2;
     bytes signatureHash = 3;
-    int32 signatureOid = 4;
 }
 
 message AgentKernelKeyringControllerCommandRequest {

@@ -5,8 +5,6 @@
 
 package conf
 
-import pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api"
-
 // only extreact what the controller unix cni netpool handler needs from root controller
 type GlobalControllerConfig struct {
 	StreamConfig struct {
@@ -25,7 +23,6 @@ type GlobalControllerConfig struct {
 	} `json:"k8s"`
 }
 
-func TestHandler() {
-	var _ pb.UnimplementedNodeAgentCryptoServiceServer
-
+type ControllerCliOpts struct {
+	Port int
 }

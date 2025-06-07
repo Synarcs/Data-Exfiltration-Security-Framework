@@ -86,7 +86,7 @@ type ExfilKernelConfig struct {
 	RedirectIpv4            uint32 // redirect to the linux network namesapce
 	NfNdpBridgeRedirectIpv4 uint32
 	KernelTCSKBMark         uint32
-	IsAgressiveSec          uint32
+	IsAgressiveSec          uint8
 }
 
 // nf_filter bridge config processing the eBPF maps as input to kernel netfilter ingress route over veth for linux ns

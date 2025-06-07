@@ -32,8 +32,10 @@ const (
 	NETNS_RNETLINK_EGREESS_DPI = "sx1"
 	NETNS_RNETLINK_INGRESS_DPI = "sx2"
 
-	NETNS_NETLINK_BRIDGE_DPI     = "br0"
-	NETNS_RAW_NETLINK_BRIDGE_DPI = "nx-br0"
+	NETNS_NETLINK_BRIDGE_DPI                = "br0"
+	NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI = "nx-br0"
+
+	NETNS_BRIDGE_DEV_MTU = 1500
 )
 
 const (
@@ -378,7 +380,7 @@ func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []n
 			}
 			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
 				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
-			} else if link.Attrs().Name == NETNS_RAW_NETLINK_BRIDGE_DPI {
+			} else if link.Attrs().Name == NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI {
 				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
 			}
 
@@ -429,7 +431,7 @@ func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.
 			// hanle all the container ns for their pod traffic
 			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
 				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
-			} else if link.Attrs().Name == NETNS_RAW_NETLINK_BRIDGE_DPI {
+			} else if link.Attrs().Name == NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI {
 				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
 			}
 		}
@@ -645,8 +647,8 @@ func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
 	return &fd, nil
 }
 
-func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {
-	cap, err := pcap.OpenLive(NETNS_RAW_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
-	cap.ZeroCopyReadPacketData()
-	return cap, err
-}
+// func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {
+// 	cap, err := pcap.OpenLive(NETNS_RAW_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
+// 	cap.ZeroCopyReadPacketData()
+// 	return cap, err
+// }

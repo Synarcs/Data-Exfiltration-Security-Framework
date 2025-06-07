@@ -160,9 +160,9 @@ func GenerateBpfFIlterForDNS(isEgress bool, isudp bool) string {
 	}
 	bpf_filter := strings.Builder{}
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_PORT))
-	bpf_filter.WriteString(" and ")
+	bpf_filter.WriteString(" or ")
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, DNS_EGRESS_MULTICAST_PORT))
-	bpf_filter.WriteString(" and ")
+	bpf_filter.WriteString(" or ")
 	bpf_filter.WriteString(fmt.Sprintf("%s %s port %d", transport, dir, LLMNR_EGRESS_LOCAL_MULTICAST_PORT))
 	return bpf_filter.String()
 }
