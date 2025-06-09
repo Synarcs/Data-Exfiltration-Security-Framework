@@ -466,7 +466,7 @@ __always_inline __u8 process_udp_payload_mem_verification(struct udphdr *udp, st
 
 
 static 
-__always_inline __u8 parse_udp(struct  skb_cursor *skb, bool isIpv4) {
+__always_inline __u8 parse_udp(struct skb_cursor *skb, bool isIpv4) {
 
     struct udphdr *udp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
     if ((void *)(udp + 1) > skb->data_end) return 0;
@@ -1247,7 +1247,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     
     if (isMarkRandSkb) {
         __u32 out = skb->ifindex;
-        struct exfil_kernel_config * config =  bpf_map_lookup_elem(&exfil_security_config_map, &out);
+        struct exfil_kernel_config * config = bpf_map_lookup_elem(&exfil_security_config_map, &out);
 
         SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
     }

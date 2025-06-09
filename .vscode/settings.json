@@ -6,6 +6,8 @@
         "unistd.h": "c",
         "types.h": "c",
         "bpf_tracing.h": "c",
-        "keyutils.h": "c"
+        "keyutils.h": "c",
+        "compare": "c",
+        "cstdint": "c"
     }
 }

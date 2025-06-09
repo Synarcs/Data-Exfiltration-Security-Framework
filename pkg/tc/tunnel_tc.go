@@ -254,7 +254,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 			var currCt uint32 = 0
 			if err := cloneredirectMap.Lookup(&redirCountKey, &currCt); err != nil {
 				if !errors.Is(err, ebpf.ErrKeyNotExist) {
-					utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
+					utils.Logger.Printf("Error while reading the clone redirect count from the map %+v for suspicious packet redirect", err)
 				}
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionCountEvent](events.PacketDPICloneRedirectionCountEvent{
@@ -292,9 +292,9 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 			return
 		}
 	} else {
-		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
+		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
 		if pcapErr != nil {
-			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI)
+			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_NETLINK_BRIDGE_DPI)
 			tun.GlobalKernelErrorChannel <- pcapErr
 			return
 		}

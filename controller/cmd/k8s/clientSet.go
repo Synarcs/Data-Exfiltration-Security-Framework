@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Synarcs/DNSObelisk/controller/conf"
+	"github.com/Synarcs/DNSObelisk/controller/utils"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -40,7 +40,7 @@ func InitK8sClientSet(configPath string) (*K8sClientSet, error) {
 		return nil, err
 	}
 
-	if conf.DEBUG {
+	if utils.DEBUG {
 		log.Println("Connected to clientset for dynamic network policy over remote c2 server Ip's", config.Host)
 	}
 

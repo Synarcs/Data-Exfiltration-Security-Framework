@@ -75,10 +75,12 @@ func NewDnsPacketResendUtils(config *DnsPacketGenConfig) (*DnsPacketGen, error) 
 }
 
 // convert to an shared distributed cache over the enitr data plane if required
-var maliciousExfilProcessCount map[uint32]int = make(map[uint32]int)
-var maliciousExfilProcessesRecCt map[uint32]int = make(map[uint32]int)
-var maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
-var maliciousProcCountguard sync.RWMutex = sync.RWMutex{}
+var (
+	maliciousExfilProcessCount     map[uint32]int                              = make(map[uint32]int)
+	maliciousExfilProcessesRecCt   map[uint32]int                              = make(map[uint32]int)
+	maliciousExfilProcessAliveTime map[uint32]events.MaliciousProcessAliveTime = make(map[uint32]events.MaliciousProcessAliveTime)
+	maliciousProcCountguard        sync.RWMutex                                = sync.RWMutex{}
+)
 
 type CombinedFeatures []DNSFeatures
 
@@ -102,7 +104,7 @@ func IncrementMaliciousProcCountLocalCache(procId uint32) {
 		if ct > utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD_BENIGN_PORT {
 			utils.Logger.Printf("The exfiltration was stopped send sigkill to the process %d is killed", procId)
 			if err := utils.KillProc(procId); err != nil {
-				utils.Logger.Printf("Error while sending sigkill to process %d wiht buffer err %+v", procId, err.Error())
+				utils.Logger.Errorf("Error while sending sigkill to process %d wiht buffer err %+v", procId, err.Error())
 			}
 			evTime := maliciousExfilProcessAliveTime[procId]
 			evTime.AliveTime = time.Now().Second() - int(evTime.AliveTime)

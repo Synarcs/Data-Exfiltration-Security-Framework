@@ -13,6 +13,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -78,8 +79,7 @@ type (
 
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
-	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = true
-	INIT_LIMITS_KERNEL_CONFIG              = false
+	init_agent_passive_mode_port_obf sync.Once
 )
 
 var mapsToPinSharedProcKillMap []string
@@ -497,6 +497,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	// populate the limit map from the kernel
 	// makes the kernel packet redirection re-programmable to kernel process the packet redirection based on the limit configured
 	// usually kernel process each packet via default bpf_spinlocks to ensure each map is memory safe in kernel heap and consistent
+
 	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
 	if dnsLimitsMap != nil {
 		// grab the fd from the kernel process to load the egress filter map limit
@@ -509,7 +510,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			}
 		}
 
-		INIT_LIMITS_KERNEL_CONFIG = true
 		if utils.DEBUG {
 			utils.Log("The Node Agent loaded the dns limits in Kernel successfully")
 		}
@@ -545,9 +545,10 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
-	if INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL {
+	init_agent_passive_mode_port_obf.Do(func() {
 		tc.InitTCTunnelExfilPrevention(ctx)
-	}
+	})
+
 }
 
 func (tc *TCHandler) InitAgentPassiveTCTunnelHandler(isPassiveStandardDNSPortUDPTransfer bool) *TCCloneTunnel {
@@ -585,7 +586,6 @@ func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context) {
 	}
 
 	tc.ProcessSniffDPIPacketCapture(ctx, tc.Interfaces, nil)
-	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = false
 }
 
 func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfig map[uint32]uint32) error {

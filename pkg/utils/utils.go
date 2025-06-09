@@ -380,7 +380,6 @@ func GetPacketPayloadSize(layer gopacket.Layer, protocol string) int {
 func KillProc(procId uint32) error {
 	proc, err := os.FindProcess(int(procId))
 	if err != nil {
-		Log("The node agent cannot find the required process ", proc.Pid)
 		return err
 	}
 
