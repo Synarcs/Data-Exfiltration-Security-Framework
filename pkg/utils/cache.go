@@ -7,6 +7,7 @@ package utils
 
 import (
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/shenwei356/countminsketch"
 )
 
 /*
@@ -21,9 +22,11 @@ type DomainNodeAgentCacheBlock struct {
 
 // all the LRU caches for eBPF agent in userspace, must reside in the agent userspace heap memory
 // apart from the eBPF maps in the kernel prceossing packet payload over kernel datapath, the userspace caches accelerate inference and per packet processing speed
-var NODE_AGENT_BLACKLISTED_DOMAINS *lru.Cache[string, *lru.Cache[string, bool]]
-var NODE_AGENT_INGRESS_BACKLISTED_DOMAINS *lru.Cache[string, bool]
-var NODE_AGENT_REMOTE_INFERENCE_READ_THROUGH_CACHE *lru.Cache[string, *lru.Cache[string, bool]] // the SLD send for remote inference --> actual fqdn inferred result, must always contain benign domains sent and cached for lookup, considering malicious domain are stored in malicious cache
+var (
+	NODE_AGENT_BLACKLISTED_DOMAINS                 *lru.Cache[string, *lru.Cache[string, bool]]
+	NODE_AGENT_INGRESS_BACKLISTED_DOMAINS          *lru.Cache[string, bool]
+	NODE_AGENT_REMOTE_INFERENCE_READ_THROUGH_CACHE *lru.Cache[string, *lru.Cache[string, bool]] // the SLD send for remote inference --> actual fqdn inferred result, must always contain benign domains sent and cached for lookup, considering malicious domain are stored in malicious cache
+)
 
 // Init the cache for the eBPF node agent in user space
 func InitCache() error {
@@ -49,6 +52,17 @@ func InitCache() error {
 	}
 	NODE_AGENT_REMOTE_INFERENCE_READ_THROUGH_CACHE = benignLookThroughcache
 
+	return nil
+}
+
+func InitCMS(ip string, ct int) error {
+	eps, delta := 0.0, 0.99
+	cms, err := countminsketch.New(uint(eps), uint(delta))
+	if err != nil {
+		return err
+	}
+
+	cms.UpdateString(ip, uint64(ct))
 	return nil
 }
 
