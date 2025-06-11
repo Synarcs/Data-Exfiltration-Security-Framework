@@ -20,6 +20,8 @@ const (
 	LSM_BPF_HOOKS = "lsm"
 )
 
+type Protocol string
+
 // all the eBPF filter the node agent can inject in kernel, over the entire kernel network stack
 // converts other prog and filter for netlink message for different netdev creation (tun/tap, vxlan etc)
 // sock layer --> netfilter --> tc --> xdp

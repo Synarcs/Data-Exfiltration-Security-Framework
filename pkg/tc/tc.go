@@ -1,11 +1,7 @@
-/*
-	Copyright (c) 2024–2025 Synarcs. All rights reserved.
-	SPDX-License-Identifier: AGPL-3.0
-*/
-
 package tc
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -28,7 +24,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
-	"github.com/cilium/ebpf/rlimit"
+	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -79,7 +75,10 @@ type (
 
 // init AF_PACKET, AF_XDP socket for the kernel
 var (
-	init_agent_passive_mode_port_obf sync.Once
+	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = true
+	INIT_LIMITS_KERNEL_CONFIG              = false
+
+	atomic_random_port_tunnel_overlay sync.Once
 )
 
 var mapsToPinSharedProcKillMap []string
@@ -214,14 +213,38 @@ clean:
 	return nil
 }
 
+func (tc *TCHandler) PollKernelDPIPerformanceTimeBuffer(ctx context.Context) error {
+	if !utils.ENABLE_KERNEL_DPI_IMPACT_MEASURE_TIME {
+		return nil
+	}
+	dpiKernelTimeMap := tc.TcCollection.Maps[events.EXFIL_SECURITY_EGRESSS_DPI_TIME]
+	if dpiKernelTimeMap == nil {
+		return fmt.Errorf("please ensure in kernel eBPF program DPI benchmark is enabled")
+	}
+	buffer, err := ringbuf.NewReader(dpiKernelTimeMap)
+	if err != nil {
+		return err
+	}
+
+	for {
+		record, err := buffer.Read()
+		if err != nil {
+			return err
+		}
+
+		var payload events.DPIPerformanceTime
+		if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &payload); err != nil {
+			utils.Logger.Error("Error reading the ring buffer")
+			return err
+		}
+
+	}
+}
+
 /*
 Relies on legacy TC via cls_bpf priority over legacy TC subsystem for bpf filter attachment
 */
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
-	if err := rlimit.RemoveMemlock(); err != nil {
-		panic(err.Error())
-	}
-
 	if utils.VerifyTcxSupportEgressLink() {
 		// TODO: Implement injection support over TCX vs prio based legacy TC cls_bpf filters
 	}
@@ -232,7 +255,6 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			panic(err.Error())
 		}
 
-		// TODO: Add support for TCX kernel link over TC attach compared to legacy qdisc with prio order
 		/*
 		   For CNI processing and adding filter they should have have highe priority post the DNS security egress security qdisc for pod  to pod communication  across nodes
 		*/
@@ -323,8 +345,12 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 	return nil
 }
 
-func (tc *TCHandler) PollMonitoringMaps(ctx context.Context, errorEventChannel chan error) {
-	const KernelPacketRedirectCount uint16 = 0
+/*
+Read through the monitoring eBPF kernel maps tracking malicious activity in kernel
+Emit threat events and other prometheus metrics accordingly
+*/
+func (tc *TCHandler) ReadMonitoringMaps(ctx context.Context, errorEventChannel chan error) {
+	var KernelPacketRedirectCount uint16 = 0
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -497,7 +523,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	// populate the limit map from the kernel
 	// makes the kernel packet redirection re-programmable to kernel process the packet redirection based on the limit configured
 	// usually kernel process each packet via default bpf_spinlocks to ensure each map is memory safe in kernel heap and consistent
-
 	dnsLimitsMap := tc.TcCollection.Maps[events.EXFILL_SECURITY_KERNEL_DNS_LIMITS_MAP]
 	if dnsLimitsMap != nil {
 		// grab the fd from the kernel process to load the egress filter map limit
@@ -510,6 +535,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			}
 		}
 
+		INIT_LIMITS_KERNEL_CONFIG = true
 		if utils.DEBUG {
 			utils.Log("The Node Agent loaded the dns limits in Kernel successfully")
 		}
@@ -526,7 +552,10 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		KerneleBPFMapMonitorPollChannel[mp] = make(chan string)
 	}
 
-	go tc.PollMonitoringMaps(ctx, errMapPollChannel)
+	go tc.ReadMonitoringMaps(ctx, errMapPollChannel)
+	if utils.ENABLE_KERNEL_DPI_IMPACT_MEASURE_TIME {
+		go tc.PollKernelDPIPerformanceTimeBuffer(ctx)
+	}
 
 	go func() {
 		for {
@@ -545,29 +574,24 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
-	init_agent_passive_mode_port_obf.Do(func() {
-		tc.InitTCTunnelExfilPrevention(ctx)
+	atomic_random_port_tunnel_overlay.Do(func() {
+		tc.InitTCTunnelExfilPrevention(ctx, false)
 	})
-
 }
 
-func (tc *TCHandler) InitAgentPassiveTCTunnelHandler(isPassiveStandardDNSPortUDPTransfer bool) *TCCloneTunnel {
-	return NewTcTunnelFactory(
+/*
+Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
+*/
+func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveStandardDNSPortUDPTransfer bool) {
+	tc_tunnel := NewTcTunnelFactory(
 		&TCCloneTunnelConfig{
 			PhysicalTcInterfaceeBPFProgCollection: tc.TcCollection,
 			Iface:                                 tc.Interfaces,
 			GlobalErrorChannel:                    tc.GlobalErrorKernelHandlerChannel,
 			StreamClient:                          tc.DnsPacketGen.StreamClient,
 			Onnx:                                  tc.OnnxLoadedModel,
-			isPassiveStandardDNSPortUDPTransfer:   false,
+			isPassiveStandardDNSPortUDPTransfer:   isPassiveStandardDNSPortUDPTransfer,
 		})
-}
-
-/*
-Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
-*/
-func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context) {
-	tc_tunnel := tc.InitAgentPassiveTCTunnelHandler(false) // build for nor standard port for overlay DNS port obfuscation exfiltration
 	tc.TcTunnelNonStandardPortScan = tc_tunnel
 
 	// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
@@ -598,25 +622,20 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 				index, limit)
 			if err != nil {
 				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
-				return err
 			}
 		}
 
 		if utils.DEBUG {
 			utils.Log("The Node Agent loaded the dns limits in Kernel successfully")
 		}
-		return nil
 	}
-	return fmt.Errorf("cannot Loading DPI kernel sec unless kernel DNS dPI features are populated")
+	return nil
 }
 
 /*
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
-func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) error {
-	tc_tunnel := tc.InitAgentPassiveTCTunnelHandler(true)
-	go tc_tunnel.SniffPacketsForTunnelDPI(ctx, true) // start the packet sniffing for  standard ports bpf_redirect_clone from kernel space with kerenl processing in passive DPI mode
-	return nil
+func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
 }
 
 /*
@@ -636,7 +655,7 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 		if isIpv6 {
 			// support for ipv6
 			if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
-				return errors.New("error in Ipv6 header checksum verification ipv6 has no default checksum")
+				return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
 			}
 		}
 
@@ -663,8 +682,8 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 	return nil
 }
 
-func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet, handler *pcap.Handle, isPhysicalNetDevSniff bool,
-	physicalSniffNetdev *netlink.Link) {
+func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Packet,
+	handler *pcap.Handle, isPhysicalNetDevSniff bool, physicalSniffNetdev *netlink.Link) {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -685,7 +704,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		ipPacket = (packet.Layer(layers.LayerTypeIPv4)).(*layers.IPv4)
 		isIpv4 = true
 		if utils.DEBUG {
-			utils.Log("current packet checksum", ipPacket.Checksum)
+			fmt.Println("current packet checksum", ipPacket.Checksum)
 		}
 	}
 
@@ -713,7 +732,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		}
 		payload := tcpPacket.Payload
 
-		utils.Log("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
+		fmt.Println("found tcp packet for domain dest port 53 ", tcpPacket, isUdp, isIpv4, payload)
 
 		if len(payload) < 2 {
 			utils.Log("TCP payload too short for dns parsing", len(payload))
@@ -743,7 +762,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 		if ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2) {
 			// packet is malicious found from kernel and link redirected and no further DPI should be done on user space
-			go model.HandleKernelDroppedPacket[events.Protocol](
+			go model.HandleKernelDroppedPacket[progs.Protocol](
 				ctx,
 				dnsLayer, isIpv4, isUdp, events.DNS, tc.Interfaces,
 			)
@@ -753,7 +772,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 		ipv6Address := ipv6Packet.DstIP.To16().String()
 
 		if ipv6Address == utils.MALICIOUS_NETNS_IPV6 {
-			go model.HandleKernelDroppedPacket[events.Protocol](
+			go model.HandleKernelDroppedPacket[progs.Protocol](
 				ctx,
 				dnsLayer, isIpv4, isUdp, events.DNS, tc.Interfaces,
 			)
@@ -778,10 +797,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			}
 		}
 
-		// TODO:: FIX the kernel memory map aligned padding for pull from userspace
 		egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
 		if err != nil {
-			utils.Logger.Error(err.Error())
 			tc.GlobalErrorKernelHandlerChannel <- err
 			return
 		}
@@ -828,6 +845,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			tc.GlobalErrorKernelHandlerChannel <- err
 			return
 		}
+
 		if isIpv4 && !isUdp {
 			// ipv4 and tcp
 			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
@@ -849,6 +867,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 processPacketForNonAggresiveDPI:
 	tc.ProcessEachPacketPassiveDpi(ctx)
+	return
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
@@ -859,28 +878,28 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 		return
 	}
 
-	cap, err := tc.Interfaces.GetPcapHandleoverNetDevByName(netinet.NETNS_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
+	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
-		utils.Logger.Error("error opening packet capture over hz,te interface from kernel")
+		fmt.Println("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
-		return
 	}
 	defer cap.Close()
 
 	utils.Log("Generated Egress Packet Listener to parse DNS packets from kernel over the UDP Layer DNS protocol from Node agent owned veth bridge driver")
 	if err := cap.SetDirection(pcap.DirectionIn); err != nil {
-		utils.Logger.Error("Error setting BPF direction filter for netdev: %v", err)
+		utils.Logger.Fatalf("Error setting BPF direction filter for netdev: %v", err)
 		errorChannel <- err
 		return
 	}
 
-	if err := cap.SetBPFFilter(utils.GenerateBpfFIlterForDNS(true, true)); err != nil {
-		utils.Logger.Error("Error setting BPF filter: %v", err)
+	if err := cap.SetBPFFilter("udp dst port 53"); err != nil {
+		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
 		errorChannel <- err
 		return
 	}
 
-	for packet := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {
+	packets := gopacket.NewPacketSource(cap, cap.LinkType())
+	for packet := range packets.Packets() {
 		go tc.ExportKernelPacketProcessCountEvents()          // let the agent start polling for monitor the kernel exported packet count metrcis
 		go tc.ProcessEachPacket(ctx, packet, cap, false, nil) // start deep packet userspace analysis over the packet
 	}
@@ -891,11 +910,10 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	utils.Log("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer DNS protocol over ysical netdev")
 	// cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 
-	cap, err := tc.Interfaces.GetPcapHandleoverNetDev(link)
+	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
 	if err != nil {
-		utils.Log("error opening packet capture over hz,te interface from kernel")
+		fmt.Println("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
-		return
 	}
 	defer cap.Close()
 
@@ -906,9 +924,8 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	}
 
 	if err := cap.SetBPFFilter("tcp dst port 53"); err != nil {
-		utils.Logger.Errorf("Error setting BPF filter 2: %v", err)
+		utils.Logger.Fatalf("Error setting BPF filter: %v", err)
 		errorChannel <- err
-		return
 	}
 
 	for pack := range gopacket.NewPacketSource(cap, cap.LinkType()).Packets() {
@@ -916,7 +933,7 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	}
 }
 
-func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHandler *netinet.NetIface, prog *ebpf.Program) {
+func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHandler *netinet.NetIface, prog *ebpf.Program) error {
 	utils.Log("Loading the Egress Packet Capture over Custom Linux iface in network namespace")
 
 	errorChannel := make(chan error, len(ifaceHandler.PhysicalLinks))
@@ -932,6 +949,7 @@ func (tc *TCHandler) ProcessSniffDPIPacketCapture(ctx context.Context, ifaceHand
 
 	tc.ProcessPcapFilterHandler(ctx, ifaceHandler.PhysicalLinks[0], ifaceHandler, errorChannel)
 
+	return nil
 }
 
 func (tc *TCHandler) DetachTCLinkedTracepointHookHandlers() error {

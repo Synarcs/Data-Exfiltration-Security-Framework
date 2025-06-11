@@ -10,12 +10,13 @@ import (
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
 
-func HandleKernelDroppedPacket[T events.Protocol](
+func HandleKernelDroppedPacket[T progs.Protocol](
 	ctx context.Context, dnsLayer gopacket.Layer, isIpv4, isUdp bool, protocol T,
 	nodeIface *netinet.NetIface) {
 

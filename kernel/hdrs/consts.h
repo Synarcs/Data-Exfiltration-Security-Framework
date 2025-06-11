@@ -21,6 +21,9 @@
     #define TC_DROP TC_ACT_SHOT
 #endif
 
+#define DPI_KERNEL_PERF_BENCH true 
+#define DPI_KERNEL_PERF_BENCH_SCAN_INTERVAL 1 << 12 
+
 // a all main custom flag for parsing the packet after redirection from N/S to a different port on same net-device 
 #ifndef RESERVED_KERNEL_SKBUFF_MAP 
     #define RESERVED_KERNEL_SKBUFF_MAP 1 

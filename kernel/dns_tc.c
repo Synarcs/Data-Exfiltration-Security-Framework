@@ -123,6 +123,18 @@ struct exfil_vxlan_exfil_event {
     __u16 transport_src_port;
 } __attribute__((packed));
 
+#if DPI_KERNEL_PERF_BENCH 
+    struct dpi_performance_time {
+        __u64 kernel_dpi_time;
+        __u32 packet_size;
+    } __attribute__((packed));
+
+    struct exfil_security_egresss_dpi_time {
+        __uint(type, BPF_MAP_TYPE_RINGBUF);
+        __uint(max_entries, DPI_KERNEL_PERF_BENCH_SCAN_INTERVAL);
+    } exfil_security_egresss_dpi_time SEC(".maps");
+#endif
+
 // map storing information about the vxlan kernel encap channels port for transfer, userspace instruct kernel DPI to block traffic unless scanned nexxt time via ring buff 
 // userspace has always ensured that there is an l7 dns layer with malicious payload encapsulated inside the frame for vxlan packet frame.
 struct exfil_vxlan_block_egress_port {
@@ -556,7 +568,7 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
 }
 
 static
-__always_inline __bpf_fastcall __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
+__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
@@ -980,6 +992,26 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
     #endif 
 }
 
+#if DPI_KERNEL_PERF_BENCH 
+    static
+    __always_inline void __emit_kernel_dpi_time(__u64 end_time, __u64 start_time, __u32 payload_size) {
+        struct bpf_dynptr dptr;
+
+        struct dpi_performance_time dpi_time = {
+            .kernel_dpi_time = end_time - start_time,
+            .packet_size = payload_size,
+        };
+
+        if (bpf_ringbuf_reserve_dynptr(&exfil_security_egresss_dpi_time, sizeof(struct dpi_performance_time), 0, &dptr) < 0) {
+            bpf_ringbuf_discard_dynptr(&dptr, 0);
+            return;
+        }
+
+        bpf_dynptr_write(&dptr, 0, &dpi_time, sizeof(struct dpi_performance_time), 0);
+        bpf_ringbuf_submit_dynptr(&dptr, 0);
+    }
+#endif
+
 /*
     Emit the kernel event to user space to bind and read traffic over the port 
     Userspace should clean the dptr kernel only emits dptr dynamic events for user space to sniff the traffic on these ports to read udp traffic post parsing and processing the vxlan header 
@@ -988,9 +1020,6 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
 static
 __always_inline void __emit_kernel_encap_event_vxlan_encap(struct udphdr *udp, __u32 egress_ifindex) {
     struct bpf_dynptr dptr;
-    #if DEBUG
-        bpf_printk("emit an vxlan kernel event for udp %u %u", bpf_ntohs(udp->dest), bpf_ntohs(udp->source));
-    #endif
     struct exfil_vxlan_exfil_event vxlan_event = (struct exfil_vxlan_exfil_event) {
         .transport_dest_port = bpf_ntohs(udp->dest),
         .transport_src_port = bpf_ntohs(udp->source)
@@ -1968,7 +1997,9 @@ SEC("tcx")
 SEC("tc")
 #endif
 int classify(struct __sk_buff *skb){
-    
+
+    __u64 kernel_dpi_start_time = bpf_ktime_get_ns();
+
     struct skb_cursor cursor; 
     struct packet_actions actions;
 
@@ -2138,6 +2169,11 @@ int classify(struct __sk_buff *skb){
 
                 SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
                 
+                #if DPI_KERNEL_PERF_BENCH
+                    // called only when the packet arrives the egress tc filter first time to measure impact kernel DPI have in processing each packet 
+                    __emit_kernel_dpi_time(bpf_ktime_get_ns(), kernel_dpi_start_time,  skb->len);
+                #endif
+                
                 __update_kernel_packet_redirection_time(transaction_id);
                 return bpf_redirect(br_index, BPF_F_INGRESS); // redirect to the bridge
                 // for now learn dns ring buff event;
@@ -2302,10 +2338,16 @@ int classify(struct __sk_buff *skb){
                 __skb_l3_dnat_v6(&ipv6);
 
                 __update_kernel_packet_redirection_time(transaction_id);
+                
+                #if DPI_KERNEL_PERF_BENCH
+                    // called only when the packet arrives the egress tc filter first time to measure impact kernel DPI have in processing each packet 
+                    __emit_kernel_dpi_time(bpf_ktime_get_ns(), kernel_dpi_start_time,  skb->len);
+                #endif
+                
                 // forward the traffic to the brodhe fpr enhanced DPI in userspace 
                 return bpf_redirect(br_index, BPF_F_INGRESS);
                 
-                threatHuntPotentialMaliciousProcessExfilIpv6:
+            threatHuntPotentialMaliciousProcessExfilIpv6:
                 
                 if (result.isBenign) {
                     return TC_FORWARD;

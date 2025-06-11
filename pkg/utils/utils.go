@@ -41,6 +41,11 @@ const (
 	DEFAULT_SK_BUFF_NUONCE        = 0xffff
 )
 
+// capture performance benchmark details
+const (
+	ENABLE_KERNEL_DPI_IMPACT_MEASURE_TIME = true
+)
+
 const (
 	SOCK_TUNNEL_CODE = "netlink_socket"
 )

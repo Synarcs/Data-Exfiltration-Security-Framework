@@ -17,7 +17,7 @@ import (
 */
 
 type DomainNodeAgentCacheBlock struct {
-	CompleteDomain map[string]bool
+	CompleteDomain map[string]bool  
 }
 
 // all the LRU caches for eBPF agent in userspace, must reside in the agent userspace heap memory

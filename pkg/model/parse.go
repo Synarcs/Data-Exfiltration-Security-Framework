@@ -21,6 +21,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/asavie/xdp"
 	"github.com/cilium/ebpf"
@@ -263,18 +264,18 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 		for _, feature := range features {
 			if isUdp {
 				if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
-					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+					go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(udpPacket.DstPort), processInfo)
 				} else {
-					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+					go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(udpPacket.DstPort), nil)
 				}
 			} else {
 				if utils.VerifyKernelSupportTaskComms(processInfo.ProcessId, processInfo.ThreadId) {
-					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+					go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(tcpPacket.DstPort), processInfo)
 				} else {
-					go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
+					go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &d.IfaceHandler.PhysicalNodeBridgeIpv4,
 						events.DNS, int(udpPacket.DstPort), nil)
 				}
 			}
@@ -300,7 +301,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 					Fqdn:     feature.Fqdn,
 					Tld:      feature.Tld,
 					IsEgress: isEgress,
-					Protocol: events.Protocol(events.DNS),
+					Protocol: progs.Protocol(events.DNS),
 				})
 			}
 		} else {
@@ -308,7 +309,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 				Fqdn:     features[0].Fqdn,
 				Tld:      features[0].Tld,
 				IsEgress: isEgress,
-				Protocol: events.Protocol(events.DNS),
+				Protocol: progs.Protocol(events.DNS),
 			})
 		}
 	}

@@ -106,6 +106,12 @@ type TokenBucketEgressDnsConf struct {
 	MaxTokens uint64
 }
 
+// benchmark measure for DPI in kernel
+type DPIPerformanceTime struct {
+	Kernel_dpi_time uint64
+	PacketSize      uint32
+}
+
 // kernel eBPF maps over kernel network stack
 const (
 	EXFILL_SECURITY_EGRESS_REDIRECT_MAP                   = "exfil_security_egress_redirect_map"
@@ -133,6 +139,7 @@ const (
 const (
 	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_ring_buff_non_standard_port"
 	EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP                     = "exfil_security_egress_vxlan_encap_drop"
+	EXFIL_SECURITY_EGRESSS_DPI_TIME                            = "exfil_security_egresss_dpi_time"
 )
 
 // maps for kernel timers

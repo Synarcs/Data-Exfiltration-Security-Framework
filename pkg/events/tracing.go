@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -96,7 +97,7 @@ type RawDnsEvent struct {
 	Fqdn     string
 	Tld      string
 	IsEgress bool
-	Protocol Protocol
+	Protocol progs.Protocol
 }
 
 type KernelNetlinkSocket struct {
@@ -108,13 +109,12 @@ type KernelNetlinkSocket struct {
 }
 
 type MaliciousDetectedUserSpaceCount int
-type Protocol string
 
 const (
-	DNS  Protocol = "DNS"
-	ICMP Protocol = "ICMP"
-	HTTP Protocol = "HTTP"
-	SMTP Protocol = "SMTP"
+	DNS  progs.Protocol = "DNS"
+	ICMP progs.Protocol = "ICMP"
+	HTTP progs.Protocol = "HTTP"
+	SMTP progs.Protocol = "SMTP"
 )
 
 // TODO Make nested generic service interfaces
@@ -513,7 +513,7 @@ func SanatizeRune(value []byte) string {
 	return buffer.String()
 }
 
-func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T,
+func ExportMaliciousEvents[T progs.Protocol](feature DNSFeatures, nodeIp *net.IP, protocol T,
 	exfilPort int, procInfo *utils.MaliciousKernelTaskCommExportedProcInfo) error {
 	if exportCount {
 		malicious_detected_event_userspace.Inc()
@@ -568,8 +568,6 @@ func ExportMaliciousEvents[T Protocol](feature DNSFeatures, nodeIp *net.IP, prot
 		labels["Protocol"] = string(DNS)
 	case T(ICMP):
 		labels["Protocol"] = string(ICMP)
-	case T(SMTP):
-		labels["Protocol"] = string(SMTP)
 	case T(HTTP):
 		labels["Protocol"] = string(HTTP)
 	default:

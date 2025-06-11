@@ -25,6 +25,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
@@ -256,6 +257,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 				if !errors.Is(err, ebpf.ErrKeyNotExist) {
 					utils.Logger.Printf("Error while reading the clone redirect count from the map %+v for suspicious packet redirect", err)
 				}
+				return err
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionCountEvent](events.PacketDPICloneRedirectionCountEvent{
 				KernelCloneRedirectPacketCount: currCt,
@@ -267,7 +269,10 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 		if cloneredirectDropMap != nil {
 			var currCt uint32 = 0
 			if err := cloneredirectDropMap.Lookup(&redirCountKey, &currCt); err != nil {
-				utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
+				if !errors.Is(err, ebpf.ErrKeyNotExist) {
+					utils.Logger.Printf("Error while reading the clone redirect count from the map %+v", err)
+				}
+				return err
 			}
 			events.ExportPromeEbpfExporterEvents[events.PacketDPICloneRedirectionDropCountEvent](events.PacketDPICloneRedirectionDropCountEvent{
 				KernelCloneRedirectPacketDropCount: currCt,
@@ -280,6 +285,7 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 
 func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiveDPIStandardPort bool) {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	var handler *pcap.Handle
 	var pcapErr error
@@ -328,6 +334,8 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 	go func() {
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case msg, ok := <-sniffTunnelErr:
 				if !ok {
 					return
@@ -476,6 +484,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 
 			if err != nil {
 				utils.Log("Error Gettting report inference socket for inference")
+				return err
 			}
 
 			if conn == nil || client == nil {
@@ -530,13 +539,13 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 
 				for _, feature := range features {
 					if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
+						go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
 							int(destTransportPort), &utils.MaliciousKernelTaskCommExportedProcInfo{
 								ProcessId: ev.ProcessId,
 								ThreadId:  ev.ThreadId,
 							})
 					} else {
-						go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
+						go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4, "DNS",
 							int(destTransportPort), nil)
 					}
 
@@ -587,13 +596,13 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		}
 		for _, feature := range features {
 			if utils.VerifyKernelSupportTaskComms(ev.ProcessId, ev.ThreadId) {
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+				go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
 					"DNS", int(destTransportPort), &utils.MaliciousKernelTaskCommExportedProcInfo{
 						ProcessId: ev.ProcessId,
 						ThreadId:  ev.ThreadId,
 					}) // (wont overflow (1 << 16))
 			} else {
-				go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
+				go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(feature), &tun.IfaceHandler.PhysicalNodeBridgeIpv4,
 					"DNS", int(destTransportPort), nil) //
 			}
 

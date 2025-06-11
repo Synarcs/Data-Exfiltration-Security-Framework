@@ -19,6 +19,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
@@ -75,7 +76,7 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 			// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
 			// the same port as used for egrres will be used as src port for response from remote c2c malware
 			// dont monitro task comm and process struct over ingress traffic
-			go events.ExportMaliciousEvents[events.Protocol](events.DNSFeatures(rawFeatures[index]),
+			go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(rawFeatures[index]),
 				&iface.PhysicalNodeBridgeIpv4, events.DNS, int(utils.DNS_EGRESS_PORT), nil)
 
 			if !conf.GlobalAgentCliConfig.DisableThreadEventStream {
