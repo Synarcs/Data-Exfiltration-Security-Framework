@@ -2,7 +2,7 @@
 set terminal pngcairo size 800,600 enhanced font 'Verdana,10'
 set output 'kernel_dpi_time_plot.png'
 
-set title "Microsecond Raw Parsing Time of DNS Kernel"
+set title "DNS DPI Time in eBPF egress TC CLSACT QDISC filter"
 set xlabel "Seconds (Single DNS Packet per Second)"
 set ylabel "DNS DPI Parsing Time (μs)"
 set grid

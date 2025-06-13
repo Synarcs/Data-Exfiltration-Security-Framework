@@ -38,13 +38,16 @@ type KernelNetlinkSocket struct {
 }
 
 type NetKProbes struct {
-	NetlinkSocket     *ebpf.Program
-	NetlinkSupportMap *ebpf.Map
-	KprobelLink       link.Link
+	NetlinkSocket         *ebpf.Program
+	NetlinkSupportMap     *ebpf.Map
+	KprobelLink           link.Link
+	GlobalErrorKernelChan chan error
 }
 
-func NewKprobeEventFactory() *NetKProbes {
-	return &NetKProbes{}
+func NewKprobeEventFactory(globalErrorKernelChan chan error) *NetKProbes {
+	return &NetKProbes{
+		GlobalErrorKernelChan: globalErrorKernelChan,
+	}
 }
 
 func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
@@ -78,7 +81,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 
 }
 
-func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) error {
+func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) {
 	utils.Log("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -89,16 +92,20 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 	if err != nil {
 		utils.Logger.Fatal("error loading the xdp program over interface")
-		return err
+		k.GlobalErrorKernelChan <- err
+		return
 	}
 
+	// static determine the program and maps and load and assign, rather creating new collection from spec
 	var objs struct {
 		NetlinkSocket                                     *ebpf.Program `ebpf:"netlink_socket"`
 		ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent *ebpf.Map     `ebpf:"exfil_security_detected_c2c_tunneling_netlink_sock_event"`
 	}
 
 	if err := handler.LoadAndAssign(&objs, nil); err != nil {
-		panic(err.Error())
+		utils.Log("error loading the kprobe in kerenl ... ", err)
+		k.GlobalErrorKernelChan <- err
+		return
 	}
 
 	k.NetlinkSocket = objs.NetlinkSocket
@@ -109,7 +116,8 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	sockettp, err := link.Kprobe(TUNTAP_NET_OPEN, objs.NetlinkSocket, nil)
 	if err != nil {
 		utils.Logger.Fatal("error loading the kprobe program over sys_enter sock")
-		return err
+		k.GlobalErrorKernelChan <- err
+		return
 	}
 
 	k.KprobelLink = sockettp
@@ -125,7 +133,8 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 
 	if err != nil {
 		utils.Logger.Fatal("Error in creating the ring buffer reader")
-		return err
+		k.GlobalErrorKernelChan <- err
+		return
 	}
 	defer ringBuff.Close()
 
@@ -134,16 +143,18 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	for {
 		if err != nil {
 			utils.Logger.Fatal("Error in creating the ring buffer reader")
-			return err
+			k.GlobalErrorKernelChan <- err
+			return
 		}
 
 		record, err := ringBuff.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
-				return nil
+				continue
 			}
 			utils.Logger.Fatal("Error in reading the ring buffer reader")
-			return err
+			k.GlobalErrorKernelChan <- err
+			return
 		}
 
 		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {

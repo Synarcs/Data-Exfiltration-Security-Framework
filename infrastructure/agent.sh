@@ -65,19 +65,8 @@ fi
 
 # Install x86_64 specific libraries
 arch=$(uname -m)
-if [ "$arch" = "amd64" ]; then
+if [ "$arch" = "amd64" || "$arch" -eq "x86_64" ]; then 
     sudo apt install -y libc6-dev-i386
-if [ "$arch" = "x86_64" ]; then
-    sudo apt install -y libc6-dev-i386
-fi
-
-install_bazel=0
-
-if [[ $install_bazel -eq "1" ]]; then 
-    echo "[x] Installing Bazel bindings"
-    sudo apt install -y apt-transport-https curl gnupg
-    curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/bazel-archive-keyring.gpg > /dev/null
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://bazel.build/apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
 fi 
 
 # Install Python dependencies

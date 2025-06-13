@@ -825,11 +825,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if any feature violated return suspicious
                 the reason to not straight of return for any of the features being violated for enhanced priority based filtering mapping to total number of violated features 
             */
-            for (int i =0; i < MAX_DNS_PRIO_KEYS; i++) {
+            for (int i =0; i < MAX_DNS_PRIO_KEYS && prio_violate_bitset > 0; i++, prio_violate_bitset >>= 1) 
                 if (prio_violate_bitset & 1)
                     return SUSPICIOUS; // violated an high prio feature filter
-                prio_violate_bitset >>= 1;
-            }
 
             return BENIGN;
         }

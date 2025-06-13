@@ -422,7 +422,7 @@ func main() {
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
-	kprobe := kprobe.NewKprobeEventFactory()
+	kprobe := kprobe.NewKprobeEventFactory(globalErrorKernelHandlerChannel)
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(ctx, iface, globalEBPFProgInjectChan)

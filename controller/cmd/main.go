@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/consumer"
@@ -111,7 +110,7 @@ func main() {
 	sock, err := net.Listen("unix", CNI_CONTROLLER_SOCK)
 
 	controlSigKillChan := make(chan os.Signal, 1)
-	errChan := make(chan error)
+	globalControllerErrorChan := make(chan error)
 	signal.Notify(controlSigKillChan, syscall.SIGINT, syscall.SIGTERM)
 
 	ctx := context.Background()
@@ -130,7 +129,7 @@ func main() {
 		CryptoConfig:  controllerCa,
 	}
 
-	go nodeAgentServer.StartControllerRpcServer(opts.Port, controllerCa)
+	go nodeAgentServer.StartControllerRpcServer(opts.Port, controllerCa, globalControllerErrorChan)
 
 	k8sClientSet, err := k8s.InitK8sClientSet("")
 
@@ -148,6 +147,7 @@ func main() {
 		if sock != nil {
 			sock.Close()
 		}
+
 		if _, err := os.Stat(CNI_CONTROLLER_SOCK); err == nil {
 			if err := os.Remove(CNI_CONTROLLER_SOCK); err != nil {
 				log.Println("Error removing mounted CNI socket:", err)
@@ -157,15 +157,13 @@ func main() {
 
 	for {
 		select {
-		case err := <-errChan:
+		case err := <-globalControllerErrorChan:
 			log.Println("Received error  ", err.Error())
 			return
 		case <-controlSigKillChan:
 			log.Println("the CNI socket would be closed on the controller cleanning all controller sock")
 			cancel()
 			return
-		default:
-			time.Sleep(time.Second)
 		}
 	}
 }

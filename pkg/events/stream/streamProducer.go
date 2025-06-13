@@ -24,8 +24,8 @@ const (
 )
 
 var (
-	ErrEmptyAgentProducer         = errors.New("Kafka Producer not initialized")
-	ErrCloseUninitializedProducer = errors.New("Kafka Producer close error")
+	ErrEmptyAgentProducer         = errors.New("kafka Producer not initialized")
+	ErrCloseUninitializedProducer = errors.New("kafka Producer close error")
 )
 
 type StreamProducer struct {

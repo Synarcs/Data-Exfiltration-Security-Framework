@@ -23,20 +23,22 @@ type NodeAgentServer struct {
 }
 
 func (rpc *NodeAgentServer) StartControllerRpcServer(port int,
-	cotnrollerCryptoOpts *utils.ControlelrCertConfig) {
+	cotnrollerCryptoOpts *utils.ControlelrCertConfig, globalControllerErrorChan chan error) {
 	list, err := net.Listen("tcp", ":3200")
 	if err != nil {
-		panic(err.Error())
+		globalControllerErrorChan <- err
+		return
 	}
 
-	log.Println("Node Agent RPC Server Listen on POrt :: ", 3200)
+	log.Println("Node Agent RPC Server Listen on Port :: ", 3200)
 	s := grpc.NewServer(grpc.EmptyServerOption{})
 
 	rpc.Server = s
 	pb.RegisterNodeAgentFeatureServiceServer(s, &NodeAgentServer{})
 	if err := s.Serve(list); err != nil {
 		log.Println(err.Error())
-		panic(err.Error())
+		globalControllerErrorChan <- err
+		return
 	}
 
 }

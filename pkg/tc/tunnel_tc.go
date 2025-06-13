@@ -406,18 +406,10 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 			}
 
 			var event events.DnsEvent
-			if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
-				if err != nil {
-					utils.Logger.Fatalf("Failed to parse event: %v", err)
-					return err
-				}
-			} else {
-				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &event)
-				if err != nil {
-					utils.Logger.Fatalf("Failed to parse event: %v", err)
-					return err
-				}
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &event)
+			if err != nil {
+				utils.Logger.Fatalf("Failed to parse event: %v", err)
+				return err
 			}
 
 			// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
