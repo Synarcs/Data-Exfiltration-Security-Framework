@@ -21,6 +21,7 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/google/gopacket"
+	seccomp "github.com/seccomp/libseccomp-golang"
 )
 
 var DEBUG = false
@@ -277,6 +278,17 @@ func ExtractTldFromDomain(fqdn string) string {
 
 func CpuArch() string {
 	return runtime.GOARCH
+}
+
+func CpuArchPerSeccompProfile() seccomp.ScmpArch {
+	switch CpuArch() {
+	case "arm64":
+		return seccomp.ArchARM64
+	case "arm":
+		return seccomp.ArchARM
+	default:
+		return seccomp.ArchAMD64
+	}
 }
 
 func GetCPUCores() int {

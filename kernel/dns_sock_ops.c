@@ -78,7 +78,7 @@ __always_inline void __update_egress_sock_proc_map(struct __sk_buff *skb, struct
     __u16 src_transfer_port = bpf_ntohs(udp->source);
     __u16 dest_transport_port = bpf_ntohs(udp->dest);
 
-    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+    struct __kernel_proc_struct_info * proc_info = __get_process_info(true);
     
     struct sock_proc_conn_info *curr_info = bpf_map_lookup_elem(&exfil_sock_udp_conn_map, &src_transfer_port);
     struct sock_proc_conn_info sock_proc_conn_info = __get_sock_proc_conn_info(dest_transport_port, proc_info);

@@ -130,6 +130,7 @@ func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 	}
 }
 
+// agent inject dynamic seccomp profiles per process globally, and not restricted to specific cgroups
 func initSeccompDynamicSeccomFilters() error {
 
 	// TODO: dynamic userspace enforced process aware security with dynamic security fitler values

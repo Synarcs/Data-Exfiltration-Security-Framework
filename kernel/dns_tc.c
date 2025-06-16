@@ -106,7 +106,7 @@ struct packet_actions {
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *, struct udphdr *);
     __u8 (*parse_dns_payload_non_standard_port_tcp) (struct skb_cursor * , struct __sk_buff *, void *, struct dns_header_tcp *);
-};
+} __attribute__((packed));
 
 /* ***************************************** Event ring buffeers for kernel detected DNS events ***************************************** */
 
@@ -1309,7 +1309,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
 static 
 __always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
     struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
-    struct __kernel_proc_struct_info * proc_info = __get_process_info();
+    struct __kernel_proc_struct_info * proc_info = __get_process_info(false);
 
     if (!val) {
         struct proc_info_non_standard_port suspicious_tunnel_port_transfer = (struct proc_info_non_standard_port) {
@@ -1413,7 +1413,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     __u32 tc_class_id = skb->tc_classid;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
-    struct __kernel_proc_struct_info * proc_info = __get_process_info(); // task struct for process Info 
+    struct __kernel_proc_struct_info * proc_info = __get_process_info(false); // task struct for process Info 
 
     // populate the br_index handler clone for skb from kernel over the packet bridge 
     struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
@@ -1509,7 +1509,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
 static
 __always_inline void __submit_ring_buff_events_malicious_transfers(bool isStandardPortTransfer, struct udphdr *udp, struct dns_header *dns) {
 
-    struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+    struct __kernel_proc_struct_info * proc_info  = __get_process_info(false);
     struct bpf_dynptr dptr;
 
     if (!isStandardPortTransfer) {
@@ -1632,7 +1632,7 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
         event->isTcp = (__u8)1;
         event->isUdp = (__u8)0;
 
-        struct __kernel_proc_struct_info *proc_info = __get_process_info();
+        struct __kernel_proc_struct_info *proc_info = __get_process_info(false);
 
         if (__update_non_stand_port_map(bpf_ntohs(tcp->source)) == 0) {
               #if DEBUG 
@@ -1824,7 +1824,7 @@ __always_inline long __update_checksum_dns_redirect_map_ipv6(__u32 transaction_i
     };
     // update the task comm 
     if (verify_kernel_version_support_task_comm()) {
-        struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+        struct __kernel_proc_struct_info * proc_info  = __get_process_info(false);
         L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv6);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);
@@ -1846,7 +1846,7 @@ __always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_i
         .skb_index = skb_if_index
     };
     if (verify_kernel_version_support_task_comm()) {
-        struct __kernel_proc_struct_info * proc_info  = __get_process_info();
+        struct __kernel_proc_struct_info * proc_info  = __get_process_info(false);
         L3_CHECKSUM_MAP_UPDATE_DNAT_TC_TASK_INFO(proc_info, layer3_checksum_ipv4);
     }else {
         struct sock_proc_conn_info  *sock_proc_conn_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sport);

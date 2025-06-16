@@ -60,10 +60,11 @@ __always_inline bool verify_kernel_version_support_task_comm() {
     Rely on kernel task comm for the tc running on whichever CPU handles and retrieve the process name and associated task struct
 */
 static 
-__always_inline struct __kernel_proc_struct_info * __get_process_info() {
+__always_inline struct __kernel_proc_struct_info * __get_process_info(bool is_non_tc ) {
     struct __kernel_proc_struct_info proc_info;
-
-    if (verify_kernel_version_support_task_comm()) {
+    
+    // the kernel bpf helper internally calling kernel trask struct is always exposed to the non kernel TC layer. 
+    if (verify_kernel_version_support_task_comm() || is_non_tc) {
         __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
         __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
         proc_info.procId = proc_id;

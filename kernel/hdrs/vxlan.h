@@ -1,3 +1,8 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
+*/
+
 #ifndef __VXLAN_H 
     #define  __VXLAN_H 
 

@@ -57,8 +57,7 @@ int main(void) {
     printf("Process ID adding epoll events over POLL STDIN: %d\n", proc); 
     int event_count = 0;
     size_t bytes_read;  char read_buffer[READ_SIZE + 1]; 
-    bool pool = true;
-    while (pool) {
+    while (true) {
         memset(read_buffer, '\0', sizeof(read_buffer));
         size_t read_buffer_size = sizeof(read_buffer) / sizeof(read_buffer[0]);
         if (read_buffer_size != READ_SIZE) READ_SIZE = read_buffer_size;
@@ -71,7 +70,7 @@ int main(void) {
     		printf("%zd bytes read.\n", bytes_read);
             read_buffer[bytes_read] = '\0';
             for (int i=0; i <= strlen(read_buffer); i++) printf("%c", *(read_buffer + i));
-			if(strncmp(read_buffer, "exit", 5)) break;
+			if(strncmp(read_buffer, "exit", 4) == 0) break;
 		}
 	}
 

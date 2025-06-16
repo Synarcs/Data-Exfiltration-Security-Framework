@@ -257,7 +257,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		utils.Log("Attaching TC qdisc to the interface ", link.Attrs().Name)
 		_, err := netlink.QdiscList(link)
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		/*
@@ -265,7 +265,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		*/
 		qdiscs, err := netlink.QdiscList(link)
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		hasClsactQdisc := false
@@ -313,7 +313,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			},
 		}
 		if err := netlink.QdiscReplace(qdisc_clsact); err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		if !hasClsactQdisc {
@@ -333,7 +333,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		}
 
 		if err := netlink.FilterReplace(&filter); err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		// attach and start bpf timers in kernel as the program is injected in the kernel
@@ -342,7 +342,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 		if enhancedFeatures.Dns.EnabledTbRlimit {
 			if err := tc.InitDnsRateLimiter(ctx); err != nil {
 				utils.Log("Error initializing the dns rate limiter", err.Error())
-				tc.GlobalErrorKernelHandlerChannel <- err
+				return err
 			}
 		}
 
@@ -451,12 +451,13 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 		},
 	})
 	if err != nil {
-		panic(err)
+		tc.GlobalErrorKernelHandlerChannel <- err
+		return
 	}
 
 	prog := spec.Programs[utils.TC_CONTROL_PROG]
 	if prog == nil {
-		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("No Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG)
+		tc.GlobalErrorKernelHandlerChannel <- fmt.Errorf("no Required TC Hook found for DNS egress %s", utils.TC_CONTROL_PROG)
 		return
 	}
 
@@ -660,7 +661,7 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 		if isIpv6 {
 			// support for ipv6
 			if ip_layer3_checksum_kernel_ts.Checksum != uint16(utils.DEFAULT_IPV6_CHECKSUM_MAP) {
-				return errors.New("Error in Ipv6 header checksum verification ipv6 has no default checksum")
+				return errors.New("error in Ipv6 header checksum verification ipv6 has no default checksum")
 			}
 		}
 

@@ -54,10 +54,10 @@ struct sched_process_fork {
     __u32 child_pid;
 };
 
-typedef struct detected_malicious_process_forks {
+struct detected_malicious_process_forks {
     __u32 ppid;
     __u32 fork_count;
-};
+} __attribute__((packed));
 
 struct exfill_security_kill_proc_tree {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
@@ -74,15 +74,14 @@ __always_inline struct kill_proc_mal_payload * is_process_found_malicious(__u32 
 
 static
 __always_inline void is_mal_proc_below_detect_threshold_killed() {
-    __u32 proc_id = bpf_get_current_pid_tgid() >> 32;
-    __u32 thread_id = bpf_get_current_pid_tgid() & 0xFFFFFFFF;
+    struct __kernel_proc_struct_info *proc_info = __get_process_info(true);
 
-    struct kill_proc_mal_payload * mal_detected_count = is_process_found_malicious(proc_id);
+    struct kill_proc_mal_payload * mal_detected_count = is_process_found_malicious(proc_info->procId);
     if (mal_detected_count) {
         // remove if the proc was SIGTERM before reaching malicious threshold, otherwise will be SIGKILL if it exceed the malicious threshold 
         if (mal_detected_count < EGRESS_MAL_PROC_EXFIL_SCHED) {
             // 3 proc map kill free 
-            if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_id) < 0) {
+            if (bpf_map_delete_elem(&exfil_security_egress_proc_mal, &proc_info->procId) < 0) {
                 #if DEBUG 
                         bpf_printk("the key is removed by smp on another CPU once the process was sigkilled before thresholled reach for map clean");
                 #endif
@@ -90,7 +89,7 @@ __always_inline void is_mal_proc_below_detect_threshold_killed() {
             // 1 map kernel free 
             struct exfil_security_egress_nsp_map_key mal_proc_redir_key = (struct exfil_security_egress_nsp_map_key) {
                 .dport = mal_detected_count->dest_port,
-                .processId = proc_id,
+                .processId = proc_info->procId,
             };
             // count of time rescan kernel redirected to user space for malicious rescan of exfil packet via clone redirect's 
             __u32 * mal_proc_redir_ct = bpf_map_lookup_elem(&exfil_security_egress_nsp_map, &mal_proc_redir_key);
@@ -163,7 +162,7 @@ int process_potential_mal_c2_thread_spawn()  {
     struct task_struct *parent = NULL;
     pid_t ppid = 0;
 
-    struct __kernel_proc_struct_info *proc_infp = __get_process_info();
+    struct __kernel_proc_struct_info *proc_infp = __get_process_info(true);
     if (proc_infp->procId != proc_infp->threadId) {
         // a trhead spawn for the parent process in the parent task struct tgroup 
     }
@@ -178,14 +177,15 @@ int handle_potential_malicious_forks(struct sched_process_fork *proc_info) {
     __u32 ppid = proc_info->parent_pid;
 
     struct kill_proc_mal_payload * is_process_mal = is_process_found_malicious(pid);
-    if (!is_process_mal) {
-        return 0;
-    }
+    if (!is_process_mal) 
+        goto end;
 
     __u32 * fork_count = bpf_map_lookup_elem(&exfill_security_ppid_fork_ct, &ppid);
-    if (!fork_count) return 0;
+    if (!fork_count) 
+        goto end;
 
     __sync_fetch_and_add(fork_count, 1);
+end:
     return 0;
 }
 
