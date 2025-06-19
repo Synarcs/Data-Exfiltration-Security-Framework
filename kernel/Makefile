@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0
 tc_kernel := dns_tc.c 
 tc_kernel_out ?= tc.o
 

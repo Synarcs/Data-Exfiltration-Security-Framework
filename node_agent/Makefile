@@ -1,4 +1,4 @@
-
+# SPDX-License-Identifier: AGPL-3.0
 
 node_agent := main.go 
 output ?= main 

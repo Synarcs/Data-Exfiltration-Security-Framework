@@ -10,8 +10,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Internally relies on kernel watchdog for fd emit over kqueue or async io to blocked poll socket
-// save from unwanted jargon continuous poll syscall for stats for wasting cpu cycles
+// Internally relies on kernel fsNotify for fd emit over kqueue or async io to blocked poll socket
 // rely on inotify and epoll for async io emit rather than polling
 func NewInotifySystemWatcher() (*fsnotify.Watcher, error) {
 	watcher, err := fsnotify.NewWatcher()

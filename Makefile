@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0
 model_path ?= model/dns_sec.onnx
 DEBUG ?= false 
 
@@ -38,7 +39,7 @@ build-controller:
 		rm -rf controller/bin; \
 	fi
 	@mkdir controller/bin
-	cd controller && mvn clean package && cp target/node-agent-controller-1.0-SNAPSHOT.jar bin/ && mvn clean 
+	cd controller && mvn clean package && cp target/*.jar bin/ && mvn clean 
 	@echo "Building the controller UNIX stream Inference NetworkPolicyHandlers"
 	cd controller/cmd && go build -ldflags="-s -w" -o ../bin/main main.go 
 
@@ -70,7 +71,7 @@ stop-controller-image:
 .PHONY: run-controller
 run-controller:
 	@echo "Running the controller"
-	cd controller && java -jar bin/node-agent-controller-1.0-SNAPSHOT.jar 
+	cd controller && java -jar bin/*.jar 
 
 .PHONY: controller 
 controller:

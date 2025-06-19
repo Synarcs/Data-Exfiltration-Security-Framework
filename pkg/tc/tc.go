@@ -873,7 +873,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 processPacketForNonAggresiveDPI:
 	tc.ProcessEachPacketPassiveDpi(ctx)
-	return
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,
@@ -884,7 +883,9 @@ func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface
 		return
 	}
 
-	cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+	// cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
+	cap, err := tc.Interfaces.GetPcapHandleoverNetDevByName(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU))
+
 	if err != nil {
 		fmt.Println("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err
@@ -916,7 +917,8 @@ func (tc *TCHandler) ProcessPcapFilterHandlerTcpPhysicalNetDev(ctx context.Conte
 	utils.Log("Generated Egress Packet Listener to parse DNS packets from kernel over the TCP Layer DNS protocol over ysical netdev")
 	// cap, err := pcap.OpenLive(netinet.NETNS_NETLINK_BRIDGE_DPI, int32(linkInterface.Attrs().MTU), true, pcap.BlockForever)
 
-	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
+	cap, err := tc.Interfaces.GetPcapHandleoverNetDevByName(link.Attrs().Name, int32(link.Attrs().MTU))
+
 	if err != nil {
 		fmt.Println("error opening packet capture over hz,te interface from kernel")
 		errorChannel <- err

@@ -25,7 +25,7 @@
 struct skb_cursor {
     void *data;
     void *data_end;
-};
+} __attribute__((packed));
 
 struct vlan_hdr {
 	__be16	h_vlan_TCI;

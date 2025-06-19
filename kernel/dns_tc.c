@@ -339,9 +339,8 @@ struct dns_volume_stats {
     __always_inline bool __l3_ipv4_netpool_egress_filter_for_dns_c2_server(struct iphdr *ip) {
         __u32 daddr = bpf_ntohl(ip->daddr); // userspace inject in network btyteorder over a eBPF map key with type __u32 not raw butes 
         __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &daddr);
-        if (isDynamicBlacklisted) {
-            return DROP_L3_INTERNAL_FILTER_TRAFFIC == true ? true : false;
-        }
+        if (isDynamicBlacklisted) 
+            return DROP_L3_INTERNAL_FILTER_TRAFFIC;
         return false;
     }
 #endif
@@ -839,7 +838,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
 
 static 
-__always_inline __bpf_fastcall __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, 
+__always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb_cursor *skb, void *dns_payload, 
             struct dns_header_tcp *dns_header) {
     // dns header already validated and payload and header memory safetyy already cosnidered 
 

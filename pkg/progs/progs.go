@@ -19,7 +19,6 @@ const (
 const (
 	LSM_BPF_HOOKS = "lsm"
 )
-
 type Protocol string
 
 // all the eBPF filter the node agent can inject in kernel, over the entire kernel network stack

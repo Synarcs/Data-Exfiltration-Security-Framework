@@ -499,7 +499,7 @@ func (nf *NetIface) GetEgressLinkFromIfIndex(ifIndex uint32) (*netlink.Link, err
 		}
 	}
 
-	return nil, fmt.Errorf("the required netdev for skb not found on the host")
+	return nil, fmt.Errorf("the required netdev for skb not found on the host %d", ifIndex)
 }
 
 func (nf *NetIface) ListRootnetlinkNetworkNamespaces() map[string]int {
@@ -646,9 +646,3 @@ func (nf *NetIface) GetRootNamespaceRawSocketFd() (*int, error) {
 
 	return &fd, nil
 }
-
-// func (nf *NetIface) GetBridgePcapHandleClone() (*pcap.Handle, error) {
-// 	cap, err := pcap.OpenLive(NETNS_RAW_NETLINK_BRIDGE_DPI, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
-// 	cap.ZeroCopyReadPacketData()
-// 	return cap, err
-// }

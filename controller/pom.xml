@@ -4,7 +4,7 @@
   <groupId>com.synarcs.controller</groupId>
   <artifactId>node-agent-controller</artifactId>
   <packaging>jar</packaging>
-  <version>1.0-SNAPSHOT</version>
+  <version>1.0.1</version>
   <name>node-agent-controller</name>
   <url>http://maven.apache.org</url>
 
