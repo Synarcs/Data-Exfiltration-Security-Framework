@@ -160,7 +160,6 @@ int process_potential_mal_c2_thread_spawn()  {
   
     struct task_struct *task = (void *)bpf_get_current_task();
     struct task_struct *parent = NULL;
-    pid_t ppid = 0;
 
     struct __kernel_proc_struct_info *proc_infp = __get_process_info(true);
     if (proc_infp->procId != proc_infp->threadId) {

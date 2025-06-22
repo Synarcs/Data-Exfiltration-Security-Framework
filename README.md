@@ -129,7 +129,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 * [Security Framewok WhitePaper](https://github.com/Synarcs/DNSObelisk_Report) provides detailed internals of the security framework.
 
 ## Author
-- [Vedang Parasnis](https://github.com/Synarcs/)
+- [Vedang Parasnis (Synarcs)](https://github.com/Synarcs/)
 
 ## Conferences
 * Accepted and was presented at [Netdev 0x19](https://netdevconf.info/0x19/sessions/bof/real-time-prevention-of-dns-based-data-exfiltration-bof.html) for innovation in Linux kernel advancing DNS security.

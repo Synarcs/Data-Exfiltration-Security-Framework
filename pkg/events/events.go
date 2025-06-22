@@ -9,6 +9,10 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
+const (
+	KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE = 1 << 7
+)
+
 // lower protocol packet information
 type DnsEvent struct {
 	DstPort          uint32
@@ -18,6 +22,10 @@ type DnsEvent struct {
 	IsTcp            uint8
 	ProcessId        uint32
 	ThreadId         uint32
+}
+
+type KernelGlobalDPError struct {
+	Err [KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE]rune
 }
 
 func PrettyPrintMaliciousDNSEvent(ev *DnsEvent) {
@@ -140,6 +148,7 @@ const (
 	EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT = "exfil_security_egrees_clone_redirect_ring_buff_non_standard_port"
 	EXFIL_SECURITY_EGRESS_VXLAN_ENCAP_DROP                     = "exfil_security_egress_vxlan_encap_drop"
 	EXFIL_SECURITY_EGRESSS_DPI_TIME                            = "exfil_security_egresss_dpi_time"
+	EXFIL_SECURITY_ERROR_PIPE_AGENT                            = "exfil_security_error_pipe_agent"
 )
 
 // maps for kernel timers

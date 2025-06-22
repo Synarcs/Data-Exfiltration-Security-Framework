@@ -17,6 +17,7 @@ import (
 	"io"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -390,10 +391,10 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 		case <-ctx.Done():
 			return nil
 		default:
+			record, err := ringBuffer.Read()
 			if utils.DEBUG {
 				utils.Log("polling the ring buffer", "using th map", ebpfEvents)
 			}
-			record, err := ringBuffer.Read()
 			if err != nil {
 				if errors.Is(err, ringbuf.ErrClosed) {
 					return err
@@ -405,18 +406,30 @@ func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Ma
 				utils.Logger.Printf("Polling the ring buffer for the %s arch", utils.CpuArch())
 			}
 
-			var event events.DnsEvent
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &event)
-			if err != nil {
-				utils.Logger.Fatalf("Failed to parse event: %v", err)
-				return err
-			}
+			if strings.Contains(ebpfEvents.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
+				var event events.DnsEvent
+				err = binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &event)
+				if err != nil {
+					utils.Logger.Fatalf("Failed to parse event: %v", err)
+					return err
+				}
 
-			// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
-			if event.ProcessId != 0 && event.ThreadId != 0 {
-				events.PrettyPrintMaliciousDNSEvent(&event)
-			} else {
-				utils.Log("Potential DNS tunnel from kernel detected", event)
+				// kernel compatible to  extract process from task struct inside kernel traffic direct action qdisc SCHED_CLS in kernel
+				if event.ProcessId != 0 && event.ThreadId != 0 {
+					events.PrettyPrintMaliciousDNSEvent(&event)
+				} else {
+					utils.Log("Potential DNS tunnel from kernel detected", event)
+				}
+			}
+			if strings.Contains(ebpfEvents.String(), events.EXFIL_SECURITY_ERROR_PIPE_AGENT) {
+				// TODO: perform deep er ELK export for log or loki for deeper in kernel monitoring over massive scaled data planes at endpoints.
+				var event events.KernelGlobalDPError
+				if err := binary.Read(bytes.NewBuffer(record.RawSample), binary.NativeEndian, &event); err != nil {
+					utils.Logger.Errorf("Error polling kernel DPI error %+v", err)
+					return err
+				}
+
+				utils.Log(event)
 			}
 		}
 	}

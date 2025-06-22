@@ -55,6 +55,7 @@
 #include "hdrs/vxlan.h"
 #include "hdrs/pinmaps.h"
 #include "hdrs/sockpin.h"
+#include "hdrs/err.h"
 #include "hdrs/rlt.h" // ratelimiter over kernel TC 
 
 #define SIZE_INFO(ptr, data, end) \
@@ -1457,6 +1458,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             // let the malware keep retrying and kernel stopping it and user space record the count the packet detected as malicious to eventually let the malware strive suffocate and user space kill it
             // if the malware sabotage and mask process via kernel syscall layer and hide with mutating proc id in kernel proper sig kill threshold below certain values will kill it  and free map 
             if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
+                // __emit_error_msg_ringbuff("Error clone redirect packet in kernel for passive dpi over kernel egress TC cls_bpf filter");
                 return 1;
             }
             return 0;
@@ -1486,9 +1488,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         
         __handle_kernel_map_clone_redirected_count(false);
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #if DEBUG
-                bpf_printk("kernel cannot clone the packet for the redirect"); 
-            #endif
+            __emit_error_msg_ringbuff("kernel cannot clone the packet for the redirect");
+            return 1;
         }
     }
         
@@ -1866,11 +1867,7 @@ out:
 static 
 __always_inline void __update_kernel_packet_redirection_time(__u32 dns_query_id) {
     __u64 kernel_redirection_process_time = bpf_ktime_get_ns();
-    if (bpf_map_update_elem(&exfil_security_egress_redirect_loop_time, &dns_query_id, &kernel_redirection_process_time, 0) < 0) {
-        #if DEBUG 
-            bpf_printk("the kernel monitor redirect map is full and exceed the possible kernel heap time");
-        #endif
-    }
+    bpf_map_update_elem(&exfil_security_egress_redirect_loop_time, &dns_query_id, &kernel_redirection_process_time, 0);
 }  
 
 
@@ -1994,7 +1991,6 @@ SEC("tcx")
 SEC("tc")
 #endif
 int classify(struct __sk_buff *skb){
-
     __u64 kernel_dpi_start_time = bpf_ktime_get_ns();
 
     struct skb_cursor cursor; 

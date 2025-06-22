@@ -42,6 +42,7 @@
 #include "hdrs/utils.h" 
 #include "hdrs/sockpin.h"
 #include "hdrs/pinmaps.h"
+#include "hdrs/err.h"
 
 #define DEBUG false
 

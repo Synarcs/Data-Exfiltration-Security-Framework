@@ -78,13 +78,8 @@ type (
 	}
 )
 
-// init AF_PACKET, AF_XDP socket for the kernel
-var (
-	INIT_TC_DNS_OVERLAY_RANDOM_PORT_TUNNEL = true
-	INIT_LIMITS_KERNEL_CONFIG              = false
-
-	atomic_random_port_tunnel_overlay sync.Once
-)
+// atomic insert to initi DPI in kernel
+var atomic_random_port_tunnel_overlay_agent_analysis sync.Once
 
 var mapsToPinSharedProcKillMap []string
 
@@ -541,7 +536,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			}
 		}
 
-		INIT_LIMITS_KERNEL_CONFIG = true
 		if utils.DEBUG {
 			utils.Log("The Node Agent loaded the dns limits in Kernel successfully")
 		}
@@ -580,7 +574,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 	}()
 
 	// atomic ref  holder to denote userspace loaded the kernel tc program post monitor of tunnel traffic maps, considering both tunnel and standard DNS port exfiltration preventeed by single TC prog in kernel
-	atomic_random_port_tunnel_overlay.Do(func() {
+	atomic_random_port_tunnel_overlay_agent_analysis.Do(func() {
 		tc.InitTCTunnelExfilPrevention(ctx, false)
 	})
 }
@@ -601,8 +595,9 @@ func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveS
 	tc.TcTunnelNonStandardPortScan = tc_tunnel
 
 	// spawn go routine to handle ring buffer polling for nonstandard exfiltrated traffic over the ports
+	// let this be global map err poller from kernel for mallicious port obfuscation tunnel events as well as kernel DPI runtime errors otherwise exported via kernel pipe
 	for _, maps := range tc.TcCollection.Maps {
-		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) {
+		if strings.Contains(maps.String(), events.EXFIL_SECURITY_EGREES_REDIRECT_RING_BUFF_NON_STANDARD_PORT) || strings.Contains(maps.String(), events.EXFIL_SECURITY_ERROR_PIPE_AGENT) {
 			// an ring event buffer
 			go tc_tunnel.PollRingBuffer(ctx, maps)
 		}

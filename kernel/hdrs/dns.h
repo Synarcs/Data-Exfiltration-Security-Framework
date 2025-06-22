@@ -14,7 +14,8 @@
 #define MAX_SIZE 1024;
 #define MAX_ENTRIES 1024;
 
-#define DEBUG false 
+#define DEBUG false    // works same way to log debug status for info inside kernel performing DPI
+#define ERR_DEBUG_RINGBUFF_EVENT true
 
 #define MAX_DNS_FEATURES 8
 #define MAX_DNS_PRIO_KEYS 4
