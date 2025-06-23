@@ -374,7 +374,7 @@ func ForceGcPacketBufferZerocopyUserspace() {
 /*
 Removes the pinned eBPF maps mounts from bpf fs
 */
-func UnPingPinnedMaps(collection *ebpf.Collection, unupinMaps []string) error {
+func UnPinPinnedMaps(collection *ebpf.Collection, unupinMaps []string) error {
 
 	for _, pinMaps := range unupinMaps {
 		if _, fd := collection.Maps[pinMaps]; fd {

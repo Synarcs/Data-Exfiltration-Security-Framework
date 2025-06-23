@@ -166,7 +166,7 @@ func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) er
 		}
 	}
 
-	if err := utils.UnPingPinnedMaps(btc.col, []string{events.EXFIL_TC_BRIDGE_CONFIG_MAP}); err != nil {
+	if err := utils.UnPinPinnedMaps(btc.col, []string{events.EXFIL_TC_BRIDGE_CONFIG_MAP}); err != nil {
 		return err
 	}
 

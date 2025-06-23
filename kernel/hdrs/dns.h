@@ -36,7 +36,7 @@ enum MALICIOUS_FLAGS {
 #endif
 
 // TODO: convert all the consts to proper config loader from ebpf maps
-#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN false
+#define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN true
 #define SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER false
 
 

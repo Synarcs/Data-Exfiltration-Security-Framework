@@ -35,6 +35,7 @@
 #include "hdrs/utils.h"
 #include "hdrs/pinmaps.h"
 #include "hdrs/dns.h"
+#include "hdrs/err.h"
 
 struct exfill_security_ppid_fork_ct {   
     __uint(type, BPF_MAP_TYPE_LRU_HASH);

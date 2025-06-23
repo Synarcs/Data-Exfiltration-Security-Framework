@@ -17,6 +17,8 @@ node_agent/keys/*
 build/*
 package/*
 
+out/* 
+
 *.deb
 *.rpm 
 *.osx 

@@ -78,8 +78,13 @@ sudo apt install -y \
     python-is-python3 \
     python3-setuptools \
     python3-wheel \
-    python3-virtualenv
+    python3-virtualenv \ 
+    python3-command-runner 
 
+agent_binary=1
+if [[ $agent_binary -eq 1 ]]; then 
+    sudo apt-get install -y ruby-rubygems
+fi
 
 # Install bpftool for btf emit and vmlinux for kprobes and kernel sockets 
 echo "[✅] Building and installing bpftool"

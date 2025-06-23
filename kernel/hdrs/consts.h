@@ -100,6 +100,7 @@ struct exfil_security_egress_dns_limites {
 
 
 // use the kernel eBPF maps to inject the dynamic config to process all the l3 filters 
+// TODO: All the kernel addon DPI filter must be injected in runtime from endpoint security agent in userspace inside kernel for security
 static 
 __always_inline void __configure_l3_filter_options() {
 }
@@ -163,7 +164,7 @@ typedef struct inet6_bridge_address {
 
 
 #ifdef IPV6_ROUTE 
-    // configrue the global ipv6 range and forward for the global googl's ipv6 address. 
+    // should be configured in runtime over discrete IPAM at the endpoint 
     inet6_bridge_address * configure_global_ipv6_route_handlers() {
         inet6_bridge_address inet_addr_map = {};
         inet_addr_map.inet_addr[0] = (struct in6_addr){

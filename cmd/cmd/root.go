@@ -4,8 +4,6 @@ Copyright © 2024 Syncarcs
 package cmd
 
 import (
-	"os"
-
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +12,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:           "Data Exfiltration Security Framework eBPF Node Agent cli",
 	Short:         "CLI to interact eBPF Node Agent local unix socket",
-	Long:          "An Enhanced Enterprise Ready Data Exfiltration Security Framework buildi for distributed enviornments usine eBPF (linux kernel tc, xdp, kprobes,  kfuncs), Deep Learning and Threat Data Streaming",
+	Long:          "An Enhanced Enterprise Ready Data Exfiltration Security Framework build for distributed enviornments usine eBPF (linux kernel tc, xdp, kprobes,  kfuncs), Deep Learning and Threat Data Streaming",
 	Version:       "0.0.1",
 	SilenceErrors: false,
 	// Uncomment the following line if your bare application
@@ -28,7 +26,7 @@ func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		utils.Log(err)
-		os.Exit(1)
+		return
 	}
 }
 

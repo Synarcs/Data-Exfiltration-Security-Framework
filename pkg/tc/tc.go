@@ -130,6 +130,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
 		events.EXFILL_SECURITY_KERNEL_CONFIG_MAP,
 	}
+
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
 		mapsToPinSharedProcKillMap = append(mapsToPinSharedProcKillMap, events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER)
 	}
@@ -148,6 +149,7 @@ func PacketTcKernelDPICountMaps() []string {
 	}
 }
 
+// poll the malicious event  prevented  all inside kernel without endpoint agent intervention
 func (tc *TCHandler) PollMaliciousControllerAwareC2Address(ctx context.Context, errorChannel <-chan error) {
 	// ipv4
 	go func() {
@@ -164,6 +166,7 @@ func (tc *TCHandler) PollMaliciousControllerAwareC2Address(ctx context.Context, 
 	}()
 }
 
+// exfil rate limiter over egress TC on clsact qdisc
 func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 
 	rlimitConfig := tc.config.GetRLimitConfig()
@@ -188,6 +191,7 @@ func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 	return nil
 }
 
+// Attach the kernel TC eBPF program over egress physical link
 func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) error {
 	for _, netlink := range tc.Interfaces.PhysicalLinks {
 		// the DNS security rpograms must have highest priority to be executed first over cls_bpf egress filters list  attached to netdev
@@ -213,6 +217,7 @@ clean:
 	return nil
 }
 
+// Used for monitoring system kernel performance time with all kernel injected eBPF programs
 func (tc *TCHandler) PollKernelDPIPerformanceTimeBuffer(ctx context.Context) error {
 	if !utils.ENABLE_KERNEL_DPI_IMPACT_MEASURE_TIME {
 		return nil
@@ -241,9 +246,7 @@ func (tc *TCHandler) PollKernelDPIPerformanceTimeBuffer(ctx context.Context) err
 	}
 }
 
-/*
-Relies on legacy TC via cls_bpf priority over legacy TC subsystem for bpf filter attachment
-*/
+// Relies on legacy TC via cls_bpf priority over legacy TC subsystem for bpf filter attachment
 func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) error {
 	if utils.VerifyTcxSupportEgressLink() {
 		// TODO: Implement injection support over TCX vs prio based legacy TC cls_bpf filters
@@ -1033,7 +1036,7 @@ func (tc *TCHandler) DetachHandler(ctx *context.Context) error {
 		}
 	}
 
-	if err := utils.UnPingPinnedMaps(tc.TcCollection, mapsToPinSharedProcKillMap); err != nil {
+	if err := utils.UnPinPinnedMaps(tc.TcCollection, mapsToPinSharedProcKillMap); err != nil {
 		return err
 	}
 
