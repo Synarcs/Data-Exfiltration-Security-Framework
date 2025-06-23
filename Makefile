@@ -139,3 +139,31 @@ pprof_duration ?= 10
 profile-agent:
 	@echo "Running Pprof profile over the node agent in user-space"
 	go tool pprof -http=0.0.0.0:$(pprof_port) http://localhost:6262/debug/pprof/profile?seconds=$(pprof_duration)
+
+archive ?= agent.gz
+archive_cli ?= cli.gz
+output ?= main
+archive_out ?= out
+
+# generate compress archive for all exec for the agent to be deployed at endpoint 
+.PHONY: archive-all
+archive-all: clean_archives archive archive_cli   # Removed archive unless you define it
+
+.PHONY: clean_archives
+clean_archives:
+	@if [ -d "$(archive_out)" ]; then \
+		echo "Deleting directory $(archive_out)"; \
+		rm -rf "$(archive_out)"; \
+	fi
+	@mkdir -p "$(archive_out)"
+
+.PHONY: archive_cli
+archive_cli:
+	@echo "Compressing the endpoint security agent CLI..."
+	cd cmd && rm -f "$(output)" && make build && tar -caf "../$(archive_out)/$(archive_cli)" $(output)
+	
+.PHONY: archive
+archive:
+	@echo "compressing the endpoint security agent ..."
+	make build 
+	cd package && tar -caf "../$(archive_out)/$(archive)" .

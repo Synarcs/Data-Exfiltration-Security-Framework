@@ -1,6 +1,10 @@
 #!/bin/sh 
 
+set -eo 
+
 build_controller=$1 
+
+gem install fpm
 
 dir=$(pwd)
 
@@ -8,7 +12,6 @@ echo "[x] Building Kernel eBPF code, eBPF node agent Go Binary Cilium, and infer
 cd node_agent
 make build 
 make infer-build 
-rm -rf dist 
 
 cd ../
 echo "build autoInstall Build dir"
@@ -43,8 +46,9 @@ buildpackage() {
 
 
 loadbinaries
-buildpackage
+# buildpackage
 
+rm -rf dist 
 
 if [ $build_controller ]; then 
   make build-controller 
