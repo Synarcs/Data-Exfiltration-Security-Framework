@@ -441,7 +441,7 @@ func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.
 
 func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error) {
 	if len(nf.Links) == 0 {
-		return nil, fmt.Errorf("Vxlan Tunnel Interfaces cannot be found use netlink soscket to read all net_devices on node")
+		return nil, fmt.Errorf("vxlan Tunnel Interfaces cannot be found use netlink soscket to read all net_devices on node")
 	}
 
 	var tunnelVxlanInterfaces map[uint16]*netlink.Vxlan = make(map[uint16]*netlink.Vxlan)
@@ -550,7 +550,7 @@ func (nf *NetIface) GetAllNetworkNamespaces() (map[string]int, error) {
 
 	// process raw RF_NETLINK kernel socket for biind process and return all ns and id (ip nentns list-id / ip netns list)
 	if nsMap := nf.ListRootnetlinkNetworkNamespaces(); nsMap == nil {
-		return nil, fmt.Errorf("Error cannot generate netns map for all network namspace")
+		return nil, fmt.Errorf("error cannot generate netns map for all network namspace")
 	} else {
 		nsMap["root"] = 0
 		return nsMap, nil
@@ -579,35 +579,30 @@ func (nf *NetIface) InitconnTrackSockHandles() error {
 // uses the first default pcap handle from the host physical netlink (net_device) and seclect bpf filter for live sniff
 func (nf *NetIface) GetRootNamespacePcapHandle() (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, pcap.BlockForever)
-	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
 // opens pcap handle over cusotm netlink  (net_device), runs over zero copy to read packet from rx queues of netdev with no overhead of data copy over in userspace
 func (nf *NetIface) GetPcapHandleoverNetDev(link netlink.Link) (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, pcap.BlockForever)
-	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
 // opens pcap handle over cusotm (net_device) through name, runs over zero copy to read packet from rx queues of netdev with no overhead of data copy over in userspace
 func (nf *NetIface) GetPcapHandleoverNetDevByName(link string, mtu int32) (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(link, mtu, true, pcap.BlockForever)
-	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
 // opens pcap handle over cusotm netlink  (net_device for sniff over custom duration time
 func (nf *NetIface) GetPcapHandleoverNetDevDuration(link netlink.Link, duration time.Duration) (*pcap.Handle, error) {
 	cap, err := pcap.OpenLive(link.Attrs().Name, int32(link.Attrs().MTU), true, duration)
-	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 
 func (nf *NetIface) GetRootNamespacePcapHandleDuration(time time.Duration) (*pcap.Handle, error) {
 
 	cap, err := pcap.OpenLive(nf.PhysicalLinks[0].Attrs().Name, int32(nf.PhysicalLinks[0].Attrs().MTU), true, time)
-	cap.ZeroCopyReadPacketData()
 	return cap, err
 }
 

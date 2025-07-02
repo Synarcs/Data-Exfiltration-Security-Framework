@@ -206,15 +206,7 @@ func InitControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControlle
 	return rpcClient, nil
 }
 
-func main() {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	ctx := context.Background()
-	ctx, agentCancelFunc := context.WithCancel(ctx)
-	utils.NewLogger(ctx)
-
-	var nodeAgentCliOptions conf.NodeAgentCliOptions
-	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
+func ParseArgs(nodeAgentCliOptions *conf.NodeAgentCliOptions) {
 	flag.StringVar(&nodeAgentCliOptions.BPFProgPath, "bpf_prog_path", "", "the path containing all the eBPF compiled programs")
 	flag.StringVar(&nodeAgentCliOptions.AgentConfigPath, "agent_config_path", "", "custom path absolute path for booting up the agent | must be yaml as per Agent required format")
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
@@ -244,6 +236,19 @@ func main() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+}
+
+func main() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	ctx := context.Background()
+	ctx, agentCancelFunc := context.WithCancel(ctx)
+	utils.NewLogger(ctx)
+
+	var nodeAgentCliOptions conf.NodeAgentCliOptions
+	ParseArgs(&nodeAgentCliOptions)
+	utils.Log("The Node Agent Booted up with thte process Id", os.Getpid())
 
 	configureGlobalAgentConfigOpts(&nodeAgentCliOptions)
 	conf.ConfigureGlobalAgentCLiConfig(&nodeAgentCliOptions)
@@ -429,11 +434,9 @@ func main() {
 	go tc.TcHandlerEbfpProg(ctx, iface, globalEBPFProgInjectChan)
 
 	// kernel tc process post routing hooks for attach over tc clsact bridge filters for the DPI in kernel
-	netfilter := &bridgetc.BridgeTCFilters{
-		Interfaces: iface,
-		Hash:       hash,
-	}
-	go netfilter.AttachTcHandlerIngressBridge(ctx, false)
+	bridgeTc := bridgetc.NewBridgeTCFilters(iface, hash, globalErrorKernelHandlerChannel)
+
+	go bridgeTc.AttachTcHandlerIngressBridge(ctx, false)
 
 	// process pre default boot interfaces of type tunnels loaded pre in kernel
 	go tcl.VerifyTunnelNetDevicesOnBoot(ctx, tc, iface)
@@ -463,7 +466,7 @@ func main() {
 
 	detachKernelHooksOpts := &KernelCleanHooks{
 		tc:        tc,
-		nft:       netfilter,
+		nft:       bridgeTc,
 		kprobe:    kprobe,
 		sockProgs: sockProgs,
 		iface:     iface,

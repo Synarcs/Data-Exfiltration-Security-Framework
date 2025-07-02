@@ -29,11 +29,23 @@ type BridgeTCFilters struct {
 	Interfaces        *netinet.NetIface
 	Hash              *crypto.Hash
 	col               *ebpf.Collection
+	globalErrorChan   chan error
 }
 
-func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context, prog *ebpf.Program, isEgress bool) error {
+// netlink brink links at the endpoint , and unique skb hash per netflow
+func NewBridgeTCFilters(ifaceHandler *netinet.NetIface,
+	hash *crypto.Hash, globalErrorChan chan error) *BridgeTCFilters {
+	return &BridgeTCFilters{
+		Hash:            hash,
+		Interfaces:      ifaceHandler,
+		globalErrorChan: globalErrorChan,
+	}
+}
+
+func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context,
+	prog *ebpf.Program, isEgress bool) error {
 	if err := rlimit.RemoveMemlock(); err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	for _, link := range btc.Interfaces.BridgeLinks {
@@ -134,19 +146,20 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
 		utils.Log("Error attaching the clsact bpf qdisc for netdev")
-		panic(err.Error())
+		btc.globalErrorChan <- err
+		return
 	}
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
 		utils.Log("Error attaching the clsact bpf qdisc for netdev")
-		panic(err.Error())
+		btc.globalErrorChan <- err
+		return
 	}
 
 	btc.TCBridgeSocketMap = spec.Maps[events.EXFIL_TC_BRIDGE_CONFIG_MAP]
 	if btc.TCBridgeSocketMap == nil {
-		panic(fmt.Errorf("No Required TC Bridge Socket Map found for %s", events.EXFIL_TC_BRIDGE_CONFIG_MAP))
+		btc.globalErrorChan <- fmt.Errorf("no Required TC Bridge Socket Map found for %s", events.EXFIL_TC_BRIDGE_CONFIG_MAP)
 	}
-
 }
 
 func (btc *BridgeTCFilters) DetachKernelBridgeTCFilters(ctx *context.Context) error {

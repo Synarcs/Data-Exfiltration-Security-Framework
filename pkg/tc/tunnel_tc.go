@@ -93,14 +93,14 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 
 var (
 	// dont use spin lock user space write a map from userspace, and kernel always read it, and never write,
-	KernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
-	KernelMaliciousTransferPortDelete     sync.Mutex = sync.Mutex{}
-	KernelUpdateMaliciousReferenceLock    sync.Mutex = sync.Mutex{}
+	kernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
+	kernelMaliciousTransferPortDelete     sync.Mutex = sync.Mutex{}
+	kernelUpdateMaliciousReferenceLock    sync.Mutex = sync.Mutex{}
 
 	// map 3  (proc --> isMal (bool))
-	UpdateMapMaliciousProcId sync.Mutex = sync.Mutex{}
-	CleanMapMaliciousProcId  sync.Mutex = sync.Mutex{}
-	maliciousProcCountguard  sync.Mutex = sync.Mutex{}
+	updateMapMaliciousProcIdLock sync.Mutex = sync.Mutex{}
+	cleanMapMaliciousProcIdLock  sync.Mutex = sync.Mutex{}
+	maliciousProcCountguardLock  sync.Mutex = sync.Mutex{}
 )
 
 var (
@@ -116,8 +116,8 @@ var (
 func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
 
 	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is syncrhonized
-	KernelMaliciousTransferPortDelete.Lock()
-	defer KernelMaliciousTransferPortDelete.Unlock()
+	kernelMaliciousTransferPortDelete.Lock()
+	defer kernelMaliciousTransferPortDelete.Unlock()
 
 	var potentialMaliciousTaskComm events.DnsMapPayloadNonOverlayPort
 	if err := tunnelMap.LookupAndDelete(srcPort, &potentialMaliciousTaskComm); err != nil {
@@ -132,8 +132,8 @@ func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPor
 
 func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procId uint32, dport uint16) {
 	// will be called since the process was sigkilled from node agent in user space or via kernel syscall layer all entries for this must be cleaned
-	CleanMapMaliciousProcId.Lock()
-	defer CleanMapMaliciousProcId.Unlock()
+	cleanMapMaliciousProcIdLock.Lock()
+	defer cleanMapMaliciousProcIdLock.Unlock()
 
 	// aligned with memory pages
 	var nsp_map_dport events.ExfilNSPDportPayload = events.ExfilNSPDportPayload{
@@ -173,8 +173,8 @@ type maliciousExfilPortIngressSniffCtx struct {
 var exfilSizePriorSigKill int = 0
 
 func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapField *events.DnsMapPayloadNonOverlayPort, maliciousDestPort uint16) {
-	maliciousProcCountguard.Lock()
-	defer maliciousProcCountguard.Unlock()
+	maliciousProcCountguardLock.Lock()
+	defer maliciousProcCountguardLock.Unlock()
 
 	// the sniff context uses same mutex for node agent to track detected malicous process and associated port
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
@@ -246,8 +246,8 @@ func GetCurrentLoggedExfiltratedProcessids() map[uint32]int {
 }
 
 func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneRedirectedAndMalicious bool) error {
-	KernelUpdateMaliciousReferenceLock.Lock()
-	defer KernelUpdateMaliciousReferenceLock.Unlock()
+	kernelUpdateMaliciousReferenceLock.Lock()
+	defer kernelUpdateMaliciousReferenceLock.Unlock()
 
 	var redirCountKey uint16 = 0
 	if !isCloneRedirectedAndMalicious {
@@ -328,8 +328,6 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 		}
 	}
 
-	packetSource := gopacket.NewPacketSource(handler, handler.LinkType())
-
 	sniffTunnelErr := make(chan interface{})
 
 	go func() {
@@ -370,9 +368,19 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 		}
 	}
 
-	for packet := range packetSource.Packets() {
+	// zero copy buffer to read buffer packets from the kernel rx handlers for performance over DPI
+	for {
+		data, _, err := handler.ZeroCopyReadPacketData()
+		if err != nil {
+			return
+		}
+		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 		go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)
 	}
+	// packetSource := gopacket.NewPacketSource(handler, handler.LinkType())
+	// for packet := range packetSource.Packets() {
+	// go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)
+	// }
 }
 
 func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) error {
@@ -440,8 +448,8 @@ Update a process as malicious , and should be sigkilled or dropped prior thresho
 */
 func (tun *TCCloneTunnel) EnsureTransportTunnelPortMapUpdateKernelProc(procComm *events.DnsMapPayloadNonOverlayPort,
 	errorChannel chan interface{}) error {
-	UpdateMapMaliciousProcId.Lock()
-	defer UpdateMapMaliciousProcId.Unlock()
+	updateMapMaliciousProcIdLock.Lock()
+	defer updateMapMaliciousProcIdLock.Unlock()
 
 	// no need of mutex use atomic update to map values to control concurrent go routines
 	if _, fd := tun.PhysicalTcInterfaceeBPFProgCollection.Maps[events.EXFIL_SECURITY_EGRESS_PROC_MAL]; fd {

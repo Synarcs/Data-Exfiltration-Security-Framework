@@ -72,5 +72,4 @@ func TestParseIpv4(t *testing.T) {
 			})
 		}
 	}
-
 }

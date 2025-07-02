@@ -30,6 +30,7 @@ __always_inline int __get_len(char *msg) {
     for (int i=0; i < KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE; i++) {
         if (msg[i] == '\0') break;
         len++;
+        if (len > KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE) return KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE;
     }
     return len;
 }
@@ -40,7 +41,6 @@ __always_inline int __emit_error_msg_ringbuff(char * err_message) {
     int len = __get_len(err_message);
 
     //verifier check large error message all cannot be put enitrely on stack 
-    len = len > KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE ? KERNEL_DATAPATH_MAX_ERR_MESSAGE_SIZE : len;
     struct exfil_sec_error err_message_payload = {};
     __builtin_memcpy(&err_message_payload.err, err_message, sizeof(char) * len);
     

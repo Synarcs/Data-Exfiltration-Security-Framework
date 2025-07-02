@@ -719,10 +719,11 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 	var tcpCheck bool = false
 	if transportLayer != nil {
 		udpPacket := transportLayer.(*layers.UDP)
+
 		if udpPacket != nil {
 			isUdp = true
 		} else {
-			utils.Log("the packet is malformed")
+			utils.Log("the UDP Packet is malformed")
 			return
 		}
 	} else if isPhysicalNetDevSniff {

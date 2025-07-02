@@ -288,7 +288,7 @@ struct dns_volume_stats {
 #endif 
 
 // Parse the RAW SKB for query classes 
-#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(__dns_query_class)\ 
+#define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(__dns_query_class) \ 
         do {                                            \
             switch ((__dns_query_class)){               \
                     case 0x0001:                        \
@@ -669,7 +669,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     
                         char dns_payload_start_chr = (char)(*dns_payload_start);
                         #if DEBUG
-                            buff[buffer_lab_ind] = dns_payload_start_chr;
+                            buff[buffer_lab_ind++] = dns_payload_start_chr;
                         #endif
 
                         dns_payload_start = dns_payload_start + sizeof(__u8);
@@ -1128,7 +1128,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
             #endif
             if (*userspace_vxlan_flag_val == 1) {
                 // there is an malicious exfiltrated dns traffic done over this vxlan port 
-                return 0;
+                return OVERLAY_VXLAN_TUNNEL_DETECTED;
             }
             // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
             if (bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port) < 0) {
@@ -1147,7 +1147,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
         }
     }
 
-    return 1;
+    return OVERLAY_VXLAN_TUNNEL_NOT_DETECTED;
 }
 
 /*
@@ -1281,7 +1281,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, &current_dest_addr, 4) < 0) {
         bpf_printk("Error Loading the IP Destination Address for malicious redirect"); 
         return -1;
-    } 
+    }
     // change the ipv4 layer 3 for redirect of the entire tcp packet over the other ns bridge 
     __u32 csum_diff_drop = bpf_csum_diff(&current_dest_addr, 4, &dest_addr_route, 4, 0);
 
@@ -1306,7 +1306,7 @@ __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_ind
     return 0;
 }
 
-static 
+static
 __always_inline __u8 __update_non_stand_port_map(__u16 src_port) {
     struct proc_info_non_standard_port *val = bpf_map_lookup_elem(&exfil_security_egrees_clone_redirect_map_non_standard_port, &src_port);
     struct __kernel_proc_struct_info * proc_info = __get_process_info(false);
@@ -1455,18 +1455,18 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     if (verify_kernel_version_support_task_comm()) {
         if (__handle_malicious_egress_dns_port_random(__transport_dest_port, __transport_src_port, proc_info)) {
             __handle_kernel_map_clone_redirected_count(true);
-            // let the malware keep retrying and kernel stopping it and user space record the count the packet detected as malicious to eventually let the malware strive suffocate and user space kill it
             // if the malware sabotage and mask process via kernel syscall layer and hide with mutating proc id in kernel proper sig kill threshold below certain values will kill it  and free map 
+            // referred as process aware dynamic threat hunt, kernel forces malware to retry exposing malicious retry attempts to userspace endpoitn agent, eventually trapping and suffocating malware to be finally killed from userspace post exceeeded threshold 
             if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
                 // __emit_error_msg_ringbuff("Error clone redirect packet in kernel for passive dpi over kernel egress TC cls_bpf filter");
-                return 1;
+                return OVERLAY_TUNNEL_SUPICIOUS;
             }
-            return 0;
+            return OVERLAY_TUNNEL_DETECTED; // packet will be dropped over egress TC
         }
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             #if DEBUG
-                    bpf_printk("kernel cannot clone the packet for the redirect"); 
-            #endif
+                bpf_printk("error clone the packet ")
+            #endif 
         }
         goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
     }
@@ -1483,13 +1483,13 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
 
         if (__update_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(sock_proc_info, skb, __transport_src_port, __transport_dest_port)){
             __handle_kernel_map_clone_redirected_count(true);
-            return 0;
+            return OVERLAY_TUNNEL_DETECTED;
         }
         
         __handle_kernel_map_clone_redirected_count(false);
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
             __emit_error_msg_ringbuff("kernel cannot clone the packet for the redirect");
-            return 1;
+            return OVERLAY_TUNNEL_SUPICIOUS;
         }
     }
         
@@ -1498,7 +1498,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
         SKIP_DEEP_PARSING_RANDOM_PORTS_STANDARD_L7_PROTOCOLS:
     #endif
 
-    return 1;
+    return OVERLAY_TUNNEL_SUPICIOUS;
 }
 
 /*
@@ -1534,7 +1534,7 @@ __always_inline void __submit_ring_buff_events_malicious_transfers(bool isStanda
 
 
 static 
-__always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions, 
+__always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions *actions, 
                     __u32 udp_payload_exclude_header, void *udp_data, __u32 udp_payload_len, struct udphdr *udp, bool isIpv4) {
 
         // verify and parse for vxlan in the packet , we dont need dns header check since vxlan has the entire packet encap inside the udp frame for skb 
@@ -1548,7 +1548,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         }
 
         // always forward from kernel if the packet is using a non standard udp port and trying to send a dns packet over non standard port 
-        if (actions.parse_dns_header_size(&cursor, isIpv4, false) == 0)
+        if (actions->parse_dns_header_size(&cursor, isIpv4, false) == 0)
             // an non dns protocol based udp packet (no dns header found) 
             return 1;
 
@@ -1558,7 +1558,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         if ((void *) (dns_payload + 1) > cursor.data_end) return 1;
         struct dns_header *dns = (struct dns_header *) (udp_data);
         
-        if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header,
+        if (actions->parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header,
                         dns, skb->len) == 0) 
             return 1;
         
@@ -1574,7 +1574,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
         __u32 dest_port = bpf_ntohs(udp->dest);
      
-        __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port(&cursor, skb,
+        __u8 __non_standard_port_dpi = actions->parse_dns_payload_non_standard_port(&cursor, skb,
                             dns_payload, dns, udp);
         if (__non_standard_port_dpi == 0) {
             // emit the ring buff from kernel as a transport event 
@@ -2195,8 +2195,8 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
                 #endif
 
-                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, 
-                                    udp_data, udp_payload_len, udp, true) == 1)
+                if (__parse_skb_non_standard(cursor, skb, &actions, udp_payload_exclude_header, 
+                                    udp_data, udp_payload_len, udp, true) == OVERLAY_TUNNEL_SUPICIOUS)
                     return TC_FORWARD;
                 return TC_DROP;
             }
@@ -2364,7 +2364,7 @@ int classify(struct __sk_buff *skb){
                     EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
                 #endif
 
-                if (__parse_skb_non_standard(cursor, skb, actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
+                if (__parse_skb_non_standard(cursor, skb, &actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;
                 return TC_DROP;
             }
