@@ -6,12 +6,6 @@ local cjson = require("cjson")
 local pgmoon = require("pgmoon")
 local encode_array = require("pgmoon.arrays").encode_array
 
-local debug = false
-
-if debug then
-    local const = require("consts")
-end
-
 local ONNX_INFERENCE_UNIX_SOCKET_EGRESS = "/etc/powerdns/onnx-inference-out.sock"
 local ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/etc/powerdns/onnx-inference-in.sock"
 local EGRESS_INFER_ROUTE = "/onnx/dns"
@@ -258,30 +252,30 @@ local function listBlocklistedDomains()
 	  end
       end
     end
-    if DEBUG then
+    if not DEBUG then
         for _, dom in pairs(blockedDomains)do print(dom) end
     end
     sf_grp:add(blockedDomains)
 end
 
--- insert the malicious_domain in tcp to re program the data plane kernel eBPF programs to stop exfiltration against these nodes 
--- only the recursor will call for malicious TCP transport and not UDP 
+-- insert the malicious_domain in tcp to re program the data plane kernel eBPF programs to stop exfiltration against these nodes
+-- only the recursor will call for malicious TCP transport and not UDP
 local function insertMaliciousDomains(qname)
     pdnslog("A malicious TCP query: " .. qname)
 
-    local fqdn = qname:sub(1, -2) 
+    local fqdn = qname:sub(1, -2)
 
     local sld = getSLD(qname):toString()
-    sld = sld:sub(1, -2) 
+    sld = sld:sub(1, -2)
 
     -- fqdn, sld, isControllerUnblocked, isTransportUDP
     local malicious_tcp_values = {fqdn, sld, false, true}
 
-    -- for secrity and sql safe check sanity 
+    -- for secrity and sql safe check sanity
     local query = "INSERT INTO malicious_domain (sld, fqdn, forced_unblocked, is_transporttcp) VALUES ($1, $2, $3, $4)"
     pg:query(query, unpack(malicious_tcp_values))
 
-    if DEBUG then 
+    if DEBUG then
         pdnslog("Inserted the malicious TCP query in DB: " .. fqdn, pdns.loglevels.Info)
     end
 end
@@ -313,7 +307,7 @@ function preresolve(dq)
 
     if dq.isTcp then
         local quer_res = extractFeaturesAndGetremoteInference(dq.qname:toString())
-        pdnslog("Received query over TCP" .. qname, pdns.loglevels.Info)
+        pdnslog("Received query over TCP doing deep DL scan for any data breaches over DNS " .. qname, pdns.loglevels.Info)
         if DEBUG then
             for k, v in pairs(quer) do
                 if k == "threat_type" then
@@ -322,15 +316,15 @@ function preresolve(dq)
                     end
                 end
             end 
-        end 
+        end
         if quer_res['threat_type'] then
             insertMaliciousDomains(qname)
             dq.rcode = pdns.NXDOMAIN
-            return true 
-        end 
+            return true
+        end
     end
 
-    -- udp does not require since the endpoints runnin inside kernel will secure any exfiltration 
+    -- udp does not require since the endpoints runnin inside kernel will secure any exfiltration
     if sf_grp:check(getSLD(qname)) then
     	dq.rcode = pdns.NXDOMAIN
 	    return true
