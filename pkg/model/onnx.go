@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
@@ -75,7 +76,7 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				return false, nil
 			}
 
-			client, conn, err := GetInferenceUnixClient(direction)
+			client, conn, err := inference.GetInferenceUnixClient(direction)
 			if err != nil {
 				panic(err.Error())
 			}

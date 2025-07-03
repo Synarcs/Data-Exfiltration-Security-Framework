@@ -14,12 +14,13 @@ import (
 	"github.com/vishvananda/netns"
 )
 
+// TODO: Let the agent at the endpoint use the netlink socket for creatign spine, bridge and overlay network bridge topology
 func (nf *NetIface) CreateNamespace(nsName string) {
 	_, err := netns.NewNamed(nsName)
 	if err != nil {
-		log.Fatalf("Failed to create namespace %s: %v", nsName, err)
+		utils.Logger.Fatalf("Failed to create namespace %s: %v", nsName, err)
 	}
-	fmt.Printf("Created namespace: %s\n", nsName)
+	utils.Log(fmt.Sprintf("Created namespace: %s\n", nsName))
 }
 
 func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
@@ -36,11 +37,10 @@ func (nf *NetIface) AttachVethNamespace(veth, nsName string) error {
 	if err := netlink.LinkSetNsFd(link, int(nsHandle)); err != nil {
 		log.Fatalf("Failed to set veth %s to namespace %s: %v", veth, nsName, err)
 	}
-	fmt.Printf("Set %s to namespace %s\n", veth, nsName)
+	utils.Log(fmt.Sprintf("Set %s to namespace %s\n", veth, nsName))
 	return nil
 }
 
 func (nf *NetIface) CreateBridge(bridgeName string) error {
-
 	return nil
 }

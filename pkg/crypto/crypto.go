@@ -18,7 +18,7 @@ import (
 	"os"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
-	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
+	controllerrpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/controller"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/asm"
@@ -289,7 +289,7 @@ type CryptoBpfLsm struct {
 	Program                   *ebpf.Program
 	Link                      link.Link
 	ControllerEnabledZtEnfoce bool
-	AgentRpcClient            *rpc.AgentControllerRpcServices
+	AgentRpcClient            *controllerrpc.AgentControllerRpcServices
 }
 
 var cryptoMaps []string = []string{
@@ -316,7 +316,7 @@ func NewCryptoBpfLsmWithLocalCAConfig(ctx context.Context, agentCryptoConfig *No
 }
 
 func NewCryptoBpfLsmWithLocalControllerRpcConfig(ctx context.Context,
-	controllerEnabledZtEnfoce bool, rpcClient *rpc.AgentControllerRpcServices) func(*CryptoBpfLsm) {
+	controllerEnabledZtEnfoce bool, rpcClient *controllerrpc.AgentControllerRpcServices) func(*CryptoBpfLsm) {
 	return func(cbl *CryptoBpfLsm) {
 		cbl.AgentRpcClient = rpcClient
 		cbl.ControllerEnabledZtEnfoce = controllerEnabledZtEnfoce
@@ -326,7 +326,7 @@ func NewCryptoBpfLsmWithLocalControllerRpcConfig(ctx context.Context,
 // this is the global layered bpf prog enforcement for the agent in datapalne request controller to sign the raw bytecode before inject in LSM
 func (lsm *CryptoBpfLsm) RequestControllerForBpfProgSign(ebpfProgRaw []byte,
 	progInfo *ebpf.ProgramInfo) error {
-		// TODO: Ask the controller to sign the required eBPF progs raw bytecode establish first chain of trust 
+	// TODO: Ask the controller to sign the required eBPF progs raw bytecode establish first chain of trust
 	return nil
 }
 

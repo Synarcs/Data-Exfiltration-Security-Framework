@@ -80,6 +80,7 @@ type (
 
 // atomic insert to initi DPI in kernel
 var atomic_random_port_tunnel_overlay_agent_analysis sync.Once
+var atomic_standard_port_dns_agent_analysis sync.Once
 
 var mapsToPinSharedProcKillMap []string
 
@@ -129,6 +130,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_SOCK_UDP_CONN_MAP,
 		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
 		events.EXFILL_SECURITY_KERNEL_CONFIG_MAP,
+		events.EXFIL_SECURITY_ERROR_PIPE_AGENT,
 	}
 
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
@@ -503,6 +505,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				KernelTCSKBMark:         tc.Hash.SkbHash,
 			}
 
+			// DPI modes all over standard DNS transport UDP ports
 			if tc.config.GetAgentAggressiveDpiMode() {
 				kernelTCConfig.IsAgressiveSec = 1 // agressive DPI
 			} else {
@@ -626,6 +629,7 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 				index, limit)
 			if err != nil {
 				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+				return err
 			}
 		}
 
@@ -640,6 +644,10 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
 func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
+	utils.Log("init the tc tunnel filter for passive fultering standard transport port .....")
+	atomic_standard_port_dns_agent_analysis.Do(func() {
+		tc.InitTCTunnelExfilPrevention(ctx, true)
+	})
 }
 
 /*

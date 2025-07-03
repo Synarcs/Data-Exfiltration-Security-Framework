@@ -20,6 +20,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
@@ -34,7 +35,7 @@ func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeat
 		Features: features,
 	}
 	// layer 7 markup over layer 4 unix transport
-	ingressClient, _, err := model.GetInferenceUnixClient(false)
+	ingressClient, _, err := inference.GetInferenceUnixClient(false)
 
 	if err != nil {
 		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)

@@ -79,8 +79,6 @@
 struct packet_actions {
     // init the cursror to hold packet cursor information from skb 
     void (*cursor_init) (struct skb_cursor *, struct __sk_buff *);
-    // init all the fuctionr ref pointers to parse each layer of kernel network stack raw from skb 
-    struct packet_actions (*packet_class_action) (struct packet_actions actions);
     // link layer
     __u8 (*parse_eth) (struct skb_cursor *);
     // router layer 3
@@ -1474,7 +1472,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     // fetched from kernel sock layervia cgroup root egress (cgroup_skb/egress) for sock operations 
     struct sock_proc_conn_info *sock_proc_info = __get_malicious_egress_dns_port_random_kernel_sock_ops_mp_update(__transport_src_port);
     if (!sock_proc_info) {
-        return 1;
+        return OVERLAY_TUNNEL_SUPICIOUS;
     }else {
         #if DEBUG
             bpf_printk("kernel tc layer found the process for current src port as packed moved down kernel stack to kernel tc %d %d", 
@@ -1597,7 +1595,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
 
 
 static 
-__always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions actions,
+__always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, struct __sk_buff *skb, struct packet_actions * actions,
                                                  void *tcp_data, bool isIpv4) {
     if ((void *)(tcp_data + sizeof(struct dns_header_tcp)) > cursor.data_end)
         return 1;
@@ -1616,7 +1614,7 @@ __always_inline __u8 __parse_skb_non_standard_tcp(struct skb_cursor cursor, stru
     if ((void *)(tcp + 1) > cursor.data_end)
         return 1;
 
-    __u8 __non_standard_port_dpi = actions.parse_dns_payload_non_standard_port_tcp(&cursor, skb,
+    __u8 __non_standard_port_dpi = actions->parse_dns_payload_non_standard_port_tcp(&cursor, skb,
                                                                                   dns_payload, dns);
 
     if (__non_standard_port_dpi == 0) {
@@ -1952,26 +1950,26 @@ __always_inline void __skb_l3_dnat_v6(struct ipv6hdr *ipv6) {
 
 
 /*
+    init all the fuctionr ref pointers to parse each layer of kernel network stack raw from skb 
     For tcp traffic all deep parsing in kernel   over TCP streams carrying frahmented DNS traffic must be enforced over the interceptors on DNS server.
     For DPI over TCP streams over DNS, filter must be via user space proxy filter through envoy, and the kernel TC should not be used for this, rather the deep security. in passive mode 
 */  
 static
-__always_inline struct packet_actions packet_class_action(struct packet_actions actions) {
-    actions.cursor_init = &cursor_init;
-    actions.parse_eth = &parse_eth;
-    actions.parse_ipv4 = &parse_ipv4;
-    actions.parse_ipv6 = &parse_ipv6;
-    actions.parse_udp = &parse_udp;
-    actions.parse_tcp = &parse_tcp;
-    actions.parse_dns_header_size = &parse_dns_header_size;
-    actions.parse_dns_payload_transport_udp = &parse_dns_payload_udp;
-    actions.parse_dns_payload_transport_tcp = &parse_dns_payload_tcp; 
-    actions.parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
-    actions.parse_dns_payload_memsafet_payload_transport_tcp = &parse_dns_payload_memsafet_payload_transport_tcp;
-    actions.parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
-    actions.parse_dns_payload_non_standard_port_tcp = &parse_dns_payload_non_standard_port_tcp;
-    actions.parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
-    return actions;
+__always_inline void packet_actions_init(struct packet_actions * actions) {
+    actions->cursor_init = &cursor_init;
+    actions->parse_eth = &parse_eth;
+    actions->parse_ipv4 = &parse_ipv4;
+    actions->parse_ipv6 = &parse_ipv6;
+    actions->parse_udp = &parse_udp;
+    actions->parse_tcp = &parse_tcp;
+    actions->parse_dns_header_size = &parse_dns_header_size;
+    actions->parse_dns_payload_transport_udp = &parse_dns_payload_udp;
+    actions->parse_dns_payload_transport_tcp = &parse_dns_payload_tcp; 
+    actions->parse_dns_payload_memsafet_payload = &parse_dns_payload_memsafet_payload;
+    actions->parse_dns_payload_memsafet_payload_transport_tcp = &parse_dns_payload_memsafet_payload_transport_tcp;
+    actions->parse_dns_payload_non_standard_port = &parse_dns_payload_non_standard_port;
+    actions->parse_dns_payload_non_standard_port_tcp = &parse_dns_payload_non_standard_port_tcp;
+    actions->parse_dns_payload_queries_section = &parse_dns_qeury_type_section;
 }
 
 static 
@@ -1996,8 +1994,7 @@ int classify(struct __sk_buff *skb){
     struct skb_cursor cursor; 
     struct packet_actions actions;
 
-    actions.packet_class_action = &packet_class_action;
-    actions = actions.packet_class_action(actions);
+    packet_actions_init(&actions);
 
     struct ethhdr *eth;
     struct iphdr *ip; 
@@ -2090,7 +2087,8 @@ int classify(struct __sk_buff *skb){
                 struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
                 __u32 br_index = 4; 
 
-                __u32 isAggressiveExfilsec = 1;
+                __u32 isAggressiveExfilsec = 1; // aggressively hunts process for DNS exfil over UDP until every packet is prevented 
+                                                // passive or less secure allows to passthrough but actively start threat hunt process tied to exfiltration attempt
                 if (config) {
                     __be32 redirect_address_from_config = config->RedirectIpv4;
                     dest_addr_route = bpf_htonl(redirect_address_from_config);
@@ -2184,7 +2182,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 if (__process_packet_clone_redirection_non_standard_port(skb, true, bpf_ntohs(udp->dest), 
-                                bpf_ntohs(udp->source), config) == 1) {
+                                bpf_ntohs(udp->source), true) == OVERLAY_TUNNEL_SUPICIOUS) {
                     return TC_FORWARD;
                 }
 
@@ -2352,7 +2350,7 @@ int classify(struct __sk_buff *skb){
                 }
 
                 if (__process_packet_clone_redirection_non_standard_port(skb, true, bpf_ntohs(udp->dest), 
-                                bpf_ntohs(udp->source), config) == 1) {
+                                bpf_ntohs(udp->source), true) == OVERLAY_TUNNEL_SUPICIOUS) {
                     return TC_FORWARD;
                 }
 

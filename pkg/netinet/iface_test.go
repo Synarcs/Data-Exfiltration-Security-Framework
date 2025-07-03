@@ -12,8 +12,7 @@ var iface *NetIface
 
 func init() {
 
-	ctx := context.Background()
-	utils.NewLogger(ctx)
+	utils.NewLogger(context.Background())
 
 	iface = NewNetIface()
 	iface.ReadInterfaces(false)

@@ -205,7 +205,9 @@ func (c *StreamConsumer) ControllErInferBenignConsumer(ctx context.Context,
 				return
 			}
 		}
-		utils.Log("eBPF Agent block to consume inferred malicious events from consumer")
+		if utils.DEBUG {
+			utils.Log("eBPF Agent block to consume inferred malicious events from consumer")
+		}
 		msg, err := consumer.ReadMessage(ctx)
 		if err != nil {
 			c.ConsumerErroChan <- err

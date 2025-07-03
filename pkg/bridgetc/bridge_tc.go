@@ -42,6 +42,8 @@ func NewBridgeTCFilters(ifaceHandler *netinet.NetIface,
 	}
 }
 
+// Attach Tc qdisc over prior legacy TC as clsact qdisc and ebpf filter
+// TODO: add biderectional support for TCX and netkit  later over veth bridge pair on netdev for faster SKB enqueue and IRQ less overhead over moving SKB across netdev (east-west traffic)
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context,
 	prog *ebpf.Program, isEgress bool) error {
 	if err := rlimit.RemoveMemlock(); err != nil {

@@ -28,7 +28,7 @@ import (
 	onnx "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
-	controllerrpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc"
+	controllerrpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/controller"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tracepoint/uapimac"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"

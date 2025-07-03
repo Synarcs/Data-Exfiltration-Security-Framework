@@ -27,6 +27,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
@@ -493,7 +494,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		/// used as a processing input for standard tensor vectors for the deep learning model
 		featureVectorsFloat := model.GenerateFloatVectors(features, tun.Onnx)
 		if tun.Onnx.StaticRuntimeChecks(featureVectorsFloat, true) == model.DEEP_LEXICAL_INFERENCING {
-			client, conn, err := model.GetInferenceUnixClient(true)
+			client, conn, err := inference.GetInferenceUnixClient(true)
 
 			if err != nil {
 				utils.Log("Error Gettting report inference socket for inference")
