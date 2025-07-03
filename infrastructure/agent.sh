@@ -55,7 +55,8 @@ sudo apt update -y && sudo apt install -y \
     libbz2-dev \
     keyutils \
     libkeyutils-dev \
-    policycoreutils-dev 
+    policycoreutils-dev \
+    libboost-all-dev  # unary rpc for async thread pool in cc for high throughput low latency ttrpc inference processing
 
 # dependencies for pprof flamegraph and other graph visualization support 
 pprof=1

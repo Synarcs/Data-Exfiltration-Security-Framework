@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.21.12
-// source: exfil_sec.proto
+// source: exfil_sec_controller.proto
 
 package exfil_sec_api
 
@@ -189,7 +189,7 @@ var NodeAgentFeatureService_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "exfil_sec.proto",
+	Metadata: "exfil_sec_controller.proto",
 }
 
 const (
@@ -327,5 +327,5 @@ var NodeAgentCryptoService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "exfil_sec.proto",
+	Metadata: "exfil_sec_controller.proto",
 }

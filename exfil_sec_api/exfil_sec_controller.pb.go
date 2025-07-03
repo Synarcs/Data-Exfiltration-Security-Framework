@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v3.21.12
-// source: exfil_sec.proto
+// source: exfil_sec_controller.proto
 
 package exfil_sec_api
 
@@ -51,11 +51,11 @@ func (x DNS_MALICIOUS_FLAGS) String() string {
 }
 
 func (DNS_MALICIOUS_FLAGS) Descriptor() protoreflect.EnumDescriptor {
-	return file_exfil_sec_proto_enumTypes[0].Descriptor()
+	return file_exfil_sec_controller_proto_enumTypes[0].Descriptor()
 }
 
 func (DNS_MALICIOUS_FLAGS) Type() protoreflect.EnumType {
-	return &file_exfil_sec_proto_enumTypes[0]
+	return &file_exfil_sec_controller_proto_enumTypes[0]
 }
 
 func (x DNS_MALICIOUS_FLAGS) Number() protoreflect.EnumNumber {
@@ -64,7 +64,7 @@ func (x DNS_MALICIOUS_FLAGS) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use DNS_MALICIOUS_FLAGS.Descriptor instead.
 func (DNS_MALICIOUS_FLAGS) EnumDescriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{0}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{0}
 }
 
 type KERNEL_KEYRING_OPS_TYPES int32
@@ -100,11 +100,11 @@ func (x KERNEL_KEYRING_OPS_TYPES) String() string {
 }
 
 func (KERNEL_KEYRING_OPS_TYPES) Descriptor() protoreflect.EnumDescriptor {
-	return file_exfil_sec_proto_enumTypes[1].Descriptor()
+	return file_exfil_sec_controller_proto_enumTypes[1].Descriptor()
 }
 
 func (KERNEL_KEYRING_OPS_TYPES) Type() protoreflect.EnumType {
-	return &file_exfil_sec_proto_enumTypes[1]
+	return &file_exfil_sec_controller_proto_enumTypes[1]
 }
 
 func (x KERNEL_KEYRING_OPS_TYPES) Number() protoreflect.EnumNumber {
@@ -113,7 +113,7 @@ func (x KERNEL_KEYRING_OPS_TYPES) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use KERNEL_KEYRING_OPS_TYPES.Descriptor instead.
 func (KERNEL_KEYRING_OPS_TYPES) EnumDescriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{1}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{1}
 }
 
 type KERNEL_KEYRING_TYPES int32
@@ -149,11 +149,11 @@ func (x KERNEL_KEYRING_TYPES) String() string {
 }
 
 func (KERNEL_KEYRING_TYPES) Descriptor() protoreflect.EnumDescriptor {
-	return file_exfil_sec_proto_enumTypes[2].Descriptor()
+	return file_exfil_sec_controller_proto_enumTypes[2].Descriptor()
 }
 
 func (KERNEL_KEYRING_TYPES) Type() protoreflect.EnumType {
-	return &file_exfil_sec_proto_enumTypes[2]
+	return &file_exfil_sec_controller_proto_enumTypes[2]
 }
 
 func (x KERNEL_KEYRING_TYPES) Number() protoreflect.EnumNumber {
@@ -162,7 +162,7 @@ func (x KERNEL_KEYRING_TYPES) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use KERNEL_KEYRING_TYPES.Descriptor instead.
 func (KERNEL_KEYRING_TYPES) EnumDescriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{2}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{2}
 }
 
 type KERNEL_KEYRING_KEY_TYPES int32
@@ -198,11 +198,11 @@ func (x KERNEL_KEYRING_KEY_TYPES) String() string {
 }
 
 func (KERNEL_KEYRING_KEY_TYPES) Descriptor() protoreflect.EnumDescriptor {
-	return file_exfil_sec_proto_enumTypes[3].Descriptor()
+	return file_exfil_sec_controller_proto_enumTypes[3].Descriptor()
 }
 
 func (KERNEL_KEYRING_KEY_TYPES) Type() protoreflect.EnumType {
-	return &file_exfil_sec_proto_enumTypes[3]
+	return &file_exfil_sec_controller_proto_enumTypes[3]
 }
 
 func (x KERNEL_KEYRING_KEY_TYPES) Number() protoreflect.EnumNumber {
@@ -211,7 +211,7 @@ func (x KERNEL_KEYRING_KEY_TYPES) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use KERNEL_KEYRING_KEY_TYPES.Descriptor instead.
 func (KERNEL_KEYRING_KEY_TYPES) EnumDescriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{3}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{3}
 }
 
 type ExfilDomains struct {
@@ -227,7 +227,7 @@ type ExfilDomains struct {
 
 func (x *ExfilDomains) Reset() {
 	*x = ExfilDomains{}
-	mi := &file_exfil_sec_proto_msgTypes[0]
+	mi := &file_exfil_sec_controller_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -239,7 +239,7 @@ func (x *ExfilDomains) String() string {
 func (*ExfilDomains) ProtoMessage() {}
 
 func (x *ExfilDomains) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[0]
+	mi := &file_exfil_sec_controller_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -252,7 +252,7 @@ func (x *ExfilDomains) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExfilDomains.ProtoReflect.Descriptor instead.
 func (*ExfilDomains) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{0}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ExfilDomains) GetDomain() string {
@@ -299,7 +299,7 @@ type ElfSignatureRequest struct {
 
 func (x *ElfSignatureRequest) Reset() {
 	*x = ElfSignatureRequest{}
-	mi := &file_exfil_sec_proto_msgTypes[1]
+	mi := &file_exfil_sec_controller_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +311,7 @@ func (x *ElfSignatureRequest) String() string {
 func (*ElfSignatureRequest) ProtoMessage() {}
 
 func (x *ElfSignatureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[1]
+	mi := &file_exfil_sec_controller_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +324,7 @@ func (x *ElfSignatureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ElfSignatureRequest.ProtoReflect.Descriptor instead.
 func (*ElfSignatureRequest) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{1}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ElfSignatureRequest) GetEBPFProgramPayload() []byte {
@@ -345,7 +345,7 @@ type ElfSignatureResponse struct {
 
 func (x *ElfSignatureResponse) Reset() {
 	*x = ElfSignatureResponse{}
-	mi := &file_exfil_sec_proto_msgTypes[2]
+	mi := &file_exfil_sec_controller_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -357,7 +357,7 @@ func (x *ElfSignatureResponse) String() string {
 func (*ElfSignatureResponse) ProtoMessage() {}
 
 func (x *ElfSignatureResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[2]
+	mi := &file_exfil_sec_controller_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -370,7 +370,7 @@ func (x *ElfSignatureResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ElfSignatureResponse.ProtoReflect.Descriptor instead.
 func (*ElfSignatureResponse) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{2}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ElfSignatureResponse) GetSignature() []byte {
@@ -405,7 +405,7 @@ type AgentKernelKeyringControllerCommandRequest struct {
 
 func (x *AgentKernelKeyringControllerCommandRequest) Reset() {
 	*x = AgentKernelKeyringControllerCommandRequest{}
-	mi := &file_exfil_sec_proto_msgTypes[3]
+	mi := &file_exfil_sec_controller_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -417,7 +417,7 @@ func (x *AgentKernelKeyringControllerCommandRequest) String() string {
 func (*AgentKernelKeyringControllerCommandRequest) ProtoMessage() {}
 
 func (x *AgentKernelKeyringControllerCommandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[3]
+	mi := &file_exfil_sec_controller_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -430,7 +430,7 @@ func (x *AgentKernelKeyringControllerCommandRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use AgentKernelKeyringControllerCommandRequest.ProtoReflect.Descriptor instead.
 func (*AgentKernelKeyringControllerCommandRequest) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{3}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AgentKernelKeyringControllerCommandRequest) GetCmd() []KERNEL_KEYRING_OPS_TYPES {
@@ -463,7 +463,7 @@ type AgentKernelKeyringControllerCommandResponse struct {
 
 func (x *AgentKernelKeyringControllerCommandResponse) Reset() {
 	*x = AgentKernelKeyringControllerCommandResponse{}
-	mi := &file_exfil_sec_proto_msgTypes[4]
+	mi := &file_exfil_sec_controller_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -475,7 +475,7 @@ func (x *AgentKernelKeyringControllerCommandResponse) String() string {
 func (*AgentKernelKeyringControllerCommandResponse) ProtoMessage() {}
 
 func (x *AgentKernelKeyringControllerCommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[4]
+	mi := &file_exfil_sec_controller_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +488,7 @@ func (x *AgentKernelKeyringControllerCommandResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use AgentKernelKeyringControllerCommandResponse.ProtoReflect.Descriptor instead.
 func (*AgentKernelKeyringControllerCommandResponse) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{4}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AgentKernelKeyringControllerCommandResponse) GetResponse() []bool {
@@ -507,7 +507,7 @@ type ExfillSecurityLengthLimits struct {
 
 func (x *ExfillSecurityLengthLimits) Reset() {
 	*x = ExfillSecurityLengthLimits{}
-	mi := &file_exfil_sec_proto_msgTypes[5]
+	mi := &file_exfil_sec_controller_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -519,7 +519,7 @@ func (x *ExfillSecurityLengthLimits) String() string {
 func (*ExfillSecurityLengthLimits) ProtoMessage() {}
 
 func (x *ExfillSecurityLengthLimits) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[5]
+	mi := &file_exfil_sec_controller_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -532,7 +532,7 @@ func (x *ExfillSecurityLengthLimits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExfillSecurityLengthLimits.ProtoReflect.Descriptor instead.
 func (*ExfillSecurityLengthLimits) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{5}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ExfillSecurityLengthLimits) GetDomainrangeExfilLimits() map[int32]int32 {
@@ -551,7 +551,7 @@ type ExfilDomainsLength struct {
 
 func (x *ExfilDomainsLength) Reset() {
 	*x = ExfilDomainsLength{}
-	mi := &file_exfil_sec_proto_msgTypes[6]
+	mi := &file_exfil_sec_controller_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -563,7 +563,7 @@ func (x *ExfilDomainsLength) String() string {
 func (*ExfilDomainsLength) ProtoMessage() {}
 
 func (x *ExfilDomainsLength) ProtoReflect() protoreflect.Message {
-	mi := &file_exfil_sec_proto_msgTypes[6]
+	mi := &file_exfil_sec_controller_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -576,7 +576,7 @@ func (x *ExfilDomainsLength) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExfilDomainsLength.ProtoReflect.Descriptor instead.
 func (*ExfilDomainsLength) Descriptor() ([]byte, []int) {
-	return file_exfil_sec_proto_rawDescGZIP(), []int{6}
+	return file_exfil_sec_controller_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ExfilDomainsLength) GetLen() int64 {
@@ -586,11 +586,11 @@ func (x *ExfilDomainsLength) GetLen() int64 {
 	return 0
 }
 
-var File_exfil_sec_proto protoreflect.FileDescriptor
+var File_exfil_sec_controller_proto protoreflect.FileDescriptor
 
-const file_exfil_sec_proto_rawDesc = "" +
+const file_exfil_sec_controller_proto_rawDesc = "" +
 	"\n" +
-	"\x0fexfil_sec.proto\x12\fexfil_kernel\"\xa0\x02\n" +
+	"\x1aexfil_sec_controller.proto\x12\fexfil_kernel\"\xa0\x02\n" +
 	"\fExfilDomains\x12\x16\n" +
 	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x10\n" +
 	"\x03tld\x18\x02 \x01(\tR\x03tld\x12 \n" +
@@ -645,20 +645,20 @@ const file_exfil_sec_proto_rawDesc = "" +
 	"\x15EBPFKeyringController\x128.exfil_kernel.AgentKernelKeyringControllerCommandRequest\x1a9.exfil_kernel.AgentKernelKeyringControllerCommandResponseBUZSgithub.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_apib\x06proto3"
 
 var (
-	file_exfil_sec_proto_rawDescOnce sync.Once
-	file_exfil_sec_proto_rawDescData []byte
+	file_exfil_sec_controller_proto_rawDescOnce sync.Once
+	file_exfil_sec_controller_proto_rawDescData []byte
 )
 
-func file_exfil_sec_proto_rawDescGZIP() []byte {
-	file_exfil_sec_proto_rawDescOnce.Do(func() {
-		file_exfil_sec_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_exfil_sec_proto_rawDesc), len(file_exfil_sec_proto_rawDesc)))
+func file_exfil_sec_controller_proto_rawDescGZIP() []byte {
+	file_exfil_sec_controller_proto_rawDescOnce.Do(func() {
+		file_exfil_sec_controller_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_exfil_sec_controller_proto_rawDesc), len(file_exfil_sec_controller_proto_rawDesc)))
 	})
-	return file_exfil_sec_proto_rawDescData
+	return file_exfil_sec_controller_proto_rawDescData
 }
 
-var file_exfil_sec_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_exfil_sec_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_exfil_sec_proto_goTypes = []any{
+var file_exfil_sec_controller_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_exfil_sec_controller_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_exfil_sec_controller_proto_goTypes = []any{
 	(DNS_MALICIOUS_FLAGS)(0),                            // 0: exfil_kernel.DNS_MALICIOUS_FLAGS
 	(KERNEL_KEYRING_OPS_TYPES)(0),                       // 1: exfil_kernel.KERNEL_KEYRING_OPS_TYPES
 	(KERNEL_KEYRING_TYPES)(0),                           // 2: exfil_kernel.KERNEL_KEYRING_TYPES
@@ -673,7 +673,7 @@ var file_exfil_sec_proto_goTypes = []any{
 	nil,                                                 // 11: exfil_kernel.ExfilDomains.StatusEntry
 	nil,                                                 // 12: exfil_kernel.ExfillSecurityLengthLimits.DomainrangeExfilLimitsEntry
 }
-var file_exfil_sec_proto_depIdxs = []int32{
+var file_exfil_sec_controller_proto_depIdxs = []int32{
 	11, // 0: exfil_kernel.ExfilDomains.status:type_name -> exfil_kernel.ExfilDomains.StatusEntry
 	1,  // 1: exfil_kernel.AgentKernelKeyringControllerCommandRequest.cmd:type_name -> exfil_kernel.KERNEL_KEYRING_OPS_TYPES
 	2,  // 2: exfil_kernel.AgentKernelKeyringControllerCommandRequest.ringTypes:type_name -> exfil_kernel.KERNEL_KEYRING_TYPES
@@ -697,27 +697,27 @@ var file_exfil_sec_proto_depIdxs = []int32{
 	0,  // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_exfil_sec_proto_init() }
-func file_exfil_sec_proto_init() {
-	if File_exfil_sec_proto != nil {
+func init() { file_exfil_sec_controller_proto_init() }
+func file_exfil_sec_controller_proto_init() {
+	if File_exfil_sec_controller_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exfil_sec_proto_rawDesc), len(file_exfil_sec_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exfil_sec_controller_proto_rawDesc), len(file_exfil_sec_controller_proto_rawDesc)),
 			NumEnums:      4,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
-		GoTypes:           file_exfil_sec_proto_goTypes,
-		DependencyIndexes: file_exfil_sec_proto_depIdxs,
-		EnumInfos:         file_exfil_sec_proto_enumTypes,
-		MessageInfos:      file_exfil_sec_proto_msgTypes,
+		GoTypes:           file_exfil_sec_controller_proto_goTypes,
+		DependencyIndexes: file_exfil_sec_controller_proto_depIdxs,
+		EnumInfos:         file_exfil_sec_controller_proto_enumTypes,
+		MessageInfos:      file_exfil_sec_controller_proto_msgTypes,
 	}.Build()
-	File_exfil_sec_proto = out.File
-	file_exfil_sec_proto_goTypes = nil
-	file_exfil_sec_proto_depIdxs = nil
+	File_exfil_sec_controller_proto = out.File
+	file_exfil_sec_controller_proto_goTypes = nil
+	file_exfil_sec_controller_proto_depIdxs = nil
 }

@@ -102,7 +102,8 @@ install-dep:
 
 proto_path ?= exfil_sec_api/proto
 go_out ?= exfil_sec_api
-proto_file ?= exfil_sec.proto
+proto_file_c := exfil_sec_controller.proto
+proto_file_i := exfil_sec_inference.proto
 
 .PHONY: build-framework-protos
 build-framework-protos:
@@ -110,7 +111,13 @@ build-framework-protos:
 	protoc --proto_path="$(proto_path)" \
 		--go_out="paths=source_relative:$(go_out)" \
 		--go-grpc_out="paths=source_relative,require_unimplemented_servers=false:$(go_out)" \
-		"$(proto_path)/$(proto_file)"
+		"$(proto_path)/$(proto_file_c)"
+
+	protoc --proto_path="$(proto_path)" \
+		--go_out="paths=source_relative:$(go_out)" \
+		--go-grpc_out="paths=source_relative,require_unimplemented_servers=false:$(go_out)" \
+		"$(proto_path)/$(proto_file_i)"
+	
 
 .PHONY: build-proto-dep
 build-proto-dep: 

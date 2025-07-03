@@ -4,6 +4,7 @@ package exfil_kernel;
 
 option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_api";
 // the proto is initially written for multi-layer security with control plane verifying progs, and signatures for the eBPF progs at the endpoint over the data plane
+// covers all the proto the dataplane must use for mtls over http/2 bidirectional communication with controller 
 
 enum DNS_MALICIOUS_FLAGS {
     MALICIOUS  = 0;

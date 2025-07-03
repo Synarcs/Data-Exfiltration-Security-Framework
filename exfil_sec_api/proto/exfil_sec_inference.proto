@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package exfil_kernel;
+
+option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_api";
+
+
