@@ -59,9 +59,14 @@ type (
 	//  config usd to boot the DNS node agent in user space and inject kernel eBPF programs
 
 	NodeAgentConfig struct {
-		AgentModeAggressive bool `yaml:"agentModeAggressive" reflect:"agentModeAggressive"`
-		AgentModeIsolated   bool `yaml:"agentModeIsolated" reflect:"agentModeIsolated"`
-		StreamServers       struct {
+		Agent struct {
+			AgentModeAggressive            bool `yaml:"agentModeAggressive" reflect:"agentModeAggressive"`
+			AgentModeIsolated              bool `yaml:"agentModeIsolated" reflect:"agentModeIsolated"`
+			IngressMaliciousCacheTTL       int  `yaml:"ingressMaliciousCacheTTL" reflect:"ingressMaliciousCacheTTL"`
+			EgressMaliciousCacheTTL        int  `yaml:"egressMaliciousCacheTTL" reflect:"egressMaliciousCacheTTL"`
+			GlobalMaliciousprocessCacheTTl int  `yaml:"globalMaliciousprocessCacheTTl" reflect:"globalMaliciousprocessCacheTTl"`
+		}
+		StreamServers struct {
 			Host string `yaml:"host" reflect:"host"`
 			Ip   string `yaml:"ip" reflect:"ip"`
 			Port string `yaml:"port" reflect:"port"`
@@ -162,7 +167,7 @@ func (nn *Config) ReadNodeAgentConfig(customConfigPath string) error {
 }
 
 func (nn *Config) GetAgentAggressiveDpiMode() bool {
-	return nn.AgentBootConfig.AgentModeAggressive
+	return nn.AgentBootConfig.Agent.AgentModeAggressive
 }
 
 func (nn *Config) GetAgentConfig() *NodeAgentConfig {

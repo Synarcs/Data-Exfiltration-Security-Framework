@@ -306,10 +306,28 @@ func main() {
 	hash := &crypto.Hash{}
 	hash.GetRandomBootSkbMark()
 
-	// io Disk Cache Inodes for Node agent
-	if err := utils.InitCache(); err != nil {
-		panic(err.Error())
+	var agentConfigLoader conf.AgentConfig = &conf.Config{}
+	globalErrorKernelHandlerChannel := utils.InitGlobalErrorControlChannel()
+
+	utils.Log("Endpoint Agent: Configuring itself with provided bootstrap config file path")
+	if nodeAgentCliOptions.AgentConfigPath != "" {
+		if err := agentConfigLoader.ReadNodeAgentConfig(nodeAgentCliOptions.AgentConfigPath); err != nil {
+			panic(err.Error())
+		}
+	} else {
+		if err := agentConfigLoader.ReadNodeAgentConfig(""); err != nil {
+			panic(err.Error())
+		}
 	}
+	globalConfig := agentConfigLoader.GetAgentConfig()
+
+	// io Disk Cache Inodes for Node agent
+	utils.Log("Endpoint Agent: configure the cache")
+	utils.InitCache(&utils.CacheConfig{
+		IngressMaliciousCacheTTL:       globalConfig.Agent.IngressMaliciousCacheTTL,
+		EgressMaliciousCacheTTL:        globalConfig.Agent.EgressMaliciousCacheTTL,
+		GlobalMaliciousprocessCacheTTl: globalConfig.Agent.GlobalMaliciousprocessCacheTTl,
+	})
 
 	topDomains, err := utils.ReadTldDomainsData()
 
@@ -329,19 +347,6 @@ func main() {
 		// configure the k8s Admission mutation webhook to inject k8s eBPF DNS as a sidecar for all pods labelled as security required for eBPF node agent
 		return
 	}
-
-	globalErrorKernelHandlerChannel := utils.InitGlobalErrorControlChannel()
-	var agentConfigLoader conf.AgentConfig = &conf.Config{}
-	if nodeAgentCliOptions.AgentConfigPath != "" {
-		if err := agentConfigLoader.ReadNodeAgentConfig(nodeAgentCliOptions.AgentConfigPath); err != nil {
-			panic(err.Error())
-		}
-	} else {
-		if err := agentConfigLoader.ReadNodeAgentConfig(""); err != nil {
-			panic(err.Error())
-		}
-	}
-	globalConfig := agentConfigLoader.GetAgentConfig()
 
 	if utils.DEBUG {
 		utils.Log("The Node Agent booted with global config", agentConfigLoader.GetAgentConfig())

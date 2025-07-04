@@ -94,9 +94,8 @@ func IsTunnelSniffForLargeMaliciousThresholdRequired() bool {
 
 var (
 	// dont use spin lock user space write a map from userspace, and kernel always read it, and never write,
-	kernelMaliciousTransferPortUpdateLock sync.Mutex = sync.Mutex{}
-	kernelMaliciousTransferPortDelete     sync.Mutex = sync.Mutex{}
-	kernelUpdateMaliciousReferenceLock    sync.Mutex = sync.Mutex{}
+	kernelMaliciousTransferPortDelete  sync.Mutex = sync.Mutex{}
+	kernelUpdateMaliciousReferenceLock sync.Mutex = sync.Mutex{}
 
 	// map 3  (proc --> isMal (bool))
 	updateMapMaliciousProcIdLock sync.Mutex = sync.Mutex{}
@@ -373,7 +372,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 	for {
 		data, _, err := handler.ZeroCopyReadPacketData()
 		if err != nil {
-			return
+			continue
 		}
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 		go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)

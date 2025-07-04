@@ -794,7 +794,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 	isIpv6 := !isIpv4
 
-	if !tc.config.GetAgentConfig().AgentModeAggressive {
+	if !tc.config.GetAgentConfig().Agent.AgentModeAggressive {
 		goto processPacketForNonAggresiveDPI
 	}
 

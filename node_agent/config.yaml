@@ -43,9 +43,14 @@ rlimitConfig:
   tb:
     maxTokens: 10000
 
-agentModeAggressive: true
-agentModeIsolated: false # assumes this agent is alone runnin at endpoint and not connected to control plane, the agent does not get any updates or malicious stream process from control plane 
 
+agent:
+  agentModeAggressive: true
+  agentModeIsolated: false # assumes this agent is alone runnin at endpoint and not connected to control plane, the agent does not get any updates or malicious stream process from control plane 
+  # the required store time in sec for the caceh to stay hot and prevent the c2 implant bruteforce and bring down the agent 
+  ingressMaliciousCacheTTL: 50 
+  egressMaliciousCacheTTL: 80
+  globalMaliciousprocessCacheTTl: 15
 
 # Add the tb volume config for volume based rate limit over egress tc in kernel 
 
