@@ -535,7 +535,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 			err := dnsLimitsMap.Put(
 				index, limit)
 			if err != nil {
-				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
+				utils.Log("error loading the dns limits in kernel from userspace agent, kernel default limits apply for feature ", limit)
 			}
 		}
 

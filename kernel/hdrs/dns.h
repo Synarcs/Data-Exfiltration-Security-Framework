@@ -29,12 +29,18 @@ enum MALICIOUS_FLAGS {
 enum OVERLAY_DNS_TUNNEL_FLAGS {
     OVERLAY_TUNNEL_DETECTED = 0,
     OVERLAY_TUNNEL_SUPICIOUS,
+    OVERLAY_TUNNEL_BENIGN // this an addon check for compiler the kernel did not find the loaded proper config from endpoint agent in userspace 
 } overlay_flags;
 
 enum OVERLAY_ENCAP_TUNNEL_FLAGS {
     OVERLAY_VXLAN_TUNNEL_DETECTED = 0,
     OVERLAY_VXLAN_TUNNEL_NOT_DETECTED
 } overlay_encap_flags;
+
+enum OVERLAY_DNS_RANDOM_UDP_PORT {
+    OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_DETECTED = 0,
+    OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_UNDETECTED = 1
+} overlay_dns_port_flags;
 
 #ifndef DNS_EGRESS_PORT
     #define DNS_EGRESS_PORT 53 
