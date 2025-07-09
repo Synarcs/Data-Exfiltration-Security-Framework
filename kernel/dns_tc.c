@@ -175,10 +175,12 @@ struct exfil_security_egrees_clone_redirect_map_non_standard_port {
 // make the map struct more fine grained to prevent timing attacks from user space malware 
 struct checkSum_redirect_struct_value {
     __u16 checksum; // the l3 checksum for the kernel packet before redirection 
-    __u64 kernel_timets; // 
+    __u64 kernel_timets; // system NMI safe kernel time for brute force timing attack prevention 
     __u32 procId; // send the process info to user space for layer over kernel syscall layer to kill this process if found malicious 
     __u32 threadId; // thread inn process task_struct comm used for sending this packet 
     __u32 skb_index;
+    __u32 l3_dest_ip;
+    // TODO: fix for ipv6 either for new maps or stuffed packed in memory in checksum map 
 } __attribute__((packed));
 
 // stores inofrmation regarding checksum and the redirection of the packet from kernel 
@@ -406,13 +408,13 @@ struct dns_volume_stats {
         } while (0);
 
 // drop in kernel and let the userspace agent monitor it in depth for packet drop cycle ipv4
-#define PROCESS_KERNEL_PACKET_DROP_IPV4(skb, current_dest_addr, dest_addr_route_malicious, config, br_index) \
+#define PROCESS_KERNEL_PACKET_DROP_IPV4(__skb, __current_dest_addr, __dest_addr_route_malicious, __config, __br_index) \
     do { \
-        if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route_malicious) == TC_DROP) \
+        if(__skb_l3_dnat(__skb, &__current_dest_addr, &__dest_addr_route_malicious) == TC_DROP) \
             return TC_DROP;                             \
         __handle_kernel_map_redirection_drop_count();   \
         SKB_RANDOM_MARK_PER_NETFLOW(skb, config)        \
-        return bpf_redirect(br_index, BPF_F_INGRESS);   \
+        return bpf_redirect(__br_index, BPF_F_INGRESS);   \
     } while(0); 
 
 // drop in kernel and let the userspace agent monitor it in depth for packet drop cycle ipv6
@@ -1836,12 +1838,14 @@ out:
 
 
 static 
-__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum, __u16 sport, __u32 skb_if_index){
+__always_inline long __update_checksum_dns_redirect_map_ipv4(__u32 transaction_id, __u16 ipv4_checksum, __be32 l3_daddr,
+                    __u16 sport, __u32 skb_if_index){
     __u64 ipv4_kernel_time = bpf_ktime_get_ns();
     struct checkSum_redirect_struct_value layer3_checksum_ipv4 = { 
         .checksum =  ipv4_checksum, 
         .kernel_timets = ipv4_kernel_time,
-        .skb_index = skb_if_index
+        .skb_index = skb_if_index,
+        .l3_dest_ip = bpf_ntohl(l3_daddr),
     };
     if (verify_kernel_version_support_task_comm()) {
         struct __kernel_proc_struct_info * proc_info  = __get_process_info(false);
@@ -2126,7 +2130,9 @@ int classify(struct __sk_buff *skb){
                 __u16 sport = bpf_ntohs(udp->source);
                 struct checkSum_redirect_struct_value * map_layer3_redirect_value = bpf_map_lookup_elem(&exfil_security_egress_redirect_map, &transaction_id);
                 if (!map_layer3_redirect_value) {
-                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, sport, skb->ifindex) < 0) { // kernel parsed dns query id within kernel 
+                    // store the l3 for dnat per query for higher security and unwanted loop and requeu over same netdev with different hash post scan in userspace
+                    if (__update_checksum_dns_redirect_map_ipv4(transaction_id, ip_checksum, 
+                                ip->daddr, sport, skb->ifindex) < 0) { // kernel parsed dns query id within kernel 
                         #if DEBUG 
                             bpf_printk("Error updating the kernel redirect map, the packet is dropped since kernel cannot monitor the \
                                                 packet redirect lifecycle");

@@ -18,4 +18,5 @@ class OnnxRequestProcessingHandler {
 int main() {
     unique_ptr<OnnxRequestProcessingHandler> handler = make_unique<OnnxRequestProcessingHandler>();
     cout << "checking the loaded libboost modules " << endl;
+    return 0;
 }

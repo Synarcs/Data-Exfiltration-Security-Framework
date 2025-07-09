@@ -50,6 +50,7 @@ type DPIRedirectionKernelMap struct {
 	ProcId       uint32
 	ThreadId     uint32
 	SkbIndex     uint32
+	L3Address    uint32
 }
 
 // Page align with ring buff page size and alighment of bytes

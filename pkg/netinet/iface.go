@@ -142,15 +142,20 @@ func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer
 
 	configCustomDefaultLocalgw := func(resolverConfig *DnsResolverServer) {
 		if resolverConfig.Ipv4 != nil {
-			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv4
+			// take the last one s the default upsteam which point to the local router in local subnet in most cases
+			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv4[0]
 		} else {
 			nf.PhysicalRouterGatewayV4 = gw.To4()
 		}
+		utils.Log("the endpoint agent loaded with upstream systemd resolved Ipv4 address ::", nf.PhysicalRouterGatewayV4) // the default ip and associated netdev systemd resolved provide for ipv4 resolution
+
 		if resolverConfig.Ipv6 != nil {
-			nf.PhysicalRouterGatewayV6 = resolverConfig.Ipv6
+			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv6[0]
 		} else {
 			nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
 		}
+		utils.Log("the endpoint agent loaded with upstream systemd resolved Ipv6 address ::", nf.PhysicalRouterGatewayV6) // the default ip and associated netdev systemd resolved provide for ipv4 resolution
+
 	}
 
 	if dnsResolver == nil {
@@ -163,6 +168,13 @@ func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer
 		return
 	}
 	configCustomDefaultLocalgw(dnsResolver)
+}
+
+// makes sure the upstream dns resolver the agent booted does not DNAT what the original packet leaving is using from kernel post DPI in kernel
+func (nf *NetIface) UpstreamLinkoverAgentResolverIpv4(ddaddr uint32) (bool, string) {
+	destPacketAddr := utils.BigEndianToIPv4(ddaddr)
+	// fmt.Println(destPacketAddr, nf.PhysicalNodeBridgeIpv4.String())
+	return destPacketAddr == nf.PhysicalNodeBridgeIpv4.String(), destPacketAddr
 }
 
 func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {

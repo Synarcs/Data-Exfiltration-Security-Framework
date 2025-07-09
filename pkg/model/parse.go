@@ -198,13 +198,16 @@ func (d *DnsPacketGen) EvalOverallPacketProcessTime(dns layers.DNS, spec *ebpf.C
 }
 
 /*
-Rns inference over DL model and esends if non malicious ove AF_XDP OR AF_PACKET
+Runs inference over DL model and esends if non malicious ove AF_XDP OR AF_PACKET
+TODO: fix massive amount of functions args to the function, for custom config structs
 */
 func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	ethLayer, networkLayer, transportLayer, dnsLayer gopacket.Layer,
 	l3_bpfMap_checksum uint16, handler *pcap.Handle, isEgress bool, isIpv4, isUdp bool, spec *ebpf.Collection,
 	processInfo *utils.MaliciousKernelTaskCommExportedProcInfo, isPhysicalNetDevSniff bool,
-	egressLink netlink.Link, allowXDP bool) error {
+	egressLink netlink.Link, allowXDP bool,
+	customDnat bool,
+	customUpstreamDnsresolveIp string) error {
 
 	st := time.Now().Nanosecond()
 	if utils.DEBUG {
@@ -218,7 +221,11 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
 		// ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
-		ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		if customDnat {
+			ipv4.DstIP = net.ParseIP(customUpstreamDnsresolveIp)
+		} else {
+			ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+		}
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)

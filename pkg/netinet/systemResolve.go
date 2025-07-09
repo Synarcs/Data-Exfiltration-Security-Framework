@@ -16,8 +16,8 @@ import (
 )
 
 type DnsResolverServer struct {
-	Ipv4 net.IP
-	Ipv6 net.IP
+	Ipv4 []net.IP
+	Ipv6 []net.IP
 }
 
 const (
@@ -45,11 +45,12 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 			dnsServer := strings.Split(info, " ")
 			isIpv4 := net.ParseIP(dnsServer[1]).To4()
 			if isIpv4 != nil {
-				if dnsResolver.Ipv4 == nil {
-					dnsResolver.Ipv4 = isIpv4 // only take the ipv4 dns address with highest priority in systemd resolved
-				}
+				dnsResolver.Ipv4 = append(dnsResolver.Ipv4, isIpv4) // only take the ipv4 dns address with highest priority in systemd resolved
 			} else {
-				dnsResolver.Ipv6 = net.ParseIP(dnsServer[1]).To16()
+				ipv6 := net.ParseIP(dnsServer[1]).To16()
+				if ipv6 != nil {
+					dnsResolver.Ipv6 = append(dnsResolver.Ipv6, ipv6)
+				}
 			}
 		}
 	}

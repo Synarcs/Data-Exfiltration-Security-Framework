@@ -80,7 +80,6 @@ type (
 
 // atomic insert to initi DPI in kernel
 var atomic_random_port_tunnel_overlay_agent_analysis sync.Once
-var atomic_standard_port_dns_agent_analysis sync.Once
 
 var mapsToPinSharedProcKillMap []string
 
@@ -130,7 +129,6 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_SOCK_UDP_CONN_MAP,
 		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
 		events.EXFILL_SECURITY_KERNEL_CONFIG_MAP,
-		events.EXFIL_SECURITY_ERROR_PIPE_AGENT,
 	}
 
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
@@ -505,7 +503,6 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 				KernelTCSKBMark:         tc.Hash.SkbHash,
 			}
 
-			// DPI modes all over standard DNS transport UDP ports
 			if tc.config.GetAgentAggressiveDpiMode() {
 				kernelTCConfig.IsAgressiveSec = 1 // agressive DPI
 			} else {
@@ -629,7 +626,6 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 				index, limit)
 			if err != nil {
 				utils.Log("error loading the dns limits in kernel Default in Kernel Loaded BPF object")
-				return err
 			}
 		}
 
@@ -644,10 +640,6 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
 func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
-	utils.Log("init the tc tunnel filter for passive fultering standard transport port .....")
-	atomic_standard_port_dns_agent_analysis.Do(func() {
-		tc.InitTCTunnelExfilPrevention(ctx, true)
-	})
 }
 
 /*
@@ -815,13 +807,29 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			tc.GlobalErrorKernelHandlerChannel <- err
 			return
 		}
+
 		if isIpv4 && isUdp {
+			var agentDNSDefaultGwDnat bool = false
+			isSameResolver, destIp := tc.Interfaces.UpstreamLinkoverAgentResolverIpv4(ip_layer3_checksum_kernel_ts.L3Address)
+			if !isSameResolver {
+				var currupstreamL3Ip = utils.BigEndianToIPv4(ip_layer3_checksum_kernel_ts.L3Address)
+				if utils.DEBUG {
+					utils.Log("the current upstream converted l3 address unmatched from kernel to agent dest resolver ::: ", currupstreamL3Ip)
+				}
+				agentDNSDefaultGwDnat = true
+			}
+
+			// TODO: fix code redudnacies into a common utils
 			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
 				}, isPhysicalNetDevSniff, *egressLink,
-				tc.HasDiffPriorityQdiscFilter)
+				tc.HasDiffPriorityQdiscFilter,
+				// dnat custom upstream resolver config
+				agentDNSDefaultGwDnat,
+				destIp,
+			)
 			// ipv4 and udp
 		}
 		if !isIpv4 && isUdp {
@@ -831,7 +839,8 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
 				}, isPhysicalNetDevSniff, *egressLink,
-				tc.HasDiffPriorityQdiscFilter)
+				tc.HasDiffPriorityQdiscFilter,
+				false, "")
 		}
 	}
 
@@ -866,7 +875,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
 				}, isPhysicalNetDevSniff, *egressLink,
-				tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 		if !isIpv4 && !isUdp {
 			// ipv6 and tcp
@@ -874,7 +883,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, *egressLink, tc.HasDiffPriorityQdiscFilter) // physical netdev sniff resembles passive and not aggressive analysis and DPI
+				}, isPhysicalNetDevSniff, *egressLink, tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
 		}
 	}
 

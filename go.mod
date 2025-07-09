@@ -13,8 +13,8 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mdlayher/netlink v1.7.2
 	github.com/prometheus/client_golang v1.20.5
-	github.com/seccomp/libseccomp-golang v0.11.0
 	github.com/segmentio/kafka-go v0.4.47
+	github.com/shenwei356/countminsketch v0.0.0-20241203001942-fffc24a083a5
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
@@ -32,11 +32,10 @@ require (
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/lipgloss v1.0.0 // indirect
 	github.com/charmbracelet/x/ansi v0.4.2 // indirect
-	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/ttrpc v1.2.7 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -63,9 +62,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
-	github.com/shenwei356/countminsketch v0.0.0-20241203001942-fffc24a083a5 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/ti-mo/netfilter v0.5.2 // indirect

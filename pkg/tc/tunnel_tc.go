@@ -372,7 +372,7 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 	for {
 		data, _, err := handler.ZeroCopyReadPacketData()
 		if err != nil {
-			continue
+			return
 		}
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 		go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)

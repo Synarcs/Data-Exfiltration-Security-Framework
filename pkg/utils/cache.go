@@ -60,7 +60,7 @@ func InitCache(conf *CacheConfig) error {
 	return nil
 }
 
-// offload heavy task loaded lookup for performance to countminsketch
+// offload heavy task loaded lookup for performance to countminsketch, only if the cache become to heavy for lookup
 func InitCMS(ip string, ct int) error {
 	eps, delta := 0.0, 0.99
 	cms, err := countminsketch.New(uint(eps), uint(delta))

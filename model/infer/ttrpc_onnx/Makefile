@@ -8,7 +8,7 @@ CXXFLAGS ?= -O2 -Wall
 all: compile run 
 
 compile:
-	$(CXX) $(CXXFLAGS) -o infer  infer.cc
+	$(CXX) $(CXXFLAGS) -o infer main.cc
 
 run:
 	./infer
