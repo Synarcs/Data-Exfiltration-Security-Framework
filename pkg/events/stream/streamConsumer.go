@@ -113,7 +113,7 @@ func (consumer *StreamConsumer) VerifyBenignSLDRedirect(remoteC2Ips []string) []
 		if len(labels) <= 2 {
 			continue
 		}
-		tld := strings.Join(labels[2:], ".")
+		tld := strings.Join(labels[len(labels)-2:], ".")
 		if _, fd := consumer.TopDomainsCache.TopDomains.Load(tld); fd {
 			continue
 		}
