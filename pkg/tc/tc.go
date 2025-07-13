@@ -802,10 +802,17 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 			}
 		}
 
-		egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
-		if err != nil {
-			tc.GlobalErrorKernelHandlerChannel <- err
-			return
+		var egressLink netlink.Link
+		if len(tc.Interfaces.PhysicalLinks) > 1 {
+			// TODO: fix the broken ifindex emit from kernel for each packet extracked from (__sk_buff) running on attached tc filter at egress point
+			link, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
+			if err != nil {
+				tc.GlobalErrorKernelHandlerChannel <- err
+				return
+			}
+			egressLink = *link
+		} else {
+			egressLink = tc.Interfaces.PhysicalLinks[0]
 		}
 
 		if isIpv4 && isUdp {
@@ -824,7 +831,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, *egressLink,
+				}, isPhysicalNetDevSniff, egressLink,
 				tc.HasDiffPriorityQdiscFilter,
 				// dnat custom upstream resolver config
 				agentDNSDefaultGwDnat,
@@ -838,7 +845,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
 					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
 					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, *egressLink,
+				}, isPhysicalNetDevSniff, egressLink,
 				tc.HasDiffPriorityQdiscFilter,
 				false, "")
 		}

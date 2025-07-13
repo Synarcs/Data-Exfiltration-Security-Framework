@@ -354,7 +354,7 @@ struct dns_volume_stats {
         struct in6_addr dest_addr = ip->daddr;
         __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
         if (fd)
-            return true;
+            return DROP_L3_INTERNAL_FILTER_TRAFFIC;
         return false;
     }
 #endif
@@ -427,9 +427,9 @@ struct dns_volume_stats {
     } while(0);
 
 
-#define OVERLAY_DNS_TRANSFER_ACT(__skb, dport,sport,isPassiveDPI) \
+#define OVERLAY_DNS_TRANSFER_ACT(__skb, __dport, __sport, __isPassiveDPI) \
     do {    \
-        switch(__process_packet_clone_redirection_non_standard_port(__skb, dport, sport, isPassiveDPI)) { \
+        switch(__process_packet_clone_redirection_non_standard_port(__skb, __dport, __sport, __isPassiveDPI)) { \
             case OVERLAY_TUNNEL_DETECTED:   \
                 return TC_DROP;             \
             case OVERLAY_TUNNEL_SUPICIOUS:  \
@@ -640,7 +640,9 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u8 total_domain_length_exclude_tld = 0;
         // Iter through the Questions Count
         __u8 i = 0; __u8 j = 0; // iters
-        forn(qd_count, __u8, i) {
+        
+        #pragma unroll 
+        forn(qd_count, i) {
             __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
@@ -648,7 +650,8 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             
             // parse the QNAME
             // iter over the char labels in QNAME
-            forn(MAX_DNS_NAME_LENGTH, __u8, j) {
+            #pragma unroll(MAX_DNS_NAME_LENGTH)
+            forn(MAX_DNS_NAME_LENGTH, j) {
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
@@ -909,7 +912,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
         // start raw parsing DNS application data from SKB 
         #pragma unroll 
-        forn(qd_count, typeof(i), i) {
+        forn(qd_count, i) {
             __u16 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
 
@@ -917,7 +920,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
 
             // parse the QNAME
             #pragma unroll 
-            forn(MAX_DNS_NAME_LENGTH, typeof(j) , j){
+            forn(MAX_DNS_NAME_LENGTH, j){
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
                 __u8 label_len = *(__u8 *)  (dns_payload_buffer + offset);
@@ -2343,7 +2346,7 @@ int classify(struct __sk_buff *skb){
                     #if DEBUG
                         bpf_printk("Dropping the packet in Kernel Layer");
                     #endif
-                    PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
+		    PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
                 }
 
                 OVERLAY_DNS_TRANSFER_ACT(skb, bpf_ntohs(udp->dest), bpf_ntohs(udp->source), true);
@@ -2352,8 +2355,8 @@ int classify(struct __sk_buff *skb){
             else {
 
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
-                    EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
-                #endif
+		    EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
+		#endif
 
                 if (__parse_skb_non_standard(cursor, skb, &actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;

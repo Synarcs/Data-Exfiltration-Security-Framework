@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
@@ -104,6 +105,23 @@ func (consumer *StreamConsumer) ConfigureeBPFEgressHandlerForDynamicL3Blacklist(
 	consumer.NewStreamAckEvents(iface)
 }
 
+// since the agent always ask the most highest reputed upstream DNS resolver, the refractor based proxies redirection to benign domain is less likely, however ensure the l7 domain is not blacklisted in kernel if has any TOP benign SLD
+func (consumer *StreamConsumer) VerifyBenignSLDRedirect(remoteC2Ips []string) []string {
+	filteredDomains := []string{} // remote C2 server Ip's (redirectore's, core botnet C2 army servers)
+	for _, remoteControllerinferUpstreamC2Domain := range remoteC2Ips {
+		labels := strings.Split(remoteControllerinferUpstreamC2Domain, ".")
+		if len(labels) <= 2 {
+			continue
+		}
+		tld := strings.Join(labels[2:], ".")
+		if _, fd := consumer.TopDomainsCache.TopDomains.Load(tld); fd {
+			continue
+		}
+		filteredDomains = append(filteredDomains, remoteControllerinferUpstreamC2Domain)
+	}
+	return filteredDomains
+}
+
 func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Context, consumedeControllerEvent *events.RemoteStreamInferenceControllerAnalyzed) {
 	configMapIpv4 := consumer.EgresseBPFKernelTCCollection.Maps[events.EXFIL_SECURITY_EGRESS_L3_IPV4_DYNAMIC_NETPOOL_C2_FILTER]
 	// TODO Add support for ipv6 filter routing in kernel
@@ -114,8 +132,11 @@ func (consumer *StreamConsumer) AddL3FilterForTrafficOverKernelTC(ctx context.Co
 		return
 	}
 
+	if len(consumedeControllerEvent.Fqdn) != len(consumedeControllerEvent.ResolveAddressMaliciousC2Domains) {
+		return
+	}
 	// controller will always stream a valid ipv4, ipv6 l3 address to data plane
-	for _, remoteIpAddressInferedMaliciousController := range consumedeControllerEvent.ResolveAddressMaliciousC2Domains {
+	for _, remoteIpAddressInferedMaliciousController := range consumer.VerifyBenignSLDRedirect(consumedeControllerEvent.ResolveAddressMaliciousC2Domains) {
 		// convert to network order
 		ipv4littleEndianAddress := utils.GenerateBigEndianIpv4(remoteIpAddressInferedMaliciousController)
 		if _, fd := consumer.L3NodeFilterCache.Get(remoteIpAddressInferedMaliciousController); !fd {

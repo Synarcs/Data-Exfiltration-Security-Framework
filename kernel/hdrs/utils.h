@@ -9,17 +9,15 @@
 #include <linux/version.h>
 
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(_x, _y) __builtin_types_compatible_p(typeof((_x)), typeof((_y))) ? ((_x) > (_y) ? (_x) : (_y)) : (_x) 
+#define max(_x, _y) __builtin_types_compatible_p(typeof((_x)), typeof((_y))) ? ((_x) > (_y) ? (_y) : (_x)) : (_x)
 
 #define isUpper(a) ((a) - 'A' >= 0 && 'Z' - (a) >= 0)
 #define isLower(a) ((a) - 'a' >= 0 && 'z' - (a) >= 0)
 #define isDigit(a) ((a) - '0' >= 0 && '9' - (a) >= 0)
 
-#define div(a, b) ((a) / (b))
-
-#define forn(x, type, i) for (type i = 0; i < (x); i++)
-#define forin(x, y, type, i) for (type i = (x); i < (y); i++)
+#define forn(x, i) for (typeof(i) i = 0; i < (x); i++)
+#define forin(x, y, i) for (typeof(i) i = (x); i < (y); i++)
 
 // cursor to and other encap protocol information storing packet cursor information in skb 
 struct skb_cursor {
@@ -30,8 +28,7 @@ struct skb_cursor {
 struct vlan_hdr {
 	__be16	h_vlan_TCI;
 	__be16	h_vlan_encapsulated_proto;
-};
-
+} __attribute__((packed));
 
 struct __kernel_proc_struct_info {
     __u32 procId;

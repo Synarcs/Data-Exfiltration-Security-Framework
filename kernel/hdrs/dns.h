@@ -11,8 +11,8 @@
 #include <bpf/bpf_endian.h>
 
 //bpf map parameters
-#define MAX_SIZE 1024;
-#define MAX_ENTRIES 1024;
+#define MAX_SIZE 1024
+#define MAX_ENTRIES 1024
 
 #define DEBUG false    // works same way to log debug status for info inside kernel performing DPI
 #define ERR_DEBUG_RINGBUFF_EVENT true

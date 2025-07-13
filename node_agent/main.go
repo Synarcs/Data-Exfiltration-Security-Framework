@@ -370,12 +370,14 @@ func main() {
 		TopDomainsCache:   topDomains,
 	}
 
-	if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
-		utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
-	}
+	if !globalConfig.Agent.AgentModeIsolated {
+		if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
+			utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+		}
 
-	if err := streamConsumer.NewStreamKafkaConsumer(ctx); err != nil {
-		utils.Log("Error starting node agent data plane kafka consumer ", err.Error())
+		if err := streamConsumer.NewStreamKafkaConsumer(ctx); err != nil {
+			utils.Log("Error starting node agent data plane kafka consumer ", err.Error())
+		}
 	}
 
 	// load the model from onnx lib
