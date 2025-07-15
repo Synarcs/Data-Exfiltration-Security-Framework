@@ -10,7 +10,7 @@
 
 
 #define max(_x, _y) __builtin_types_compatible_p(typeof((_x)), typeof((_y))) ? ((_x) > (_y) ? (_x) : (_y)) : (_x) 
-#define max(_x, _y) __builtin_types_compatible_p(typeof((_x)), typeof((_y))) ? ((_x) > (_y) ? (_y) : (_x)) : (_x)
+#define min(_x, _y) __builtin_types_compatible_p(typeof((_x)), typeof((_y))) ? ((_x) > (_y) ? (_y) : (_x)) : (_x)
 
 #define isUpper(a) ((a) - 'A' >= 0 && 'Z' - (a) >= 0)
 #define isLower(a) ((a) - 'a' >= 0 && 'z' - (a) >= 0)

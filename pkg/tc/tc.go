@@ -583,7 +583,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 }
 
 /*
-Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB for potential SKB packets with DNS exfiltrated data
+Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB L7 payload for potential SKB packets with DNS exfiltrated data
 */
 func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveStandardDNSPortUDPTransfer bool) {
 	tc_tunnel := NewTcTunnelFactory(
@@ -640,6 +640,10 @@ func (tc *TCHandler) InjectKernelHandlerPacketRedirectLimit(cliProcessedDnsConfi
 Node agent helper to process as a passive DPI, kernel wont live redirect whole skb, rather clone redirect via tap netdev tx handlers, for the rx handler to read it over the virtual netdev for DPI over master bridge
 */
 func (tc *TCHandler) ProcessEachPacketPassiveDpi(ctx context.Context) {
+	if utils.DEBUG {
+		utils.Log("the agent in running in passive mode andall the kernel program are operational in passive process threat hunt strategy for C2 implants")
+	}
+	tc.InitTCTunnelExfilPrevention(ctx, true)
 }
 
 /*
@@ -669,6 +673,7 @@ func (tc *TCHandler) KernelPacketTSVerifcation(ctx context.Context, dns_packet_i
 				if !errors.Is(err, ebpf.ErrKeyNotExist) {
 					utils.Log("Link has XDP support Error delete the Key ", dns_packet_id)
 				}
+				return err
 			}
 		} else {
 			// will again pass through kernel AF_PACKET via kernel TC
@@ -760,6 +765,7 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 	if isIpv4 {
 		ipv4Address := ipPacket.DstIP.To4().String()
+		fmt.Println("the kernel egress dnat for packet is ", ipv4Address)
 		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
 			utils.Log("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
 			return

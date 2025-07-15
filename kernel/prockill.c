@@ -157,9 +157,8 @@ int handle_mal_c2_proc_exit() {
 */
 SEC("tracepoint/sched/sched_process_exec")
 int process_potential_mal_c2_thread_spawn()  {
-
   
-    struct task_struct *task = (void *)bpf_get_current_task();
+    struct task_struct *task = (void *)bpf_get_current_task_btf();
     struct task_struct *parent = NULL;
 
     struct __kernel_proc_struct_info *proc_infp = __get_process_info(true);

@@ -52,7 +52,7 @@ enum OVERLAY_DNS_RANDOM_UDP_PORT {
 
 // TODO: convert all the consts to proper config loader from ebpf maps
 #define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN true
-#define SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER false
+#define SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER true
 
 
 //                               1  1  1  1  1  1

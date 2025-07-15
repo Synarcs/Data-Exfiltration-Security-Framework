@@ -108,7 +108,7 @@ type (
 		EnableNxFloodPrevention            bool `yaml:"enableNxFloodPrevention" reflect:"enableNxFloodPrevention"`
 		EnableIngressSniff                 bool `yaml:"enableIngressSniff" reflect:"enableIngressSniff"`
 		EnabledTbRlimit                    bool `yaml:"enabledTbRlimit" reflect:"enabledTbRlimit"`
-		EnabbledVolumeRlimit               bool `yaml:"enabbledVolumeRlimit" reflect:"enabbledVolumeRlimit"`
+		EnabbledVolumeRlimit               bool `yaml:"enabledVolumeRlimit" reflect:"enabledVolumeRlimit"`
 		EnabledPassiveEgressEnhancedTCPDPI bool `yaml:"enabledPassiveEgressEnhancedTCPDPI"`
 	}
 

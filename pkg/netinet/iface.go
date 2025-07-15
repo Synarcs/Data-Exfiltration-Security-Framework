@@ -43,6 +43,10 @@ const (
 	NETNS_RNETLINK_INGRESS_DPI_INTERFACE = "sx2-eth0"
 )
 
+const (
+	VXLAN_DEFAULT_PORT = 4789
+)
+
 // TODO: Replace with discrete IPAM  differring from the all netdev links at the endpoint
 var Iface_Bridge_Subnets map[string]string = map[string]string{
 	NETNS_RNETLINK_EGREESS_DPI_INTERFACE: "10.200.0.1",
@@ -56,7 +60,8 @@ type NetIface struct {
 	BridgeLinks   []netlink.Link // links created specifically for bridge kernel utils and DPI over bridge traffic
 	LoopBackLinks []netlink.Link // loopback links
 
-	VxlanLinks []netlink.Link
+	// if_index --> vxlan netdev
+	VxlanLinks map[int]*netlink.Vxlan
 	LinkMap    map[string]bool
 	// all the encapsulated packet links for tunnelling using packet encapsulation
 	// most tunnelling link use kernel router netfilter forwarding via non control host for detection prevention
@@ -96,9 +101,8 @@ func (nf *NetIface) ReadInterfaces(containered bool) error {
 		}
 	}
 
-	utils.Log("the custom link to process are ", customLinks)
 	nf.Links = links
-	nf.GetVxlanLinks()
+	nf.GetVxlanTunnelInterfaces()
 	var hardwareInterfaces []netlink.Link
 	var logicalInterfaces []netlink.Link
 	var bridgeInterfaces []netlink.Link
@@ -117,14 +121,6 @@ func (nf *NetIface) ReadInterfaces(containered bool) error {
 		nf.BridgeLinks = bridgeInterfaces
 	}
 	return nil
-}
-
-func (nf *NetIface) GetVxlanLinks() {
-	for _, link := range nf.Links {
-		if link.Type() == "vxlan" {
-			nf.VxlanLinks = append(nf.VxlanLinks, link)
-		}
-	}
 }
 
 var sysetemdResolvedConfigUpdateGuard sync.Mutex
@@ -451,22 +447,20 @@ func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.
 	return containerVethPairInterface, loopBackInterface, bridgeInterfaces
 }
 
-func (nf *NetIface) GetVxlanTunnelInterfaces() (map[uint16]*netlink.Vxlan, error) {
-	if len(nf.Links) == 0 {
-		return nil, fmt.Errorf("vxlan Tunnel Interfaces cannot be found use netlink soscket to read all net_devices on node")
-	}
+func (nf *NetIface) GetVxlanTunnelInterfaces() {
+	nf.VxlanLinks = make(map[int]*netlink.Vxlan)
 
-	var tunnelVxlanInterfaces map[uint16]*netlink.Vxlan = make(map[uint16]*netlink.Vxlan)
+	// iter over all links fetched from netlink socket
 	for _, link := range nf.Links {
-		if vxlan, ok := link.(*netlink.Vxlan); ok {
+		if vxlan, ok := link.(*netlink.Vxlan); ok || link.Type() == "vxlan" {
 			if vxlan.Group == nil || vxlan.SrcAddr == nil {
 				continue
 			}
-			tunnelVxlanInterfaces[uint16(vxlan.Port)] = vxlan
+			nf.VxlanLinks[vxlan.VxlanId] = vxlan
 		}
 	}
 
-	return tunnelVxlanInterfaces, nil
+	utils.Log("the vxlan linkx found on the endpoint are ", nf.VxlanLinks)
 }
 
 func (nf *NetIface) GetNetworkNamespace(route string) (*netns.NsHandle, error) {

@@ -134,8 +134,8 @@ const (
 	EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_COUNT_MAP             = "exfil_security_egress_clone_redirect_count_map"
 	EXFIL_SECURITY_EGRESS_CLONE_REDIRECT_DROP_KERNEL_COUNT_MAP = "exfil_security_egress_clone_redirect_drop_kernel_count_map"
 
-	EXFIL_VXLAN_BLOCK_EGRESS_PORT = "exfil_vxlan_block_egress_port"
-	EXFIL_TC_BRIDGE_CONFIG_MAP    = "exfil_security_tc_bridge_config_map"
+	EXFIL_VXLAN_TRANSFER_EGRESS_PORT = "exfil_vxlan_transfer_egress_port" // vxlan is always tied to dedicated netdev in kernel
+	EXFIL_TC_BRIDGE_CONFIG_MAP       = "exfil_security_tc_bridge_config_map"
 
 	// tunnel map
 	EXFIL_TUNNEL_DNS_ENCAP_TRANSFER = "exfil_tunnel_dns_encap_transfer"

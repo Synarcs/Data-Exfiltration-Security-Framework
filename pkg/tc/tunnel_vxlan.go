@@ -87,20 +87,43 @@ func (tc *TCHandler) ExportVxlanTunnelDnsTrafficMetric(vni int, srcPort uint16, 
 	})
 }
 
-func (tc *TCHandler) GetTunnelLinkInterfaceInfo(dstPort uint16) (*netlink.Vxlan, error) {
-	encapTunnelVtepLinks, err := tc.Interfaces.GetVxlanTunnelInterfaces()
-	if err != nil {
-		utils.Log("Error getting the vxlan tunnel interfaces", err)
-		return nil, err
+func (tc *TCHandler) VerifyVTEPDestPortRange(portLow, portHigh, port int) bool {
+	if portHigh == portLow || (portLow == 0 && portHigh == 0) {
+		return false
 	}
+	return true
+}
 
-	// kerel use dest  port for vxlan encap over ht the link and it should be there on the net_device matching a vxlan
-	if vxlanLink, fd := encapTunnelVtepLinks[dstPort]; !fd {
-		utils.Log("Error getting the vxlan tunnel interfaces", err)
-		return nil, fmt.Errorf("Error getting the vxlan tunnel interfaces")
-	} else {
-		return vxlanLink, nil
+// let the kernel eBPF egress TC know for the physical netdev is carrying an encap traffic for deep DPI to prevent any breakc, or c2 commands
+func (tc *TCHandler) PopulateVTEPUDPDestPorts() error {
+	for ifIndex, vxlanNetdev := range tc.Interfaces.VxlanLinks {
+		if !tc.VerifyVTEPDestPortRange(vxlanNetdev.PortLow, vxlanNetdev.PortHigh, vxlanNetdev.Port) {
+			utils.Log("the custom dst port transfer for vxlan link configured :: ", vxlanNetdev)
+		} else {
+			for port := vxlanNetdev.PortLow; port <= vxlanNetdev.PortHigh; port++ {
+				utils.Log("range port configured for netdev if_index over vxlan ", ifIndex, vxlanNetdev.PortLow, vxlanNetdev.PortHigh)
+			}
+		}
 	}
+	return nil
+}
+
+func (tc *TCHandler) GetTunnelLinkInterfaceInfo(dstPort uint16) (*netlink.Vxlan, error) {
+
+	// TODO: optimize this
+	// kerel use dest  port for vxlan encap over ht the link and it should be there on the net_device matching a vxlan
+	for _, vxlanNetdev := range tc.Interfaces.VxlanLinks {
+		if !tc.VerifyVTEPDestPortRange(vxlanNetdev.PortLow, vxlanNetdev.PortHigh, vxlanNetdev.Port) {
+			// kernel vvxlan_xmit_skb defailts to 4789
+			if vxlanNetdev.Port == int(dstPort) {
+				return vxlanNetdev, nil
+			}
+		} else if vxlanNetdev.PortLow <= int(dstPort) && vxlanNetdev.PortHigh >= int(dstPort) {
+			return vxlanNetdev, nil
+		}
+	}
+	utils.Log("Error getting the vxlan tunnel interfaces", dstPort)
+	return nil, fmt.Errorf("Error getting the vxlan tunnel interfaces")
 }
 
 func (tc *TCHandler) UpdateVxlanDestPortTransferMapDrop(dstPort uint16, ebpfMap *ebpf.Map) error {

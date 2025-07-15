@@ -6,7 +6,6 @@
 package utils
 
 import (
-	"fmt"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -40,7 +39,6 @@ type CacheConfig struct {
 
 // Init the cache for the eBPF node agent in user space
 func InitCache(conf *CacheConfig) error {
-	fmt.Println("configure agent with config of cache ", conf)
 	Log("Init the Lru Cache for the Node Agent")
 	NODE_AGENT_BLACKLISTED_DOMAINS = expirable.NewLRU[string, *expirable.LRU[string, bool]](
 		MAX_NODE_AGENT_CACHE_SIZE,

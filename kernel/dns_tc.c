@@ -136,12 +136,13 @@ struct exfil_vxlan_exfil_event {
 
 // map storing information about the vxlan kernel encap channels port for transfer, userspace instruct kernel DPI to block traffic unless scanned nexxt time via ring buff 
 // userspace has always ensured that there is an l7 dns layer with malicious payload encapsulated inside the frame for vxlan packet frame.
-struct exfil_vxlan_block_egress_port {
+// the payload is put for the edr agent in userspace monitor all the vxlan egress transfer activity, as well mark a port as malicious associated with the netdev, unless unblocekd further
+struct exfil_vxlan_transfer_egress_port {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // userspace post DPI determines the kernel sock for the port to drop traffic 
     __type(value, __u8); // kernel flags for __u8 populated to suggest to block any traffic henceforth over this port
     __uint(max_entries, 1 << 10); // ideally matches the max (0xffff) ports over encap udp transport 
-} exfil_vxlan_block_egress_port SEC(".maps");
+} exfil_vxlan_transfer_egress_port SEC(".maps");
 
 
 // emits an potential ring buff kernel event with value setting an port in UDP which is potentially used to perform exfiltration and data breach 
@@ -312,27 +313,30 @@ struct dns_volume_stats {
             }                                           \                                
         }while(0);
 
+// to ensure ease fro verifier bounds
+#define DNS_DPI_FEATURE_PRIO_SAFE(feature_prio) (feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (feature_prio)
+
 #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER 
     // custom range order filtering for the DNS domains over the labels queries ssections 
-    #define SUBDOMAIN_RANGE_FILTER(subdomain_label_count_config_min_key, subdomain_label_count_config_max_key) \
-        do { \
-            __u32 *subdomain_label_count_config_min_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); \
-            if (!subdomain_label_count_config_min_map) { \
-                __u32 min_value = DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
-                subdomain_label_count_config_min_map = &min_value; \
-            } \
-            __u32 *subdomain_label_count_config_max_map = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); \
-            if (!subdomain_label_count_config_max_map) { \
-                __u32 max_value = DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD; \
-                subdomain_label_count_config_max_map = &max_value; \
-            } \
-            if (subdomain_label_count >= *subdomain_label_count_config_min_map && subdomain_label_count <= *subdomain_label_count_config_max_map) \
-                return SUSPICIOUS; \
-            if (subdomain_label_count > *subdomain_label_count_config_max_map) \
-                return MALICIOUS; \
-        } while(0)      
-#endif 
+    static 
+    __always_inline bool __subdomain_range_dpi_filter(__u32 subdomain_label_count_config_min_key, __u32 subdomain_label_count_config_max_key, __u8 subdomain_label_count) {
+        __u32 *subdomain_label_count_config_min_map_value = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); 
+        __u32 *subdomain_label_count_config_max_map_value = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); 
+        if (!subdomain_label_count_config_min_map_value && !subdomain_label_count_config_max_map_value) {
+            __u8 feature_prio_min = (*subdomain_label_count_config_min_map_value) >> 8;
+            feature_prio_min = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio_min);
+            __u8 feature_prio_min_value = (*subdomain_label_count_config_min_map_value) & 0xff;
 
+            __u8 feature_prio_max = (*subdomain_label_count_config_max_map_value) >> 8;
+            feature_prio_max = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio_max);
+            __u8 feature_prio_max_value = (*subdomain_label_count_config_max_map_value) & 0xff;
+            
+            if (subdomain_label_count >= feature_prio_min_value && subdomain_label_count <= feature_prio_max_value) 
+                return true;
+        }
+        return false;
+    }
+#endif 
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
@@ -636,8 +640,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         __u32 * MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_total_domain_length_min);
         __u32 * MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &label_key_total_domain_length_max);
 
-        __u8 total_domain_length = 0;
-        __u8 total_domain_length_exclude_tld = 0;
         // Iter through the Questions Count
         __u8 i = 0; __u8 j = 0; // iters
         
@@ -645,12 +647,17 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
         forn(qd_count, i) {
             __u8 offset = 0;
             __u8 label_count = 0; __u8 mx_label_ln = 0;
+            __u8 total_domain_length = 0;
+            __u8 total_domain_length_exclude_tld = 0;
 
             __u8 root_domain = 0;
             
+            __u8 suspicious_label_subdomain_ct = 0;
+            __u8 subdomain_label_count = 0;
+
             // parse the QNAME
             // iter over the char labels in QNAME
-            #pragma unroll(MAX_DNS_NAME_LENGTH)
+            #pragma unroll
             forn(MAX_DNS_NAME_LENGTH, j) {
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
@@ -661,7 +668,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     char buff[MAX_DNS_LABEL_LENGTH];
                 #endif
 
+                __u8 spec_char_per_label = 0;
+
                 #if SUBDOMAIN_RANGE_LABEL_CHAR_SCAN
+                        if (label_count < 2) 
+                            goto skip_parsing_root_domain_labels;
+
                         __u8 iter_label_chars_ln = label_len;
                         if (iter_label_chars_ln >= MAX_DNS_LABEL_LENGTH)
                             iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
@@ -673,56 +685,55 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                         
                         __u8 *dns_payload_start = (__u8 *)(void *)(dns_payload_buffer + offset + sizeof(__u8));
                         if ((void *)dns_payload_start + 1 > skb->data_end) {
-                            goto parsed_label_queryHandler;
+                            goto parsed_label_queryname_end;
                         }
 
-                        __u8 spec_char = 0;
                         __u8 curr_parsed_jumps = 0;
                         __u8 buffer_lab_ind = 0;
                     
                     next_char_parse:
                         if ((void *)(dns_payload_start + 1) > skb->data_end)
-                            goto parsed_label_queryHandler;
+                            goto parsed_label_queryname_end;
                     
                         char dns_payload_start_chr = (char)(*dns_payload_start);
                         #if DEBUG
-                            buff[buffer_lab_ind++] = dns_payload_start_chr;
+                            if (buffer_lab_ind < MAX_DNS_LABEL_COUNT)
+                                buff[buffer_lab_ind++] = dns_payload_start_chr;
                         #endif
 
+                        // only consdier DPI parse over the the subdomain labels  in DNS app payload 
                         dns_payload_start = dns_payload_start + sizeof(__u8);
                     
                         if (!(isLower(dns_payload_start_chr) || 
                             isUpper(dns_payload_start_chr) || 
-                            isDigit(dns_payload_start_chr))) 
-                            spec_char++;
+                            isDigit(dns_payload_start_chr)) && label_count >= 2) 
+                            spec_char_per_label++;
 
                         curr_parsed_jumps++;
                         buffer_lab_ind++;
 
                         if (buffer_lab_ind >= MAX_DNS_LABEL_LENGTH)
-                            goto parsed_label_queryHandler;
+                            goto parsed_label_queryname_end;
                         
                         if ((void *) dns_payload_start > skb->data_end)
-                            goto parsed_label_queryHandler;
-                        
+                            goto parsed_label_queryname_end;
+
                         goto next_char_parse;
                         
-                        if (spec_char > (int) label_len / 2) return SUSPICIOUS;
-                    parsed_label_queryHandler:
+                    parsed_label_queryname_end:
                 #endif
 
-                #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
-                    SUBDOMAIN_RANGE_FILTER(label_key_subdomain_length_exclude_tld_min,label_key_subdomain_length_exclude_tld_max)
-                #endif
+                skip_parsing_root_domain_labels:
             
                 if (label_len == 0x00) break;
                 label_count++;
-
-                if (root_domain > 2)
+                
+                if (root_domain > 2) {
                     total_domain_length_exclude_tld += label_len;
-                else 
+                    subdomain_label_count++;
+                }else
                     root_domain++;
-
+                
                 total_domain_length += label_len;
                 offset += label_len + 1; 
                 if ((void *) (dns_payload_buffer + offset) > skb->data_end) return SUSPICIOUS;
@@ -730,6 +741,13 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
+
+            // enhanced scan over subdomain features for DPI exclude TLD 
+            #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
+                if (subdomain_label_count > 0) 
+                    if (__subdomain_range_dpi_filter(label_key_subdomain_length_exclude_tld_min, label_key_subdomain_length_exclude_tld_max, subdomain_label_count))
+                        return SUSPICIOUS;
+            #endif
 
             // parse the QTYPE
             __u16 query_type = *(__u16 *) (dns_payload_buffer + offset); 
@@ -771,21 +789,21 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                        1    (0x8 << 0xFF) | (feature_value) | prio_violate_bitset   ..                                          ...
             */
 
+            
             __u64 prio_violate_bitset = 0x00; 
 
             // subdomain length per label (min | max)
+            // every min, max length features always ensure there would never be an overflow in feature value loaded from userspace in kernel 
             if (MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP != NULL) {
                     if (mx_label_ln >= (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff) && mx_label_ln <= (*MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) >> 8; // consider any key since min and max range has same prio in kernel eBPF map 
-                        if (feature_prio > MAX_DNS_PRIO_KEYS)  // just to ensure ease fro verifier bounds
-                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
             }else if (mx_label_ln >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL & 0xff) && 
                             mx_label_ln <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL & 0xff)){
                         __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
-                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
@@ -793,14 +811,12 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
                 if (label_count >= (*MIN_LABEL_COUNT_KERNEL_MAP & 0xff) && label_count <= (*MAX_LABEL_COUNT_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_LABEL_COUNT_KERNEL_MAP) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
-                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             }else if (label_count >= (DNS_RECORD_LIMITS.MIN_LABEL_COUNT & 0xff) && label_count <= (DNS_RECORD_LIMITS.MAX_LABEL_COUNT & 0xff)){
                     __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_LABEL_COUNT) >> 8;
-                    if (feature_prio > MAX_DNS_PRIO_KEYS) // just to ensure ease fro verifier bounds
-                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                     prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
@@ -809,15 +825,13 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (total_domain_length >= (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff) && 
                 total_domain_length <= (*MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff)) {
                     __u8 feature_prio = (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP) >> 8;
-                    if (feature_prio > MAX_DNS_PRIO_KEYS)
-                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                     prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length >= (DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH & 0xff) && 
                 total_domain_length <= (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH & 0xff)) {
                     __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH) >> 8;
-                    if (feature_prio > MAX_DNS_PRIO_KEYS)
-                        feature_prio = MAX_DNS_PRIO_KEYS;
+                    feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                     prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
@@ -826,15 +840,13 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if (total_domain_length_exclude_tld >= (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff) && 
                     total_domain_length_exclude_tld <= (*MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS)
-                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length_exclude_tld >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff) && 
                        total_domain_length_exclude_tld <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff)) {
                         __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) >> 8;
-                        if (feature_prio > MAX_DNS_PRIO_KEYS)
-                            feature_prio = MAX_DNS_PRIO_KEYS;
+                        feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
                         prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
@@ -1137,7 +1149,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
         __be32 __attribute__((__unused__)) dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
         __u32 udp_dest_port = bpf_ntohs(udp->dest);
-        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+        __u8 * userspace_vxlan_flag_val = bpf_map_lookup_elem(&exfil_vxlan_transfer_egress_port, &udp_dest_port);
 
         if (userspace_vxlan_flag_val) {
             #if DEBUG 
@@ -1148,7 +1160,7 @@ __always_inline __u8 __verify_vxlan_encap_over_udp(struct skb_cursor *skb, void 
                 return OVERLAY_VXLAN_TUNNEL_DETECTED;
             }
             // delete the map let kernel again do raw scan in tc for the vxlan raw header and userspace do enhanced dpi in user space replicating as event loop 
-            bpf_map_delete_elem(&exfil_vxlan_block_egress_port, &udp_dest_port);
+            bpf_map_delete_elem(&exfil_vxlan_transfer_egress_port, &udp_dest_port);
         }else {
             /* emit the kernel socket event filter to emit vxlan for userspace to sniff live traffic process 
                    continue the same process to make sure there is continuous DPI and kernel buffer event emits to user space.
@@ -1184,7 +1196,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     __u16 add_count = bpf_ntohs(dns_header->add_count);
 
     //bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
-    if (qd_count > (1 << 8) - 1 || ans_count > (1 << 8) - 1 || auth_count > (1 << 8) - 1 || add_count >  (1 << 8) - 1) {
+    if (qd_count > (1 << 8) - 1 || ans_count  > (1 << 8) - 1 || auth_count > (1 << 8) - 1 || add_count >  (1 << 8) - 1) {
         // the dns payload is non standard port and the protcol encapsulated used is not dns 
         return OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_UNDETECTED;
     }
@@ -1422,8 +1434,15 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     // populate the br_index handler clone for skb from kernel over the packet bridge 
     struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
     if (config) {
-        br_index = config->NfNdpBridgeIndexId;
-        dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
+        if (isPassiveDPIStandardPortTransfer) {
+            // core redirect netdev and upstream link for active mode would be done in clone_redirect mode
+            br_index = config->BridgeIndexId;
+            dest_addr_route = bpf_ntohl(config->RedirectIpv4);
+        }else {
+            // core redirect netdev and upstream link for active mode would be done in redirect mode
+            br_index = config->NfNdpBridgeIndexId;
+            dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
+        }
      }else {
         return OVERLAY_TUNNEL_BENIGN; // cannot proceed until the config is loaded from userspace endpoint agent in the eBPF map 
     }
@@ -2174,7 +2193,6 @@ int classify(struct __sk_buff *skb){
                 // for now learn dns ring buff event;
 
 		threatHuntPotentialMaliciousProcessExfil:
-
                 if (result.isBenign) {
                     return TC_FORWARD;
                 }else if (result.drop){
@@ -2185,6 +2203,7 @@ int classify(struct __sk_buff *skb){
                         dest_addr_route_malicious, config, br_index)
                 }
 
+                bpf_printk("the kernel DPI running in passive mode for default port DPI process with clone");
                 OVERLAY_DNS_TRANSFER_ACT(skb, bpf_ntohs(udp->dest), bpf_ntohs(udp->source), true);
 
             }else {
@@ -2339,7 +2358,6 @@ int classify(struct __sk_buff *skb){
                 return bpf_redirect(br_index, BPF_F_INGRESS);
                 
             threatHuntPotentialMaliciousProcessExfilIpv6:
-                
                 if (result.isBenign) {
                     return TC_FORWARD;
                 }else if (result.drop){
