@@ -765,7 +765,6 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 
 	if isIpv4 {
 		ipv4Address := ipPacket.DstIP.To4().String()
-		fmt.Println("the kernel egress dnat for packet is ", ipv4Address)
 		if !(ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(1) || ipv4Address == utils.GetIpv4AddressUserSpaceDpIString(2)) {
 			utils.Log("The Bridge is only meant for DPI pf suspicious or Malicious DNS traffic")
 			return
@@ -793,115 +792,113 @@ func (tc *TCHandler) ProcessEachPacket(ctx context.Context, packet gopacket.Pack
 	isIpv6 := !isIpv4
 
 	if !tc.config.GetAgentConfig().Agent.AgentModeAggressive {
-		goto processPacketForNonAggresiveDPI
-	}
+		tc.ProcessEachPacketPassiveDpi(ctx)
+	} else {
 
-	if dnsLayer != nil {
-		dns, _ := dnsLayer.(*layers.DNS)
+		if dnsLayer != nil {
+			dns, _ := dnsLayer.(*layers.DNS)
 
-		var dns_packet_id uint16 = uint16(dns.ID)
-		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+			var dns_packet_id uint16 = uint16(dns.ID)
+			var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
 
-		if !isPhysicalNetDevSniff {
-			if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts, dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
-				utils.Log(fmt.Sprintf("Error verify the UDP packet time from kernel %+v", err))
+			if !isPhysicalNetDevSniff {
+				if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts, dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
+					utils.Log(fmt.Sprintf("Error verify the UDP packet time from kernel %+v", err))
+				}
+			}
+
+			var egressLink netlink.Link
+			if len(tc.Interfaces.PhysicalLinks) > 1 {
+				// TODO: fix the broken ifindex emit from kernel for each packet extracked from (__sk_buff) running on attached tc filter at egress point
+				link, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
+				if err != nil {
+					tc.GlobalErrorKernelHandlerChannel <- err
+					return
+				}
+				egressLink = *link
+			} else {
+				egressLink = tc.Interfaces.PhysicalLinks[0]
+			}
+
+			if isIpv4 && isUdp {
+				var agentDNSDefaultGwDnat bool = false
+				isSameResolver, destIp := tc.Interfaces.UpstreamLinkoverAgentResolverIpv4(ip_layer3_checksum_kernel_ts.L3Address)
+				if !isSameResolver {
+					var currupstreamL3Ip = utils.BigEndianToIPv4(ip_layer3_checksum_kernel_ts.L3Address)
+					if utils.DEBUG {
+						utils.Log("the current upstream converted l3 address unmatched from kernel to agent dest resolver ::: ", currupstreamL3Ip)
+					}
+					agentDNSDefaultGwDnat = true
+				}
+
+				// TODO: fix code redudnacies into a common utils
+				tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+					handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
+						ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+						ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+					}, isPhysicalNetDevSniff, egressLink,
+					tc.HasDiffPriorityQdiscFilter,
+					// dnat custom upstream resolver config
+					agentDNSDefaultGwDnat,
+					destIp,
+				)
+				// ipv4 and udp
+			}
+			if !isIpv4 && isUdp {
+				// ipv6 and udp
+				tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+					handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
+						ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+						ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+					}, isPhysicalNetDevSniff, egressLink,
+					tc.HasDiffPriorityQdiscFilter,
+					false, "")
 			}
 		}
 
-		var egressLink netlink.Link
-		if len(tc.Interfaces.PhysicalLinks) > 1 {
-			// TODO: fix the broken ifindex emit from kernel for each packet extracked from (__sk_buff) running on attached tc filter at egress point
-			link, err := tc.Interfaces.GetEgressLinkFromIfIndex(ip_layer3_checksum_kernel_ts.SkbIndex)
+		if tcpCheck && isPhysicalNetDevSniff {
+			dns := &layers.DNS{}
+
+			err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
 			if err != nil {
+				utils.Log("Error decoding the dns packet over the tcp stream", err)
+				return
+			}
+
+			var dns_packet_id uint16 = uint16(dns.ID)
+			var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
+
+			if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts,
+				dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
+				utils.Log(fmt.Sprintf("Error processing the dns packet over tcp stream %+v", err))
+			}
+
+			egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(uint32((*physicalSniffNetdev).Attrs().Index))
+			if err != nil {
+				utils.Logger.Error(err.Error())
 				tc.GlobalErrorKernelHandlerChannel <- err
 				return
 			}
-			egressLink = *link
-		} else {
-			egressLink = tc.Interfaces.PhysicalLinks[0]
-		}
 
-		if isIpv4 && isUdp {
-			var agentDNSDefaultGwDnat bool = false
-			isSameResolver, destIp := tc.Interfaces.UpstreamLinkoverAgentResolverIpv4(ip_layer3_checksum_kernel_ts.L3Address)
-			if !isSameResolver {
-				var currupstreamL3Ip = utils.BigEndianToIPv4(ip_layer3_checksum_kernel_ts.L3Address)
-				if utils.DEBUG {
-					utils.Log("the current upstream converted l3 address unmatched from kernel to agent dest resolver ::: ", currupstreamL3Ip)
-				}
-				agentDNSDefaultGwDnat = true
+			if isIpv4 && !isUdp {
+				// ipv4 and tcp
+				tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+					handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
+						ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+						ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+					}, isPhysicalNetDevSniff, *egressLink,
+					tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
 			}
-
-			// TODO: fix code redudnacies into a common utils
-			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
-					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
-					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressLink,
-				tc.HasDiffPriorityQdiscFilter,
-				// dnat custom upstream resolver config
-				agentDNSDefaultGwDnat,
-				destIp,
-			)
-			// ipv4 and udp
-		}
-		if !isIpv4 && isUdp {
-			// ipv6 and udp
-			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
-					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
-					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, egressLink,
-				tc.HasDiffPriorityQdiscFilter,
-				false, "")
+			if !isIpv4 && !isUdp {
+				// ipv6 and tcp
+				tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
+					handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
+						ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
+						ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
+					}, isPhysicalNetDevSniff, *egressLink, tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
+			}
 		}
 	}
-
-	if tcpCheck && isPhysicalNetDevSniff {
-		dns := &layers.DNS{}
-
-		err := dns.DecodeFromBytes(dnsTcpPayload, gopacket.NilDecodeFeedback)
-		if err != nil {
-			utils.Log("Error decoding the dns packet over the tcp stream", err)
-			return
-		}
-
-		var dns_packet_id uint16 = uint16(dns.ID)
-		var ip_layer3_checksum_kernel_ts events.DPIRedirectionKernelMap // granualar timining control over the redirection from kernel
-
-		if err := tc.KernelPacketTSVerifcation(ctx, dns_packet_id, isIpv6, &ip_layer3_checksum_kernel_ts,
-			dnsMapRedirectMap, dnsMapRedirectVerify); err != nil {
-			utils.Log(fmt.Sprintf("Error processing the dns packet over tcp stream %+v", err))
-		}
-
-		egressLink, err := tc.Interfaces.GetEgressLinkFromIfIndex(uint32((*physicalSniffNetdev).Attrs().Index))
-		if err != nil {
-			utils.Logger.Error(err.Error())
-			tc.GlobalErrorKernelHandlerChannel <- err
-			return
-		}
-
-		if isIpv4 && !isUdp {
-			// ipv4 and tcp
-			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
-					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
-					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, *egressLink,
-				tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
-		}
-		if !isIpv4 && !isUdp {
-			// ipv6 and tcp
-			tc.DnsPacketGen.EvaluateGeneratePacket(ctx, eth, ipLayer, transportLayer, dnsLayer, ip_layer3_checksum_kernel_ts.Checksum,
-				handler, true, isIpv4, isUdp, tc.TcCollection, &utils.MaliciousKernelTaskCommExportedProcInfo{
-					ProcessId: ip_layer3_checksum_kernel_ts.ProcId,
-					ThreadId:  ip_layer3_checksum_kernel_ts.ThreadId,
-				}, isPhysicalNetDevSniff, *egressLink, tc.HasDiffPriorityQdiscFilter, false, "") // physical netdev sniff resembles passive and not aggressive analysis and DPI
-		}
-	}
-
-processPacketForNonAggresiveDPI:
-	tc.ProcessEachPacketPassiveDpi(ctx)
 }
 
 func (tc *TCHandler) ProcessPcapFilterHandler(ctx context.Context, linkInterface netlink.Link, ifaceHandler *netinet.NetIface,

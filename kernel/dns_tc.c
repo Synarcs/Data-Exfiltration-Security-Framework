@@ -314,29 +314,36 @@ struct dns_volume_stats {
         }while(0);
 
 // to ensure ease fro verifier bounds
-#define DNS_DPI_FEATURE_PRIO_SAFE(feature_prio) (feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (feature_prio)
+#define DNS_DPI_FEATURE_PRIO_SAFE(feature_prio) \
+    __builtin_types_compatible_p(typeof((feature_prio)), typeof(MAX_DNS_PRIO_KEYS)) ? \
+                ((feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (feature_prio)) : \
+                    (feature_prio)   
+
 
 #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER 
     // custom range order filtering for the DNS domains over the labels queries ssections 
     static 
-    __always_inline bool __subdomain_range_dpi_filter(__u32 subdomain_label_count_config_min_key, __u32 subdomain_label_count_config_max_key, __u8 subdomain_label_count) {
+    __always_inline void __subdomain_range_dpi_filter(__u32 subdomain_label_count_config_min_key,
+                        __u32 subdomain_label_count_config_max_key, __u8 subdomain_label_count, __u64 *prio_violate_bitset) {
         __u32 *subdomain_label_count_config_min_map_value = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_min_key); 
-        __u32 *subdomain_label_count_config_max_map_value = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key); 
+        __u32 *subdomain_label_count_config_max_map_value = bpf_map_lookup_elem(&exfil_security_egress_dns_limites, &subdomain_label_count_config_max_key);
         if (!subdomain_label_count_config_min_map_value && !subdomain_label_count_config_max_map_value) {
-            __u8 feature_prio_min = (*subdomain_label_count_config_min_map_value) >> 8;
+            __u8 feature_prio_min = (*subdomain_label_count_config_min_map_value) >> 0x08;
             feature_prio_min = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio_min);
             __u8 feature_prio_min_value = (*subdomain_label_count_config_min_map_value) & 0xff;
 
-            __u8 feature_prio_max = (*subdomain_label_count_config_max_map_value) >> 8;
+            __u8 feature_prio_max = (*subdomain_label_count_config_max_map_value) >> 0x08;
             feature_prio_max = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio_max);
-            __u8 feature_prio_max_value = (*subdomain_label_count_config_max_map_value) & 0xff;
+            __u8 feature_prio_max_value = (*subdomain_label_count_config_max_map_value) & 0x08;
             
-            if (subdomain_label_count >= feature_prio_min_value && subdomain_label_count <= feature_prio_max_value) 
-                return true;
+            if (subdomain_label_count >= feature_prio_min_value)
+                *prio_violate_bitset |= (1U << (feature_prio_min_value - 1));
+
+            if (subdomain_label_count <= feature_prio_max_value) 
+                *prio_violate_bitset |= (1U << (feature_prio_max_value - 1));
         }
-        return false;
     }
-#endif 
+#endif
 
 // l3 ipv4 netpool dynamic injected filter in kernel blocks every l3,l4,l7 packets for transfer over this remote c2 servers 
 #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS
@@ -345,7 +352,7 @@ struct dns_volume_stats {
         __u32 daddr = bpf_ntohl(ip->daddr); // userspace inject in network btyteorder over a eBPF map key with type __u32 not raw butes 
         __u32 * isDynamicBlacklisted = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, &daddr);
         if (isDynamicBlacklisted) 
-            return DROP_L3_INTERNAL_FILTER_TRAFFIC;
+            return DROP_L3_DYANMIC_NETPOOL_TRAFFIC;
         return false;
     }
 #endif
@@ -358,7 +365,7 @@ struct dns_volume_stats {
         struct in6_addr dest_addr = ip->daddr;
         __u8 * fd = bpf_map_lookup_elem(&exfil_security_egress_l3_ipv6_dynamic_netpool_c2_filter, &dest_addr);
         if (fd)
-            return DROP_L3_INTERNAL_FILTER_TRAFFIC;
+            return DROP_L3_DYANMIC_NETPOOL_TRAFFIC;
         return false;
     }
 #endif
@@ -657,7 +664,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
 
             // parse the QNAME
             // iter over the char labels in QNAME
-            #pragma unroll
+            #pragma unroll(MAX_DNS_NAME_LENGTH)
             forn(MAX_DNS_NAME_LENGTH, j) {
                 if ((void *) (dns_payload_buffer + offset + 1 ) > skb->data_end) return SUSPICIOUS;
 
@@ -679,7 +686,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                             iter_label_chars_ln = MAX_DNS_LABEL_LENGTH;
 
                         #if DEBUG
-                            for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++)
+                            for (int i = 0; i < MAX_DNS_LABEL_LENGTH; i++) 
                                 buff[i] = '\0';
                         #endif
                         
@@ -742,13 +749,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if (label_count > MAX_DNS_LABEL_COUNT) label_count = MAX_DNS_LABEL_COUNT;
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
-            // enhanced scan over subdomain features for DPI exclude TLD 
-            #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
-                if (subdomain_label_count > 0) 
-                    if (__subdomain_range_dpi_filter(label_key_subdomain_length_exclude_tld_min, label_key_subdomain_length_exclude_tld_max, subdomain_label_count))
-                        return SUSPICIOUS;
-            #endif
-
             // parse the QTYPE
             __u16 query_type = *(__u16 *) (dns_payload_buffer + offset); 
             
@@ -798,57 +798,65 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     if (mx_label_ln >= (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff) && mx_label_ln <= (*MAX_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP & 0xff)) {
                         __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_PER_LABEL_KERNEL_MAP) >> 8; // consider any key since min and max range has same prio in kernel eBPF map 
                         feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                        prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
             }else if (mx_label_ln >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_PER_LABEL & 0xff) && 
                             mx_label_ln <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL & 0xff)){
-                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL) >> 8;
+                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_PER_LABEL) >> 0x08;
                         feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                        prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // label count (min | max)
             if (MIN_LABEL_COUNT_KERNEL_MAP != NULL && MAX_LABEL_COUNT_KERNEL_MAP != NULL){
                 if (label_count >= (*MIN_LABEL_COUNT_KERNEL_MAP & 0xff) && label_count <= (*MAX_LABEL_COUNT_KERNEL_MAP & 0xff)) {
-                        __u8 feature_prio = (*MIN_LABEL_COUNT_KERNEL_MAP) >> 8;
+                        __u8 feature_prio = (*MIN_LABEL_COUNT_KERNEL_MAP) >> 0x08;
                         feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                        prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             }else if (label_count >= (DNS_RECORD_LIMITS.MIN_LABEL_COUNT & 0xff) && label_count <= (DNS_RECORD_LIMITS.MAX_LABEL_COUNT & 0xff)){
-                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_LABEL_COUNT) >> 8;
+                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_LABEL_COUNT) >> 0x08;
                     feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                    prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // total domain length (min | max) 
             if (MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL && MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP != NULL) {
                 if (total_domain_length >= (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff) && 
                 total_domain_length <= (*MAX_TOTAL_DOMAIN_LENGTH_KERNEL_MAP & 0xff)) {
-                    __u8 feature_prio = (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP) >> 8;
+                    __u8 feature_prio = (*MIN_TOTAL_DOMAIN_LENGTH_KERNEL_MAP) >> 0x08;
                     feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                    prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length >= (DNS_RECORD_LIMITS.MIN_DOMAIN_LENGTH & 0xff) && 
                 total_domain_length <= (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH & 0xff)) {
-                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH) >> 8;
+                    __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_DOMAIN_LENGTH) >> 0x08;
                     feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                    prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                    prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
 
             // subdomain length excludes tld (min | max)
             if (MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL && MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP != NULL) {
                 if (total_domain_length_exclude_tld >= (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff) && 
                     total_domain_length_exclude_tld <= (*MAX_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP & 0xff)) {
-                        __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP) >> 8;
+                        __u8 feature_prio = (*MIN_SUBDOMAIN_LENGTH_EXCLUDE_TLD_MIN_KERNEL_MAP) >> 0x08;
                         feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                        prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
                 }
             } else if (total_domain_length_exclude_tld >= (DNS_RECORD_LIMITS.MIN_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff) && 
                        total_domain_length_exclude_tld <= (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD & 0xff)) {
-                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) >> 8;
+                        __u8 feature_prio = (DNS_RECORD_LIMITS.MAX_SUBDOMAIN_LENGTH_EXCLUDING_TLD) >> 0x08;
                         feature_prio = DNS_DPI_FEATURE_PRIO_SAFE(feature_prio);
-                        prio_violate_bitset |= (1 << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
+                        prio_violate_bitset |= (1U << (feature_prio - 1)); // set the bit as 1 denoting the ordered feature was violated 
             }
+
+            // enhanced scan over subdomain features for DPI exclude TLD
+            #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER
+                if (subdomain_label_count > 0)  {
+                    __subdomain_range_dpi_filter(label_key_subdomain_length_exclude_tld_min, 
+                                            label_key_subdomain_length_exclude_tld_max, subdomain_label_count, &prio_violate_bitset);
+                }
+            #endif
 
             /*
                 if any feature violated return suspicious
@@ -995,13 +1003,6 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
    return BENIGN;
 }
 
-
-static 
-__always_inline __u32 __get_random_skb_u32_hash() {
-    return bpf_get_prandom_u32();
-}
-
-
 // skb mark for secure valid redirection in kernel to if_igress over bridge
 static 
 __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_redir_hash) {
@@ -1013,7 +1014,7 @@ __always_inline void __mark_skb_packet_buffer(struct __sk_buff *skb, __u32 skb_r
         return;
     }
     #if SKB_B32_KERNEL_RAND_PER_NETFLOW
-        __u32 rand_mark = __get_random_skb_u32_hash();
+        __u32 rand_mark = bpf_get_prandom_u32();
         skb->mark = rand_mark;
         __u32 skb_hash_map_bridge_default_key = 0;
         if (bpf_map_update_elem(&exfil_security_tc_bridge_config_map, &skb_hash_map_bridge_default_key, &rand_mark, BPF_ANY) < 0) {
@@ -1432,7 +1433,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     struct __kernel_proc_struct_info * proc_info = __get_process_info(false); // task struct for process Info 
 
     // populate the br_index handler clone for skb from kernel over the packet bridge 
-    struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); // 10.200.0.1
+    struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); 
     if (config) {
         if (isPassiveDPIStandardPortTransfer) {
             // core redirect netdev and upstream link for active mode would be done in clone_redirect mode

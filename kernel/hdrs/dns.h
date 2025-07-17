@@ -152,23 +152,28 @@ const int valid_opcodes[2] = {
     0x0, 0x6
 };
 
+#define EXTRACT_DNS_FLAGS(flags, host_order_flags) \
+    do {    \
+        (flags) = (struct dns_flags) {   \
+            .qr = (host_order_flags & DNS_QR_MASK) >> DNS_QR_SHIFT, \
+            .opcode = (host_order_flags & DNS_OPCODE_MASK) >> DNS_OPCODE_SHIFT, \
+            .aa = (host_order_flags & DNS_AA_MASK) >> DNS_AA_SHIFT, \
+            .tc = (host_order_flags & DNS_TC_MASK) >> DNS_TC_SHIFT, \
+            .rd = (host_order_flags & DNS_RD_MASK) >> DNS_RD_SHIFT, \
+            .ra = (host_order_flags & DNS_RA_MASK) >> DNS_RA_SHIFT, \
+            .z = (host_order_flags & DNS_Z_MASK) >> DNS_Z_SHIFT,    \
+            .ad = (host_order_flags & DNS_AD_MASK) >> DNS_AD_SHIFT, \
+            .cd = (host_order_flags & DNS_CD_MASK) >> DNS_CD_SHIFT, \
+            .rcode = (host_order_flags & DNS_RCODE_MASK) >> DNS_RCODE_SHIFT \
+        };   \
+    } while(0);
+
 
 static 
 __always_inline struct dns_flags  get_dns_flags (struct dns_header * dns_header) {
     struct dns_flags flags;
     __u16 host_order_flags = bpf_ntohs(dns_header->flags);
-    flags = (struct dns_flags) {
-        .qr = (host_order_flags & DNS_QR_MASK) >> DNS_QR_SHIFT,
-        .opcode = (host_order_flags & DNS_OPCODE_MASK) >> DNS_OPCODE_SHIFT,
-        .aa = (host_order_flags & DNS_AA_MASK) >> DNS_AA_SHIFT,
-        .tc = (host_order_flags & DNS_TC_MASK) >> DNS_TC_SHIFT,
-        .rd = (host_order_flags & DNS_RD_MASK) >> DNS_RD_SHIFT,
-        .ra = (host_order_flags & DNS_RA_MASK) >> DNS_RA_SHIFT,
-        .z = (host_order_flags & DNS_Z_MASK) >> DNS_Z_SHIFT,
-        .ad = (host_order_flags & DNS_AD_MASK) >> DNS_AD_SHIFT,
-        .cd = (host_order_flags & DNS_CD_MASK) >> DNS_CD_SHIFT, 
-        .rcode = (host_order_flags & DNS_RCODE_MASK) >> DNS_RCODE_SHIFT
-    };
+    EXTRACT_DNS_FLAGS(flags, host_order_flags);
     return flags;
 }
 
@@ -180,18 +185,7 @@ __always_inline struct dns_flags get_dns_flags_tcp (struct dns_header_tcp *dns_h
     #endif
     struct dns_flags flags;
     __u16 host_order_flags = bpf_ntohs(dns_header->flags);
-    flags = (struct dns_flags) {
-        .qr = (host_order_flags & DNS_QR_MASK) >> DNS_QR_SHIFT,
-        .opcode = (host_order_flags & DNS_OPCODE_MASK) >> DNS_OPCODE_SHIFT,
-        .aa = (host_order_flags & DNS_AA_MASK) >> DNS_AA_SHIFT,
-        .tc = (host_order_flags & DNS_TC_MASK) >> DNS_TC_SHIFT,
-        .rd = (host_order_flags & DNS_RD_MASK) >> DNS_RD_SHIFT,
-        .ra = (host_order_flags & DNS_RA_MASK) >> DNS_RA_SHIFT,
-        .z = (host_order_flags & DNS_Z_MASK) >> DNS_Z_SHIFT,
-        .ad = (host_order_flags & DNS_AD_MASK) >> DNS_AD_SHIFT,
-        .cd = (host_order_flags & DNS_CD_MASK) >> DNS_CD_SHIFT, 
-        .rcode = (host_order_flags & DNS_RCODE_MASK) >> DNS_RCODE_SHIFT
-    };
+    EXTRACT_DNS_FLAGS(flags, host_order_flags);
     return flags;
 }
 
