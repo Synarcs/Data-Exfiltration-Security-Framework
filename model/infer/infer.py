@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.append(__name__) 
 
-model = '../dns_sec.onnx'
+model: str = '../dns_sec_qint8.onnx'
 session = ort.InferenceSession(model) 
 
 input_name = session.get_inputs()[0].name
