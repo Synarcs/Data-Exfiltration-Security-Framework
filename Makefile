@@ -118,6 +118,13 @@ build-framework-protos:
 		--go-grpc_out="paths=source_relative,require_unimplemented_servers=false:$(go_out)" \
 		"$(proto_path)/$(proto_file_i)"
 	
+	@mkdir $(go_out)/cxx 
+	protoc --proto_path="$(proto_path)"		 	\
+		--cpp_out="$(go_out)"/cxx 				\
+		--grpc_out=$(go_out)/cxx				\
+		--plugin=protoc-gen-grpc=$(shell which grpc_cpp_plugin) \
+		$(proto_path)/$(proto_file_i) 
+
 
 .PHONY: build-proto-dep
 build-proto-dep: 
