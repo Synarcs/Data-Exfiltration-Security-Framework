@@ -1,23 +1,26 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 CXX := clang++
-CXXFLAGS := -O2 -Wall
+CXXFLAGS := -O2 -Wall -std=c++17
+LDFLAGS = -L/usr/local/lib `pkg-config --libs protobuf grpc++`\
+           -Wl,--no-as-needed -lgrpc++_reflection -Wl,--as-needed\
+           -ldl
+PROTO_PATH = "../../exfil_sec_api/cxx/"
+LIBONNX = -lonnxruntime
 INFER := infer
-SRC := main.cc
+SRC := main.cc \
+       $(PROTO_PATH)/exfil_sec_inference.pb.cc \
+       $(PROTO_PATH)/exfil_sec_inference.grpc.pb.cc
 
-# If libonnxruntime.so is custom mounted at endpoitn  in /usr/lib, add:
-# LDFLAGS += -L/path/to/onnxruntime/lib
-# CXXFLAGS += -I/path/to/onnxruntime/include
-
-.PHONY: all compile run clean
+.PHONY: all compile run clean 
 
 all: compile run
 
 compile:
-	$(CXX) $(CXXFLAGS) $(SRC) $(LDFLAGS) -o $(INFER) -lonnxruntime
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(SRC) -o $(INFER) $(LIBONNX)
 
 run:
-	./infer
-	
+	sudo ./$(INFER)
+
 clean:
 	rm -f $(INFER)
