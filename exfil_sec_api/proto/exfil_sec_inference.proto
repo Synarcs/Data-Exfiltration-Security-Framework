@@ -4,4 +4,31 @@ package exfil_kernel;
 
 option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_api";
 
+message DnsFeatures {
+    repeated float features = 1;
+}
 
+message DnsInferenceRequest {
+    repeated DnsFeatures reshaped = 1; // features over rpc are reshaped adhere to shape for inference request 
+    string tld = 2;
+    string root = 3;
+}
+
+message DnsInferenceResponseIngress {
+    repeated bool threadType = 1;
+    string protocol = 2;
+}
+
+message DnsInferenceResponseEgress {
+    bool threadType = 1;
+}
+
+message ServiceHeartBeatVersion {
+    string version = 1;
+}
+
+service DNSOnnxInferenceService {
+    // rpc ServiceVersion() returns (ServiceHeartBeatVersion);
+    rpc IngressInfer(DnsInferenceRequest) returns (DnsInferenceResponseIngress);
+    rpc EgressInfer(DnsInferenceRequest) returns (DnsInferenceResponseEgress);
+}
