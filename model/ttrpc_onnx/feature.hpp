@@ -1,5 +1,9 @@
+/*
+	Copyright (c) 2024–2025 Synarcs. All rights reserved.
+	SPDX-License-Identifier: AGPL-3.0
+*/
 
-#include "onnxInferencer.hpp"
+#include "inference.hpp"
 #include <iostream>
 #include <map>
 #include <vector>
@@ -7,7 +11,7 @@
 namespace LocalInferenceTest {
     class FeatureLoaderExtractor {
         private:
-            OnnxInferencer::OnnxRequestProcessingHandler inference;
+            OnnxInferencer::DNSOnnxInference inference = OnnxInferencer::DNSOnnxInference();
             float calculate_entropy(std::string& domain) {
                 std::vector<float> freq(256, 0);
                 for (char c : domain) freq[static_cast<unsigned char>(c)] += 1.0f;
@@ -21,9 +25,17 @@ namespace LocalInferenceTest {
                 return entropy;
             }
         public:
-            FeatureLoaderExtractor() noexcept : inference() { }
+            FeatureLoaderExtractor() {}
             ~FeatureLoaderExtractor() {}
 
+            void infer(std::string& domain) {
+                std::vector<float> features = extractFeatures(domain);
+                if (inference.infer(features) >= inference.getClassificationThreshold()) {
+                    std::cout << "Malicious domain contain DNS exfil: " << domain << std::endl;
+                    return;
+                }
+                std::cout << "Benign domain contain DNS exfil: " << domain << std::endl;
+            }
             // extract DNS exfil lexical scan deep features 
             std::vector<float> extractFeatures(std::string& domain) {
                 std::vector<float> features;
@@ -32,7 +44,6 @@ namespace LocalInferenceTest {
 
                 size_t dot1 = domain.rfind('.');
                 size_t dot2 = domain.rfind('.', dot1 == std::string::npos ? std::string::npos : dot1 - 1);
-
                 std::string subdomain = (dot2 != std::string::npos) ? domain.substr(0, dot2) : "";
 
                 std::cout << "subdomain is " << subdomain << std::endl;

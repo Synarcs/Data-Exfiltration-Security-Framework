@@ -9,10 +9,9 @@ PROTO_PATH = "../../exfil_sec_api/cxx/"
 LIBONNX = -lonnxruntime
 INFER := infer
 SRC := main.cc \
-       $(PROTO_PATH)/exfil_sec_inference.pb.cc \
-       $(PROTO_PATH)/exfil_sec_inference.grpc.pb.cc
+       $(PROTO_PATH)/*.cc 
 
-.PHONY: all compile run clean 
+.PHONY: all compile run clean test
 
 all: compile run
 
