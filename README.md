@@ -82,11 +82,6 @@ Threat Event Stream Message Analysis Control Plane Server
     * Malicious / Suspicious Requests per second window
         Implementation of Token Bucket Algorithm for rate-limiting DNS traffic over kernel TC egress QDISC (bpf_timer), with refill rate equals 1 sec kernel time-window per-cpu reference.
     * Improve the DNS Volume base rate limiting
-* Cloud-Native orchestrated / containerized exfiltration security (via custom blacklist policy filters and CRD resources) using physical netdev Kernel eBPF programs.
-	* Kernel-enforced Dynamic Response (KDR) for cloud environments: leverages eBPF running over the host physical netdev to generate dynamic blacklist policy filters, intercepted in real-time via Kubernetes-based endpoint security operators. These controllers behave as wrappers to add layered security on top of the kernel network stack.
-	* Ongoing integration with Kubernetes using sidecar or guard containers for all pods — running eBPF over the kernel SOCK layer (skb_filter, skb_ops) — enabling real-time detection and prevention of malicious pods attempting data breaches across the entire Kubernetes cluster, thereby security nodes not running the eBPF DNS exfil agent at endpoint. Relies on layered security in kernel over each stages of packet processing from physical to virtual netdev.
-* Process-Aware Zero Trust Enforcement in Kernel Data Path
-    * integrates eBPF at the socket and TC layers to enforce packet-level security, dynamically correlating packets to originating processes using pinned maps and tracepoints. Malicious processes are contained via userspace-injected seccomp filters and fork tracking, enabling runtime threat response and process isolation across the kernel data path.
 * Zero Trust Architecture with Dual Signatures and Mutual Authentication for eBPF programs loading in cloud distributed systems
 	* Stage 1: Control Plane ↔ Data Plane
 	* gRPC over mutual TLS (mTLS) used for secure communication,
@@ -100,8 +95,8 @@ Threat Event Stream Message Analysis Control Plane Server
     * Integration with Public Cloud providers for dynamic NACL, Security groups, firewall rules creation over VPC for DNS exfiltration security
 eBPF node agent rinning over host ns, to fully thwart data breach by killing malicious C2 implants.
 * Enhance security covering all attack vectors for DNS data exfiltration over TCP (as covered in UDP) at endpoint itself, supporting conntrack state mapping in eBPF map for TCP handshake prior DNS transfer and stopping DNS data transfer over TCP socket via kernel TC.
-    1.  Integrate Envoy L7 TCP sock listener over user-space, for kernel to live forward TCP traffic from host netdev TC to envoy l7 socket listneer.
-    2.  Implement a envoy GO wasm filter for deep parsing DNS traffic over TCP over unix stream socket and shared as component of core node-agent.
+    1.  Integrate  L7 TCP sock listener over user-space for coalesced tcp segments, for kernel to live forward TCP traffic from host netdev TC to envoy l7 socket listneer.
+    2.  Implement a envoy GO wasm filter for deep parsing DNS traffic over TCP over unix stream socket and shared as component of core node-agent with similar hunt for process encap in kernel and userspace endpoint agent.
 * Harden security integrating with KubeArmor and other ACL policies for hardened security in orchestrated environments.
 * Enhance framework for safeguarding enterprises from exfiltration over other protocols (ICMP, FTP) etc. 
 * Enhance support for DOT (DNS over TLS), eBPF based TLS fingerprinting interception in kernel. 
