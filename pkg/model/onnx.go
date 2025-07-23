@@ -6,24 +6,29 @@
 package model
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
+	"context"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
-type OnnxModel struct {
-	TopDomainsDNSServer *utils.TopDomains
-}
-
 const (
 	DEEP_LEXICAL_INFERENCING  = iota
 	STATIC_BENIGN_INFERENCING // node agent found no further deep lexical analysis required its benign and can be procceed to leave the user space
 )
+
+type OnnxModel struct {
+	TopDomainsDNSServer *utils.TopDomains
+	InferenceServerSock *inference.DNSOnnxInferenceService // grpc socket l7 client connected to onnx inference server over UDS
+}
+
+func NewOnnxModelRemoteInference(topDomains *utils.TopDomains,
+	inferenceServerSock *inference.DNSOnnxInferenceService) (*OnnxModel, error) {
+	return &OnnxModel{
+		TopDomainsDNSServer: topDomains,
+		InferenceServerSock: inferenceServerSock,
+	}, nil
+}
 
 func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
 	floatTensors := make([][]float32, 0)
@@ -76,52 +81,19 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 				return false, nil
 			}
 
-			client, conn, err := inference.GetInferenceUnixClient(direction)
+			if onnx.InferenceServerSock == nil {
+				utils.Log("there is error the socket is nil ", onnx.InferenceServerSock)
+				return true, nil
+			}
+			inferenceResponse, err := onnx.InferenceServerSock.EgressInference(context.Background(), featureVectorsFloat)
 			if err != nil {
-				panic(err.Error())
+				utils.Log(err.Error())
+				return true, nil
 			}
 
-			defer conn.Close()
-
-			inferRequest := InferenceRequest{
-				// pass all the 8 features which define the input layer for the inference in the onnx model
-				Features: featureVectorsFloat,
-			}
-
-			requestPayload, err := json.Marshal(inferRequest)
-			if err != nil {
-				log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
-			}
-			resp, err := client.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
-			if err != nil {
-				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-				return false, err
-			}
-
-			defer resp.Body.Close()
-
-			payload, err := io.ReadAll(resp.Body)
-
-			if err != nil {
-				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-				return false, err
-			}
-
-			var inferenceResponse InferenceResponse
-			err = json.Unmarshal(payload, &inferenceResponse)
-
-			if err != nil {
-				utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
-				return false, err
-			}
-
-			if utils.DEBUG {
-				utils.Log("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
-			}
-
+			utils.Log("the threat type as malicious", inferenceResponse.ThreatType)
 			if inferenceResponse.ThreatType {
-				// add in the threat cache map for nested lru
-				// marked all the dns features as malicious
+				// add in the threat cache map for nested lru mark all the dns features as malicious
 				for _, dnsFeature := range dnsFeatures {
 					utils.UpdateDomainNestedEgressCache(dnsFeature.Tld, dnsFeature.Fqdn, true)
 				}
@@ -152,10 +124,4 @@ func (onnx *OnnxModel) Evaluate(features interface{}, protocol string, direction
 		utils.Log("the protocol not supported or missing the onnx model for evaluation")
 		return false
 	}
-}
-
-func NewRemoteInferenceSocket(t *utils.TopDomains) (*OnnxModel, error) {
-	return &OnnxModel{
-		TopDomainsDNSServer: t,
-	}, nil
 }

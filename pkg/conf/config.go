@@ -21,6 +21,7 @@ var (
 type (
 	NodeAgentCliOptions struct {
 		BPFProgPath              string
+		OnnxInferenceserverPath  string
 		AgentConfigPath          string
 		CliFlag                  bool
 		Debug                    bool
@@ -41,12 +42,12 @@ type (
 		Profile bool
 	}
 
-	// apply addon and extend to support cusomt config as required by the agent in userspace
+	// apply addon and extend to support custom config as required by the agent in userspace
 	AgentConfig interface {
 		GetAgentAggressiveDpiMode() bool
 		GetAddonFeaturesConfig() *EnhancedFeatures
 		GetAgentConfig() *NodeAgentConfig
-		ReadNodeAgentConfig(customConfigPath string) error
+		ReadNodeAgentConfig(string) error
 		GetL3FiltersConfig() *L3EnhancedFeatures
 		GetRLimitConfig() *RlimitConfig
 	}

@@ -29,6 +29,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	progs "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	controllerrpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/controller"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/profile"
@@ -196,6 +197,7 @@ func InitControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControlle
 
 func ParseArgs(nodeAgentCliOptions *conf.NodeAgentCliOptions) {
 	flag.StringVar(&nodeAgentCliOptions.BPFProgPath, "bpf_prog_path", "", "the path containing all the eBPF compiled programs")
+	flag.StringVar(&nodeAgentCliOptions.OnnxInferenceserverPath, "onnx_inference_path", "", "the grpc over unix server path to be bootstrapped for runtime inference over endpoint agent")
 	flag.StringVar(&nodeAgentCliOptions.AgentConfigPath, "agent_config_path", "", "custom path absolute path for booting up the agent | must be yaml as per Agent required format")
 	flag.BoolVar(&nodeAgentCliOptions.Debug, "debug", false, "Run the Node Agent in debug mode (default: false)")
 	flag.BoolVar(&nodeAgentCliOptions.CliFlag, "cli", false, "Runs the Node Agent control Daemon socket over a unix socket as cli reference (default: false)")
@@ -205,7 +207,7 @@ func ParseArgs(nodeAgentCliOptions *conf.NodeAgentCliOptions) {
 	// k8s integration as planned for supporting sidecar traffic mutation guards to thwart exfiltration over all pods virtual net_device in kernel attached to either the host cni vxlan / bgp net_device or internal node to node communication on same pod
 	flag.BoolVar(&nodeAgentCliOptions.Sdr, "sdr", false, "Run the eBPF Node Agent as a containerd using CAP_NET_ADMIN as a sidecar for traffic exfiltration security in Kubernetes")
 
-	// integrates with existing CNI's based on the availaible netfilter in user space via envoy for cilium (l7 filters) or iptables, ipvs (l3, l4) filters
+	// integrates with existing CNI's basedx on the availaible netfilter in user space via envoy for cilium (l7 filters) or iptables, ipvs (l3, l4) filters
 	flag.BoolVar(&nodeAgentCliOptions.Cni, "cni", false, "Instructs current configured CNI")
 	flag.IntVar(&nodeAgentCliOptions.K8sControllerWebhookPort, "mutatePort", 3000, "The port the eBPF Node agent mutation web hook runs ")
 
@@ -278,7 +280,7 @@ func main() {
 	// 	panic(err.Error())
 	// }
 
-	envoy.InitTCPWasmFilter()
+	envoy.InitTCPWasmFilter(ctx)
 
 	// rf Netlink packet parsing for the node agent
 	iface := netinet.NewNetIface()
@@ -340,9 +342,29 @@ func main() {
 		utils.Log("The Node Agent booted with global config", agentConfigLoader.GetAgentConfig())
 	}
 
+	var inferServerPath string = ""
+	if nodeAgentCliOptions.OnnxInferenceserverPath == "" {
+		inferServerPath = "../model/ttrpc_onnx/infer"
+	} else {
+		inferServerPath = nodeAgentCliOptions.OnnxInferenceserverPath
+	}
+
+	// starts the onnx loaded grpc inference server over UDS
+	onnxServer := inference.NewOnxxInferenceServer()
+
+	if err := onnxServer.StartRemoteOnnxInferenceListener(inferServerPath); err != nil {
+		panic(err.Error())
+	}
+
+	inferenceOnnxrpcClient, err := inference.NewNodeAgentUnixCLISocket()
+
+	if err != nil {
+		panic(err.Error())
+	}
+
 	cliSock := cli.NewRemoteCliSocketServer()
 	if nodeAgentCliOptions.CliFlag {
-		utils.Log(fmt.Sprintf("The ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath))
+		utils.Log(fmt.Sprintf("oThe ebpf node agent booted with unix stream socket as cli daemon control for root admins  %s", cli.LocalCliUnixSockPath))
 		go cliSock.NewNodeAgentUnixCLISocket()
 	}
 
@@ -381,7 +403,7 @@ func main() {
 	}
 
 	// load the model from onnx lib
-	model, err := onnx.NewRemoteInferenceSocket(topDomains)
+	model, err := onnx.NewOnnxModelRemoteInference(topDomains, inferenceOnnxrpcClient)
 	if err != nil {
 		utils.Log("The Required dumped stored model cannot be loaded , Node agent current process panic", os.Getpid())
 		panic(err.Error())
@@ -418,6 +440,7 @@ func main() {
 			OnnxModel:                       model,
 			StreamClient:                    streamProducer,
 			GlobalErrorKernelHandlerChannel: globalErrorKernelHandlerChannel,
+			InferenceServerSock:             inferenceOnnxrpcClient,
 		})
 		go ingress.SniffIgressForC2C(ctx, utils.DNS_EGRESS_PORT)
 	}
@@ -498,7 +521,7 @@ func main() {
 		term <- sig
 	}(term, tst)
 
-	// TODO move this to uring or epoll fd listners for the remote inference server to emity socket close signal event consumed via unix trafer port
+	// works over fsnotify running over epoll for socket mount option event notification for socket clean and mounted status
 	go func() {
 		cleanMountedKernelHooks := func() {
 			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
@@ -524,6 +547,7 @@ func main() {
 	case syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM:
 		utils.Log("Received signal", sigType, "Terminating all the kernel routines ebpf programs")
 	}
+
 	utils.Log("Stopping the root node agent ebpf programs atatched in Kernel", os.Getpid())
 	agentCancelFunc() // used only for ring buffers to stop polling ting buff from kernel
 	if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
@@ -541,6 +565,10 @@ func main() {
 	if crypto.DUMP_CA_LSM {
 		CleanCryptoDirs()
 	}
+
+	// closing the inference server
+	inferenceOnnxrpcClient.CloseRpcInferenceServer()
+	onnxServer.StopRemoteOnnxInferenceListener()
 
 	streamProducer.CloseProducer()
 	streamConsumer.CloseConsumer()

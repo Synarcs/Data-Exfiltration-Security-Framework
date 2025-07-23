@@ -321,10 +321,10 @@ func (nf *NetIface) ReadRoutes() error {
 	return nil
 }
 
-func (iface *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
+func (nf *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
 	links, _ := netlink.LinkList()
 	for _, link := range links {
-		_, fd := iface.LinkMap[link.Attrs().Name]
+		_, fd := nf.LinkMap[link.Attrs().Name]
 		if !fd {
 			flags := link.Attrs().Flags
 			if utils.DEBUG {
@@ -335,14 +335,14 @@ func (iface *NetIface) FetchNewNetlinkPppSocket() netlink.Link {
 				utils.Log("ppp socket detected attaching tc hooks", link.Attrs().Name, link.Attrs().Index)
 				return link
 			}
-			iface.LinkMap[link.Attrs().Name] = true
+			nf.LinkMap[link.Attrs().Name] = true
 		}
 	}
 	return nil
 }
 
 // in case if node agent crash and hte tunnel iface tuntap point to point is loaded in kernel
-func (iface *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
+func (nf *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 	links, _ := netlink.LinkList()
 	var tunnelLinks []netlink.Link = make([]netlink.Link, 0)
 

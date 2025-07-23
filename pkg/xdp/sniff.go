@@ -13,6 +13,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events/stream"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/model"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -28,6 +29,7 @@ type IngressSniffHandler struct {
 	StreamClient *stream.StreamProducer
 
 	GlobalErrorKernelHandlerChannel chan error // handles all control channel created by main to kill any kernel code if found runtime panics
+	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 
 type IngressSnifferConfig struct {
@@ -35,34 +37,34 @@ type IngressSnifferConfig struct {
 	OnnxModel                       *model.OnnxModel
 	StreamClient                    *stream.StreamProducer
 	GlobalErrorKernelHandlerChannel chan error
+	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 
-// a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
-// TODO: Fix all the code redundancies
 func NewIngressSniffer(config *IngressSnifferConfig) *IngressSniffHandler {
-
 	// only use  for ingress support for the link (net_device) in kernel
 	// Ingress sniff and process neither need AF_XDP not AF_PACKET
-
 	return &IngressSniffHandler{
 		IfaceHandler:                    config.Iface,
 		OnnxModel:                       config.OnnxModel,
 		StreamClient:                    config.StreamClient,
 		GlobalErrorKernelHandlerChannel: config.GlobalErrorKernelHandlerChannel,
+		InferenceServerSock:             config.InferenceServerSock,
 	}
 }
 
-func (ing *IngressSniffHandler) RemoteIngressInference(features [][]float32,
+func (ing *IngressSniffHandler) RemoteIngressInference(ctx context.Context, features [][]float32,
 	rawFeatures []model.DNSFeatures) error {
 
 	if ing.OnnxModel.StaticRuntimeChecks(features, false) == model.DEEP_LEXICAL_INFERENCING &&
 		!model.StaticRuntimeBenignDomainChecks(rawFeatures) {
-		IngressRemoteInferHandler(features, rawFeatures, ing.IfaceHandler, ing.StreamClient)
+		ing.IngressRemoteInferHandler(ctx, features, rawFeatures,
+			ing.IfaceHandler, ing.StreamClient, ing.InferenceServerSock)
 	}
 	return nil
 }
 
-func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
+func (ing *IngressSniffHandler) ProcessEachPacket(ctx context.Context,
+	packet gopacket.Packet, ifaceHandler *netinet.NetIface, handler *pcap.Handle) error {
 
 	eth := packet.Layer(layers.LayerTypeEthernet)
 	var isIpv4 bool
@@ -108,7 +110,7 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 			}
 
 			vectors := model.GenerateFloatVectors(features, ing.OnnxModel)
-			ing.RemoteIngressInference(vectors, features)
+			ing.RemoteIngressInference(ctx, vectors, features)
 			return nil
 		}
 
@@ -133,8 +135,6 @@ func (ing *IngressSniffHandler) ProcessEachPacket(packet gopacket.Packet, ifaceH
 			utils.Log("Error decoding the dns packet over the tcp stream", err)
 			return err
 		}
-
-		// TODO: Support deep parsing for parsing Ingress  TCP traffic
 	}
 	return nil
 }
@@ -171,7 +171,7 @@ func (ing *IngressSniffHandler) SniffIgressForC2C(ctx context.Context, sniffUDPP
 				graceFulCloseSniff <- true
 				return nil
 			case pack := <-packets.Packets():
-				go ing.ProcessEachPacket(pack, ing.IfaceHandler, cap)
+				go ing.ProcessEachPacket(ctx, pack, ing.IfaceHandler, cap)
 			}
 		}
 	}

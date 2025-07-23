@@ -106,10 +106,8 @@ var (
 	EXFIL_PROCESS_CACHE_CLEAN_MALICIOUS_PORT_INGRESS_SNIF_THRESHOLD = 5
 )
 
-// user space remote inferencing support for unix domain sockets
 const (
-	ONNX_INFERENCE_UNIX_SOCKET_EGRESS  = "/run/dnsobelisk/onnx-inference-out.sock"
-	ONNX_INFERENCE_UNIX_SOCKET_INGRESS = "/run/dnsobelisk/onnx-inference-in.sock"
+	ONNX_INFER_UNIX_MNT = "/run/dnsobelisk/onnx-inference.sock"
 )
 
 const (
@@ -355,7 +353,7 @@ func VerifyTcxSupportEgressLink() bool {
 	return majorRelease >= 6 && patchRelease >= 6 && false // for now return fale until kernel prorga with eBPF section is modified
 }
 
-func ForceGcPacketBufferZerocopyUserspace() {
+func ForceGc() {
 	runtime.GC()
 }
 

@@ -11,10 +11,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"runtime"
 	"strconv"
 	"strings"
@@ -49,7 +47,8 @@ type (
 		TaskCommTCEgressKernelSupport bool
 		IngressTunnelSniffer          *xdp.IngressSniffHandler
 
-		AgentOperationPassiveMode bool // passive DPI stop breaches over both random and default UDP port over DNS
+		AgentOperationPassiveMode bool                               // passive DPI stop breaches over both random and default UDP port over DNS
+		InferenceServerSock       *inference.DNSOnnxInferenceService // grpc socket l7 client connected to onnx inference server over UDS
 	}
 
 	TCCloneTunnelConfig struct {
@@ -59,6 +58,7 @@ type (
 		StreamClient                          *stream.StreamProducer
 		Onnx                                  *model.OnnxModel
 		isPassiveStandardDNSPortUDPTransfer   bool
+		InferenceServerSock                   *inference.DNSOnnxInferenceService
 	}
 )
 
@@ -75,6 +75,7 @@ func NewTcTunnelFactory(config *TCCloneTunnelConfig) *TCCloneTunnel {
 		Onnx:                                  config.Onnx,
 		TaskCommTCEgressKernelSupport:         utils.VerifyKernelEgressTCClsactTaskCommSuppert(),
 		AgentOperationPassiveMode:             config.isPassiveStandardDNSPortUDPTransfer,
+		InferenceServerSock:                   config.InferenceServerSock,
 	}
 
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
@@ -179,8 +180,7 @@ func (tun *TCCloneTunnel) IncrementMaliciousProcCountLocalCacheOverlayPort(mapFi
 	// the sniff context uses same mutex for node agent to track detected malicous process and associated port
 	if IsTunnelSniffForLargeMaliciousThresholdRequired() {
 		if _, fd := maliciousExfilPortIngressSniffCtxMap[maliciousDestPort]; !fd {
-			ctx := context.Background()
-			ctx, cancel := context.WithCancel(ctx)
+			ctx, cancel := context.WithCancel(context.Background())
 			maliciousExfilPortIngressSniffCtxMap[maliciousDestPort] = &maliciousExfilPortIngressSniffCtx{
 				ctx:         ctx,
 				cancelSniff: cancel,
@@ -493,52 +493,15 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		/// used as a processing input for standard tensor vectors for the deep learning model
 		featureVectorsFloat := model.GenerateFloatVectors(features, tun.Onnx)
 		if tun.Onnx.StaticRuntimeChecks(featureVectorsFloat, true) == model.DEEP_LEXICAL_INFERENCING {
-			client, conn, err := inference.GetInferenceUnixClient(true)
 
+			if tun.InferenceServerSock == nil {
+				utils.Log("there is error the socket is nil ", tun.InferenceServerSock)
+				return nil // dont block or erro for passive DPI if inference socket is not mounted
+			}
+			inferenceResponse, err := tun.InferenceServerSock.EgressInference(context.Background(), featureVectorsFloat)
 			if err != nil {
-				utils.Log("Error Gettting report inference socket for inference")
+				utils.Logger.Error(err.Error())
 				return err
-			}
-
-			if conn == nil || client == nil {
-				return fmt.Errorf("Error while getting the inference client for the onnx model")
-			}
-			defer conn.Close()
-
-			inferRequest := model.InferenceRequest{
-				// pass all the 8 features which define the input layer for the inference in the onnx model
-				Features: featureVectorsFloat,
-			}
-			requestPayload, err := json.Marshal(inferRequest)
-			if err != nil {
-				utils.Logger.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
-				return err
-			}
-
-			resp, err := client.Post(fmt.Sprintf("http://%s/onnx/dns", "unix"), "application/json", bytes.NewBuffer(requestPayload))
-			if err != nil {
-				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-				return err
-			}
-			defer resp.Body.Close()
-
-			payload, err := io.ReadAll(resp.Body)
-
-			if err != nil {
-				utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-				return err
-			}
-
-			var inferenceResponse model.InferenceResponse
-			err = json.Unmarshal(payload, &inferenceResponse)
-
-			if err != nil {
-				utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
-				return err
-			}
-
-			if !utils.DEBUG {
-				utils.Log("Received inference from remote unix socket server ", inferenceResponse, inferenceResponse.ThreatType)
 			}
 
 			// detected malicious exfiltrated object
@@ -595,8 +558,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 						tun.IncrementMaliciousProcCountLocalCacheOverlayPort(ev, destTransportPort)
 					}
 				}
-				go runtime.GC()
-
+				go utils.ForceGc()
 			}
 		}
 	} else {
@@ -650,7 +612,7 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 			// older kernel version use kernel proc fs mount to ge process Information
 		}
 	}
-	go utils.ForceGcPacketBufferZerocopyUserspace()
+	go utils.ForceGc()
 	return nil
 }
 

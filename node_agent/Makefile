@@ -27,6 +27,11 @@ compile-kernel-ebpf:
 	@echo "Compiling all the eBPF kernel programs for $(shell uname -m) arch"
 	cd ../kernel && make
 
+.PHONY: compile-onnx-infer-server
+compile-onnx-infer-server:
+	@echo "compiling onnx inference and WASM TCP DPI server"
+	cd ../model/ttrpc_onnx && make compile
+
 .PHONY: build-cli 
 build-cli:
 	@echo "Building eBPF Node Agent CLI for unix IPC"
@@ -41,13 +46,19 @@ test:
 build:
 	@echo "Building and compiling the eBPF Node Agent {Kernel, User-Space}"
 	make compile-kernel-ebpf
+	make compile-onnx-infer-server 
 	make build-cli 
 	make compile
 
 .PHONY: run-inference
 run-inference:
 	@echo "Running the Remote unix socket inference server" 
-	sudo python3 ../model/infer/inference.py -m $(MODEL_PATH)
+	sudo python3 ../model/infer/inference.py -m $(MODEL_PATH) 
+
+# this is what meant for production and high throughput requirement for packet processing
+.PHONY: build-run-inference
+build-run-inference:
+	cd ../model/ttrpc_onnx && make && sudo ./infer &
 
 .PHONY: run-inference-controller
 run-inference-controller:

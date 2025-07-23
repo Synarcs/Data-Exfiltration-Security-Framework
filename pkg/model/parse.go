@@ -297,7 +297,7 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 				})
 			}
 			// perform force garbage collection for go runtime to clean userspace memory during processing from kernel packet data in zero-copy mode
-			go utils.ForceGcPacketBufferZerocopyUserspace()
+			go utils.ForceGc()
 			d.EvalOverallPacketProcessTime(*dns, spec, true)
 		}
 		return nil

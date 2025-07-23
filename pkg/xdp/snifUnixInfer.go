@@ -6,12 +6,7 @@
 package xdp
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
 	"strconv"
 
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
@@ -24,59 +19,21 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
-func IngressRemoteInferHandler(features [][]float32, rawFeatures []model.DNSFeatures,
-	iface *netinet.NetIface, streamClient *stream.StreamProducer) error {
+func (ing *IngressSniffHandler) IngressRemoteInferHandler(ctx context.Context, features [][]float32, rawFeatures []model.DNSFeatures,
+	iface *netinet.NetIface, streamClient *stream.StreamProducer, InferenceServerSock *inference.DNSOnnxInferenceService) error {
 	// process deep lexical analysis from remote unix transport inference server
 
-	ctx := context.Background()
-
-	inferRequest := model.InferenceRequest{
-		// pass all the 8 features which define the input layer for the inference in the onnx model
-		Features: features,
-	}
-	// layer 7 markup over layer 4 unix transport
-	ingressClient, _, err := inference.GetInferenceUnixClient(false)
-
+	inferenceResponse, err := ing.InferenceServerSock.IngressInference(ctx, features)
 	if err != nil {
-		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-		return err
-	}
-
-	// need this over multiplex transport layer 7 transport
-	requestPayload, err := json.Marshal(inferRequest)
-	if err != nil {
-		log.Fatalf("Error while generating the onnx remote inference request payload  %v", err)
-	}
-	resp, err := ingressClient.Post(fmt.Sprintf("http://%s/onnx/dns/ing", "unix"), "application/json", bytes.NewBuffer(requestPayload))
-	if err != nil {
-		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-		return err
-	}
-	defer resp.Body.Close()
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		utils.Logger.Printf("Error while evaluating the onnx model for the dns features %v", err)
-		return err
-	}
-	var inferenceResponse model.InferenceResponseIngress
-	err = json.Unmarshal(payload, &inferenceResponse)
-
-	if err != nil {
-		utils.Logger.Printf("Error while unmarshalling the onnx inference response %v", err)
-		return err
-	}
-
-	if utils.DEBUG {
-		utils.Log("Remote inference over unix ingress socket for transport for node agent ", inferenceResponse)
+		utils.Logger.Error(err)
+		return nil
 	}
 
 	for index, resp := range inferenceResponse.ThreatType {
 		if resp {
-			utils.Log("raw feature for malicious payload is ::", rawFeatures[index])
 			utils.IngUpdateDomainBlacklistInCache(rawFeatures[index].Tld)
-			// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handl itself no need to again check
+			// putting here 53 the standard DNS port since the socket transport from kernel must be detected before handle itself no need to again check
 			// the same port as used for egrres will be used as src port for response from remote c2c malware
-			// dont monitro task comm and process struct over ingress traffic
 			go events.ExportMaliciousEvents[progs.Protocol](events.DNSFeatures(rawFeatures[index]),
 				&iface.PhysicalNodeBridgeIpv4, events.DNS, int(utils.DNS_EGRESS_PORT), nil)
 
