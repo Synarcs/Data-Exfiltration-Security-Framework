@@ -69,7 +69,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
 
                 if self.path == "/onnx/dns":
                     evalPrediction = []
-
+                    
                     for feature in request_body['Features']:
                         evalPrediction.append(self.infer(feature))
 
@@ -95,7 +95,7 @@ class HandleInferenceConnHttpLayer7(http.server.BaseHTTPRequestHandler):
                     }
                     self.send_response(http.HTTPStatus.OK) 
                     self.send_header("Content-Type", "application/json") 
-                    response_body = json.dumps(response).encode('utf-8')
+                    response_body = json.dumps(response).encode("utf-8")
                     if not DEBUG:
                         log.debug(f"Sending response: {response_body}")
                     self.wfile.write(response_body) 
@@ -142,6 +142,7 @@ class UnixSocketHttpServer(socketserver.UnixStreamServer):
 
 class ThreadingUnixSocketHttpServer(socketserver.ThreadingMixIn, UnixSocketHttpServer):
     allow_reuse_address = True
+    allow_reuse_port = True 
     daemon_threads = True 
     request_queue_size = 1 << 10 
 

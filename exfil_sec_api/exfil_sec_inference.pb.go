@@ -9,7 +9,9 @@ package exfil_sec_api
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
+	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -20,19 +22,293 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type DnsFeatures struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Features      []float32              `protobuf:"fixed32,1,rep,packed,name=features,proto3" json:"features,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsFeatures) Reset() {
+	*x = DnsFeatures{}
+	mi := &file_exfil_sec_inference_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsFeatures) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsFeatures) ProtoMessage() {}
+
+func (x *DnsFeatures) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_inference_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsFeatures.ProtoReflect.Descriptor instead.
+func (*DnsFeatures) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_inference_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *DnsFeatures) GetFeatures() []float32 {
+	if x != nil {
+		return x.Features
+	}
+	return nil
+}
+
+type DnsInferenceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reshaped      []*DnsFeatures         `protobuf:"bytes,1,rep,name=reshaped,proto3" json:"reshaped,omitempty"` // features over rpc are reshaped adhere to shape for inference request
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsInferenceRequest) Reset() {
+	*x = DnsInferenceRequest{}
+	mi := &file_exfil_sec_inference_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsInferenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsInferenceRequest) ProtoMessage() {}
+
+func (x *DnsInferenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_inference_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsInferenceRequest.ProtoReflect.Descriptor instead.
+func (*DnsInferenceRequest) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_inference_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *DnsInferenceRequest) GetReshaped() []*DnsFeatures {
+	if x != nil {
+		return x.Reshaped
+	}
+	return nil
+}
+
+type DnsInferenceResponseIngress struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ThreatType    []bool                 `protobuf:"varint,1,rep,packed,name=threatType,proto3" json:"threatType,omitempty"`
+	Protocol      string                 `protobuf:"bytes,2,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsInferenceResponseIngress) Reset() {
+	*x = DnsInferenceResponseIngress{}
+	mi := &file_exfil_sec_inference_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsInferenceResponseIngress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsInferenceResponseIngress) ProtoMessage() {}
+
+func (x *DnsInferenceResponseIngress) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_inference_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsInferenceResponseIngress.ProtoReflect.Descriptor instead.
+func (*DnsInferenceResponseIngress) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_inference_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DnsInferenceResponseIngress) GetThreatType() []bool {
+	if x != nil {
+		return x.ThreatType
+	}
+	return nil
+}
+
+func (x *DnsInferenceResponseIngress) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+type DnsInferenceResponseEgress struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ThreatType    bool                   `protobuf:"varint,1,opt,name=threatType,proto3" json:"threatType,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsInferenceResponseEgress) Reset() {
+	*x = DnsInferenceResponseEgress{}
+	mi := &file_exfil_sec_inference_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsInferenceResponseEgress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsInferenceResponseEgress) ProtoMessage() {}
+
+func (x *DnsInferenceResponseEgress) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_inference_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsInferenceResponseEgress.ProtoReflect.Descriptor instead.
+func (*DnsInferenceResponseEgress) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_inference_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DnsInferenceResponseEgress) GetThreatType() bool {
+	if x != nil {
+		return x.ThreatType
+	}
+	return false
+}
+
+type ServiceHeartBeatVersion struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServiceHeartBeatVersion) Reset() {
+	*x = ServiceHeartBeatVersion{}
+	mi := &file_exfil_sec_inference_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceHeartBeatVersion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceHeartBeatVersion) ProtoMessage() {}
+
+func (x *ServiceHeartBeatVersion) ProtoReflect() protoreflect.Message {
+	mi := &file_exfil_sec_inference_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceHeartBeatVersion.ProtoReflect.Descriptor instead.
+func (*ServiceHeartBeatVersion) Descriptor() ([]byte, []int) {
+	return file_exfil_sec_inference_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ServiceHeartBeatVersion) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
 var File_exfil_sec_inference_proto protoreflect.FileDescriptor
 
 const file_exfil_sec_inference_proto_rawDesc = "" +
 	"\n" +
-	"\x19exfil_sec_inference.proto\x12\fexfil_kernelBUZSgithub.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_apib\x06proto3"
+	"\x19exfil_sec_inference.proto\x12\fexfil_kernel\x1a\x1bgoogle/protobuf/empty.proto\")\n" +
+	"\vDnsFeatures\x12\x1a\n" +
+	"\bfeatures\x18\x01 \x03(\x02R\bfeatures\"L\n" +
+	"\x13DnsInferenceRequest\x125\n" +
+	"\breshaped\x18\x01 \x03(\v2\x19.exfil_kernel.DnsFeaturesR\breshaped\"Y\n" +
+	"\x1bDnsInferenceResponseIngress\x12\x1e\n" +
+	"\n" +
+	"threatType\x18\x01 \x03(\bR\n" +
+	"threatType\x12\x1a\n" +
+	"\bprotocol\x18\x02 \x01(\tR\bprotocol\"<\n" +
+	"\x1aDnsInferenceResponseEgress\x12\x1e\n" +
+	"\n" +
+	"threatType\x18\x01 \x01(\bR\n" +
+	"threatType\"3\n" +
+	"\x17ServiceHeartBeatVersion\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion2\xa1\x02\n" +
+	"\x17DNSOnnxInferenceService\x12\\\n" +
+	"\fIngressInfer\x12!.exfil_kernel.DnsInferenceRequest\x1a).exfil_kernel.DnsInferenceResponseIngress\x12Z\n" +
+	"\vEgressInfer\x12!.exfil_kernel.DnsInferenceRequest\x1a(.exfil_kernel.DnsInferenceResponseEgress\x12L\n" +
+	"\vVersionInfo\x12\x16.google.protobuf.Empty\x1a%.exfil_kernel.ServiceHeartBeatVersionBUZSgithub.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_apib\x06proto3"
 
-var file_exfil_sec_inference_proto_goTypes = []any{}
+var (
+	file_exfil_sec_inference_proto_rawDescOnce sync.Once
+	file_exfil_sec_inference_proto_rawDescData []byte
+)
+
+func file_exfil_sec_inference_proto_rawDescGZIP() []byte {
+	file_exfil_sec_inference_proto_rawDescOnce.Do(func() {
+		file_exfil_sec_inference_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_exfil_sec_inference_proto_rawDesc), len(file_exfil_sec_inference_proto_rawDesc)))
+	})
+	return file_exfil_sec_inference_proto_rawDescData
+}
+
+var file_exfil_sec_inference_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_exfil_sec_inference_proto_goTypes = []any{
+	(*DnsFeatures)(nil),                 // 0: exfil_kernel.DnsFeatures
+	(*DnsInferenceRequest)(nil),         // 1: exfil_kernel.DnsInferenceRequest
+	(*DnsInferenceResponseIngress)(nil), // 2: exfil_kernel.DnsInferenceResponseIngress
+	(*DnsInferenceResponseEgress)(nil),  // 3: exfil_kernel.DnsInferenceResponseEgress
+	(*ServiceHeartBeatVersion)(nil),     // 4: exfil_kernel.ServiceHeartBeatVersion
+	(*emptypb.Empty)(nil),               // 5: google.protobuf.Empty
+}
 var file_exfil_sec_inference_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: exfil_kernel.DnsInferenceRequest.reshaped:type_name -> exfil_kernel.DnsFeatures
+	1, // 1: exfil_kernel.DNSOnnxInferenceService.IngressInfer:input_type -> exfil_kernel.DnsInferenceRequest
+	1, // 2: exfil_kernel.DNSOnnxInferenceService.EgressInfer:input_type -> exfil_kernel.DnsInferenceRequest
+	5, // 3: exfil_kernel.DNSOnnxInferenceService.VersionInfo:input_type -> google.protobuf.Empty
+	2, // 4: exfil_kernel.DNSOnnxInferenceService.IngressInfer:output_type -> exfil_kernel.DnsInferenceResponseIngress
+	3, // 5: exfil_kernel.DNSOnnxInferenceService.EgressInfer:output_type -> exfil_kernel.DnsInferenceResponseEgress
+	4, // 6: exfil_kernel.DNSOnnxInferenceService.VersionInfo:output_type -> exfil_kernel.ServiceHeartBeatVersion
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_exfil_sec_inference_proto_init() }
@@ -46,12 +322,13 @@ func file_exfil_sec_inference_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_exfil_sec_inference_proto_rawDesc), len(file_exfil_sec_inference_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   0,
+			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_exfil_sec_inference_proto_goTypes,
 		DependencyIndexes: file_exfil_sec_inference_proto_depIdxs,
+		MessageInfos:      file_exfil_sec_inference_proto_msgTypes,
 	}.Build()
 	File_exfil_sec_inference_proto = out.File
 	file_exfil_sec_inference_proto_goTypes = nil

@@ -3,15 +3,19 @@
 	SPDX-License-Identifier: AGPL-3.0
 */
 
-#include "inference.hpp"
+#pragma once 
+
 #include <iostream>
 #include <map>
 #include <vector>
+#include <concepts>
+
+#include "inference.hpp"
 
 namespace LocalInferenceTest {
     class FeatureLoaderExtractor {
-        private:
-            OnnxInferencer::DNSOnnxInference inference = OnnxInferencer::DNSOnnxInference();
+        protected:
+            unique_ptr<OnnxInferencer::DNSOnnxCPUInference> inference;
             float calculate_entropy(std::string& domain) {
                 std::vector<float> freq(256, 0);
                 for (char c : domain) freq[static_cast<unsigned char>(c)] += 1.0f;
@@ -25,17 +29,17 @@ namespace LocalInferenceTest {
                 return entropy;
             }
         public:
-            FeatureLoaderExtractor() {}
-            ~FeatureLoaderExtractor() {}
+            FeatureLoaderExtractor() : inference(make_unique<OnnxInferencer::DNSOnnxCPUInference>()){}
 
             void infer(std::string& domain) {
                 std::vector<float> features = extractFeatures(domain);
-                if (inference.infer(features) >= inference.getClassificationThreshold()) {
+                if (inference.get()->infer(features) >= inference.get()->getClassificationThreshold()) {
                     std::cout << "Malicious domain contain DNS exfil: " << domain << std::endl;
                     return;
                 }
                 std::cout << "Benign domain contain DNS exfil: " << domain << std::endl;
             }
+
             // extract DNS exfil lexical scan deep features 
             std::vector<float> extractFeatures(std::string& domain) {
                 std::vector<float> features;
@@ -58,7 +62,7 @@ namespace LocalInferenceTest {
                 size_t start = 0, end;
                 while ((end = domain.find('.', start)) != std::string::npos) {
                     labels.push_back(domain.substr(start, end - start));
-                    start = end + 1;
+                    start = end + 1;    
                 }
                 labels.push_back(domain.substr(start));
                 int max_label_length = 0;
@@ -80,6 +84,14 @@ namespace LocalInferenceTest {
                     static_cast<float>(max_label_length),
                     avg_label_length
                 };
+            }
+
+            std::vector<std::vector<float>> getFeatures(vector<std::string>& domains) {
+                std::vector<std::vector<float>> features;
+                for (auto& domain: domains) {
+                    features.emplace_back(extractFeatures(domain));
+                }
+                return features;
             }
     };
 }

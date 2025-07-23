@@ -89,6 +89,10 @@ struct exfil_security_egress_dns_limites {
     #define TCX_LINUX_SUBRELEASE_SUPPORT 6 
 #endif
 
+// envoy filter sock options over kernel sock layer to prevent skb peer redirection loop over sockets
+// the kernel egress tc does not consider filter wasm envoy processing 
+#define ENVOY_DPI_TCP_PORT 9801
+#define ENVOY_DPI_WASM_TCP_FILTER true
 
 #define DETECTED_MALICIOUS_COUNT_DNS_RANDOM_PORT_DROP_LIMIT 1
 

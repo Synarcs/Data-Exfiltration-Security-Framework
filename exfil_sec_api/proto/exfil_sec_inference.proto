@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+import "google/protobuf/empty.proto";
 package exfil_kernel;
 
 option go_package = "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api;exfil_sec_api";
@@ -10,17 +11,15 @@ message DnsFeatures {
 
 message DnsInferenceRequest {
     repeated DnsFeatures reshaped = 1; // features over rpc are reshaped adhere to shape for inference request 
-    string tld = 2;
-    string root = 3;
 }
 
 message DnsInferenceResponseIngress {
-    repeated bool threadType = 1;
+    repeated bool threatType = 1;
     string protocol = 2;
 }
 
 message DnsInferenceResponseEgress {
-    bool threadType = 1;
+    bool threatType = 1;
 }
 
 message ServiceHeartBeatVersion {
@@ -28,7 +27,7 @@ message ServiceHeartBeatVersion {
 }
 
 service DNSOnnxInferenceService {
-    // rpc ServiceVersion() returns (ServiceHeartBeatVersion);
     rpc IngressInfer(DnsInferenceRequest) returns (DnsInferenceResponseIngress);
     rpc EgressInfer(DnsInferenceRequest) returns (DnsInferenceResponseEgress);
+    rpc VersionInfo(google.protobuf.Empty) returns (ServiceHeartBeatVersion);
 }

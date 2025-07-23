@@ -97,7 +97,8 @@ int BPF_PROG(bpf, int cmd, union bpf_attr *attr, unsigned int size){
     //     return -ENOENT;
     // }
 
-    bpf_printk("yeah the ebpf sign key found");
+    // TODO: Port the custom LSM security written to be integrated with the core kernel exfil security framework
+    bpf_printk("the ebpf sign key found");
     bpf_printk("the lsm crypto verification hook called over BPF_PROG_LOAD kernel syscall %d ins ct %d, sig size %d", 
                         *sign_keyring_id, insn_cnt, org_data->sig_len);
     // bpf_key_put(trusted_keyring);

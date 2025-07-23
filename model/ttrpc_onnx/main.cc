@@ -38,7 +38,18 @@ static
 void removeMountedSocks() {
     // ensure the mnt is clean 
     try {
-        filesystem::remove_all(INFER_MNT_PTH);
+        int runfs_sock_mount = 0;
+        for (const auto& file : std::filesystem::directory_iterator(INFER_MNT_PTH)) {
+            if (file.is_socket()) {
+                if (file.path().filename() == ONNX_INFER_UNIX_MNT) {
+                    std::filesystem::remove(ONNX_INFER_UNIX_MNT);
+                }
+            }
+            runfs_sock_mount++;
+        }
+        if (runfs_sock_mount == 1) {
+            std::filesystem::remove_all(INFER_MNT_PTH);
+        }
     }catch(const std::filesystem::filesystem_error& e) {
         perror("erro cleaning previous mnt server");
         exit(EXIT_FAILURE);
@@ -53,12 +64,12 @@ class InferenceServer {
             startinferencerpc(threshold);
         }
 
-        InferenceServer()  {
+        explicit InferenceServer()  {
             const float default_threhold = 0.5;
             start(default_threhold);
         }
 
-        InferenceServer(const string& model_path, const float& threshold) noexcept {
+        explicit InferenceServer(const string& model_path, const float& threshold) {
             this->model_path = model_path;
             this->threshold = threshold;
             start(threshold);
@@ -79,11 +90,11 @@ class InferenceServer {
             builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
             builder.RegisterService(inferrpc.get());
             std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
-            std::cout << "Inference grpc server started on port 32001 with onnx binary classification threshold " << binary_threshold << std::endl;
+            std::cout << "Inference grpc server started over UDS transport path " << ONNX_INFER_UNIX_MNT << "with binary classification threshold for model " << binary_threshold << std::endl;
             rpcServer = std::move(server);
             // Add signal handlers for graceful interrupt shutdowns 
             rpcServer->Wait();
-        }
+        }  
 
         void shutdownServer() { rpcServer->Shutdown(); }
 
@@ -120,8 +131,9 @@ class InferenceServer {
         }
 };
 
-#if !defined(LDX)
+#if defined(LDX)
 extern "C" {
+#endif
     int main(int argc, char *argv[]) { 
         int opt;
         string model_path;
@@ -143,10 +155,10 @@ extern "C" {
                     return 0;
             }
         }
-        
         unique_ptr<InferenceServer> srv = make_unique<InferenceServer>(model_path, threshold);
         signal(SIGKILL, killRPCServerHandler);
         signal(SIGINT, killRPCServerHandler);
     }
+#if defined(LDX)
 }
-#endif 
+#endif

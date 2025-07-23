@@ -93,14 +93,14 @@ struct packet_actions {
     
     // app layer 
     __u8 (*parse_dns_header_size) (struct skb_cursor *, bool, bool);
-    __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32,  struct dns_header *, __u32);
+    __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32, __u32);
     __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header_tcp *, __u32); 
 
     __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
     __u8 (*parse_dns_payload_memsafet_payload_transport_tcp) (struct skb_cursor *, void *, struct dns_header_tcp *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
-    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes );
+    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes);
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *, struct udphdr *);
@@ -314,10 +314,10 @@ struct dns_volume_stats {
         }while(0);
 
 // to ensure ease fro verifier bounds
-#define DNS_DPI_FEATURE_PRIO_SAFE(feature_prio) \
-    __builtin_types_compatible_p(typeof((feature_prio)), typeof(MAX_DNS_PRIO_KEYS)) ? \
-                ((feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (feature_prio)) : \
-                    (feature_prio)   
+#define DNS_DPI_FEATURE_PRIO_SAFE(__feature_prio) \
+    __builtin_types_compatible_p(typeof((__feature_prio)), typeof(MAX_DNS_PRIO_KEYS)) ? \
+                ((__feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (__feature_prio)) : \
+                    (__feature_prio)   
 
 
 #if SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER 
@@ -536,9 +536,9 @@ __always_inline __u8 parse_dns_header_size(struct skb_cursor *skb, bool isIpv4, 
 }
 
 
-static 
+static
 __always_inline __u8 parse_dns_payload_udp(struct skb_cursor *skb, void * dns_payload, 
-            __u32 udp_payload_len, __u32 udp_payload_exclude_header, struct dns_header * dns_header, __u32 skb_len) {
+            __u32 udp_payload_len, __u32 udp_payload_exclude_header, __u32 skb_len) {
         
         // the kernel verifier enforce and need to be strict and assume the buffer is validated before itself 
 
@@ -565,7 +565,7 @@ static
 __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u16 dns_query_class, struct qtypes qt, 
                 __u8 total_domain_length, __u8 total_domain_length_exclude_tld) {
         // check for the c2c record types used by remote malware processes 
-        struct result_parse_dns_labels resuult = {
+        struct result_parse_dns_labels result = {
             .deep_scan_mirror = false, 
             .drop = false, 
             .isBenign = false,
@@ -574,22 +574,22 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
         if (dns_query_class == qt.MX || dns_query_class == qt.TXT || dns_query_class == qt.CNAME){
             if (dns_query_class == qt.TXT) {
                 if (total_domain_length >= MAX_DNS_PAYLOAD_TXT_LENGTH) {
-                    resuult.drop = true;
+                    result.drop = true;
                 }else {
-                    resuult.deep_scan_mirror = true;
+                    result.deep_scan_mirror = true;
                 }
             }else if (dns_query_class == qt.MX) {
                 if (total_domain_length >= MAX_DNS_PAYLOAD_MX_LENGTH) {
-                    resuult.drop = true;
+                    result.drop = true;
                 }else {
-                    resuult.deep_scan_mirror = true;
+                    result.deep_scan_mirror = true;
                 }
             }else {
-                resuult.deep_scan_mirror = true;
+                result.deep_scan_mirror = true;
             }
-            resuult.isC2c = true; 
+            result.isC2c = true; 
         }
-        return resuult;
+        return result;
 }
 
 static
@@ -713,7 +713,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                     
                         if (!(isLower(dns_payload_start_chr) || 
                             isUpper(dns_payload_start_chr) || 
-                            isDigit(dns_payload_start_chr)) && label_count >= 2) 
+                            isDigit(dns_payload_start_chr)) && label_count >= 2)    
                             spec_char_per_label++;
 
                         curr_parsed_jumps++;
@@ -862,6 +862,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
                 if any feature violated return suspicious
                 the reason to not straight of return for any of the features being violated for enhanced priority based filtering mapping to total number of violated features 
             */
+            #pragma unroll(MAX_DNS_PRIO_KEYS)
             for (int i =0; i < MAX_DNS_PRIO_KEYS && prio_violate_bitset > 0; i++, prio_violate_bitset >>= 1) 
                 if (prio_violate_bitset & 1)
                     return SUSPICIOUS; // violated an high prio feature filter
@@ -1577,7 +1578,7 @@ __always_inline __u8 __parse_skb_non_standard(struct skb_cursor cursor, struct _
         struct dns_header *dns = (struct dns_header *) (udp_data);
         
         if (actions->parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header,
-                        dns, skb->len) == 0) 
+                        skb->len) == 0) 
             return 1;
         
 
@@ -2088,7 +2089,7 @@ int classify(struct __sk_buff *skb){
                 if ((void *) (dns_payload + 1) > cursor.data_end) return TC_DROP;
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
-                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, skb->len) == 0) {
                     return TC_DROP;
                 }
 
@@ -2264,7 +2265,7 @@ int classify(struct __sk_buff *skb){
                 if ((void *) dns_payload + 1 > cursor.data_end) return TC_DROP; 
                 struct dns_header *dns = (struct dns_header *) (udp_data);
 
-                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, dns, skb->len) == 0) {
+                if (actions.parse_dns_payload_transport_udp(&cursor, dns_payload, udp_payload_len, udp_payload_exclude_header, skb->len) == 0) {
                     return TC_DROP;
                 }
 
