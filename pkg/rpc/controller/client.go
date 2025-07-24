@@ -21,13 +21,29 @@ const (
 	CERT_DIR = "keys/certificate.pem"
 )
 
+// the service impl for all the core controller services the endpoint agent uses
 type AgentControllerRpcServices struct {
 	conn           *grpc.ClientConn
 	CryptoServices pb.NodeAgentCryptoServiceClient
+	FeatureService pb.NodeAgentFeatureServiceClient
 }
 
-func NewAgentControllerRpcServices() *AgentControllerRpcServices {
-	return &AgentControllerRpcServices{}
+func NewAgentControllerRpcServices() (*AgentControllerRpcServices, error) {
+	// grpc (http2 over tcp) for connecting with remote controller
+	conn, err := grpc.NewClient(":3200", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+
+	// Implement the core crypot kernel LSM services with the controller
+	cryptoService := pb.NewNodeAgentCryptoServiceClient(conn)
+	featureService := pb.NewNodeAgentFeatureServiceClient(conn)
+
+	return &AgentControllerRpcServices{
+		conn:           conn,
+		CryptoServices: cryptoService,
+		FeatureService: featureService,
+	}, nil
 }
 
 func readCerts() (credentials.TransportCredentials, error) {
@@ -46,14 +62,6 @@ func readCerts() (credentials.TransportCredentials, error) {
 }
 
 func (client *AgentControllerRpcServices) NodeAgentControllerEnforceSecRpc(ctx context.Context) error {
-	conn, err := grpc.NewClient(":3200", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return err
-	}
-
-	// Implement the core crypot kernel LSM services with the controller
-	_ = pb.NewNodeAgentFeatureServiceClient(conn)
-	client.CryptoServices = pb.NewNodeAgentCryptoServiceClient(conn)
 
 	return nil
 }

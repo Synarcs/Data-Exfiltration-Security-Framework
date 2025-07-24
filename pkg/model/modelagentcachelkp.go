@@ -8,7 +8,7 @@ package model
 import "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 
 /*
-to preven reinference all the domains, including the TLD, and actual domain must be found in the cache of benign domain for faster inferenceing
+to prevent reinference all the domains, including the TLD, and actual domain must be found in the cache of benign domain for faster inferenceing
 */
 func StaticRuntimeBenignDomainChecks(features []DNSFeatures) bool {
 	for _, feature := range features {

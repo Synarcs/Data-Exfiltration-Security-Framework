@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 
+	rpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api/consts"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/iowatchers"
 	"github.com/fsnotify/fsnotify"
@@ -43,7 +44,7 @@ func WatchEvents(ctx context.Context, doneChan, globalNodeAgentFsWatchCloseChan 
 func OnnxModelFsUnixMountWatcher(ctx context.Context, globalNodeAgentFsWtchChan chan bool) {
 
 	modelPaths := []string{
-		utils.ONNX_INFER_UNIX_MNT,
+		rpc.ONNX_INFER_UNIX_MNT,
 	}
 
 	for _, path := range modelPaths {

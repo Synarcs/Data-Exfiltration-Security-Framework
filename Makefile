@@ -120,6 +120,10 @@ build-framework-protos:
 		--go-grpc_out="paths=source_relative,require_unimplemented_servers=false:$(go_out)" \
 		"$(proto_path)/$(proto_file_i)"
 	
+	@if [ -d "$(cxx_out)/cxx" ]; then \
+		echo "Deleting directory for previous ONNX grpc inference protos"; \
+		rm -rf "$(cxx_out)/cxx"; \
+	fi
 	@mkdir $(cxx_out)/cxx 
 	protoc --proto_path="$(proto_path)"		 	\
 		--cpp_out="$(cxx_out)"/cxx 				\
@@ -179,6 +183,11 @@ archive_cli:
 	@echo "Compressing the endpoint security agent CLI..."
 	cd cmd && rm -f "$(output)" && make build && tar -caf "../$(archive_out)/$(archive_cli)" $(output)
 	
+.PHONY: archive_infer_server
+archive_infer_server:
+	@echo "Compressing the ONNX grpc inference server"
+	
+
 .PHONY: archive
 archive:
 	@echo "compressing the endpoint security agent ..."

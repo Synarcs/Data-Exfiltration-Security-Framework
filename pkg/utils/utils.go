@@ -107,10 +107,6 @@ var (
 )
 
 const (
-	ONNX_INFER_UNIX_MNT = "/run/dnsobelisk/onnx-inference.sock"
-)
-
-const (
 	NODE_CONFIG_FILE = "config.yaml"
 )
 

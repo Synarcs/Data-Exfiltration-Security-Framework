@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"syscall"
 
+	rpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api/consts"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/bridgetc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/cli"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/conf"
@@ -182,14 +183,14 @@ func configureGlobalAgentConfigOpts(nodeAgentCliOptions *conf.NodeAgentCliOption
 		utils.EXFIL_PROCESS_CACHE_CLEAN_THRESHOLD = nodeAgentCliOptions.SigKillTunnelPortThreshold
 	}
 
-	if nodeAgentCliOptions.ControllerRPCPort != controllerrpc.CONTROLLER_RPC_PORT {
-		controllerrpc.CONTROLLER_RPC_PORT = nodeAgentCliOptions.ControllerRPCPort
+	if nodeAgentCliOptions.ControllerRPCPort != rpc.CONTROLLER_RPC_PORT {
+		rpc.CONTROLLER_RPC_PORT = nodeAgentCliOptions.ControllerRPCPort
 	}
 }
 
 func InitControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControllerRpcServices, error) {
-	rpcClient := controllerrpc.NewAgentControllerRpcServices()
-	if err := rpcClient.NodeAgentControllerEnforceSecRpc(ctx); err != nil {
+	rpcClient, err := controllerrpc.NewAgentControllerRpcServices()
+	if err != nil {
 		return nil, err
 	}
 	return rpcClient, nil
@@ -320,6 +321,10 @@ func main() {
 	})
 
 	topDomains, err := utils.ReadTldDomainsData()
+	if err != nil {
+		utils.Log("error loading the top domains", err)
+		panic(err.Error())
+	}
 
 	// running over the sidecar mode the eBPF root egress runs over kernel socket layer as against tc for egress DPI
 	if nodeAgentCliOptions.Sdr && nodeAgentCliOptions.Cni {
@@ -374,11 +379,6 @@ func main() {
 
 	tst := make(chan os.Signal, 1)
 	var term chan os.Signal = make(chan os.Signal, 1)
-
-	if err != nil {
-		utils.Log("error loading the top domains", err)
-		panic(err.Error())
-	}
 
 	// holds kafka brokers and other kafka cluster related config
 	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, &nodeAgentCliOptions)

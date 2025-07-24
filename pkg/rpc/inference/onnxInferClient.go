@@ -15,6 +15,7 @@ import (
 	"time"
 
 	pb "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api"
+	rpc "github.com/Synarcs/Data-Exfiltration-Security-Framework/exfil_sec_api/consts"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -23,14 +24,18 @@ import (
 )
 
 type DNSOnnxInferenceService struct {
-	conn   *grpc.ClientConn
-	client pb.DNSOnnxInferenceServiceClient
+	conn           *grpc.ClientConn
+	dnsInferClient pb.DNSOnnxInferenceServiceClient
 }
 
 type OnxxInferenceServer struct {
 	Path string
 	Pid  int
 }
+
+var (
+	DELAY_PROCESS_ATTACH_TIME = time.Second * 3 // time for the child fork owned by the endpoint agent to boot the inference server at the endpoint
+)
 
 func NewOnxxInferenceServer() *OnxxInferenceServer {
 	return &OnxxInferenceServer{}
@@ -39,6 +44,8 @@ func NewOnxxInferenceServer() *OnxxInferenceServer {
 func (server *OnxxInferenceServer) StartRemoteOnnxInferenceListener(onnxInferServerBinPath string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+
+	releaseWaitLock := make(chan bool)
 	utils.Log("starting the remote grpc onnx inference server .....", onnxInferServerBinPath)
 	if _, err := os.Stat(onnxInferServerBinPath); err != nil {
 		return err
@@ -55,8 +62,12 @@ func (server *OnxxInferenceServer) StartRemoteOnnxInferenceListener(onnxInferSer
 		return err
 	}
 
+	time.AfterFunc(time.Second*3, func() {
+		releaseWaitLock <- true
+	})
+
+	<-releaseWaitLock
 	server.Pid = cmd.Process.Pid
-	time.Sleep(time.Second * 3) // force wait until the socket is mounted and ready for grpc client inference connection over UDS
 	utils.Log(stdout.String())
 	return nil
 }
@@ -71,22 +82,22 @@ func (server *OnxxInferenceServer) StopRemoteOnnxInferenceListener() error {
 
 func NewNodeAgentUnixCLISocket() (*DNSOnnxInferenceService, error) {
 	utils.Log("init the onnx inference grpc client for endpoint agent")
-	conn, err := grpc.NewClient(fmt.Sprintf("unix:%s", utils.ONNX_INFER_UNIX_MNT), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("unix:%s", rpc.ONNX_INFER_UNIX_MNT), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
 
 	if pb.NewDNSOnnxInferenceServiceClient(conn) == nil {
-		panic(fmt.Errorf("error create new inference client daemon"))
+		return nil, fmt.Errorf("error create new inference client daemon")
 	}
 	return &DNSOnnxInferenceService{
-		conn:   conn,
-		client: pb.NewDNSOnnxInferenceServiceClient(conn),
+		conn:           conn,
+		dnsInferClient: pb.NewDNSOnnxInferenceServiceClient(conn),
 	}, nil
 }
 
 func (infer *DNSOnnxInferenceService) GetInferenceServiceVersion(ctx context.Context) (string, error) {
-	versions, err := infer.client.VersionInfo(ctx, &emptypb.Empty{})
+	versions, err := infer.dnsInferClient.VersionInfo(ctx, &emptypb.Empty{})
 	if err != nil {
 		utils.Logger.Error(err)
 		return "", err
@@ -106,7 +117,7 @@ func (infer *DNSOnnxInferenceService) reshapeFeatures(features [][]float32, resh
 func (infer *DNSOnnxInferenceService) EgressInference(ctx context.Context, features [][]float32) (*pb.DnsInferenceResponseEgress, error) {
 	reshappedFeatures := infer.reshapeFeatures(features, []*pb.DnsFeatures{})
 
-	resp, err := infer.client.EgressInfer(ctx, &pb.DnsInferenceRequest{
+	resp, err := infer.dnsInferClient.EgressInfer(ctx, &pb.DnsInferenceRequest{
 		Reshaped: reshappedFeatures,
 	})
 	if err != nil {
@@ -118,7 +129,7 @@ func (infer *DNSOnnxInferenceService) EgressInference(ctx context.Context, featu
 func (infer *DNSOnnxInferenceService) IngressInference(ctx context.Context, features [][]float32) (*pb.DnsInferenceResponseIngress, error) {
 	reshappedFeatures := infer.reshapeFeatures(features, []*pb.DnsFeatures{})
 
-	resp, err := infer.client.IngressInfer(ctx, &pb.DnsInferenceRequest{
+	resp, err := infer.dnsInferClient.IngressInfer(ctx, &pb.DnsInferenceRequest{
 		Reshaped: reshappedFeatures,
 	})
 	if err != nil {
