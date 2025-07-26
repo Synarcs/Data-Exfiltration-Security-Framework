@@ -184,7 +184,7 @@ struct checkSum_redirect_struct_value {
     // TODO: fix for ipv6 either for new maps or stuffed packed in memory in checksum map 
 } __attribute__((packed));
 
-// stores inofrmation regarding checksum and the redirection of the packet from kernel 
+// stores information regarding checksum and the redirection of the packet from kernel 
 struct exfil_security_egress_redirect_map {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, __u16); // dns query id prior DPI
@@ -371,15 +371,15 @@ struct dns_volume_stats {
 #endif
 
 #if IS_VXLAN_PORTS_EXIST_BRIDGE
-    #define EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb)          \
+    #define EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(__cursor, __skb)          \
         do {                                                              \
-            struct udphdr *udp = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr); \
-            if ((void *)udp + 1 > cursor.data_end) return TC_FORWARD;     \
+            struct udphdr *udp = __cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr); \
+            if ((void *)udp + 1 > __cursor.data_end) return TC_FORWARD;     \
                                                                           \
-            void *transport_payload = cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); \
-            if ((void *)transport_payload + 1 > cursor.data_end) return TC_FORWARD; \
+            void *transport_payload = __cursor.data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr); \
+            if ((void *)transport_payload + 1 > __cursor.data_end) return TC_FORWARD; \
                                                                           \
-            __u8 potential_dns_tunnel = __parse_encap_vxlan_tunnel_header(&cursor, skb, transport_payload); \
+            __u8 potential_dns_tunnel = __parse_encap_vxlan_tunnel_header(&__cursor, skb, transport_payload); \
             switch (potential_dns_tunnel) {                               \
                 case MALICIOUS:                                           \
                     return TC_DROP;                                       \
@@ -759,7 +759,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
              __u16 query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); 
 
-            __u8 __attribute__((unused)) subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 __maybe_unused subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
             struct result_parse_dns_labels c2c_check = check_for_c2c_health_process(query_class, qtypes, total_domain_length, total_domain_length_exclude_tld);
 

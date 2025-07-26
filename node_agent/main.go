@@ -349,7 +349,7 @@ func main() {
 
 	var inferServerPath string = ""
 	if nodeAgentCliOptions.OnnxInferenceserverPath == "" {
-		inferServerPath = "../model/ttrpc_onnx/infer"
+		inferServerPath = "../model/rpc_onnx/infer"
 	} else {
 		inferServerPath = nodeAgentCliOptions.OnnxInferenceserverPath
 	}

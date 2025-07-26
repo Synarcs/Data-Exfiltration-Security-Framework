@@ -17,16 +17,6 @@
 const std::string backend = "CPU";
 
 namespace OnnxInferencer {
-    // the default path the inference server lookup for 
-    #if defined(ONNX_QUANTIZED)
-        const std::string model_path = "../dns_sec_qint8.onnx";
-    #else
-        #if defined(ONNX_ISOLATED_BOOT)
-            const std::string model_path = "../dns_sec.onnx";
-        #else
-            const std::string model_path = "../model/dns_sec.onnx"; // the core endpoint agent bootstraps this as a child fork 
-        #endif 
-    #endif
 
     // configure global session for all inferencer
     class BaseClassificationModelInferencer {
@@ -38,6 +28,7 @@ namespace OnnxInferencer {
             virtual Ort::Session& getOnnxInferenceSession() = 0;
     };
 
+    static const char * log_indexId = "dns_exfil_infer";
     class DNSOnnxCPUInference : public BaseClassificationModelInferencer {
     protected:
         std::vector<int32_t> addr_pool;
@@ -74,7 +65,7 @@ namespace OnnxInferencer {
     public:
         DNSOnnxCPUInference(const std::string& model_path, const float& binary_classifer) noexcept
             : session(nullptr),
-              env(ORT_LOGGING_LEVEL_WARNING, "dns_exfil_infer"),
+              env(ORT_LOGGING_LEVEL_WARNING, log_indexId),
               classifer_threshold(binary_classifer)
         {
             session_options.SetIntraOpNumThreads(std::thread::hardware_concurrency());
@@ -86,8 +77,6 @@ namespace OnnxInferencer {
             session = Ort::Session(env, model_path.c_str(), session_options);
 
         }
-
-        DNSOnnxCPUInference() noexcept : DNSOnnxCPUInference(model_path, 0.5) {}
 
         // binary classification threshold value 
         float getClassificationThreshold() override;
@@ -102,11 +91,11 @@ namespace OnnxInferencer {
         return this->classifer_threshold;
     }
 
-    bool DNSOnnxCPUInference::infer(std::vector<float>& features) {
+    inline bool DNSOnnxCPUInference::infer(std::vector<float>& features) {
         return this->evalInference(features);
     }
 
-    Ort::Session& DNSOnnxCPUInference::getOnnxInferenceSession() {
+    inline Ort::Session& DNSOnnxCPUInference::getOnnxInferenceSession() {
         return this->session;
     }
 };

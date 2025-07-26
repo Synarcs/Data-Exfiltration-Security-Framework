@@ -5,6 +5,18 @@
 
 package kprobe
 
-// implements support for wiregauard traffic monitoring for exfiltration over tunnels
+import (
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/cilium/ebpf"
+)
 
-type WgProc struct{}
+// implements support for wiregauard traffic netdev (encap creation hooks) for exfiltration over tunnels with advanced netdev devlink associated coorelation with the core exfil attempts
+
+type WireguardExfil struct {
+	WireguardSockprog *ebpf.Program
+	Devlink           *netinet.NetIface
+}
+
+func (wg *WireguardExfil) InitKernelWgHooks() error {
+	return nil
+}

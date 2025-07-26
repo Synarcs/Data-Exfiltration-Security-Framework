@@ -346,7 +346,7 @@ func VerifyTcxSupportEgressLink() bool {
 	if err != nil {
 		return false
 	}
-	return majorRelease >= 6 && patchRelease >= 6 && false // for now return fale until kernel prorga with eBPF section is modified
+	return majorRelease >= 6 && patchRelease >= 6 && false // for now return false until kernel program with eBPF section is modified
 }
 
 func ForceGc() {

@@ -86,7 +86,7 @@ namespace LocalInferenceTest {
                 };
             }
 
-            std::vector<std::vector<float>> getFeatures(vector<std::string>& domains) {
+            std::vector<std::vector<float>>& getFeatures(vector<std::string>& domains) {
                 std::vector<std::vector<float>> features;
                 for (auto& domain: domains) {
                     features.emplace_back(extractFeatures(domain));

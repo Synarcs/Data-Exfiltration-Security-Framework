@@ -82,6 +82,8 @@ type NetIface struct {
 	ConnTrackNsHandles map[int]conntrack.ConntrackSock
 }
 
+// Core netlink support for endpoint agent to discover netlink at the endpoint in kernel
+// TODO: Add epoll event handlers over netlink socket and associated netlink, rtnetlink events for dynamic netdev creation in kernel.
 func NewNetIface() *NetIface {
 	return &NetIface{}
 }

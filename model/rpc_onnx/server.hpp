@@ -28,7 +28,6 @@ namespace InferenceRPC {
     class BaseInference {
         public:
             OnnxInferencer::DNSOnnxCPUInference onnx;
-            BaseInference() = default;
             BaseInference(const std::string& model_path, const float& classify_threshold)
                     : onnx(model_path, classify_threshold) {}
             virtual ~BaseInference() {}
@@ -52,7 +51,6 @@ namespace InferenceRPC {
                 return false;
             }
         public:
-            explicit ImplDNSOnnxInferenceService() noexcept : BaseInference() {}
             explicit ImplDNSOnnxInferenceService(const std::string& model_path, const float& binary_threshold) noexcept : BaseInference(model_path, binary_threshold) {}
             Status IngressInfer(ServerContext * ctx, const DnsInferenceRequest * request, DnsInferenceResponseIngress * response) override {
 

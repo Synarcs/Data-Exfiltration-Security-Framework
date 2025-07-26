@@ -129,6 +129,7 @@ func InitPinMapHandlerNames(config conf.AgentConfig) {
 		events.EXFIL_SOCK_UDP_CONN_MAP,
 		events.EXFIL_TC_BRIDGE_CONFIG_MAP,
 		events.EXFILL_SECURITY_KERNEL_CONFIG_MAP,
+		events.EXFIL_SECURITY_ERROR_PIPE_AGENT,
 	}
 
 	if config.GetL3FiltersConfig().EnabledL3v4Filtering {
@@ -144,7 +145,7 @@ func PacketTcKernelDPICountMaps() []string {
 	// the agent holds a global control channel for polling drop kernel malicious events to emitted to the kafka controller with respective channel for each map polling from kernel, compared plain timer based busy polling
 	// add the maps for deep kernel monitoring as required
 	return []string{
-		events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP,
+		events.EXFILL_SECURITY_KERNEL_REDIRECT_COUNT_MAP,
 		events.EXFILL_SECURITY_EGRESS_REDIRECT_KERNEL_DROP_COUNT_MAP,
 	}
 }
@@ -194,7 +195,7 @@ func (tc *TCHandler) InitDnsRateLimiter(ctx context.Context) error {
 // Attach the kernel TC eBPF program over egress physical link
 func (tc *TCHandler) AttachTCXHandler(ctx context.Context, prog *ebpf.Program) error {
 	for _, netlink := range tc.Interfaces.PhysicalLinks {
-		// the DNS security rpograms must have highest priority to be executed first over cls_bpf egress filters list  attached to netdev
+		// the DNS security programs must have highest priority to be executed first over cls_bpf egress filters list  attached to netdev
 		ln, err := link.AttachTCX(link.TCXOptions{
 			Interface: netlink.Attrs().Index,
 			Program:   prog,
@@ -295,7 +296,7 @@ func (tc *TCHandler) AttachTcHandler(ctx context.Context, prog *ebpf.Program) er
 			if currPrio == 1 && currHandle != netlink.MakeHandle(0xffff, 0) {
 				// ensure the filter is removed and reattached with higher priority to ensure
 				utils.Log(errAttachedQdiscHigherPrio.Error())
-				panic(fmt.Errorf("the eBPF DNS exfiltration framework must have lower prio pre execution of any CNI attached tc hooks"))
+				return fmt.Errorf("the eBPF DNS exfiltration framework must have lower prio pre execution of any CNI attached tc hooks")
 			} else if currPrio == 1 && currHandle == netlink.MakeHandle(0xffff, 0) {
 				goto ATTACH_SECURITY_FILTER
 			}
@@ -360,7 +361,7 @@ func (tc *TCHandler) ReadMonitoringMaps(ctx context.Context, errorEventChannel c
 
 	geteBPFMapFromCollection := func(mpName string) (*ebpf.Map, error) {
 		if mp, fd := tc.TcCollection.Maps[mpName]; !fd {
-			return nil, fmt.Errorf("The required map not found %s", mpName)
+			return nil, fmt.Errorf("the required map not found %s", mpName)
 		} else {
 			return mp, nil
 		}
@@ -380,7 +381,7 @@ func (tc *TCHandler) ReadMonitoringMaps(ctx context.Context, errorEventChannel c
 				}
 			}
 			switch mapName {
-			case events.EXFOLL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
+			case events.EXFILL_SECURITY_KERNEL_REDIRECT_COUNT_MAP:
 				if err := events.ExportPromeEbpfExporterEvents[events.PacketDPIRedirectionCountEvent](events.PacketDPIRedirectionCountEvent{
 					KernelRedirectPacketCount: CurrentPacketCountKernel,
 					EvenTime:                  time.Now().Format(time.RFC3339),

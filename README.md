@@ -39,8 +39,7 @@ UserLand
     * ONNX (Open Neural Network Exchange)
     * Tensorflow
     * Dense Neural Networks
-* Libseccomp runtime security fitlers 
-* Unix Domain Sockets ONNX Inference servers 
+* GRPC over UDS - ONNX Inference RPC servers 
 * Over Cloud Orchestration Security
     * Kubernetes Client-go
     * Kubernetes Sidecars, Kubernetes Mutating Webhooks, operatirs
@@ -88,7 +87,7 @@ Threat Event Stream Message Analysis Control Plane Server
 	* Control plane signs eBPF programs, verified by the data plane during load.
 	* Stage 2: Node ↔ Kernel
 	* Kernel Keyring + BPF LSM hooks enforce signature verification of eBPF ELF programs,
-	* Mirrors TLS certificate revocation logic, supporting internal and parent Certificate Authorities for continuous validation and attestation.
+	* Mirrors TLS certificate revocation logic over kernel process keyrings, supporting internal and parent Certificate Authorities for continuous validation and attestation.
 
 ## Future Plans 
 * Cloud Providers Infrastructure Integration 
@@ -129,7 +128,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 ## Conferences
 * Accepted and was presented at [Netdev 0x19](https://netdevconf.info/0x19/sessions/bof/real-time-prevention-of-dns-based-data-exfiltration-bof.html) for innovation in Linux kernel advancing DNS security.
 * Accepted and was presented at [Linux Security Summit](https://sched.co/1zamI) for innovation in Linux kernel intersecting Kernel datapath, LSM, kprobes, tracepoints for advanced endpoint security solutions.
-* Accepted at [Black Hat Breifings](https://www.blackhat.com/us-25/briefings/schedule/#kernel-enforced-dns-exfiltration-security-framework-built-for-cloud-environments-to-stop-data-breaches-via-dns-at-scale-45566) with honororium for groundbreaking research termed as kernel enforced endpoint security built specifically to enhance DNS security to nuetralize emerging C2 attack vectors scalable in distribtued environments with strength combat complex C2 infrastructure attacks.
+* Accepted at [Black Hat Breifings](https://www.blackhat.com/us-25/briefings/schedule/#kernel-enforced-dns-exfiltration-security-framework-built-for-cloud-environments-to-stop-data-breaches-via-dns-at-scale-45566) with honororium for groundbreaking research termed as kernel enforced endpoint security built specifically to enhance DNS security to nuetralize emerging C2 attack vectors scalable in distribtued environments with strength combat evolving C2 infrastructure attacks.
 
 ## Disclaimer
 * This project is under heavy development focusing on a longer vision (Kernel enforced dynamic  security for detection and response) a privileged wrapper aiding EDR / XDR solutions, hence expect some bugs around it 😀😀😀
