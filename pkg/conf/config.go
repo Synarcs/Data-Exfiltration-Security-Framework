@@ -56,8 +56,14 @@ type (
 		AgentBootConfig *NodeAgentConfig
 	}
 
-	// config for high enhanced security for l3, l44, l7 filters and other orchestrated environments config to stop data breaches
+	// config for high enhanced security for l3, l4, l7 filters and other orchestrated environments config to stop data breaches
 	//  config usd to boot the DNS node agent in user space and inject kernel eBPF programs
+
+	DnsServer struct {
+		Host string `yaml:"host" reflect:"host"`
+		Ip   string `yaml:"ip" reflect:"ip"` // ipv4 / ipv6 upstream resolver IP for DNS
+		Port string `yaml:"port" reflect:"port"`
+	}
 
 	NodeAgentConfig struct {
 		Agent struct {
@@ -73,11 +79,7 @@ type (
 			Port string `yaml:"port" reflect:"port"`
 		} `yaml:"streamServers" reflect:"streamServers"`
 
-		DNSServer struct {
-			Host string `yaml:"host" reflect:"host"`
-			Ip   string `yaml:"ip" reflect:"ip"`
-			Port string `yaml:"port" reflect:"port"`
-		} `yaml:"dnsServer" reflect:"dnsServer"`
+		DnsResolver []DnsServer `yaml:"dnsResolver" reflect:"dnsResolver"`
 
 		MetricServer struct {
 			Host string `yaml:"host" reflect:"host"`

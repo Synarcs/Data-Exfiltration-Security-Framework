@@ -46,6 +46,10 @@ func NewBridgeTCFilters(ifaceHandler *netinet.NetIface,
 // TODO: add biderectional support for TCX and netkit  later over veth bridge pair on netdev for faster SKB enqueue and IRQ less overhead over moving SKB across netdev (east-west traffic)
 func (btc *BridgeTCFilters) AttachTcHandler(ctx context.Context,
 	prog *ebpf.Program, isEgress bool) error {
+	if utils.VerifyTcxSupportEgressLink() {
+		// TODO: the custom netdev and linux namespace must also support tcx over bridge netdev in kernel
+		// return nil
+	}
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return err
 	}
