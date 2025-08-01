@@ -42,7 +42,6 @@ __always_inline __u8 __parse_vxlan_flag__hdr(void *transport_data, struct vxlanh
     #if DEBUG
         bpf_printk("parsing the vxlan header %u", flags_vxlan_hdr);
     #endif
-    if ((void *) flags_vxlan_hdr + sizeof(__be32) > data_end) return 0;
     // an valid I sender flag set denoting sender for the vxlan packet 
     if ((((flags_vxlan_hdr >> 24) & VXLAN_RD_VNI_FLAG) >> 3) == 1) return 1;
     return 0;

@@ -162,10 +162,17 @@ int process_potential_mal_c2_thread_spawn()  {
     struct task_struct *parent = NULL;
 
     struct __kernel_proc_struct_info *proc_info = __get_process_info(true);
+    if (!proc_info) goto SKIP_PPID_HUNT;
+    if (!is_process_found_malicious(proc_info->procId)) goto SKIP_PPID_HUNT;
+    
     if (proc_info->procId != proc_info->threadId) {
         // a thread spawn for the parent process in the parent task struct thread_group 
+        #if DEBUG
+            bpf_printk("a malicious child fork or parent spawning thread groups each with kernel task_struct to exfiltrate data");
+        #endif 
     }
 
+    SKIP_PPID_HUNT:
     return 0;
 }
 

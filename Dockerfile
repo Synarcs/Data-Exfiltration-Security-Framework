@@ -68,16 +68,6 @@ RUN echo "installing kernel network utilities and userspace eBPF go bindings" &&
                 apt install -y iproute2 iptables bison conntrack 
 SHELL [ "/bin/bash" , "-c" ]
 
-ENV GOROOT=/root/.gvm/gos/go1.23.2
-ENV GOPATH=/root/go
-ENV PATH=$GOROOT/bin:$GOPATH/bin:$PATH
-
-# Install GVM and Go in a single layer
-RUN curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer | bash && \
-    /bin/bash -c "source /root/.gvm/scripts/gvm && \
-    gvm install go1.23.2 -B && \
-    gvm use --default go1.23.2"
-
 # Install bpftool
 RUN echo "install bpftool for libbpf bindings" && \
     git clone --recurse-submodules https://github.com/libbpf/bpftool.git && \
@@ -86,20 +76,57 @@ RUN echo "install bpftool for libbpf bindings" && \
     cd src && \
     make install
 
-RUN apt-get install -y libpcap-dev
+RUN apt-get install -y libpcap-dev wget libgrpc++-dev
 
 ADD kernel kernel/
 ADD node_agent node_agent/
 ADD cmd cmd/
 ADD pkg pkg/
 ADD data data/
+ADD model model/
 ADD scripts scripts/
+ADD exfil_sec_api exfil_sec_api/
 ADD go.mod .
 ADD go.sum .
+ADD Makefile .
+
+
+ARG ARCH=arm64
+# Install GVM and Go in a single layer
+RUN curl -LO https://go.dev/dl/go1.23.2.linux-${ARCH}.tar.gz && \
+    tar -C /usr/local -xzf go1.23.2.linux-${ARCH}.tar.gz && \
+    rm go1.23.2.linux-${ARCH}.tar.gz
+
+ENV PATH="/usr/local/go/bin:/root/go/bin:$PATH"
+
+# grpc protooc build bindings 
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+
+# all the onnx runtime are used for inference and not training once model is trained and serialized in onnx, the agent assume the onnx model exist
+ARG ONNX_VERSION=1.22.0
+
+RUN set -eux; \
+    arch="$(uname -m)"; \
+    if [ "$arch" = "x86_64" ] || [ "$arch" = "amd64" ]; then \
+        arch="x64"; \
+    fi; \
+    cd /tmp; \
+    wget -O onnx.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ONNX_VERSION}/onnxruntime-linux-${arch}-${ONNX_VERSION}.tgz"; \
+    tar -xvf onnx.tgz; \
+    rm -f onnx.tgz; \
+    cd onnxruntime-linux-${arch}-${ONNX_VERSION}; \
+    cp -r include/* /usr/include/; \
+    cp lib/libonnxruntime.so.1 /usr/lib/; \
+    cp lib/libonnxruntime.so /usr/lib/; \
+    ldconfig; \
+    cd /; \
+    rm -rf "/tmp/onnxruntime-linux-${arch}-${ONNX_VERSION}"
 
 # Build eBPF node-agent both in user and kernel space
 RUN echo "Building kernel eBPF programs && user eBPF agent" && \
-    cd node_agent && \
     make build
 # expose metrics port for eBPF node-agent in usr space and export for kernel metrics 
-EXPOSE 9092 
+# {profiler, prometheus metrics exporter}
+EXPOSE 8080 3232
