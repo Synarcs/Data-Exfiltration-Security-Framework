@@ -19,7 +19,6 @@ import (
 
 	"github.com/Synarcs/DNSObelisk/controller/conf"
 	"github.com/Synarcs/DNSObelisk/controller/consumer"
-	"github.com/Synarcs/DNSObelisk/controller/k8s"
 	"github.com/Synarcs/DNSObelisk/controller/rpc"
 	"github.com/Synarcs/DNSObelisk/controller/utils"
 	"github.com/cloudflare/cfssl/csr"
@@ -51,7 +50,7 @@ func InitLocalCa() (*utils.ControlelrCertConfig, error) {
 	}
 
 	// generate csr
-	req := &csr.CertificateRequest{
+	csr := &csr.CertificateRequest{
 		CN:         "synarcs.controlelr",
 		KeyRequest: key,
 		Names: []csr.Name{
@@ -62,7 +61,7 @@ func InitLocalCa() (*utils.ControlelrCertConfig, error) {
 		},
 	}
 
-	cert, _, privateKey, err := initca.New(req)
+	cert, _, privateKey, err := initca.New(csr)
 
 	block, _ := pem.Decode(cert)
 	if block == nil || block.Type != "CERTIFICATE" {
@@ -131,11 +130,6 @@ func main() {
 
 	go nodeAgentServer.StartControllerRpcServer(opts.Port, controllerCa, globalControllerErrorChan)
 
-	k8sClientSet, err := k8s.InitK8sClientSet("")
-
-	if err != nil || k8sClientSet == nil {
-		log.Println("the cni netpool handler for controller cannot load without valid k8ss client set provided")
-	}
 
 	defer func() {
 		log.Println("Closing the controller unix socket stream Consumer")
