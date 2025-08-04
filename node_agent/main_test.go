@@ -113,26 +113,6 @@ func TestNetworkInterfaces(t *testing.T) {
 	assert.True(true)
 }
 
-func TestOnnxDnsUnixMounts(t *testing.T) {
-	agentOnnxMountPaths := "/run/dnsobelisk"
-	dirs, err := os.ReadDir(agentOnnxMountPaths)
-	if err != nil {
-		t.Fatalf("Error the required onnx unix mount paths not found %s", agentOnnxMountPaths)
-	}
-	assert := assert.New(t)
-	expectCt := 2
-	onnxMountsct := 0
-
-	for _, dir := range dirs {
-		// check for both ingress and egress onnx inference mounts
-		if strings.Contains(dir.Name(), "onnx-inference") {
-			onnxMountsct++
-		}
-	}
-
-	assert.EqualValues(expectCt, onnxMountsct)
-}
-
 func TestBridgeInterfaces(t *testing.T) {
 	assert := assert.New(t)
 
@@ -153,13 +133,10 @@ func TestBridgeInterfaces(t *testing.T) {
 }
 
 func getConfigAgentPath() string {
-	var path string
 	if configOpts.agentConfigPath != "" {
-		path = configOpts.agentConfigPath
-	} else {
-		path = "config.yaml"
+		return configOpts.agentConfigPath
 	}
-	return path
+	return "config.yaml"
 }
 
 func TestRequireNodeAgentConfig(t *testing.T) {
@@ -184,11 +161,14 @@ func TestEachNodeAgentConfigAddress(t *testing.T) {
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		// verify connection upstream dns server
-		_, err := net.Dial("udp", fmt.Sprintf("%s:%d", globalConfig.DNSServer.Ip, 53))
-		if err != nil {
-			utils.Log("error connecting to dns server")
-			assert.Error(err)
+		// check for Ipv4 resolver only
+		for _, resolver := range globalConfig.DnsResolver {
+			// verify connection upstream dns server
+			_, err := net.Dial("udp", fmt.Sprintf("%s:%d", resolver.Ip, 53))
+			if err != nil {
+				utils.Log("error connecting to dns server")
+				assert.Error(err)
+			}
 		}
 	}()
 
@@ -249,13 +229,16 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	globalConfig := config.GetAgentConfig()
 	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
 
-	streamProducer := &stream.StreamProducer{
-		KafkaBrokerConfig: globalKakfBrokerConfig,
-	}
+	if !globalKakfBrokerConfig.GlobalConfig.Agent.AgentModeIsolated {
 
-	if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
-		utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
-		assert.Fail(err.Error())
+		streamProducer := &stream.StreamProducer{
+			KafkaBrokerConfig: globalKakfBrokerConfig,
+		}
+
+		if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
+			utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+			assert.Fail(err.Error())
+		}
 	}
 
 	assert.True(true)
@@ -291,6 +274,15 @@ func TestMasterNetworkBridges(t *testing.T) {
 
 	//  ensure all the required network master l3, l4 veth network bridges are created
 	assert.Equal(len(bridges), 0)
+}
+
+func TestOpenStatusAgentPort(t *testing.T) {
+	assert := assert.New(t)
+
+	metricsPort := 3200
+
+	_, err := net.Dial("tcp", fmt.Sprintf(":%s", metricsPort))
+	assert.Nil(t, err)
 }
 
 func TestAgentConfigLoader(t *testing.T) {

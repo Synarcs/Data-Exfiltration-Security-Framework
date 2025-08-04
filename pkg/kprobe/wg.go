@@ -12,11 +12,19 @@ import (
 
 // implements support for wiregauard traffic netdev (encap creation hooks) for exfiltration over tunnels with advanced netdev devlink associated coorelation with the core exfil attempts
 
-type WireguardExfil struct {
+// core kernel introspection for wireguard tunnels
+const (
+	WG_DEV_OPEN  = "wg_open"
+	WG_DEV_XMIT  = "wg_xmit"
+	WG_DEV_CLOSE = "wg_close"
+)
+
+type WireguardKprobes struct {
 	WireguardSockprog *ebpf.Program
-	Devlink           *netinet.NetIface
+	Devlink           *netinet.NetIface // eBPF agent holding all link info collected from kernel using netlink
 }
 
-func (wg *WireguardExfil) InitKernelWgHooks() error {
-	return nil
+// TODO: WG kernel wireguard tunnel introspect eBPF agent co-related process information
+func NewWgKprobes(globalErrorChannel chan error) *WireguardKprobes {
+	return &WireguardKprobes{}
 }

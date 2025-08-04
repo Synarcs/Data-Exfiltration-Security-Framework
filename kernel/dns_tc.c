@@ -134,6 +134,23 @@ struct exfil_vxlan_exfil_event {
     } exfil_security_egresss_dpi_time SEC(".maps");
 #endif
 
+
+// service loopback dnat processing 
+#if NETDEV_LINK_LB_STUB_RESOLVER
+    struct loopback_transport_port_info {
+        __u32 src_port;
+        __u32 dest_port;
+        __u32 if_index;
+    } __attribute__((packed));
+
+    struct exfil_security_loopback_transport_ports {
+        __uint(type, BPF_MAP_TYPE_LRU_HASH);
+        __type(key, __u16); // dns query ID
+        __type(value, struct loopback_transport_port_info); 
+        __uint(max_entries, 1 << 10);
+    } exfil_security_loopback_transport_ports SEC(".maps");
+#endif
+
 // map storing information about the vxlan kernel encap channels port for transfer, userspace instruct kernel DPI to block traffic unless scanned nexxt time via ring buff 
 // userspace has always ensured that there is an l7 dns layer with malicious payload encapsulated inside the frame for vxlan packet frame.
 // the payload is put for the edr agent in userspace monitor all the vxlan egress transfer activity, as well mark a port as malicious associated with the netdev, unless unblocekd further
@@ -421,7 +438,7 @@ struct dns_volume_stats {
 // drop in kernel and let the userspace agent monitor it in depth for packet drop cycle ipv4
 #define PROCESS_KERNEL_PACKET_DROP_IPV4(__skb, __current_dest_addr, __dest_addr_route_malicious, __config, __br_index) \
     do { \
-        if(__skb_l3_dnat(__skb, &__current_dest_addr, &__dest_addr_route_malicious) == TC_DROP) \
+        if(__skb_l3_dnat_v4(__skb, &__current_dest_addr, &__dest_addr_route_malicious) == TC_DROP) \
             return TC_DROP;                             \
         __handle_kernel_map_redirection_drop_count();   \
         SKB_RANDOM_MARK_PER_NETFLOW(skb, config)        \
@@ -970,7 +987,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload_transport_tcp(struct skb
             query_class = *(__u16 *) (dns_payload_buffer + offset);
             offset += sizeof(__u16); // offset += sizeof(__u8) + 1;
 
-            __u8 subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
+            __u8 __maybe_unused subdmoain_label_count = root_domain == 2 ? 0 : label_count - 2;
 
             if (label_count <= 2) return BENIGN;
             
@@ -1268,19 +1285,19 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
     __u16 redirection_count_key = 0; // keep constant from kernel to measure the redirection count 
     if (isRedirectedDropped) {
         __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key);
-        if (ct_val) 
+        if (ct_val) {
             __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
-        else {
-            bpf_map_update_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+            return;
         }
-    }else {
-        __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key);
-        if (ct_val) 
-            __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
-        else {
-            bpf_map_update_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
-        }
+        bpf_map_update_elem(&exfil_security_egress_clone_redirect_drop_kernel_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
+        return;
     }
+    __u32 *ct_val = bpf_map_lookup_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key);
+    if (ct_val) {
+        __sync_fetch_and_add(ct_val, 1); // increase clone redirection buffer count
+        return;
+    }
+    bpf_map_update_elem(&exfil_security_egress_clone_redirect_count_map, &redirection_count_key, &init_map_redirect_count, BPF_ANY);
 }
 
 
@@ -1431,7 +1448,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     __u32 tc_class_id = skb->tc_classid;
     __be32 dest_addr_route = bpf_ntohl(BRIDGE_REDIRECT_ADDRESS_IPV4_TUNNEL);
 
-    struct __kernel_proc_struct_info * proc_info = __get_process_info(false); // task struct for process Info 
+    struct __kernel_proc_struct_info * proc_info = __get_process_info(false); // task info for process Info (task struct is updated by parent process layers)
 
     // populate the br_index handler clone for skb from kernel over the packet bridge 
     struct exfil_kernel_config *config = bpf_map_lookup_elem(&exfil_security_config_map, &out); 
@@ -1452,8 +1469,8 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
     if (isPassiveDPIStandardPortTransfer) 
         goto SKIP_L7_DEEP_SCAN_DNS_UDP_OVERLAY;
 
-    bool isTunnelC2CStandardUdpTransport = false;
     #if !DEEP_SCAN_DNS_UDP_OVERLAY
+        bool isTunnelC2CStandardUdpTransport = false;
             // allow an non overlay for fixed ports used by other protocols, for struct check mode, kernel will not process the packet DPI will scan each of them 
         #pragma unroll(MAX_UDP_PROTOCOL_TRANSFERS)
         for (int i=0; i < MAX_UDP_PROTOCOL_TRANSFERS; i++) {
@@ -1483,9 +1500,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             return OVERLAY_TUNNEL_DETECTED; // packet will be dropped over egress TC
         }
         if (__clone_redirect_packet(skb, br_index, dest_addr_route, true) < 0) {
-            #if DEBUG
-                bpf_printk("error clone the packet ")
-            #endif 
+            return OVERLAY_TUNNEL_SUPICIOUS;
         }
         goto SKIP_NO_PROC_CLONE_KERNEL_WITHOUT_TASK_COMM;
     }
@@ -1941,7 +1956,7 @@ __always_inline __u8 __update_kernel_time_post_redirect(__u32 transaction_id, st
 
 // does l3 dnat over raw skb and recompute checksum to divert flow to the bridge link netdev 
 static
-__always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_addr, __be32 * dest_addr_route) {
+__always_inline __u8 __skb_l3_dnat_v4(struct __sk_buff *skb ,__be32 * current_dest_addr, __be32 * dest_addr_route) {
     if (bpf_skb_load_bytes(skb, IP_DST_OFF, current_dest_addr, 4) < 0) {
         // 4 bytes for the ipv4 address offset 
         #if DEBUG   
@@ -1963,6 +1978,45 @@ __always_inline __u8 __skb_l3_dnat(struct __sk_buff *skb ,__be32 * current_dest_
         return TC_FORWARD;
     }
 }
+
+static
+__always_inline __u8 __skb_l4_sport_translate(struct __sk_buff *skb,  __u16 __transport_src_port) {
+    
+    if (bpf_skb_store_bytes(skb, ETH_HLEN + offsetof(struct udphdr, source), &__transport_src_port, sizeof(__transport_src_port), 0) < 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
+#if NETDEV_LINK_LB_STUB_RESOLVER
+    // for stub over loopback link for hard xmit track source for packet in kernel for dnat and resent
+    static
+    __always_inline int __skb_l3_dnat_vx_sport_mapping(struct __sk_buff *skb, 
+                     __u16 dns_query_id, struct udphdr *udp) {
+        struct loopback_transport_port_info * info = bpf_map_lookup_elem(&exfil_security_loopback_transport_ports, 
+                        &dns_query_id);
+        if (!info) {
+            // first stub skb packet transfer
+            struct loopback_transport_port_info port_info = {
+                .src_port = bpf_ntohs(udp->source),
+                .dest_port = bpf_ntohs(udp->dest),
+                .if_index = skb->ingress_ifindex, // track for loopback iface mapping in kernel on loopback wire
+            };
+            bpf_map_update_elem(&exfil_security_loopback_transport_ports, &dns_query_id, &port_info, 0);
+            return 1;
+        }
+
+        // this is rescanned packet from EDR agent in userspace must do dport map on behalf for proper stub resolver forward
+
+        bpf_map_delete_elem(&exfil_security_loopback_transport_ports, &dns_query_id);
+        if (__skb_l4_sport_translate(skb, bpf_ntohs(udp->source)) == 0) {
+            return 0;
+        }
+
+        return 1;
+    }
+#endif 
 
 // v6 dnat, ipv6 does not contain checksum for fast transfer over the wire the checksum in skb need not be incrementally recomputed
 // TODO: All the ipv6 dnat in kernel has to configured from userspace node agent over discrete ipam v4/v6 range at the endpoint
@@ -2011,7 +2065,7 @@ SEC("tcx")
 #else 
 SEC("tc")
 #endif
-int classify(struct __sk_buff *skb){
+int exfil_sec(struct __sk_buff *skb){
     __u64 kernel_dpi_start_time = bpf_ktime_get_ns();
 
     struct skb_cursor cursor; 
@@ -2056,12 +2110,11 @@ int classify(struct __sk_buff *skb){
             
         // filter ay l3 traffic to prevent any l3 filter traffic to remote endpoint (security enforced from kernel)
         #if L3_IPV4_DYNAMIC_KERNEL_NETPOOL_SECURITY_MALICIOUS_REMOTE_C2_SERVERS 
-            if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            \
-                if (!DEBUG)  {                                                         \
-                    bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   \
-                }                                                                     \
-                bpf_printk("the current l3 address send %x", bpf_ntohs(ip->daddr));
-                return TC_DROP;                                                       \
+            if (__l3_ipv4_netpool_egress_filter_for_dns_c2_server(ip)) {            
+                #if DEBUG
+                    bpf_printk("dropping traffic for malicious c2 ipv4 remote c2");   
+                #endif 
+                return TC_DROP;                                                       
             } 
         #endif
 
@@ -2177,9 +2230,13 @@ int classify(struct __sk_buff *skb){
 
                 // change the dest ip to point to the bridge for destination over the internal subnet of network namespaces
 
-                if(__skb_l3_dnat(skb, &current_dest_addr, &dest_addr_route) == TC_DROP) {
+                if(__skb_l3_dnat_v4(skb, &current_dest_addr, &dest_addr_route) == TC_DROP) {
                     return TC_DROP;
                 }
+
+                #if NETDEV_LINK_LB_STUB_RESOLVER
+                    __skb_l3_dnat_vx_sport_mapping(skb, transaction_id, udp);
+                #endif 
 
                 __handle_kernel_map_redirection_count();
 
@@ -2348,6 +2405,10 @@ int classify(struct __sk_buff *skb){
                 SKB_RANDOM_MARK_PER_NETFLOW(skb, config)
 
                 __skb_l3_dnat_v6(&ipv6);
+
+                #if NETDEV_LINK_LB_STUB_RESOLVER
+                    __skb_l3_dnat_vx_sport_mapping(skb, transaction_id, udp);
+                #endif 
 
                 __update_kernel_packet_redirection_time(transaction_id);
                 

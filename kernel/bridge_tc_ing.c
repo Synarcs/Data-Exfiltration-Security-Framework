@@ -23,8 +23,12 @@
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/cbpf/exfil_security_config_map"
 
 // allow only traffic having the custom mark and stop any other packets over the bridge 
+#if !VERIFY_TCX_SUPPORT
+SEC("tcx")
+#else 
 SEC("tc")
-int bridge_ingress_filter(struct __sk_buff *skb) {
+#endif
+int exfil_sec_bridge_ingress_filter(struct __sk_buff *skb) {
     // Add more context to your print
     __u32 out = skb->ifindex;
     __u32 mark = skb->mark;

@@ -20,8 +20,12 @@
 #define EXFIL_SECURITY_PIN_DNS_EGRESS_PATH "/sys/fs/bpf/exfil_security_config_map"
 
 // allow only traffic having the custom mark and stop any other packets over the bridge 
+#if !VERIFY_TCX_SUPPORT
+SEC("tcx")
+#else 
 SEC("tc")
-int bridge_egress_filter(struct __sk_buff *skb) {
+#endif
+int exfil_sec_bridge_egress_filter(struct __sk_buff *skb) {
 	return bpf_redirect(0, BPF_F_INGRESS); // let kernel gc over the rx queue in kernel for the netdev link 
 }
 

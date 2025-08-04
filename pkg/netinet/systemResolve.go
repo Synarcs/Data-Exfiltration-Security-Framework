@@ -16,8 +16,9 @@ import (
 )
 
 type DnsResolverServer struct {
-	Ipv4 []net.IP
-	Ipv6 []net.IP
+	Ipv4              []net.IP
+	Ipv6              []net.IP
+	isLoopBackEnabled bool // any stub resolver for system resolve
 }
 
 const (
@@ -46,6 +47,9 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 			isIpv4 := net.ParseIP(dnsServer[1]).To4()
 			if isIpv4 != nil {
 				dnsResolver.Ipv4 = append(dnsResolver.Ipv4, isIpv4) // only take the ipv4 dns address with highest priority in systemd resolved
+				if isIpv4.String() == "17.0.0.53" {
+					dnsResolver.isLoopBackEnabled = true
+				}
 			} else {
 				ipv6 := net.ParseIP(dnsServer[1]).To16()
 				if ipv6 != nil {

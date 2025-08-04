@@ -37,20 +37,20 @@ type KernelNetlinkSocket struct {
 	ProcessInfo   [200]byte
 }
 
-type NetKProbes struct {
+type TunTapKprobes struct {
 	NetlinkSocket         *ebpf.Program
 	NetlinkSupportMap     *ebpf.Map
 	KprobelLink           link.Link
 	GlobalErrorKernelChan chan error
 }
 
-func NewKprobeEventFactory(globalErrorKernelChan chan error) *NetKProbes {
-	return &NetKProbes{
+func NewTunTapKprobes(globalErrorKernelChan chan error) *TunTapKprobes {
+	return &TunTapKprobes{
 		GlobalErrorKernelChan: globalErrorKernelChan,
 	}
 }
 
-func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
+func (k *TunTapKprobes) ProcessTunnelEvent(ctx context.Context,
 	iface *netinet.NetIface, eventChannel chan events.KernelNetlinkSocket, tc *tc.TCHandler) {
 	for {
 		select {
@@ -81,7 +81,7 @@ func (k *NetKProbes) ProcessTunnelEvent(ctx context.Context,
 
 }
 
-func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) {
+func (k *TunTapKprobes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) {
 	utils.Log("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
@@ -191,7 +191,7 @@ func (k *NetKProbes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceCh
 	}
 }
 
-func (k *NetKProbes) DetachKprobeHandlers() error {
+func (k *TunTapKprobes) DetachTunTapKprobeHandlers() error {
 	if k.NetlinkSocket == nil {
 		utils.Log("Cannot call raw detach before the required kprobe is first attached in kernel")
 		return nil

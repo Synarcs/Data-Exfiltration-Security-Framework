@@ -158,6 +158,10 @@ func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer
 
 	if dnsResolver == nil {
 		hostResolverConfig, err := ReadDNSResolvedConf() // read config from file of systemd resolved
+		if hostResolverConfig.isLoopBackEnabled {
+			// a service stub resolver exist on the host downstream netdev
+			
+		}
 		if err != nil {
 			nf.PhysicalRouterGatewayV4 = net.ParseIP(utils.GLOBAL_ROUTE_IPV4_TRANSFER_LINKS[0]).To4()
 			nf.PhysicalRouterGatewayV6 = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[0]).To16()

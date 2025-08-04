@@ -21,6 +21,11 @@
     #define TC_DROP TC_ACT_SHOT
 #endif
 
+#ifndef NETDEV_LINK_LB_STUB_RESOLVER
+    #define NETDEV_LINK_LB_STUB_RESOLVER true
+#endif
+
+
 #define DPI_KERNEL_PERF_BENCH true 
 #define DPI_KERNEL_PERF_BENCH_SCAN_INTERVAL 1 << 12 
 

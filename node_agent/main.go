@@ -38,12 +38,13 @@ import (
 )
 
 type KernelCleanHooks struct {
-	tc        *tcl.TCHandler
-	nft       *bridgetc.BridgeTCFilters
-	kprobe    *kprobe.NetKProbes
-	sockProgs *sock.SockKernelProgs
-	iface     *netinet.NetIface
-	cliSock   *cli.NodeDaemonCli
+	tc           *tcl.TCHandler
+	nft          *bridgetc.BridgeTCFilters
+	tuntapKprobe *kprobe.TunTapKprobes
+	wgKprobe     *kprobe.WireguardKprobes
+	sockProgs    *sock.SockKernelProgs
+	iface        *netinet.NetIface
+	cliSock      *cli.NodeDaemonCli
 }
 
 // return a channel map for other events hook the node agent must inject post successfull injection of the required prog of interest
@@ -71,7 +72,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
 
 	cleanHooks.tc.IsLinkPppLinkAttached(&ctx)
 
-	if err := cleanHooks.kprobe.DetachKprobeHandlers(); err != nil && !ignoreErr {
+	if err := cleanHooks.tuntapKprobe.DetachTunTapKprobeHandlers(); err != nil && !ignoreErr {
 		return err
 	} // kernel kprobe layer
 
@@ -312,6 +313,8 @@ func main() {
 	}
 	globalConfig := agentConfigLoader.GetAgentConfig()
 
+	utils.Log(globalConfig.DnsResolver)
+
 	// io Disk Cache Inodes for Node agent
 	utils.Log("Endpoint Agent: configure the cache")
 	utils.InitCache(&utils.CacheConfig{
@@ -446,7 +449,8 @@ func main() {
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
-	kprobe := kprobe.NewKprobeEventFactory(globalErrorKernelHandlerChannel)
+	tuntapkprobe := kprobe.NewTunTapKprobes(globalErrorKernelHandlerChannel)
+	wgkprobe := kprobe.NewWgKprobes(globalErrorKernelHandlerChannel)
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(ctx, iface, globalEBPFProgInjectChan)
@@ -461,8 +465,8 @@ func main() {
 
 	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
-	go kprobe.ProcessTunnelEvent(ctx, iface, tunnelSocketEventHandler, tc)
-	go kprobe.AttachNetlinkSockHandler(iface, tunnelSocketEventHandler)
+	go tuntapkprobe.ProcessTunnelEvent(ctx, iface, tunnelSocketEventHandler, tc)
+	go tuntapkprobe.AttachNetlinkSockHandler(iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(agentConfigLoader.GetAgentConfig())
 
@@ -483,12 +487,13 @@ func main() {
 	}
 
 	detachKernelHooksOpts := &KernelCleanHooks{
-		tc:        tc,
-		nft:       bridgeTc,
-		kprobe:    kprobe,
-		sockProgs: sockProgs,
-		iface:     iface,
-		cliSock:   cliSock,
+		tc:           tc,
+		nft:          bridgeTc,
+		tuntapKprobe: tuntapkprobe,
+		wgKprobe:     wgkprobe,
+		sockProgs:    sockProgs,
+		iface:        iface,
+		cliSock:      cliSock,
 	}
 
 	// global error channel for the kernel hooks
