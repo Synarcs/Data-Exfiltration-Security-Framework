@@ -14,14 +14,21 @@
 // ort inference
 #include "onnxruntime_cxx_api.h"
 
-const std::string backend = "CPU";
-
 namespace OnnxInferencer {
+    static const int DEFAULT_BACKEDN = 0;
+    enum class Inference_Backends: uint8_t {
+        CPU = 0,
+        GPU = 1,
+        NPU = 2,
+    };
 
     // configure global session for all inferencer
     class BaseClassificationModelInferencer {
+        protected:
+            uint8_t inferenceBackend; // generic inferencer to support ONNX inference over different backends
         public:
             BaseClassificationModelInferencer() = default;
+            BaseClassificationModelInferencer(uint8_t backend) {}
             virtual ~BaseClassificationModelInferencer() {}
             virtual bool infer(std::vector<float>&) = 0;
             virtual float getClassificationThreshold() = 0;
@@ -64,7 +71,8 @@ namespace OnnxInferencer {
         }
     public:
         DNSOnnxCPUInference(const std::string& model_path, const float& binary_classifer) noexcept
-            : session(nullptr),
+            : BaseClassificationModelInferencer(static_cast<uint8_t>(Inference_Backends::CPU)),
+              session(nullptr),
               env(ORT_LOGGING_LEVEL_WARNING, log_indexId),
               classifer_threshold(binary_classifer)
         {
@@ -75,7 +83,6 @@ namespace OnnxInferencer {
             session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
 
             session = Ort::Session(env, model_path.c_str(), session_options);
-
         }
 
         // binary classification threshold value 

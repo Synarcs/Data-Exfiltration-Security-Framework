@@ -16,6 +16,7 @@
 
 // core memory loaded onnx model for inference covers multithreaded ttrpc (grpc over UDS) and unix 
 #include "server.hpp"
+#include "inferencesock.hpp"
 #include "const.h"
 
 using namespace std;
@@ -34,27 +35,6 @@ void killRPCServerHandler(int sig_num) {
     }
 }
 
-static 
-void removeMountedSocks() {
-    // ensure the mnt is clean 
-    try {
-        int runfs_sock_mount = 0;
-        for (const auto& file : std::filesystem::directory_iterator(INFER_MNT_PTH)) {
-            if (file.is_socket()) {
-                if (file.path().filename() == ONNX_INFER_UNIX_MNT) {
-                    std::filesystem::remove(ONNX_INFER_UNIX_MNT);
-                }
-            }
-            runfs_sock_mount++;
-        }
-        if (runfs_sock_mount == 1) {
-            std::filesystem::remove_all(INFER_MNT_PTH);
-        }
-    }catch(const std::filesystem::filesystem_error& e) {
-        perror("erro cleaning previous mnt server");
-        exit(EXIT_FAILURE);
-    }
-}
 
 struct InferenceControllerOpts {
     float threshold = 0.5;
@@ -64,19 +44,18 @@ struct InferenceControllerOpts {
     int standalone = 0;
     int isQuantized = 0;
     int controller = 0;
-
-    InferenceControllerOpts() {}
-    virtual ~InferenceControllerOpts() {}
 };
 
 class InferenceServer {
     public:
         void start() {
-            mountInferSockFs();
-            iniUDS();
+            inferenceSockHandler.get()->mountInferSockFs();
+            inferenceSockHandler.get()->iniUDS();
         }
         InferenceServer(struct InferenceControllerOpts cliOpts)
-            : opts(cliOpts) {}
+            : opts(cliOpts) {
+               inferenceSockHandler = make_unique<InferenceServerSocketHandler>();
+            }
 
         void startinferencerpc();
 
@@ -84,34 +63,8 @@ class InferenceServer {
 
     private:
         struct InferenceControllerOpts opts;
+        unique_ptr<InferenceServerSocketHandler> inferenceSockHandler;
         // runfs mnt all unix socket the agent will use 
-        void mountInferSockFs() {
-            filesystem::path fd_path = INFER_MNT_PTH;
-            if (filesystem::is_directory(fd_path)) {
-                removeMountedSocks();
-            }
-            cout << "creating the unix mount path " << fd_path << endl;
-            filesystem::create_directory(fd_path);
-        }
-
-        void iniUDS() {
-            int in_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (in_fd < 0) return;
-
-            struct sockaddr_un in;
-            memset(&in, 0, sizeof(struct sockaddr_un));
-
-            in.sun_family = AF_UNIX;
-            strncpy(in.sun_path, ONNX_INFER_UNIX_MNT.c_str(), sizeof(in.sun_path) - 1);
-
-            unlink(ONNX_INFER_UNIX_MNT.c_str());
-
-            if (bind(in_fd, (struct sockaddr*)&in, sizeof(in)) < 0) {
-                perror("bind");
-                close(in_fd);
-                return;
-            }
-        }
 };
 
 void InferenceServer::startinferencerpc() {
@@ -137,7 +90,8 @@ void InferenceServer::startinferencerpc() {
 
 void InferenceServer::shutdownServer() { rpcServer->Shutdown(); }
 
-void printArgs() {
+static 
+inline void printArgs() {
     cout << "-t float32 \n \t\t The threshold used for binary classification of ONNX model. " <<
             "\n -m string \n \t\t ONNX Model serialized path. " << 
             "\n -v bool \n \t\t Debug output." << 
