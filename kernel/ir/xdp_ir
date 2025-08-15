@@ -1,5 +1,5 @@
-; ModuleID = 'dns_xdp.c'
-source_filename = "dns_xdp.c"
+; ModuleID = 'dns_xdp.bpf.c'
+source_filename = "dns_xdp.bpf.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
 target triple = "bpf"
 
@@ -31,6 +31,9 @@ target triple = "bpf"
 @__license = dso_local global [10 x i8] c"MIT / GPL\00", section "license", align 1
 @exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
 @flags = dso_local global i32 0, align 4
+@overlay_flags = dso_local global i32 0, align 4
+@overlay_encap_flags = dso_local global i32 0, align 4
+@overlay_dns_port_flags = dso_local global i32 0, align 4
 @exfil_security_detected_c2c_tld = dso_local global %struct.exfill_ingress_security_layer7_tld zeroinitializer, section ".maos", align 8
 @xdp_cursor = dso_local global %struct.cursosr zeroinitializer, align 1
 @llvm.compiler.used = appending global [4 x ptr] [ptr @xdp_process, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_detected_c2c_tld], section "llvm.metadata"

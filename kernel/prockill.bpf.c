@@ -30,7 +30,7 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_tracing.h>
 
-#include "hdrs/consts.h"
+// #include "hdrs/consts.h"
 #include "hdrs/raw_proc.h"
 #include "hdrs/utils.h"
 #include "hdrs/pinmaps.h"
@@ -146,7 +146,7 @@ int handle_mal_c2_proc_exit() {
 
     #if DEBUG
         bpf_printk("running kprobe for sigkill of proc %d", proc_id);
-    #endif 
+    #endif
 
     is_mal_proc_below_detect_threshold_killed();
     return 0;
@@ -162,8 +162,8 @@ int process_potential_mal_c2_thread_spawn()  {
     struct task_struct *parent = NULL;
 
     struct __kernel_proc_struct_info *proc_info = __get_process_info(true);
-    if (!proc_info) goto SKIP_PPID_HUNT;
-    if (!is_process_found_malicious(proc_info->procId)) goto SKIP_PPID_HUNT;
+    if (!proc_info || !is_process_found_malicious(proc_info->procId)) 
+        goto SKIP_PPID_HUNT;
     
     if (proc_info->procId != proc_info->threadId) {
         // a thread spawn for the parent process in the parent task struct thread_group 

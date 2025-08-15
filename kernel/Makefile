@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
-tc_kernel := dns_tc.c 
+tc_kernel := dns_tc.bpf.c 
 tc_kernel_out ?= tc.o
 
 bridge_tc_kernel_ingress := bridge_tc_ing.c
@@ -8,22 +8,22 @@ bridge_tc_kernel_ingress_out ?= bridge_ing.o
 bridge_tc_kernel_egress := bridge_tc_egress.c
 bridge_tc_kernel_egress_out ?= bridge_egress.o 
 
-xdp_kernel := dns_xdp.c 
+xdp_kernel := dns_xdp.bpf.c 
 xdp_kernel_out ?= xdp.o 
 
-netlink_kernel := nf_sock.c
+netlink_kernel := nf_sock.bpf.c
 netlink_kernel_out ?= netlink.o
 
-tracepoint_kernel := prockill.c 
+tracepoint_kernel := prockill.bpf.c 
 tracepoint_kernel_out ?= tracepoint.o
 
-p2p_kernel := dns_tun.c
+p2p_kernel := dns_tun.bpf.c
 p2p_kernel_out ?= tun.o
 
-sock_sdr := dns_sock_ops.c 
+sock_sdr := dns_sock_ops.bpf.c 
 sock_sdr_out ?= sock.o
 
-crypto_kernel := $(shell pwd)/lsm_bpf.c
+crypto_kernel := $(shell pwd)/lsm.bpf.c
 crypto_kernel_out ?= lsm_bpf.o 
 
 CC := clang 

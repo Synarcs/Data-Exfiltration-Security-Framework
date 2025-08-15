@@ -28,11 +28,14 @@ target triple = "bpf"
 @__license = dso_local global [13 x i8] c"Dual MIT/GPL\00", section "license", align 1
 @exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
 @flags = dso_local global i32 0, align 4
+@overlay_flags = dso_local global i32 0, align 4
+@overlay_encap_flags = dso_local global i32 0, align 4
+@overlay_dns_port_flags = dso_local global i32 0, align 4
 @exfil_security_egress_proc_mal = dso_local global %struct.exfil_security_egress_proc_mal zeroinitializer, section ".maps", align 8
 @exfil_security_egress_nsp_map = dso_local global %struct.exfil_security_egress_nsp_map zeroinitializer, section ".maps", align 8
 @exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter = dso_local global %struct.exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter zeroinitializer, section ".maps", align 8
 @exfil_security_config_map = dso_local global %struct.exfil_security_config_map zeroinitializer, section ".maps", align 8
-@llvm.compiler.used = appending global [8 x ptr] [ptr @bridge_ingress_filter, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_egress_proc_mal, ptr @exfil_security_egress_nsp_map, ptr @exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, ptr @exfil_security_tc_bridge_config_map, ptr @exfil_security_config_map], section "llvm.metadata"
+@llvm.compiler.used = appending global [8 x ptr] [ptr @exfil_sec_bridge_ingress_filter, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_egress_proc_mal, ptr @exfil_security_egress_nsp_map, ptr @exfil_security_egress_l3_ipv4_dynamic_netpool_c2_filter, ptr @exfil_security_tc_bridge_config_map, ptr @exfil_security_config_map], section "llvm.metadata"
 
 ; Function Attrs: noinline nounwind optnone
 define dso_local ptr @configure_global_ipv6_route_handlers() #0 {
@@ -88,7 +91,7 @@ declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg) #1
 declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #2
 
 ; Function Attrs: noinline nounwind optnone
-define dso_local i32 @bridge_ingress_filter(ptr noundef %0) #0 section "tc" {
+define dso_local i32 @exfil_sec_bridge_ingress_filter(ptr noundef %0) #0 section "tc" {
   %2 = alloca i32, align 4
   %3 = alloca ptr, align 8
   %4 = alloca i32, align 4

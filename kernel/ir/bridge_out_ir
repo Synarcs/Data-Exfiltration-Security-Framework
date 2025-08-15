@@ -13,7 +13,7 @@ target triple = "bpf"
 @bridge_redirect_addr_ipv6_malicious_tunnel = dso_local global { { [8 x i16] } } { { [8 x i16] } { [8 x i16] [i16 -32514, i16 0, i16 0, i16 0, i16 -28208, i16 -196, i16 9726, i16 -26515] } }, align 4
 @__license = dso_local global [13 x i8] c"Dual MIT/GPL\00", section "license", align 1
 @exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
-@llvm.compiler.used = appending global [3 x ptr] [ptr @bridge_egress_filter, ptr @__license, ptr @exfil_security_egress_dns_limites], section "llvm.metadata"
+@llvm.compiler.used = appending global [3 x ptr] [ptr @exfil_sec_bridge_egress_filter, ptr @__license, ptr @exfil_security_egress_dns_limites], section "llvm.metadata"
 
 ; Function Attrs: noinline nounwind optnone
 define dso_local ptr @configure_global_ipv6_route_handlers() #0 {
@@ -69,7 +69,7 @@ declare void @llvm.memset.p0.i64(ptr nocapture writeonly, i8, i64, i1 immarg) #1
 declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #2
 
 ; Function Attrs: noinline nounwind optnone
-define dso_local i32 @bridge_egress_filter(ptr noundef %0) #0 section "tc" {
+define dso_local i32 @exfil_sec_bridge_egress_filter(ptr noundef %0) #0 section "tc" {
   %2 = alloca ptr, align 8
   store ptr %0, ptr %2, align 8
   %3 = call i64 inttoptr (i64 23 to ptr)(i32 noundef 0, i64 noundef 1)

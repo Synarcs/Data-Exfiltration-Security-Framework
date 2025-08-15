@@ -1,5 +1,5 @@
-; ModuleID = '/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm_bpf.c'
-source_filename = "/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm_bpf.c"
+; ModuleID = '/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm.bpf.c'
+source_filename = "/home/synarcs/Desktop/Kernel-Security/Data-Exfiltration-Security-Framework/kernel/lsm.bpf.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
 target triple = "bpf"
 
@@ -18,7 +18,7 @@ target triple = "bpf"
 @exfil_security_modified_signature = dso_local global %struct.anon.0 zeroinitializer, section ".maps", align 8
 @exfil_security_original_program = dso_local global %struct.anon.1 zeroinitializer, section ".maps", align 8
 @exfil_security_combined_data_map = dso_local global %struct.anon.2 zeroinitializer, section ".maps", align 8
-@____bpf.____fmt = internal constant [29 x i8] c"yeah the ebpf sign key found\00", align 1
+@____bpf.____fmt = internal constant [24 x i8] c"the ebpf sign key found\00", align 1
 @____bpf.____fmt.1 = internal constant [100 x i8] c"the lsm crypto verification hook called over BPF_PROG_LOAD kernel syscall %d ins ct %d, sig size %d\00", align 1
 @llvm.compiler.used = appending global [6 x ptr] [ptr @bpf, ptr @_license, ptr @exfil_security_keyring_map, ptr @exfil_security_modified_signature, ptr @exfil_security_original_program, ptr @exfil_security_combined_data_map], section "llvm.metadata"
 
@@ -185,7 +185,7 @@ define dso_local i32 @bpf(ptr noundef %0) #0 section "lsm.s/bpf" {
   %104 = load i32, ptr %103, align 4
   %105 = and i32 %104, 4095
   store i32 %105, ptr %103, align 4
-  %106 = call i64 (ptr, i32, ...) inttoptr (i64 6 to ptr)(ptr noundef @____bpf.____fmt, i32 noundef 29) #1
+  %106 = call i64 (ptr, i32, ...) inttoptr (i64 6 to ptr)(ptr noundef @____bpf.____fmt, i32 noundef 24) #1
   store i64 %106, ptr %16, align 8
   %107 = load i64, ptr %16, align 8
   %108 = load ptr, ptr %13, align 8

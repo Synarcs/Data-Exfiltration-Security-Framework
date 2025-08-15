@@ -96,11 +96,11 @@ struct packet_actions {
     __u8 (*parse_dns_payload_transport_udp) (struct skb_cursor *, void *, __u32, __u32, __u32);
     __u8 (*parse_dns_payload_transport_tcp) (struct skb_cursor *, void *,  struct dns_header_tcp *, __u32); 
 
-    __u8 (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
+    enum MALICIOUS_FLAGS (*parse_dns_payload_memsafet_payload) (struct skb_cursor *, void *, struct dns_header *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
     __u8 (*parse_dns_payload_memsafet_payload_transport_tcp) (struct skb_cursor *, void *, struct dns_header_tcp *); // standard dns port DPI with header always assured to be a DNS Header and dns payload 
 
     // dns header parser section fro the enitr query labels 
-    __u8 (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes);
+    enum MALICIOUS_FLAGS (*parse_dns_payload_queries_section) (struct skb_cursor *, __u16, struct qtypes);
 
     // the malware can use non standard ports perform DPI with non statandard ports for DPI inside kernel matching the dns header payload section;
     __u8 (*parse_dns_payload_non_standard_port) (struct skb_cursor * , struct __sk_buff *,void *, struct dns_header *, struct udphdr *);
@@ -330,7 +330,7 @@ struct dns_volume_stats {
             }                                           \                                
         }while(0);
 
-// to ensure ease fro verifier bounds
+// type check from compiler for kernel DPI feature evaluation 
 #define DNS_DPI_FEATURE_PRIO_SAFE(__feature_prio) \
     __builtin_types_compatible_p(typeof((__feature_prio)), typeof(MAX_DNS_PRIO_KEYS)) ? \
                 ((__feature_prio) > (MAX_DNS_PRIO_KEYS) ? (MAX_DNS_PRIO_KEYS) : (__feature_prio)) : \
@@ -409,6 +409,14 @@ struct dns_volume_stats {
                     return TC_FORWARD;                                    \
             }                                                             \
         } while (0)
+#endif
+
+#if ENVOY_DPI_WASM_TCP_FILTER
+    #define SKIP_EBPF_AGENT_PORT_DEEP_SCAN(__dest) \
+        do {    \
+            if ((__dest) == ENVOY_DPI_TCP_PORT || (__dest) == CONTROLLER_RPC_SVC_PORT) \
+                return TC_FORWARD; \
+        }while (0);
 #endif
 
 /*
@@ -572,7 +580,7 @@ __always_inline __u8 parse_dns_payload_tcp(struct skb_cursor *skb, void *dns_pay
 }
 
 static
-  __always_inline __u8 parse_dns_qeury_type_section(struct skb_cursor *skb, __u16 dns_query_class, struct qtypes qt) {
+  __always_inline enum MALICIOUS_FLAGS parse_dns_qeury_type_section(struct skb_cursor *skb, __u16 dns_query_class, struct qtypes qt) {
 
         EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(dns_query_class)
         return SUSPICIOUS;
@@ -610,7 +618,7 @@ __always_inline struct result_parse_dns_labels check_for_c2c_health_process(__u1
 }
 
 static
-__always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
+__always_inline enum MALICIOUS_FLAGS parse_dns_payload_memsafet_payload(struct skb_cursor *skb, void *dns_payload, 
                 struct dns_header *dns_header){
     // dns header already validated and payload and header memory safetyy already cosnidered 
 
@@ -767,7 +775,7 @@ __always_inline __u8 parse_dns_payload_memsafet_payload(struct skb_cursor *skb, 
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
 
             // parse the QTYPE
-            __u16 query_type = *(__u16 *) (dns_payload_buffer + offset); 
+            __u16 query_type = *(__u16 *) (dns_payload_buffer + offset);
             
             offset += sizeof(__u16);
             if ((void *) (dns_payload_buffer + offset + sizeof(__u16)) > skb->data_end) return SUSPICIOUS;
@@ -1301,6 +1309,10 @@ __always_inline void __handle_kernel_map_clone_redirected_count(bool isRedirecte
 }
 
 
+/* 
+    Performs DNAT on the packet 
+        for further complete packet clone  using (skb_clone) in kernel for different netdev for enhanced analysis
+*/
 static 
 __always_inline __u8 __clone_redirect_packet(struct __sk_buff *skb, __u32 br_index, 
     __be32 dest_addr_route, bool isMarkRandSkb) {
@@ -1462,9 +1474,9 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             br_index = config->NfNdpBridgeIndexId;
             dest_addr_route = bpf_ntohl(config->NfNdpBridgeRedirectIpv4);
         }
-     }else {
+    }else 
         return OVERLAY_TUNNEL_BENIGN; // cannot proceed until the config is loaded from userspace endpoint agent in the eBPF map 
-    }
+
 
     if (isPassiveDPIStandardPortTransfer) 
         goto SKIP_L7_DEEP_SCAN_DNS_UDP_OVERLAY;
@@ -1483,7 +1495,7 @@ __always_inline __u8 __process_packet_clone_redirection_non_standard_port(struct
             // skip deep parsing of random UDP ports used by most common l7 protocols relying on UDP transport example 68 (DHCP) 
             goto SKIP_DEEP_PARSING_RANDOM_PORTS_STANDARD_L7_PROTOCOLS
         }
-    #endif
+    #endif 
    
     SKIP_L7_DEEP_SCAN_DNS_UDP_OVERLAY:
 
@@ -1977,6 +1989,8 @@ __always_inline __u8 __skb_l3_dnat_v4(struct __sk_buff *skb ,__be32 * current_de
     if (bpf_skb_store_bytes(skb, ETH_HLEN + offsetof(struct iphdr, daddr), dest_addr_route, sizeof(*dest_addr_route), 0) < 0) {
         return TC_FORWARD;
     }
+
+    return TC_FORWARD;
 }
 
 static
@@ -1992,28 +2006,31 @@ __always_inline __u8 __skb_l4_sport_translate(struct __sk_buff *skb,  __u16 __tr
 #if NETDEV_LINK_LB_STUB_RESOLVER
     // for stub over loopback link for hard xmit track source for packet in kernel for dnat and resent
     static
-    __always_inline int __skb_l3_dnat_vx_sport_mapping(struct __sk_buff *skb, 
-                     __u16 dns_query_id, struct udphdr *udp) {
+    __always_inline __u8 __skb_l3_dnat_lb_sport_mapping(struct __sk_buff * skb,__u32 ifindex, 
+                     __u16 * dns_query_id, __u16 transport_src_port, __u16 transport_dst_port) {
+        
+        if (!dns_query_id) goto end;
+
         struct loopback_transport_port_info * info = bpf_map_lookup_elem(&exfil_security_loopback_transport_ports, 
-                        &dns_query_id);
+                        dns_query_id);
         if (!info) {
             // first stub skb packet transfer
             struct loopback_transport_port_info port_info = {
-                .src_port = bpf_ntohs(udp->source),
-                .dest_port = bpf_ntohs(udp->dest),
-                .if_index = skb->ingress_ifindex, // track for loopback iface mapping in kernel on loopback wire
+                .src_port = transport_src_port,
+                .dest_port = transport_dst_port,
+                .if_index = ifindex // track for loopback iface mapping in kernel on loopback wire
             };
-            bpf_map_update_elem(&exfil_security_loopback_transport_ports, &dns_query_id, &port_info, 0);
+            bpf_map_update_elem(&exfil_security_loopback_transport_ports, dns_query_id, &port_info, BPF_ANY);
             return 1;
         }
 
         // this is rescanned packet from EDR agent in userspace must do dport map on behalf for proper stub resolver forward
-
-        bpf_map_delete_elem(&exfil_security_loopback_transport_ports, &dns_query_id);
-        if (__skb_l4_sport_translate(skb, bpf_ntohs(udp->source)) == 0) {
+        if (bpf_map_delete_elem(&exfil_security_loopback_transport_ports, &dns_query_id) < 0) 
+            goto end;
+        if (__skb_l4_sport_translate(skb, transport_src_port) == 0) {
             return 0;
         }
-
+    end:
         return 1;
     }
 #endif 
@@ -2235,7 +2252,7 @@ int exfil_sec(struct __sk_buff *skb){
                 }
 
                 #if NETDEV_LINK_LB_STUB_RESOLVER
-                    __skb_l3_dnat_vx_sport_mapping(skb, transaction_id, udp);
+                    __skb_l3_dnat_lb_sport_mapping(skb, skb->ifindex, &transaction_id, bpf_ntohs(udp->source), bpf_ntohs(udp->dest));
                 #endif 
 
                 __handle_kernel_map_redirection_count();
@@ -2270,6 +2287,11 @@ int exfil_sec(struct __sk_buff *skb){
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
                     EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
                 #endif
+
+                // ports owned by the ebpf agent in userspace for sock for enhanced DPI from kernel TCP streams
+                #if ENVOY_DPI_WASM_TCP_FILTER
+                    SKIP_EBPF_AGENT_PORT_DEEP_SCAN(bpf_htons(udp->dest));
+                #endif 
 
                 if (__parse_skb_non_standard(cursor, skb, &actions, udp_payload_exclude_header, 
                                     udp_data, udp_payload_len, udp, true) == OVERLAY_TUNNEL_SUPICIOUS)
@@ -2407,7 +2429,7 @@ int exfil_sec(struct __sk_buff *skb){
                 __skb_l3_dnat_v6(&ipv6);
 
                 #if NETDEV_LINK_LB_STUB_RESOLVER
-                    __skb_l3_dnat_vx_sport_mapping(skb, transaction_id, udp);
+                    __skb_l3_dnat_lb_sport_mapping(skb,skb->ifindex, &transaction_id, bpf_ntohs(udp->source), bpf_ntohs(udp->dest));
                 #endif 
 
                 __update_kernel_packet_redirection_time(transaction_id);
@@ -2427,17 +2449,21 @@ int exfil_sec(struct __sk_buff *skb){
                     #if DEBUG
                         bpf_printk("Dropping the packet in Kernel Layer");
                     #endif
-		    PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
+		            PROCESS_KERNEL_PACKET_DROP_IPV6(skb, config, bridge_redirect_addr_ipv6_malicious, br_index)
                 }
 
                 OVERLAY_DNS_TRANSFER_ACT(skb, bpf_ntohs(udp->dest), bpf_ntohs(udp->source), true);
 
             }
             else {
-
                 #if IS_VXLAN_PORTS_EXIST_BRIDGE
-		    EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
-		#endif
+		            EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
+        		#endif
+
+                // ports owned by the ebpf agent in userspace for sock for enhanced DPI from kernel TCP streams
+                #if ENVOY_DPI_WASM_TCP_FILTER
+                    SKIP_EBPF_AGENT_PORT_DEEP_SCAN(bpf_htons(udp->dest));
+                #endif 
 
                 if (__parse_skb_non_standard(cursor, skb, &actions, udp_payload_exclude_header, udp_data, udp_payload_len, udp, false) == 1)
                     return TC_FORWARD;

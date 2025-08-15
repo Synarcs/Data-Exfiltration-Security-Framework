@@ -1,5 +1,5 @@
-; ModuleID = 'dns_tun.c'
-source_filename = "dns_tun.c"
+; ModuleID = 'dns_tun.bpf.c'
+source_filename = "dns_tun.bpf.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
 target triple = "bpf"
 
@@ -31,6 +31,9 @@ target triple = "bpf"
 @DNS_RECORD_LIMITS = dso_local global %struct.dns_record_limits_malicious { i32 898, i32 1023, i32 517, i32 575, i32 271, i32 384, i32 1032, i32 1149 }, align 1
 @exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
 @flags = dso_local global i32 0, align 4
+@overlay_flags = dso_local global i32 0, align 4
+@overlay_encap_flags = dso_local global i32 0, align 4
+@overlay_dns_port_flags = dso_local global i32 0, align 4
 @exfil_tunnel_dns_encap_transfer = dso_local global %struct.exfil_tunnel_dns_encap_transfer zeroinitializer, section ".maps", align 8
 @llvm.compiler.used = appending global [3 x ptr] [ptr @classify, ptr @exfil_security_egress_dns_limites, ptr @exfil_tunnel_dns_encap_transfer], section "llvm.metadata"
 

@@ -34,6 +34,10 @@
     #define RESERVED_KERNEL_SKBUFF_MAP 1 
 #endif
 
+#ifndef KERNEL_DPI_PACKET_DP_EXPORTERS
+    #define KERNEL_DPI_PACKET_DP_EXPORTERS true
+#endif 
+
 #define ull unsigned long long 
 #define uc unsigned char 
 #define ll long 

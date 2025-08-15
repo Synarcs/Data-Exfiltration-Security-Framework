@@ -1,5 +1,5 @@
-; ModuleID = 'nf_sock.c'
-source_filename = "nf_sock.c"
+; ModuleID = 'nf_sock.bpf.c'
+source_filename = "nf_sock.bpf.c"
 target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
 target triple = "bpf"
 
@@ -23,6 +23,9 @@ target triple = "bpf"
 @__license = dso_local global [13 x i8] c"Dual MIT/GPL\00", section "license", align 1
 @exfil_security_egress_dns_limites = dso_local global %struct.exfil_security_egress_dns_limites zeroinitializer, section ".maps", align 8
 @flags = dso_local global i32 0, align 4
+@overlay_flags = dso_local global i32 0, align 4
+@overlay_encap_flags = dso_local global i32 0, align 4
+@overlay_dns_port_flags = dso_local global i32 0, align 4
 @llvm.compiler.used = appending global [4 x ptr] [ptr @netlink_socket, ptr @__license, ptr @exfil_security_egress_dns_limites, ptr @exfil_security_detected_c2c_tunneling_netlink_sock_event], section "llvm.metadata"
 
 ; Function Attrs: noinline nounwind optnone
