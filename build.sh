@@ -2,6 +2,7 @@
 
 set -eo 
 
+# generate a debian package to deploy the node agent and all the core kernel ebpf bytecode at endpoint
 build_controller=$1 
 
 gem install fpm
@@ -28,7 +29,7 @@ mkdir -p package/{usr/bin,lib/systemd/system,etc/sudoers.d}
 
 loadbinaries() {
   cp node_agent/main package/usr/bin
-  cp node_agent/dist/infer package/usr/bin
+  cp model/rpc_onnx/infer package/usr/bin
   cp scripts/brctl.sh package/usr/bin
   cp node_agent/config.yaml package/usr/bin 
   cp ebpf_agent.service package/lib/systemd/system/

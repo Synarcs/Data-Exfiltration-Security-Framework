@@ -7,15 +7,14 @@
 #include <iostream>
 #include <memory>
 
-#include "feature.hpp"
+#include "hdrs/feature.hpp"
 
-using namespace std;
 
-int main(int *argc, char **argv) {
+int main() {
     std::string domain = "mail.google.com";
     
-    unique_ptr<LocalInferenceTest::FeatureLoaderExtractor> feature = 
-                            make_unique<LocalInferenceTest::FeatureLoaderExtractor>();
+    std::unique_ptr<LocalInferenceTest::FeatureLoaderExtractor> feature = 
+                            std::make_unique<LocalInferenceTest::FeatureLoaderExtractor>();
     
     feature.get()->infer(domain);
 }

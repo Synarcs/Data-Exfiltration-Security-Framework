@@ -60,7 +60,6 @@ build:
 	make compile-kernel-bpf
 	make infer-build
 	make build-cli 
-	make infer-build
 
 compile-kernel-bpf:
 	@echo "Compiling all the eBPF kernel programs for $(shell uname -m) arch"
@@ -84,8 +83,8 @@ infer-build:
 	cd model/rpc_onnx && make compile
 
 run-agent:
-	@echo "building and running eBPF node_agent"
-	make build && cd node_agent && sudo ./main 
+	@echo "Running eBPF node_agent"
+	cd node_agent && sudo ./main 
 
 build-run-pidns:
 	@echo "building and runnign eBPF node_agent with isolated process namespace for security"

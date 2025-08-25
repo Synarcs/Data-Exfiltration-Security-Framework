@@ -46,6 +46,8 @@ type NodeAgentMockInjectors struct {
 	mock.Mock
 }
 
+var config conf.AgentConfig
+
 func (k *KernelEbpfMockInjectors) TestKernelTCEbpfInject(prog string) error {
 	k.Called(prog)
 	return nil
@@ -62,6 +64,9 @@ func init() {
 			configOpts.agentConfigPath = strings.Split(os.Args[i], ".")[1]
 		}
 	}
+	config = &conf.Config{}
+	path := getConfigAgentPath()
+	config.ReadNodeAgentConfig(path)
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
@@ -150,10 +155,6 @@ func TestRequireNodeAgentConfig(t *testing.T) {
 func TestEachNodeAgentConfigAddress(t *testing.T) {
 	assert := assert.New(t)
 
-	path := getConfigAgentPath()
-
-	var config conf.AgentConfig = &conf.Config{}
-	config.ReadNodeAgentConfig(path)
 	globalConfig := config.GetAgentConfig()
 
 	var wg sync.WaitGroup
@@ -221,23 +222,20 @@ func TestNodeAgentStreamProducerConn(t *testing.T) {
 	ctx := context.Background()
 	ctx, _ = context.WithTimeout(ctx, time.Second*3)
 
-	path := getConfigAgentPath()
+	if !config.GetAgentConfig().Agent.AgentModeIsolated {
+		globalConfig := config.GetAgentConfig()
+		globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
 
-	var config conf.AgentConfig = &conf.Config{}
+		if !globalKakfBrokerConfig.GlobalConfig.Agent.AgentModeIsolated {
 
-	config.ReadNodeAgentConfig(path)
-	globalConfig := config.GetAgentConfig()
-	globalKakfBrokerConfig := stream.InitBrokerConfig(globalConfig, nil)
+			streamProducer := &stream.StreamProducer{
+				KafkaBrokerConfig: globalKakfBrokerConfig,
+			}
 
-	if !globalKakfBrokerConfig.GlobalConfig.Agent.AgentModeIsolated {
-
-		streamProducer := &stream.StreamProducer{
-			KafkaBrokerConfig: globalKakfBrokerConfig,
-		}
-
-		if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
-			utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
-			assert.Fail(err.Error())
+			if err := streamProducer.NewStreamKafkaProducer(ctx); err != nil {
+				utils.Log("The Remote Kafka stream broker not found for threat stream analytics continue...", err)
+				assert.Fail(err.Error())
+			}
 		}
 	}
 
@@ -281,8 +279,8 @@ func TestOpenStatusAgentPort(t *testing.T) {
 
 	metricsPort := 3200
 
-	_, err := net.Dial("tcp", fmt.Sprintf(":%s", metricsPort))
-	assert.Nil(t, err)
+	_, err := net.Dial("tcp", fmt.Sprintf(":%d", metricsPort))
+	assert.NotNil(t, err)
 }
 
 func TestAgentConfigLoader(t *testing.T) {

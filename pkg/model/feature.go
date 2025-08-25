@@ -197,9 +197,9 @@ func ParseDnsAnswers(dns_packet *layers.DNS, features []DNSFeatures, isEgress bo
 			feature.Tld = strings.Join(dns_query_labels[len(dns_query_labels)-2:], ".")
 			feature.RecordType = payload.Type.String()
 			features = append(features, feature)
-			mrsh, _ := json.Marshal(features)
 
 			if utils.DEBUG {
+				mrsh, _ := json.Marshal(features)
 				utils.Log(mrsh)
 			}
 		}
@@ -240,8 +240,9 @@ func ParseDnsAuth(dns_packet *layers.DNS, features []DNSFeatures, isEgress bool)
 			feature.RecordType = payload.Type.String()
 
 			features = append(features, feature)
-			mrsh, _ := json.Marshal(feature)
+
 			if utils.DEBUG {
+				mrsh, _ := json.Marshal(feature)
 				fmt.Println(string(mrsh))
 			}
 		}
@@ -277,9 +278,9 @@ func ParseDnsAdditional(dns_packet *layers.DNS, features []DNSFeatures, isEgress
 			feature.RecordType = payload.Type.String()
 
 			features = append(features, feature)
-			mrsh, _ := json.Marshal(feature)
 
 			if utils.DEBUG {
+				mrsh, _ := json.Marshal(feature)
 				fmt.Println(string(mrsh))
 			}
 		}

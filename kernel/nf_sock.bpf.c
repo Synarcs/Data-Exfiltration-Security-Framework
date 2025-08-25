@@ -56,7 +56,7 @@ struct socket_args {
 // replace raw af_netlink socket with custom tun/tap ioctl fd tracking in the kernel 
 // tracepoint/syscalls/sys_enter_socket
 SEC("kprobe/tun_chr_open")
-int netlink_socket() {
+int tuntap_kprobe() {
 
     struct bpf_dynptr dptr;
     if (bpf_ringbuf_reserve_dynptr(&exfil_security_detected_c2c_tunneling_netlink_sock_event, sizeof(struct event_setSockEvent), 0, &dptr) < 0){

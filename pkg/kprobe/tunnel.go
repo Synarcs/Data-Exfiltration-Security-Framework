@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -38,16 +40,17 @@ type KernelNetlinkSocket struct {
 }
 
 type TunTapKprobes struct {
-	NetlinkSocket         *ebpf.Program
-	NetlinkSupportMap     *ebpf.Map
-	KprobelLink           link.Link
-	GlobalErrorKernelChan chan error
+	KprobesEDRAgentComm
+	NetlinkSocket     *ebpf.Program
+	NetlinkSupportMap *ebpf.Map
+	Link              link.Link
 }
 
-func NewTunTapKprobes(globalErrorKernelChan chan error) *TunTapKprobes {
-	return &TunTapKprobes{
-		GlobalErrorKernelChan: globalErrorKernelChan,
-	}
+func NewTunTapKprobes(globalErrorKernelChan chan agenterr.AgentError, iface *netinet.NetIface) *TunTapKprobes {
+	tkprobes := &TunTapKprobes{}
+	tkprobes.GlobalErrorKernelChan = globalErrorKernelChan
+	tkprobes.Iface = iface
+	return tkprobes
 }
 
 func (k *TunTapKprobes) ProcessTunnelEvent(ctx context.Context,
@@ -81,30 +84,32 @@ func (k *TunTapKprobes) ProcessTunnelEvent(ctx context.Context,
 
 }
 
-func (k *TunTapKprobes) AttachNetlinkSockHandler(iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) {
+// Attach the kprobe over the
+func (k *TunTapKprobes) AttachTunTapKprobeHandler(ctx context.Context, iface *netinet.NetIface, produceChannel chan events.KernelNetlinkSocket) {
 	utils.Log("Attaching the Netlink Tunnel Tap Socket Handler Scanner")
 
 	if err := rlimit.RemoveMemlock(); err != nil {
 		panic(err.Error())
 	}
 
-	handler, err := ebpf.LoadCollectionSpec(utils.SOCK_TUNNEL_CODE_EBPF)
+	handler, err := utils.ReadEbpfFromSpec(ctx, utils.SOCK_TUNNEL_CODE_EBPF)
 
 	if err != nil {
-		utils.Logger.Fatal("error loading the xdp program over interface")
-		k.GlobalErrorKernelChan <- err
+		k.GlobalErrorKernelChan <- agenterr.EmitNewError(err, "TC_TUNTAP", fmt.Sprintf("Error injecting egress eBPF TC program %s", utils.SOCK_TUNNEL_CODE_EBPF))
 		return
 	}
 
 	// static determine the program and maps and load and assign, rather creating new collection from spec
 	var objs struct {
-		NetlinkSocket                                     *ebpf.Program `ebpf:"netlink_socket"`
+		NetlinkSocket                                     *ebpf.Program `ebpf:"tuntap_kprobe"`
 		ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent *ebpf.Map     `ebpf:"exfil_security_detected_c2c_tunneling_netlink_sock_event"`
 	}
 
 	if err := handler.LoadAndAssign(&objs, nil); err != nil {
 		utils.Log("error loading the kprobe in kerenl ... ", err)
-		k.GlobalErrorKernelChan <- err
+		k.GlobalErrorKernelChan <- agenterr.EmitNewError(
+			err, "TC_TUNTAP", "error loading the egress TC program attached to TUNTAP interface",
+		)
 		return
 	}
 
@@ -116,11 +121,13 @@ func (k *TunTapKprobes) AttachNetlinkSockHandler(iface *netinet.NetIface, produc
 	sockettp, err := link.Kprobe(TUNTAP_NET_OPEN, objs.NetlinkSocket, nil)
 	if err != nil {
 		utils.Logger.Fatal("error loading the kprobe program over sys_enter sock")
-		k.GlobalErrorKernelChan <- err
+		k.GlobalErrorKernelChan <- agenterr.EmitNewError(
+			err, "TC_TUNTAP", "error loading the egress TC program attached to TUNTAP interface",
+		)
 		return
 	}
 
-	k.KprobelLink = sockettp
+	k.Link = sockettp
 
 	defer objs.NetlinkSocket.Close()
 	defer objs.ExfilSecurityDetectedC2CTunnelingNetlinkSockEvent.Close()
@@ -133,7 +140,9 @@ func (k *TunTapKprobes) AttachNetlinkSockHandler(iface *netinet.NetIface, produc
 
 	if err != nil {
 		utils.Logger.Fatal("Error in creating the ring buffer reader")
-		k.GlobalErrorKernelChan <- err
+		k.GlobalErrorKernelChan <- agenterr.EmitNewError(
+			err, "TC_TUNTAP", "error in creating ringbuffer reader for tuntap interface egress events ",
+		)
 		return
 	}
 	defer ringBuff.Close()
@@ -141,32 +150,21 @@ func (k *TunTapKprobes) AttachNetlinkSockHandler(iface *netinet.NetIface, produc
 	var netlinkKernelProcMap map[int]bool = make(map[int]bool)
 
 	for {
-		if err != nil {
-			utils.Logger.Fatal("Error in creating the ring buffer reader")
-			k.GlobalErrorKernelChan <- err
-			return
-		}
-
 		record, err := ringBuff.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				continue
 			}
 			utils.Logger.Fatal("Error in reading the ring buffer reader")
-			k.GlobalErrorKernelChan <- err
+			k.GlobalErrorKernelChan <- agenterr.EmitNewError(
+				err, "TC_TUNTAP", "error reading events from the egress TUNTAP interface",
+			)
 			return
 		}
 
-		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &netlinkEvent)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
-		} else {
-			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.BigEndian, &netlinkEvent)
-			if err != nil {
-				log.Fatalf("Failed to parse event: %v", err)
-			}
+		err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &netlinkEvent)
+		if err != nil {
+			log.Fatalf("Failed to parse event: %v", err)
 		}
 
 		go events.ExportPromeEbpfExporterEvents[events.KernelNetlinkSocket](events.KernelNetlinkSocket(netlinkEvent))
@@ -197,7 +195,7 @@ func (k *TunTapKprobes) DetachTunTapKprobeHandlers() error {
 		return nil
 	}
 
-	if err := k.KprobelLink.Close(); err != nil {
+	if err := k.Link.Close(); err != nil {
 		utils.Logger.Printf("Error detaching the Kprobe for Kernel hooks over netfilter %+v", err)
 		return err
 	}

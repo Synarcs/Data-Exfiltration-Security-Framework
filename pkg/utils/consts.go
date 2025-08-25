@@ -52,10 +52,6 @@ const (
 )
 
 const (
-	SOCK_TUNNEL_CODE = "netlink_socket"
-)
-
-const (
 	SUSPICIOUS_NETNS_IPV6 = "fe80::d091:3cff:fe25:6d96"
 	MALICIOUS_NETNS_IPV6  = "fe80::d091:3cff:fe25:6d97"
 )

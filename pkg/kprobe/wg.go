@@ -7,6 +7,7 @@ package kprobe
 
 import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/cilium/ebpf"
 )
 
@@ -20,11 +21,13 @@ const (
 )
 
 type WireguardKprobes struct {
+	KprobesEDRAgentComm
 	WireguardSockprog *ebpf.Program
-	Devlink           *netinet.NetIface // eBPF agent holding all link info collected from kernel using netlink
 }
 
-// TODO: WG kernel wireguard tunnel introspect eBPF agent co-related process information
-func NewWgKprobes(globalErrorChannel chan error) *WireguardKprobes {
+func NewWgKprobes(globalErrorChannel chan agenterr.AgentError, iface *netinet.NetIface) *WireguardKprobes {
+	wg := &WireguardKprobes{}
+	wg.GlobalErrorKernelChan = globalErrorChannel
+	wg.Iface = iface
 	return &WireguardKprobes{}
 }

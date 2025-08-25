@@ -27,6 +27,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/progs"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/ringbuf"
@@ -39,7 +40,7 @@ import (
 type (
 	TCCloneTunnel struct {
 		IfaceHandler                          *netinet.NetIface
-		GlobalKernelErrorChannel              chan error
+		GlobalKernelErrorChannel              chan<- agenterr.AgentError
 		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
 		StreamClient                          *stream.StreamProducer
 		Onnx                                  *model.OnnxModel
@@ -54,7 +55,7 @@ type (
 	TCCloneTunnelConfig struct {
 		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
 		Iface                                 *netinet.NetIface
-		GlobalErrorChannel                    chan error
+		GlobalErrorChannel                    chan<- agenterr.AgentError
 		StreamClient                          *stream.StreamProducer
 		Onnx                                  *model.OnnxModel
 		isPassiveStandardDNSPortUDPTransfer   bool
@@ -284,48 +285,37 @@ func (tun *TCCloneTunnel) UpdateExportMetricsCountForDnsExfilRandomPort(isCloneR
 	return nil
 }
 
-func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiveDPIStandardPort bool) {
+func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
 	var handler *pcap.Handle
 	var pcapErr error
 
-	if !isPassiveDPIStandardPort {
-		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
-		if pcapErr != nil {
-			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI)
-			tun.GlobalKernelErrorChannel <- pcapErr
-			return
-		}
-	} else {
-		handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
-		if pcapErr != nil {
-			utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_NETLINK_BRIDGE_DPI)
-			tun.GlobalKernelErrorChannel <- pcapErr
-			return
-		}
+	handler, pcapErr = tun.IfaceHandler.GetPcapHandleoverNetDevByName(netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI, netinet.NETNS_BRIDGE_DEV_MTU)
+	if pcapErr != nil {
+		utils.Logger.Printf("Error while sniffing packets on the interface %s", netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI)
+		tun.GlobalKernelErrorChannel <- agenterr.EmitNewError(
+			pcapErr, "TUNNEL_TC_PCAP", "Error getting the AF_PACKET pcap handler on netdev "+netinet.NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI,
+		)
+		return
 	}
 
 	if err := handler.SetDirection(pcap.DirectionIn); err != nil {
 		utils.Logger.Errorf("Error setting up the bpf filter :: %v", err)
-		tun.GlobalKernelErrorChannel <- err
+		tun.GlobalKernelErrorChannel <- agenterr.EmitNewError(
+			err, "TUNNEL_TC_PCAP", "Error setting PCAP direction for traffic ... ",
+		)
 		return
 	}
 	defer handler.Close()
 
-	if isPassiveDPIStandardPort {
-		if err := handler.SetBPFFilter(utils.GenerateBpfFIlterForDNS(true, true)); err != nil {
-			utils.Logger.Error("error setting the bpf filter for overlay random exfil DNS traffic in passive DPI mode")
-			tun.GlobalKernelErrorChannel <- err
-			return
-		}
-	} else {
-		if err := handler.SetBPFFilter("udp or tcp"); err != nil {
-			utils.Logger.Error("Error while setting the bpf filter")
-			tun.GlobalKernelErrorChannel <- err
-			return
-		}
+	if err := handler.SetBPFFilter("udp or tcp"); err != nil {
+		utils.Logger.Error("Error while setting the bpf filter")
+		tun.GlobalKernelErrorChannel <- agenterr.EmitNewError(
+			err, "TUNNEL_TC_PCAP", "Error setting the BPF filter on  netdev "+netinet.NETNS_NETLINK_BRIDGE_DPI,
+		)
+		return
 	}
 
 	sniffTunnelErr := make(chan interface{})
@@ -377,10 +367,6 @@ func (tun *TCCloneTunnel) SniffPacketsForTunnelDPI(ctx context.Context, isPassiv
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 		go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)
 	}
-	// packetSource := gopacket.NewPacketSource(handler, handler.LinkType())
-	// for packet := range packetSource.Packets() {
-	// go tun.ProcessTunnelHandlerPackets(ctx, packet, sniffTunnelErr)
-	// }
 }
 
 func (tc *TCCloneTunnel) PollRingBuffer(ctx context.Context, ebpfEvents *ebpf.Map) error {
@@ -495,10 +481,10 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 		if tun.Onnx.StaticRuntimeChecks(featureVectorsFloat, true) == model.DEEP_LEXICAL_INFERENCING {
 
 			if tun.InferenceServerSock == nil {
-				utils.Log("there is error the socket is nil ", tun.InferenceServerSock)
+				utils.Log("the Inference socket is not set ... ", tun.InferenceServerSock)
 				return nil // dont block or erro for passive DPI if inference socket is not mounted
 			}
-			inferenceResponse, err := tun.InferenceServerSock.EgressInference(context.Background(), featureVectorsFloat)
+			inferenceResponse, err := tun.InferenceServerSock.EgressInference(ctx, featureVectorsFloat)
 			if err != nil {
 				utils.Logger.Error(err.Error())
 				return err
@@ -616,7 +602,8 @@ func (tun *TCCloneTunnel) ProcessMaliciousInferenceNonStandardPortfeatures(ctx c
 	return nil
 }
 
-func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packet gopacket.Packet, errorChannel chan interface{}) {
+func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packet gopacket.Packet,
+	errorChannel chan interface{}) {
 
 	isPackEncapsulated := func(dnsPacket *layers.DNS, transportPayload []byte) bool {
 		if dnsPacket == nil {
@@ -675,6 +662,13 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 
 	}
 
+	extractDnsLayer := func(dns *layers.DNS, transportPayload []byte) error {
+		if err := dns.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// this will always exist since the kenrel will only allow a l4 packet to reach to this bridge in user space via netfilter
 	packetTransportLayer := packet.TransportLayer()
 	if packetTransportLayer == nil {
@@ -689,6 +683,8 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 	udpPack := packet.Layer(layers.LayerTypeUDP)
 	tcpPack := packet.Layer(layers.LayerTypeTCP)
 
+	isUDP := udpPack != nil
+	isTCP := tcpPack != nil
 	// the map will be synchronized in user space to update map in for redire count with proper locks in kernel and appropriate spin locks
 	go tun.UpdateExportMetricsCountForDnsExfilRandomPort(false)
 	transportPayload := packetTransportLayer.LayerPayload()
@@ -703,30 +699,13 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 
 	dns := &layers.DNS{}
 
-	err := dns.DecodeFromBytes(transportPayload, gopacket.NilDecodeFeedback)
-	if err != nil {
-		if utils.DEBUG {
-			utils.Log("error while parsing the packet from kernel")
-		}
-		return // not a dns packet
-	}
-
 	// a tunneled dns packet overlay over the protocol
 	// make the  packet pass through remote inferencing via the unix socket to be inferred with remote unix inference
-	if udpPack != nil {
+	if isUDP {
 		destPort := udpPack.(*layers.UDP).DstPort
 
 		var destPortGenTypeValue uint16 = uint16(destPort)
 		var srcPortGenTypeValue uint16 = uint16(udpPack.(*layers.UDP).SrcPort)
-
-		// passive mdoe is not meant
-		if tun.AgentOperationPassiveMode {
-			if destPortGenTypeValue != utils.DNS_EGRESS_PORT ||
-				destPortGenTypeValue != utils.DNS_EGRESS_MULTICAST_PORT ||
-				destPortGenTypeValue != utils.LLMNR_EGRESS_LOCAL_MULTICAST_PORT {
-				return
-			}
-		}
 
 		var maliciousTunnelDNSEvent events.ExfilRawPacketMirror // a sniff packet struct not event from ring buffer
 
@@ -735,16 +714,35 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 			srcPortGenTypeValue)
 
 		if err != nil {
+			// would nout occur if the C2 implant is continue to exhibit malicious activity at the endpoint
 			utils.Log("Error in deleting the map for this kernel clone redirected suspicious  packet", err)
+			return
 		}
 
-		// check for vxlan encap over the udp frame
-		if isPackEncapsulated(dns, transportPayload) {
-			if utils.DEBUG {
-				utils.Log("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
+		if utils.VerifyNonDnsTransportPorts(destPortGenTypeValue) {
+			if err := extractDnsLayer(dns, transportPayload); err != nil {
+				utils.Log("error while parsing the packet from kernel")
+				return
 			}
-			tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
-			return
+		}
+
+		if utils.VerifyNonDnsTransportPorts(destPortGenTypeValue) {
+			// check for vxlan encap over the udp frame
+			if isPackEncapsulated(dns, transportPayload) {
+				if utils.DEBUG {
+					utils.Log("A Vxlan kernel encappsulated dns packet is found in vxlan kernel transport header")
+				}
+				tun.EnsureTransportTunnelPortMapUpdateKernelProc(ev, errorChannel)
+				return
+			}
+		}
+
+		if !utils.VerifyNonDnsTransportPorts(destPortGenTypeValue) {
+			utils.Log("the mode the current agent is ", tun.AgentOperationPassiveMode, " port ... ", destPortGenTypeValue)
+		}
+
+		if !utils.VerifyNonDnsTransportPorts(destPortGenTypeValue) && tun.AgentOperationPassiveMode && utils.DEBUG {
+			utils.Log("the EDR agent running is passive mode, received clone packed for inference on the same nsp bridge iface ...")
 		}
 
 		features, err := model.ProcessDnsFeatures(dns, true)
@@ -772,7 +770,7 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 			}
 		}
 
-	} else {
+	} else if isTCP {
 		destPort := tcpPack.(*layers.TCP).DstPort
 		var destPortGenType uint16 = uint16(destPort)
 		var srcPortGenType uint16 = uint16(udpPack.(*layers.UDP).SrcPort)
@@ -784,6 +782,13 @@ func (tun *TCCloneTunnel) ProcessTunnelHandlerPackets(ctx context.Context, packe
 
 		if err != nil {
 			utils.Log("Error in deleting the map for this benign found packet", err)
+		}
+
+		if utils.VerifyNonDnsTransportPorts(destPortGenType) {
+			if err := extractDnsLayer(dns, transportPayload); err != nil {
+				utils.Log("error while parsing the packet from kernel")
+				return
+			}
 		}
 
 		// verify kernel support task comm to access kernel task struct over kernel TC layer

@@ -22,7 +22,7 @@
 #endif
 
 #ifndef NETDEV_LINK_LB_STUB_RESOLVER
-    #define NETDEV_LINK_LB_STUB_RESOLVER true
+    #define NETDEV_LINK_LB_STUB_RESOLVER false
 #endif
 
 
@@ -102,6 +102,7 @@ struct exfil_security_egress_dns_limites {
 // the kernel egress tc does not consider filter wasm envoy processing 
 #define ENVOY_DPI_TCP_PORT 9801
 #define CONTROLLER_RPC_SVC_PORT 3200
+#define EDR_PPROF_PORT 6262
 #define ENVOY_DPI_WASM_TCP_FILTER true
 
 #define DETECTED_MALICIOUS_COUNT_DNS_RANDOM_PORT_DROP_LIMIT 1

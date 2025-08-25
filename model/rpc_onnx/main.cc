@@ -15,9 +15,9 @@
 #include <signal.h>
 
 // core memory loaded onnx model for inference covers multithreaded ttrpc (grpc over UDS) and unix 
-#include "server.hpp"
-#include "inferencesock.hpp"
-#include "const.h"
+#include "hdrs/server.hpp"
+#include "hdrs/inferencesock.hpp"
+#include "hdrs/const.h"
 
 using namespace std;
 
@@ -51,6 +51,7 @@ class InferenceServer {
         void start() {
             inferenceSockHandler.get()->mountInferSockFs();
             inferenceSockHandler.get()->iniUDS();
+            this->startinferencerpc();
         }
         InferenceServer(struct InferenceControllerOpts cliOpts)
             : opts(cliOpts) {

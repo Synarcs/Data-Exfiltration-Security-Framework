@@ -28,6 +28,7 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
+// all the interfaces names and bridges
 const (
 	NETNS_RNETLINK_EGREESS_DPI = "sx1"
 	NETNS_RNETLINK_INGRESS_DPI = "sx2"
@@ -80,12 +81,17 @@ type NetIface struct {
 	PhysicalNodeBridgeIpv6 net.IP
 
 	ConnTrackNsHandles map[int]conntrack.ConntrackSock
+
+	DnsResolvers *DnsResolverServerConfig
 }
 
 // Core netlink support for endpoint agent to discover netlink at the endpoint in kernel
 // TODO: Add epoll event handlers over netlink socket and associated netlink, rtnetlink events for dynamic netdev creation in kernel.
 func NewNetIface() *NetIface {
-	return &NetIface{}
+	hostConfig, _ := ReadDNSResolvedConf()
+	return &NetIface{
+		DnsResolvers: hostConfig,
+	}
 }
 
 func (nf *NetIface) ReadInterfaces(containered bool) error {
@@ -125,9 +131,9 @@ func (nf *NetIface) ReadInterfaces(containered bool) error {
 	return nil
 }
 
-var sysetemdResolvedConfigUpdateGuard sync.Mutex
+var systemdResolvedConfigUpdateGuard sync.Mutex
 
-func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer) {
+func (nf *NetIface) ConfigureAgentDnsServerConfig(customConfig *DnsResolverServerConfig) error {
 
 	var gw net.IP
 	physicalLink := nf.PhysicalLinks[0].Attrs().Name
@@ -138,38 +144,34 @@ func (nf *NetIface) ConfigureAgentDnsServerConfig(dnsResolver *DnsResolverServer
 		}
 	}
 
-	configCustomDefaultLocalgw := func(resolverConfig *DnsResolverServer) {
-		if resolverConfig.Ipv4 != nil {
+	configCustomDefaultLocalgw := func(dnsResolverConfig *DnsResolverServerConfig) {
+		if dnsResolverConfig.Ipv4 != nil {
 			// take the last one s the default upsteam which point to the local router in local subnet in most cases
-			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv4[0]
+			nf.PhysicalRouterGatewayV4 = dnsResolverConfig.Ipv4[0]
 		} else {
 			nf.PhysicalRouterGatewayV4 = gw.To4()
 		}
 		utils.Log("the endpoint agent loaded with upstream systemd resolved Ipv4 address ::", nf.PhysicalRouterGatewayV4) // the default ip and associated netdev systemd resolved provide for ipv4 resolution
 
-		if resolverConfig.Ipv6 != nil {
-			nf.PhysicalRouterGatewayV4 = resolverConfig.Ipv6[0]
+		if dnsResolverConfig.Ipv6 != nil {
+			nf.PhysicalRouterGatewayV4 = dnsResolverConfig.Ipv6[0]
 		} else {
 			nf.PhysicalRouterGatewayV6 = net.ParseIP(strings.Split(getRouterIPv6(), "%")[0]).To16()
 		}
 		utils.Log("the endpoint agent loaded with upstream systemd resolved Ipv6 address ::", nf.PhysicalRouterGatewayV6) // the default ip and associated netdev systemd resolved provide for ipv4 resolution
-
 	}
 
-	if dnsResolver == nil {
-		hostResolverConfig, err := ReadDNSResolvedConf() // read config from file of systemd resolved
-		if hostResolverConfig.isLoopBackEnabled {
-			// a service stub resolver exist on the host downstream netdev
-			
-		}
-		if err != nil {
-			nf.PhysicalRouterGatewayV4 = net.ParseIP(utils.GLOBAL_ROUTE_IPV4_TRANSFER_LINKS[0]).To4()
-			nf.PhysicalRouterGatewayV6 = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[0]).To16()
-		}
-		configCustomDefaultLocalgw(hostResolverConfig)
-		return
+	if customConfig != nil {
+		configCustomDefaultLocalgw(customConfig)
+		return nil
 	}
-	configCustomDefaultLocalgw(dnsResolver)
+	if nf.DnsResolvers == nil {
+		nf.PhysicalRouterGatewayV4 = net.ParseIP(utils.GLOBAL_ROUTE_IPV4_TRANSFER_LINKS[0]).To4()
+		nf.PhysicalRouterGatewayV6 = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[0]).To16()
+		return fmt.Errorf("the eBPF agent require a valid formed DNS Resolver config at endpoint")
+	}
+	configCustomDefaultLocalgw(nf.DnsResolvers)
+	return nil
 }
 
 // makes sure the upstream dns resolver the agent booted does not DNAT what the original packet leaving is using from kernel post DPI in kernel
@@ -177,6 +179,14 @@ func (nf *NetIface) UpstreamLinkoverAgentResolverIpv4(ddaddr uint32) (bool, stri
 	destPacketAddr := utils.BigEndianToIPv4(ddaddr)
 	// fmt.Println(destPacketAddr, nf.PhysicalNodeBridgeIpv4.String())
 	return destPacketAddr == nf.PhysicalNodeBridgeIpv4.String(), destPacketAddr
+}
+
+func (nf *NetIface) GetTCEgressAttachLinks() []netlink.Link {
+	if nf.DnsResolvers.IsLoopBackEnabled {
+		utils.Log("egress Kernel filter will be attach to loopback link lo")
+		return nf.LoopBackLinks
+	}
+	return nf.PhysicalLinks
 }
 
 func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
@@ -188,18 +198,18 @@ func (nf *NetIface) UpdateAgentConfig(ev *fsnotify.Event) {
 	}
 
 	time.Sleep(time.Second) // wait atomic until file is modified and flushed to disk,  in case of vim, vim generates a temp swp file and then update original one
-	sysetemdResolvedConfigUpdateGuard.Lock()
-	defer sysetemdResolvedConfigUpdateGuard.Unlock()
+	systemdResolvedConfigUpdateGuard.Lock()
+	defer systemdResolvedConfigUpdateGuard.Unlock()
 
-	resolvedDnsChange, err := ReadDNSResolvedConf()
+	resolvedDnsChangeConfig, err := ReadDNSResolvedConf()
 	if err != nil {
 		// Suppress error: don't change agent config; agent is live with all eBPF programs loaded in kernel
 		return
 	}
 
-	if resolvedDnsChange != nil {
+	if resolvedDnsChangeConfig != nil {
 		// ensure the flushed change to disk has new modified content
-		nf.ConfigureAgentDnsServerConfig(resolvedDnsChange)
+		nf.ConfigureAgentDnsServerConfig(resolvedDnsChangeConfig)
 	}
 }
 
@@ -364,93 +374,90 @@ func (nf *NetIface) FindTunnelLinksOnBootUp() []netlink.Link {
 }
 
 func (nf *NetIface) findLinkAddressByType() ([]netlink.Link, []netlink.Link, []netlink.Link) {
-	hardwardIntefaces := make([]netlink.Link, 0)
-	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
-	bridgeInterfaces := make([]netlink.Link, 0)
+	var (
+		hwIfaces  []netlink.Link
+		loopbacks []netlink.Link
+		bridges   []netlink.Link
+	)
 
 	nf.LinkMap = make(map[string]bool)
+
 	for _, link := range nf.Links {
-		_, isEth := link.(*netlink.Device)
-
-		nf.LinkMap[link.Attrs().Name] = true
 		attrs := link.Attrs()
+		nf.LinkMap[attrs.Name] = true
 
-		if link.Attrs().Flags == net.FlagPointToPoint {
-			// an possible tunnelling interface for packet processing
-			utils.Log("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
+		// PPP link  (tun/tap)
+		if attrs.Flags&net.FlagPointToPoint != 0 {
+			utils.Log("Found Point-to-Point tunneling link:", attrs.Name)
 			continue
-		} else {
-			// Exclude virtual interfaces (e.g., loopback, bridge, vlan, etc.)
-			isVirtual := attrs.OperState == netlink.OperNotPresent ||
-				attrs.Flags&net.FlagLoopback != 0
-				// attrs.Name == "lo"
-
-			isLoopBack := (attrs.EncapType == "loopback" || attrs.Name == "lo" || link.Attrs().Flags&net.FlagLoopback != 0) && (link.Type() != "veth" && link.Type() != "device")
-			if isEth && !isVirtual && !isLoopBack {
-				hardwardIntefaces = append(hardwardIntefaces, link)
-			}
-			if isLoopBack {
-				loopBackInterface = append(loopBackInterface, link)
-			}
-			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
-				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
-			} else if link.Attrs().Name == NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI {
-				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
-			}
-
 		}
 
+		isLoopback := attrs.Flags&net.FlagLoopback != 0 ||
+			attrs.EncapType == "loopback" ||
+			attrs.Name == "lo"
+
+		// hardware netdevs
+		_, isEth := link.(*netlink.Device)
+		isVirtual := attrs.OperState == netlink.OperNotPresent
+
+		switch {
+		case isLoopback:
+			loopbacks = append(loopbacks, link)
+
+		case isEth && !isVirtual:
+			hwIfaces = append(hwIfaces, link)
+
+		case attrs.Name == NETNS_NETLINK_BRIDGE_DPI || attrs.Name == NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI:
+			bridges = append(bridges, link)
+		}
 	}
-	return hardwardIntefaces, loopBackInterface, bridgeInterfaces
+
+	return hwIfaces, loopbacks, bridges
 }
 
 // container has veth pair to the host bridge for k8s mount to the CNI vnxlan bridge for docker its docker bridge
 // physical interfaces are the host pair veth interface which attach to the bridge for l3 balancing l3 and l2 traffic for all pods in CNI subnet or docker ips on docker bridge
 func (nf *NetIface) findLinkAddressByTypeContainer() ([]netlink.Link, []netlink.Link, []netlink.Link) {
-	containerVethPairInterface := make([]netlink.Link, 0)
-	utils.Log("Reading net links for container environments via netlink sockets")
-	loopBackInterface := make([]netlink.Link, 0) // ensure a single loopback for self loopback link
-	bridgeInterfaces := make([]netlink.Link, 0)
+	var (
+		vethIfaces []netlink.Link
+		loopbacks  []netlink.Link
+		bridges    []netlink.Link
+	)
 
+	utils.Log("Reading net links for container environments via netlink sockets")
 	nf.LinkMap = make(map[string]bool)
 
 	for _, link := range nf.Links {
-
-		nf.LinkMap[link.Attrs().Name] = true
 		attrs := link.Attrs()
-		if link.Attrs().Flags == net.FlagPointToPoint { // (tun/tap ppp tunnels cannot be there inside containers or POID intern networking CIDR)
-			// an possible tunnelling interface for packet processing
-			utils.Log("A Point to Point virtualized tunnelling link found ", link.Attrs().Name)
+		nf.LinkMap[attrs.Name] = true
+
+		// Skip point-to-point tunnels (not expected inside containers)
+		if attrs.Flags&net.FlagPointToPoint != 0 {
+			utils.Log("Point-to-Point tunnel found in container ns:", attrs.Name)
 			continue
-		} else {
-			isLoopbackType := attrs.EncapType == "loopback" ||
-				attrs.Name == "lo" ||
-				link.Attrs().Flags == net.FlagLoopback
+		}
 
-			isNotVirtualDevice := link.Type() != "veth" &&
-				link.Type() != "device"
+		// Classify loopback
+		if attrs.Flags&net.FlagLoopback != 0 || attrs.EncapType == "loopback" || attrs.Name == "lo" {
+			loopbacks = append(loopbacks, link)
+			continue
+		}
 
-			isLoopBack := isLoopbackType && !isNotVirtualDevice
+		// primary bridhe for containers (veth bridge or any other l2/l3 bridge driver CNI attach virtual interfaces)
+		if attrs.Name == "eth0" {
+			fmt.Println("Container physical interface:", attrs.Name)
+			vethIfaces = append(vethIfaces, link)
+			continue
+		}
 
-			// for now assume container runtime internal physical interface is eth0, and containers only have one physical interface attached to veth bridge for CNI or docker bridge
-			if attrs.Name == "eth0" {
-				fmt.Println("inteface physical name ", attrs.Name)
-				containerVethPairInterface = append(containerVethPairInterface, link) // (always fixed docker networking and any k8s CNI uses this for veth pair for l2, l3 routing inside cotnianer / pod network)
-			}
-			if isLoopBack {
-				fmt.Println("loopback iface name ", attrs.Name)
-				loopBackInterface = append(loopBackInterface, link)
-			}
-
-			// hanle all the container ns for their pod traffic
-			if link.Attrs().Name == NETNS_NETLINK_BRIDGE_DPI {
-				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for netns rescan first
-			} else if link.Attrs().Name == NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI {
-				bridgeInterfaces = append(bridgeInterfaces, link) // append the kernel dpi bridge for raw rescan second
-			}
+		// Bridges for DPI
+		switch attrs.Name {
+		case NETNS_NETLINK_BRIDGE_DPI, NETNS_TUNNEL_TRAFFIC_NETLINK_BRIDGE_DPI:
+			bridges = append(bridges, link)
 		}
 	}
-	return containerVethPairInterface, loopBackInterface, bridgeInterfaces
+
+	return vethIfaces, loopbacks, bridges
 }
 
 func (nf *NetIface) GetVxlanTunnelInterfaces() {

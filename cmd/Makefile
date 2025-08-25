@@ -1,7 +1,7 @@
 
 .PHONY: build 
 build:
-	@echo "Compile eBPF Node agent cli utils for arg $(shell go env GOOS) $(shell go env GOARCH)"
+	@echo "Compile eBPF Node agent cli utils for arch $(shell go env GOOS) $(shell go env GOARCH)"
 	go build -ldflags="-w -s" main.go 
 
 .PHONY: usage

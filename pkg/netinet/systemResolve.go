@@ -15,17 +15,17 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
 )
 
-type DnsResolverServer struct {
+type DnsResolverServerConfig struct {
 	Ipv4              []net.IP
 	Ipv6              []net.IP
-	isLoopBackEnabled bool // any stub resolver for system resolve
+	IsLoopBackEnabled bool // any stub resolver for system resolve
 }
 
 const (
 	SYSTEMD_RESOLVED_PATH = "/etc/resolv.conf"
 )
 
-func ReadDNSResolvedConf() (*DnsResolverServer, error) {
+func ReadDNSResolvedConf() (*DnsResolverServerConfig, error) {
 	// we dont need parallel i/o since the dns resolv is not much huge file
 	fd, err := os.Open(SYSTEMD_RESOLVED_PATH)
 	if err != nil {
@@ -38,7 +38,7 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 	defer fd.Close()
 
 	line := bufio.NewScanner(fd)
-	dnsResolver := DnsResolverServer{}
+	dnsResolver := DnsResolverServerConfig{}
 
 	for line.Scan() {
 		info := line.Text()
@@ -47,8 +47,8 @@ func ReadDNSResolvedConf() (*DnsResolverServer, error) {
 			isIpv4 := net.ParseIP(dnsServer[1]).To4()
 			if isIpv4 != nil {
 				dnsResolver.Ipv4 = append(dnsResolver.Ipv4, isIpv4) // only take the ipv4 dns address with highest priority in systemd resolved
-				if isIpv4.String() == "17.0.0.53" {
-					dnsResolver.isLoopBackEnabled = true
+				if isIpv4.String() == "127.0.0.53" {
+					dnsResolver.IsLoopBackEnabled = true
 				}
 			} else {
 				ipv6 := net.ParseIP(dnsServer[1]).To16()

@@ -24,8 +24,8 @@ import (
 )
 
 type DNSOnnxInferenceService struct {
-	conn           *grpc.ClientConn
-	dnsInferClient pb.DNSOnnxInferenceServiceClient
+	conn        *grpc.ClientConn
+	InferClient pb.DNSOnnxInferenceServiceClient // grpc client for onnx inference server
 }
 
 type OnxxInferenceServer struct {
@@ -44,7 +44,6 @@ func NewOnxxInferenceServer() *OnxxInferenceServer {
 func (server *OnxxInferenceServer) StartRemoteOnnxInferenceListener(onnxInferServerBinPath string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-
 	releaseWaitLock := make(chan bool)
 	utils.Log("starting the remote grpc onnx inference server .....", onnxInferServerBinPath)
 	if _, err := os.Stat(onnxInferServerBinPath); err != nil {
@@ -72,9 +71,17 @@ func (server *OnxxInferenceServer) StartRemoteOnnxInferenceListener(onnxInferSer
 	return nil
 }
 
-func (server *OnxxInferenceServer) StopRemoteOnnxInferenceListener() error {
+func (server *OnxxInferenceServer) cleanOnnxInferenceMount(onnxInferServerBinPath string) error {
+	return os.Remove(onnxInferServerBinPath)
+}
+
+func (server *OnxxInferenceServer) StopRemoteOnnxInferenceListener(onnxInferServerBinPath string) error {
 	utils.Log("stopping the remote grpc onnx inference server .....")
 	if err := utils.KillProc(uint32(server.Pid)); err != nil {
+		return err
+	}
+	if err := server.cleanOnnxInferenceMount(onnxInferServerBinPath); err != nil {
+		utils.Log("the onnx inference stopped, error cleaning the unix ipc mount .... ")
 		return err
 	}
 	return nil
@@ -91,13 +98,13 @@ func NewNodeAgentUnixCLISocket() (*DNSOnnxInferenceService, error) {
 		return nil, fmt.Errorf("error create new inference client daemon")
 	}
 	return &DNSOnnxInferenceService{
-		conn:           conn,
-		dnsInferClient: pb.NewDNSOnnxInferenceServiceClient(conn),
+		conn:        conn,
+		InferClient: pb.NewDNSOnnxInferenceServiceClient(conn),
 	}, nil
 }
 
 func (infer *DNSOnnxInferenceService) GetInferenceServiceVersion(ctx context.Context) (string, error) {
-	versions, err := infer.dnsInferClient.VersionInfo(ctx, &emptypb.Empty{})
+	versions, err := infer.InferClient.VersionInfo(ctx, &emptypb.Empty{})
 	if err != nil {
 		utils.Logger.Error(err)
 		return "", err
@@ -117,7 +124,7 @@ func (infer *DNSOnnxInferenceService) reshapeFeatures(features [][]float32, resh
 func (infer *DNSOnnxInferenceService) EgressInference(ctx context.Context, features [][]float32) (*pb.DnsInferenceResponseEgress, error) {
 	reshappedFeatures := infer.reshapeFeatures(features, []*pb.DnsFeatures{})
 
-	resp, err := infer.dnsInferClient.EgressInfer(ctx, &pb.DnsInferenceRequest{
+	resp, err := infer.InferClient.EgressInfer(ctx, &pb.DnsInferenceRequest{
 		Reshaped: reshappedFeatures,
 	})
 	if err != nil {
@@ -129,7 +136,7 @@ func (infer *DNSOnnxInferenceService) EgressInference(ctx context.Context, featu
 func (infer *DNSOnnxInferenceService) IngressInference(ctx context.Context, features [][]float32) (*pb.DnsInferenceResponseIngress, error) {
 	reshappedFeatures := infer.reshapeFeatures(features, []*pb.DnsFeatures{})
 
-	resp, err := infer.dnsInferClient.IngressInfer(ctx, &pb.DnsInferenceRequest{
+	resp, err := infer.InferClient.IngressInfer(ctx, &pb.DnsInferenceRequest{
 		Reshaped: reshappedFeatures,
 	})
 	if err != nil {

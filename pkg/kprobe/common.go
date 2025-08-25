@@ -9,8 +9,15 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/cilium/ebpf"
 )
+
+type KprobesEDRAgentComm struct {
+	GlobalErrorKernelChan chan agenterr.AgentError
+	Iface                 *netinet.NetIface // netlink fetched from kernel
+}
 
 func GenerateeBPFCollectionspec(progName string, maps []string) (interface{}, error) {
 	fields := make([]reflect.StructField, 0)

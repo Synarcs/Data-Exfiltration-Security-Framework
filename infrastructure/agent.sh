@@ -24,7 +24,6 @@ sudo apt update -y && sudo apt install -y \
     git \
     autoconf \
     libcap-dev \
-    vim \
     curl \
     libdebuginfod-dev \
     bison \
@@ -56,13 +55,36 @@ sudo apt update -y && sudo apt install -y \
     keyutils \
     libkeyutils-dev \
     policycoreutils-dev \
-    libboost-all-dev  # unary rpc for async thread pool in cc for high throughput low latency ttrpc inference processing
+    libgrpc++-dev \
+    protobuf-compiler-grpc \
+    wireguard-tools 
 
 # dependencies for pprof flamegraph and other graph visualization support 
 pprof=1
 if [[ $pprof -eq 1 ]]; then 
     sudo apt install -y graphviz
 fi 
+
+
+# all the onnx runtime are used for inference and not training once model is trained and serialized in onnx, the agent assume the onnx model exist
+onnx_runtime=1
+onnx_version=1.22.0
+
+if [[ "$onnx_runtime" -eq 1 ]]; then
+    cd /tmp || exit 1
+    arch=$(uname -m)
+    if [[ "$arch" == "x86_64" || "$arch" == "amd64" ]]; then 
+        arch="x64"
+    fi
+    wget -O onnx.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${onnx_version}/onnxruntime-linux-${arch}-${onnx_version}.tgz"
+    tar -xvf onnx.tgz
+    rm -f onnx.tgz
+    cd "onnxruntime-linux-${arch}-${onnx_version}" || exit 1
+    sudo cp -r include/* /usr/include/
+    sudo cp lib/libonnxruntime.so.1 /usr/lib/
+    sudo cp lib/libonnxruntime.so /usr/lib/
+    ldconfig
+fi
 
 # Install x86_64 specific libraries
 arch=$(uname -m)

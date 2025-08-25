@@ -221,15 +221,23 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 	if isIpv4 {
 		ipv4 = networkLayer.(*layers.IPv4)
 		// ipv4.DstIP = net.ParseIP("192.168.64.27").To4()
-		if customDnat {
-			ipv4.DstIP = net.ParseIP(customUpstreamDnsresolveIp)
+		if !d.IfaceHandler.DnsResolvers.IsLoopBackEnabled {
+			if customDnat {
+				ipv4.DstIP = net.ParseIP(customUpstreamDnsresolveIp)
+			} else {
+				ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+			}
 		} else {
-			ipv4.DstIP = d.IfaceHandler.PhysicalRouterGatewayV4
+			ipv4.DstIP = net.ParseIP("127.0.0.53") // stub loopback addr
 		}
 		ipv4.Checksum = l3_bpfMap_checksum
 	} else {
 		ipv6 = networkLayer.(*layers.IPv6)
-		ipv6.DstIP = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[rand.Intn(len(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS))]).To16()
+		if !d.IfaceHandler.DnsResolvers.IsLoopBackEnabled {
+			ipv6.DstIP = net.ParseIP(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS[rand.Intn(len(utils.GLOBAL_ROUTE_IPV6_TRANSFER_LINKS))]).To16()
+		} else {
+			ipv6.DstIP = net.ParseIP("::1") // stub loopback addr
+		}
 	}
 
 	var udpPacket *layers.UDP
@@ -394,10 +402,10 @@ func (d *DnsPacketGen) EvaluateGeneratePacket(ctx context.Context,
 			if err := syscall.Sendto(*d.SocketSendFd, outputPacket, 0, &sockAddr); err != nil {
 				return err
 			}
+			return nil
 		} else {
 			// inject the packet directly into the tx queue for the xdp bypassing the entire linux kernel network stack
 			// eventually free up some of the bpf maps in tc from the kernel space
-
 			fx := d.XdpSocketSendFd.GetDescs(d.XdpSocketSendFd.NumFreeTxSlots())
 			for i := range fx {
 				fx[i].Len = uint32(outputPacketLen)

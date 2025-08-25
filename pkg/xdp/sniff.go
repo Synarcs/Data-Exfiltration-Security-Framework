@@ -15,6 +15,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -28,7 +29,7 @@ type IngressSniffHandler struct {
 	DnsFeatures  *model.DNSFeatures
 	StreamClient *stream.StreamProducer
 
-	GlobalErrorKernelHandlerChannel chan error // handles all control channel created by main to kill any kernel code if found runtime panics
+	GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError // handles all control channel created by main to kill any kernel code if found runtime panics
 	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 
@@ -36,7 +37,7 @@ type IngressSnifferConfig struct {
 	Iface                           *netinet.NetIface
 	OnnxModel                       *model.OnnxModel
 	StreamClient                    *stream.StreamProducer
-	GlobalErrorKernelHandlerChannel chan error
+	GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError
 	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 

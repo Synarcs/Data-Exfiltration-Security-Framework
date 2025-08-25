@@ -33,6 +33,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/rpc/inference"
 	tcl "github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/tc"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/profile"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/xdp"
 )
@@ -100,7 +101,7 @@ func kernelHooksCleanUp(ctx context.Context, config *conf.NodeAgentCliOptions,
 /*
 The signed kernel keys which the node agent generate in data plane is always secured via the crypto keys ephemeral to the life time of agent
 */
-func CleanCryptoDirs() error {
+func cleanCryptoDirs() error {
 	if err := crypto.CleanOlderCrypoDir(); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil
@@ -113,7 +114,7 @@ func CleanCryptoDirs() error {
 /*
 Init all the kernel crypto dir ephemeral to hold keyrings and signatures to secure bpf programs injections
 */
-func InitKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
+func initKernelCryptoHooks() (*crypto.NodeAgentCryptoConfig, error) {
 
 	if err := crypto.CleanOlderCrypoDir(); err != nil {
 		utils.Log("Error cleaning the older crypto dir, the node agent for LSM in kernel must boot with new ephemeral keys")
@@ -189,7 +190,7 @@ func configureGlobalAgentConfigOpts(nodeAgentCliOptions *conf.NodeAgentCliOption
 	}
 }
 
-func InitControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControllerRpcServices, error) {
+func initControllerRpcClient(ctx context.Context) (*controllerrpc.AgentControllerRpcServices, error) {
 	rpcClient, err := controllerrpc.NewAgentControllerRpcServices()
 	if err != nil {
 		return nil, err
@@ -248,7 +249,7 @@ func main() {
 
 	// configure the global logger
 
-	agentCryptoConfig, err := InitKernelCryptoHooks()
+	agentCryptoConfig, err := initKernelCryptoHooks()
 	if err != nil {
 		utils.Log("the Node agent cannot boot without crypto validation ", err.Error())
 		panic(err.Error())
@@ -267,7 +268,7 @@ func main() {
 			crypto.NewCryptoBpfLsmWithLocalCAConfig(ctx, agentCryptoConfig),
 		)
 	} else {
-		rpcClient, err := InitControllerRpcClient(ctx)
+		rpcClient, err := initControllerRpcClient(ctx)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -288,7 +289,9 @@ func main() {
 	iface := netinet.NewNetIface()
 	iface.ReadInterfaces(nodeAgentCliOptions.ContainerRuntime || nodeAgentCliOptions.Sdr)
 	iface.ReadRoutes()
-	iface.ConfigureAgentDnsServerConfig(nil)
+	if err := iface.ConfigureAgentDnsServerConfig(nil); err != nil {
+		panic(err.Error())
+	}
 	iface.InitconnTrackSockHandles()
 
 	// before node agent inject kernel programs for security add inotify watchers for sysetmd resolved
@@ -449,8 +452,8 @@ func main() {
 	}
 
 	// all factory maps for the loaded kprobes by the ebpf Node Agent
-	tuntapkprobe := kprobe.NewTunTapKprobes(globalErrorKernelHandlerChannel)
-	wgkprobe := kprobe.NewWgKprobes(globalErrorKernelHandlerChannel)
+	tuntapkprobe := kprobe.NewTunTapKprobes(globalErrorKernelHandlerChannel, iface)
+	wgkprobe := kprobe.NewWgKprobes(globalErrorKernelHandlerChannel, iface)
 
 	// host network traffic control for egress traffic to load the ebpf in kernel
 	go tc.TcHandlerEbfpProg(ctx, iface, globalEBPFProgInjectChan)
@@ -466,7 +469,7 @@ func main() {
 	// add the kernel sock map
 	tunnelSocketEventHandler := make(chan events.KernelNetlinkSocket)
 	go tuntapkprobe.ProcessTunnelEvent(ctx, iface, tunnelSocketEventHandler, tc)
-	go tuntapkprobe.AttachNetlinkSockHandler(iface, tunnelSocketEventHandler)
+	go tuntapkprobe.AttachTunTapKprobeHandler(ctx, iface, tunnelSocketEventHandler)
 
 	go events.StartPrometheusMetricExporterServer(agentConfigLoader.GetAgentConfig())
 
@@ -482,7 +485,9 @@ func main() {
 		// sock ops support all kernel socket layer progs (cgroups, sock_ops,skb_filters) etc
 		if err := sockProgs.InjectKernelSockOps(ctx, utils.SOCK_SKB_OP_CODE_EBPF); err != nil {
 			utils.Log("running on Older Kernel version to support Task comm over kernel error inject over sock ops prog ", err.Error())
-			globalErrorKernelHandlerChannel <- err
+			globalErrorKernelHandlerChannel <- agenterr.EmitNewError(
+				err, "SOCK_CGROUP_EGRESS", fmt.Sprintf("Error attaching cgroups/egress program %s", utils.SOCK_SKB_OP_CODE_EBPF),
+			)
 		}
 	}
 
@@ -499,7 +504,7 @@ func main() {
 	// global error channel for the kernel hooks
 	go func() {
 		for err := range globalErrorKernelHandlerChannel {
-			utils.Logger.Error("Error receieved in node agent global error chan ", err.Error())
+			utils.Log(fmt.Sprintf("%+v", err))
 			if err := kernelHooksCleanUp(ctx, &nodeAgentCliOptions, detachKernelHooksOpts, false); err != nil {
 				utils.Logger.Errorf("Error receieved in node agent global error chan closing ... %+v", err)
 				agentCancelFunc()
@@ -568,12 +573,12 @@ func main() {
 	}
 
 	if crypto.DUMP_CA_LSM {
-		CleanCryptoDirs()
+		cleanCryptoDirs()
 	}
 
 	// closing the inference server
 	inferenceOnnxrpcClient.CloseRpcInferenceServer()
-	onnxServer.StopRemoteOnnxInferenceListener()
+	onnxServer.StopRemoteOnnxInferenceListener(nodeAgentCliOptions.OnnxInferenceserverPath)
 
 	streamProducer.CloseProducer()
 	streamConsumer.CloseConsumer()

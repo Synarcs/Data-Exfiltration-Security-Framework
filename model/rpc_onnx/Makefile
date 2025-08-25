@@ -8,8 +8,12 @@ LDFLAGS = -L/usr/local/lib `pkg-config --libs protobuf grpc++`\
 PROTO_PATH = "../../exfil_sec_api/cxx/"
 LIBONNX = -lonnxruntime
 INFER := infer
+
 SRC := main.cc \
        $(PROTO_PATH)/*.cc 
+
+TEST := infer_test.cc 
+TEST_OUT := test
 
 .PHONY: all compile run clean test
 
@@ -20,6 +24,9 @@ compile:
 
 run:
 	sudo ./$(INFER)
+
+test:
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(TEST) -o $(TEST_OUT) $(LIBONNX)
 
 clean:
 	rm -f $(INFER)

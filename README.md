@@ -68,7 +68,7 @@ Threat Event Stream Message Analysis Control Plane Server
 * Exposing C2 implants / APT malwares carrying DNS data exfiltration.
 * Destroying DNS tunnels carrying exfiltration of any protocol over DNS.
 * Destroying DNS tunnels and C2 channels carrying exfiltration of any protocol over DNS through any port irrespective of UDP transport
-* Destroying tunnels in tunnels and reverse forwarded tunnels on compromised machines.
+* Destroying tunnels in tunnels and reverse forwarded tunnels on compromised machines further tunnelled through DNS for remote C2 communication.
 * Enhanced protection for in-build scan and prevention over kernel encapsulation mecahnicsms (VLAN, Tun/Tap, VXLAN).
 * Hardened Security using seccomp, LSM, BPF secured map pinning, and BPF map lockings to protect all eBPF maps inside Linux kernel. 
 * Build to prevent DGA (Domain generation algorithms), metrics with prometheus, grafana and practively adoptable for massively scaled infrastructures.

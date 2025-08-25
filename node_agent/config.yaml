@@ -5,7 +5,7 @@ streamServers:
   port: 9092
 
 # systemd resolved internally forward to physical netdev / wire for upstream resolver, attached kernel egress datapath ebpf filters 
-# note if using stub resolver this must be disabled due to hard dev xmit on loopback and internal eas-west traffic over links in kernel forward to physical wire by resolved
+# note if using stub resolver this must be disabled due to hard dev xmit on loopback and internal easr-west traffic over links in kernel forward to physical wire by resolved
 dnsResolver:
   - host: cssvlab08.uwb.edu
     ip: 10.158.82.55
@@ -44,7 +44,7 @@ rlimitConfig:
 
 
 agent:
-  agentModeAggressive: true # for DNS over UDP kernel eBPF aggresively redirect packet to userspace, for deep inference ensuring no exfiltrated packet over DNS leaves the endpoint 
+  agentModeAggressive: false # for DNS over UDP kernel eBPF aggresively redirect packet to userspace, for deep inference ensuring no exfiltrated packet over DNS leaves the endpoint 
   agentModeIsolated: true # assumes this agent is alone runnin at endpoint and not connected to control plane, the agent does not get any updates or malicious stream process from control plane 
   # the required store time in sec for the caceh to stay hot and prevent the c2 implant bruteforce and bring down the agent 
   ingressMaliciousCacheTTL: 50 

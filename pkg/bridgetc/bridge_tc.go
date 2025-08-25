@@ -14,6 +14,7 @@ import (
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/events"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/netinet"
 	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils"
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/vishvananda/netlink"
@@ -29,12 +30,12 @@ type BridgeTCFilters struct {
 	Interfaces        *netinet.NetIface
 	Hash              *crypto.Hash
 	col               *ebpf.Collection
-	globalErrorChan   chan error
+	globalErrorChan   chan agenterr.AgentError
 }
 
 // netlink brink links at the endpoint , and unique skb hash per netflow
 func NewBridgeTCFilters(ifaceHandler *netinet.NetIface,
-	hash *crypto.Hash, globalErrorChan chan error) *BridgeTCFilters {
+	hash *crypto.Hash, globalErrorChan chan agenterr.AgentError) *BridgeTCFilters {
 	return &BridgeTCFilters{
 		Hash:            hash,
 		Interfaces:      ifaceHandler,
@@ -152,19 +153,25 @@ func (btc *BridgeTCFilters) AttachTcHandlerIngressBridge(ctx context.Context, is
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
 		utils.Log("Error attaching the clsact bpf qdisc for netdev")
-		btc.globalErrorChan <- err
+		btc.globalErrorChan <- agenterr.EmitNewError(
+			err, "BRIDGE_TC", fmt.Sprintf("error attaching egress TC program on bridge interface %s", utils.TC_CONTROL_PROG_BRIDGE_EGRESS),
+		)
 		return
 	}
 
 	if err := btc.AttachTcHandler(ctx, prog, isEgress); err != nil {
 		utils.Log("Error attaching the clsact bpf qdisc for netdev")
-		btc.globalErrorChan <- err
+		btc.globalErrorChan <- agenterr.EmitNewError(
+			err, "BRIDGE_TC", fmt.Sprintf("error attaching TC handler to the custom veth bridge %s", utils.TC_CONTROL_PROG_BRIDGE_INGRESS),
+		)
 		return
 	}
 
 	btc.TCBridgeSocketMap = spec.Maps[events.EXFIL_TC_BRIDGE_CONFIG_MAP]
 	if btc.TCBridgeSocketMap == nil {
-		btc.globalErrorChan <- fmt.Errorf("no Required TC Bridge Socket Map found for %s", events.EXFIL_TC_BRIDGE_CONFIG_MAP)
+		btc.globalErrorChan <- agenterr.EmitNewError(
+			fmt.Errorf("no Required TC Bridge Socket Map found for %s", events.EXFIL_TC_BRIDGE_CONFIG_MAP), "BRIDGE_TC", "",
+		)
 	}
 }
 

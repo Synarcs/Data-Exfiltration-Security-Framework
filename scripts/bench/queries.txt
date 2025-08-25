@@ -1,3 +1,10 @@
 www.amazonaws.com A 
 www.amazonaws.com AAAA 
+www.netflix.com AAAA
+www.netflix.com MX 
+www.bing.com MX 
+www.bing.com AAAA
+www.bing.com A
+
+
 

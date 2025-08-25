@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Synarcs/Data-Exfiltration-Security-Framework/pkg/utils/agenterr"
 	"github.com/cilium/ebpf"
 	"github.com/google/gopacket"
 )
@@ -78,8 +79,14 @@ func GenerateBpfFIlterForDNS(isEgress bool, isudp bool) string {
 	return bpf_filter.String()
 }
 
-func InitGlobalErrorControlChannel() chan error {
-	return make(chan error)
+func VerifyNonDnsTransportPorts(port uint16) bool {
+	return port != DNS_EGRESS_PORT &&
+		port != DNS_EGRESS_MULTICAST_PORT &&
+		port != LLMNR_EGRESS_LOCAL_MULTICAST_PORT
+}
+
+func InitGlobalErrorControlChannel() chan agenterr.AgentError {
+	return make(chan agenterr.AgentError)
 }
 
 func ParseIp(saddr uint32) string {
@@ -171,14 +178,6 @@ func GetIpv4AddressUserSpaceDpIString(id int) string {
 
 func GetIpv4AddressUserspaceDPI(id int) net.IP {
 	return []byte(BRIDGE_IPAM_IPV4_IP + strconv.Itoa(id))
-}
-
-func ExtractTldFromDomain(fqdn string) string {
-	vv := strings.Split(fqdn, ".")
-	if len(vv) <= 2 {
-		return fqdn
-	}
-	return strings.Join(vv[len(vv)-2:], ".")
 }
 
 func CpuArch() string {
