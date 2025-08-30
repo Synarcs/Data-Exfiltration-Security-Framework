@@ -131,6 +131,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 
 ## Disclaimer
 * This project is under heavy development focusing on a longer vision (Kernel enforced dynamic  security for detection and response) a privileged wrapper aiding EDR / XDR solutions, hence expect some bugs around it 😀😀😀
+* This project has no affiliation to any research group at University of Washington, neither with any professors, with research, architecture design, implementation done solely without guidance as an independent researcher.
 
 ## Support 
 <a href="https://www.buymeacoffee.com/vedangparan" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
