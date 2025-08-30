@@ -37,13 +37,12 @@ UserLand
 * Kafka Streams Producers
 * Deep Learning
     * ONNX (Open Neural Network Exchange)
+    * ONNX Model Quantization
     * Tensorflow
     * Dense Neural Networks
 * GRPC over UDS - ONNX Inference RPC servers 
-* Over Cloud Orchestration Security
-    * Kubernetes Client-go
-    * Kubernetes Sidecars, Kubernetes Mutating Webhooks, operatirs
-    * Envoy L7 Proxy, Filter chains, OPA (Open Policy Agents for L7 Security)
+* Filter Chain Proxies for Segmented DPI
+    * Envoy L7 Proxy, Custom L7 Filter chains paired with kernel sock parser eBPF DPI
 
 ## Distributed Infrastructure
 DNS Network Topologies
@@ -74,12 +73,12 @@ Threat Event Stream Message Analysis Control Plane Server
 * Build to prevent DGA (Domain generation algorithms), metrics with prometheus, grafana and practively adoptable for massively scaled infrastructures.
 * Support to integrate itself with any XDR / EDR solutions providie metrics for centralized enterprise monitoring tools.
 * Modular design to integrate across several legacy and modern cloud-native DNS topologies.
-* Robust adaptable to modern evolving threats and massively horizontally scaled data planes, with Kafka threat events updating malicious domain cache in userspace across each node in data plane. 
+* Robust adaptable to modern evolving threats and massively scalable for enterprise data planes, with Kafka threat events updating malicious domain cache in userspace across and security policies inside kernel across each node in data plane.
 
 ## Features In Development
 * Rate Limiting
     * Malicious / Suspicious Requests per second window
-        Implementation of Token Bucket Algorithm for rate-limiting DNS traffic over kernel TC egress QDISC (bpf_timer), with refill rate equals 1 sec kernel time-window per-cpu reference.
+        Implementation of Token Bucket Algorithm for rate-limiting DNS traffic over kernel TC egress QDISC (bpf_timer), with refill rate equals 1 sec kernel time-window per-cpu reference pinned reference per CPU.
     * Improve the DNS Volume base rate limiting
 * Zero Trust Architecture with Dual Signatures and Mutual Authentication for eBPF programs loading in cloud distributed systems
 	* Stage 1: Control Plane ↔ Data Plane
@@ -120,7 +119,7 @@ eBPF node agent rinning over host ns, to fully thwart data breach by killing mal
 * Control Plane: ``` infrastructure/controller.sh ```
 
 ## WhitePaper and supporting Paper
-* [Security Framewok WhitePaper](https://github.com/Synarcs/DNSObelisk_Report) provides detailed internals of the security framework (the whitepaper is in process to be formelly published at upcoming NSDI, ACM and other research conferences).
+* [Security Framewok WhitePaper](https://github.com/Synarcs/DNSObelisk_Report) provides detailed internals of the security framework (the whitepaper is in process to be formelly published at upcoming USENIX Security, ACM and other security conferences).
 
 ## Author
 - [Vedang Parasnis (Synarcs)](https://github.com/Synarcs/)
