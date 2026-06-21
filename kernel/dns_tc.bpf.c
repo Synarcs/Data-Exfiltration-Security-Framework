@@ -64,9 +64,9 @@
 
 #define IP_DST_OFF (ETH_HLEN + offsetof(struct iphdr, daddr))
 #define IP_SRC_OFF (ETH_HLEN + offsetof(struct iphdr, saddr))
-#define IP_CHECK_FF (ETH_HLEN + offsetof(struct iphdr, check))
 
-#define IP_CHECK_FF_V6 (ETH_HLEN + offsetof(struct ipv6hdr, check))
+#define IP_FRAG_OFF (ETH_HLEN + offsetof(struct iphdr, frag_off))
+#define IP_CHECK_FF (ETH_HLEN + offsetof(struct iphdr, check))
 
 #define UDP_CHECK_FF (ETH_HLEN + offsetof(struct udphdr, check))
 #define TCP_CHECK_FF (ETH_HLEN + offsetof(struct tcphdr, check))
@@ -303,7 +303,7 @@ struct dns_volume_stats {
         __type(value, struct dns_volume_stats);
         __uint(max_entries, 1);
     } exfil_security_egress_tb_rate_limit_map SEC(".maps");
-#endif 
+#endif
 
 // Parse the RAW SKB for query classes 
 #define EXFIL_SECURITY_FILTER_DNS_QUERY_CLASS(__dns_query_class) \ 
@@ -423,9 +423,7 @@ struct dns_volume_stats {
     SKB Random mark per netflow prior TC redirect to rx queues for agent owned bridge netdev'x rx queues 
 */
 #define SKB_RANDOM_MARK_PER_NETFLOW(__skb, __mark_config)                     \
-        do {                                                                  \
-            __mark_skb_packet_buffer(__skb, __mark_config == NULL ? REDIRECT_SKB_MARK : config->KernelTCSKBMark);\
-        } while(0);
+        __mark_skb_packet_buffer(__skb, __mark_config == NULL ? REDIRECT_SKB_MARK : config->KernelTCSKBMark);\
 
     
 #define READ_NETLINK_AGENT_LOADED_CONFIG(__skb, __dest_addr_route, __br_index) \
@@ -521,7 +519,7 @@ __always_inline __u8 parse_udp(struct skb_cursor *skb, bool isIpv4) {
 }
 
 static 
-__always_inline __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
+__always_inline __maybe_unused __u8 parse_tcp(struct  skb_cursor *skb, bool isIpv4) {
     struct tcphdr *tcp = skb->data + sizeof(struct ethhdr) + (isIpv4 ? sizeof(struct iphdr) : sizeof(struct ipv6hdr));
     if ((void *)(tcp+ 1) > skb->data_end) return 0;
 
@@ -1198,11 +1196,11 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
     // qeuries section 
     __u16 qd_count = bpf_ntohs(dns_header->qd_count);
     __u16 ans_count = bpf_ntohs(dns_header->ans_count);
-    __u16 auth_count = bpf_ntohs(dns_header->auth_count);   
+    __u16 auth_count = bpf_ntohs(dns_header->auth_count);
     __u16 add_count = bpf_ntohs(dns_header->add_count);
 
     //bpf_printk("NON STANDARD Port used over similar dns standard header further DPI %u %u", qd_count, ans_count);
-    if (qd_count > (1 << 8) - 1 || ans_count  > (1 << 8) - 1 || auth_count > (1 << 8) - 1 || add_count >  (1 << 8) - 1) {
+    if (qd_count > DNS_RECORDS_LIMITS - 1 || ans_count  > DNS_RECORDS_LIMITS - 1 || auth_count > DNS_RECORDS_LIMITS - 1 || add_count > DNS_RECORDS_LIMITS - 1) {
         // the dns payload is non standard port and the protcol encapsulated used is not dns 
         return OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_UNDETECTED;
     }
@@ -1221,7 +1219,7 @@ __always_inline __u8 parse_dns_payload_non_standard_port(struct skb_cursor * skb
         if (dns_header_flags.rcode >= 24) return 1;
 
         return OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_DETECTED;
-    }else if (ans_count > 0 && ans_count <= (1 << 8) - 1)
+    }else if (ans_count > 0 && ans_count <= DNS_RECORDS_LIMITS - 1)
         return OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_UNDETECTED; // the tc egress is a egress control traffic filter hte node does not belong to a dns server to have answer at egress 
     // let the kernel do no standard chcek inside kernel sicne normal tunnelling over this port is never done by standard udp traffic 
     return OVERLAY_SUSPICIOUS_DNS_PORT_TRANSFER_DETECTED;
@@ -2057,10 +2055,13 @@ static
 __always_inline int ip_is_fragment(struct __sk_buff *skb, __u32 nhoff){
 	__u16 frag_off;
 
-	bpf_skb_load_bytes(skb, nhoff + offsetof(struct iphdr, frag_off), &frag_off, 2);
+	bpf_skb_load_bytes(skb, IP_FRAG_OFF, &frag_off, 2);
 	frag_off = bpf_ntohs(frag_off);
 	return frag_off & (IP_MF | IP_OFFSET);
 }
+
+#if 0
+#endif
 
 
 // the agent loader in userspace will load the direction via bpf link or tc ip route2 prio or tcx 
@@ -2470,7 +2471,7 @@ int exfil_sec(struct __sk_buff *skb){
 		            EXFIL_SECURITY_VXLAN_STANDARD_PORT_DPI(cursor, skb);
         		#endif
 
-                // ports owned by the ebpf agent in userspace for sock for enhanced DPI from kernel TCP streams
+                // ports owned by the ebpf agecnt in userspace for sock for enhanced DPI from kernel TCP streams
                 #if ENVOY_DPI_WASM_TCP_FILTER
                     SKIP_EBPF_AGENT_PORT_DEEP_SCAN(bpf_htons(udp->dest));
                 #endif 

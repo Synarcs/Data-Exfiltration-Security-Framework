@@ -55,6 +55,11 @@ enum OVERLAY_DNS_RANDOM_UDP_PORT {
 #define SUBDOMAIN_RANGE_LABEL_CHAR_SCAN true
 #define SUBDOMAIN_RANGE_LABEL_LENGTH_FILTER true
 
+// (all the record limits for each dns (auth, add, qd count))
+#ifndef DNS_RECORDS_LIMITS 
+    #define DNS_RECORDS_LIMITS 1 << 8 
+#endif
+
 
 //                               1  1  1  1  1  1
 // 0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5

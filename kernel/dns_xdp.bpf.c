@@ -61,7 +61,7 @@ struct exfill_ingress_security_layer7_tld  {
     __type(key, __u32); // dns query
     __type(value, __u8); // boolean flag for user space to understand if the id is in map it need ingress DPI based on tld or other factor 
     __uint(max_entries, 1 << 12);
-} exfil_security_detected_c2c_tld SEC(".maos");
+} exfil_security_detected_c2c_tld SEC(".maps");
 
 struct xdp_parse {
     __u8 (*parse_dns_header) (void * ,struct __sk_buff *, bool, bool);

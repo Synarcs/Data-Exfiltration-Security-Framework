@@ -68,8 +68,9 @@ struct exfill_security_kill_proc_tree {
 static 
 __always_inline struct kill_proc_mal_payload * is_process_found_malicious(__u32 proc_id) {
     struct kill_proc_mal_payload * mal_detected_proc = bpf_map_lookup_elem(&exfil_security_egress_proc_mal, &proc_id);
-    if (!mal_detected_proc) return NULL;
-
+    if (!mal_detected_proc) 
+        return NULL;
+        
     return mal_detected_proc;
 }
 
