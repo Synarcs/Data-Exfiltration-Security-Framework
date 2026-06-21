@@ -88,7 +88,7 @@ run-agent:
 
 build-run-pidns:
 	@echo "building and runnign eBPF node_agent with isolated process namespace for security"
-	make build 
+	make compile-node-agent
 	sudo unshare --pid --fork ./main
 
 # for local testing to check compatibility of loaded onnx model ran by thte python ort inferencer

@@ -46,8 +46,8 @@ type (
 		DnsPacketGen    *model.DnsPacketGen
 		OnnxLoadedModel *model.OnnxModel
 
-		TcTunnelNonStandardPortScan     *TCCloneTunnel             // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
-		GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError // handles all control channel created by main to kill any kernel code if found runtime panics
+		TcTunnelNonStandardPortScan     *TCCloneTunnel              // sniffer routine for processing clone redirect traffic to precess exfiltrated traffic over non stanard ports for UDP / TCP transport
+		GlobalErrorKernelHandlerChannel chan<- *agenterr.AgentError // handles all control channel created by main to kill any kernel code if found runtime panics
 
 		IsEgressXdpSupport   bool
 		TcTracepointHandlers *tracepoint.ExfilSecTreacePoint // store all the tracepoint attached and related to tc handlers
@@ -72,7 +72,7 @@ type (
 		Iface                           *netinet.NetIface
 		OnnxModel                       *model.OnnxModel
 		StreamClient                    *stream.StreamProducer
-		GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError
+		GlobalErrorKernelHandlerChannel chan<- *agenterr.AgentError
 		AgentHash                       *crypto.Hash
 		AgentConfig                     conf.AgentConfig
 		CryptoAgentLSMHandler           *crypto.CryptoBpfLsm
@@ -97,6 +97,7 @@ var KerneleBPFMapMonitorPollChannel map[string]chan string = make(map[string]cha
 
 // a builder facotry for the tc load and process all tc egress traffic over the different filter chain which node agent is running
 func NewTcEgressFactory(config *KernelTcInjectConfig) (*TCHandler, error) {
+	// uses the kernel AF_PACKET or AF_XDP sockets to get fd / tx umem rings for af_xdp inside kernel
 	dnsPacketGen, err := model.NewDnsPacketResendUtils(&model.DnsPacketGenConfig{
 		Iface:        config.Iface,
 		OnnxModel:    config.OnnxModel,
@@ -611,7 +612,7 @@ func (tc *TCHandler) TcHandlerEbfpProg(ctx context.Context, iface *netinet.NetIf
 Start preventing DNS exfiltration over random UDP port with kernel TC aggresively scanning SKB L7 payload for potential SKB packets with DNS exfiltrated data
 */
 func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveStandardDNSPortUDPTransfer bool) *TCCloneTunnel {
-	tc_tunnel := NewTcTunnelFactory(
+	return NewTcTunnelFactory(
 		&TCCloneTunnelConfig{
 			PhysicalTcInterfaceeBPFProgCollection: tc.TcCollection,
 			Iface:                                 tc.Interfaces,
@@ -621,8 +622,6 @@ func (tc *TCHandler) InitTCTunnelExfilPrevention(ctx context.Context, isPassiveS
 			isPassiveStandardDNSPortUDPTransfer:   isPassiveStandardDNSPortUDPTransfer,
 			InferenceServerSock:                   tc.OnnxLoadedModel.InferenceServerSock,
 		})
-
-	return tc_tunnel
 }
 
 // Start polling on the ring buffers in kernel for tunnel overlay exfiltration attempts

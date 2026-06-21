@@ -46,7 +46,7 @@ type TunTapKprobes struct {
 	Link              link.Link
 }
 
-func NewTunTapKprobes(globalErrorKernelChan chan agenterr.AgentError, iface *netinet.NetIface) *TunTapKprobes {
+func NewTunTapKprobes(globalErrorKernelChan chan<- *agenterr.AgentError, iface *netinet.NetIface) *TunTapKprobes {
 	tkprobes := &TunTapKprobes{}
 	tkprobes.GlobalErrorKernelChan = globalErrorKernelChan
 	tkprobes.Iface = iface

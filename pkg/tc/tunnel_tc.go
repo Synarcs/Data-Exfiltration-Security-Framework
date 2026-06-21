@@ -40,7 +40,7 @@ import (
 type (
 	TCCloneTunnel struct {
 		IfaceHandler                          *netinet.NetIface
-		GlobalKernelErrorChannel              chan<- agenterr.AgentError
+		GlobalKernelErrorChannel              chan<- *agenterr.AgentError
 		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
 		StreamClient                          *stream.StreamProducer
 		Onnx                                  *model.OnnxModel
@@ -55,7 +55,7 @@ type (
 	TCCloneTunnelConfig struct {
 		PhysicalTcInterfaceeBPFProgCollection *ebpf.Collection
 		Iface                                 *netinet.NetIface
-		GlobalErrorChannel                    chan<- agenterr.AgentError
+		GlobalErrorChannel                    chan<- *agenterr.AgentError
 		StreamClient                          *stream.StreamProducer
 		Onnx                                  *model.OnnxModel
 		isPassiveStandardDNSPortUDPTransfer   bool
@@ -117,7 +117,7 @@ var (
 
 func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPort uint16) (*events.DnsMapPayloadNonOverlayPort, error) {
 
-	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is syncrhonized
+	// ensure even though parallel sniff across go routines happen the kernel map update over this port transfer is synchronized
 	kernelMaliciousTransferPortDelete.Lock()
 	defer kernelMaliciousTransferPortDelete.Unlock()
 
@@ -133,7 +133,7 @@ func (tun *TCCloneTunnel) EnsureCleanUpTunnelPortMap(tunnelMap *ebpf.Map, srcPor
 }
 
 func (tun *TCCloneTunnel) UpdateMaliciousTransferProcessMapKernelDropClean(procId uint32, dport uint16) {
-	// will be called since the process was sigkilled from node agent in user space or via kernel syscall layer all entries for this must be cleaned
+	// will be called since the process was SIGKILL from node agent in user space or via kernel syscall layer all entries for this must be cleaned
 	cleanMapMaliciousProcIdLock.Lock()
 	defer cleanMapMaliciousProcIdLock.Unlock()
 

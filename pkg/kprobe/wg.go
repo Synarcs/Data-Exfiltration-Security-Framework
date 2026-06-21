@@ -25,9 +25,11 @@ type WireguardKprobes struct {
 	WireguardSockprog *ebpf.Program
 }
 
-func NewWgKprobes(globalErrorChannel chan agenterr.AgentError, iface *netinet.NetIface) *WireguardKprobes {
-	wg := &WireguardKprobes{}
-	wg.GlobalErrorKernelChan = globalErrorChannel
-	wg.Iface = iface
-	return &WireguardKprobes{}
+func NewWgKprobes(globalErrorChannel chan<- *agenterr.AgentError, iface *netinet.NetIface) *WireguardKprobes {
+	return &WireguardKprobes{
+		KprobesEDRAgentComm: KprobesEDRAgentComm{
+			GlobalErrorKernelChan: globalErrorChannel,
+			Iface:                 iface,
+		},
+	}
 }

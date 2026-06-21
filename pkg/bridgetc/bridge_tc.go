@@ -30,12 +30,12 @@ type BridgeTCFilters struct {
 	Interfaces        *netinet.NetIface
 	Hash              *crypto.Hash
 	col               *ebpf.Collection
-	globalErrorChan   chan agenterr.AgentError
+	globalErrorChan   chan<- *agenterr.AgentError
 }
 
 // netlink brink links at the endpoint , and unique skb hash per netflow
 func NewBridgeTCFilters(ifaceHandler *netinet.NetIface,
-	hash *crypto.Hash, globalErrorChan chan agenterr.AgentError) *BridgeTCFilters {
+	hash *crypto.Hash, globalErrorChan chan *agenterr.AgentError) *BridgeTCFilters {
 	return &BridgeTCFilters{
 		Hash:            hash,
 		Interfaces:      ifaceHandler,

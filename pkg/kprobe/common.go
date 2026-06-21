@@ -15,7 +15,7 @@ import (
 )
 
 type KprobesEDRAgentComm struct {
-	GlobalErrorKernelChan chan agenterr.AgentError
+	GlobalErrorKernelChan chan<- *agenterr.AgentError
 	Iface                 *netinet.NetIface // netlink fetched from kernel
 }
 

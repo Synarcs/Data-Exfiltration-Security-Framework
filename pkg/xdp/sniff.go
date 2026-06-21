@@ -29,7 +29,7 @@ type IngressSniffHandler struct {
 	DnsFeatures  *model.DNSFeatures
 	StreamClient *stream.StreamProducer
 
-	GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError // handles all control channel created by main to kill any kernel code if found runtime panics
+	GlobalErrorKernelHandlerChannel chan<- *agenterr.AgentError // handles all control channel created by main to kill any kernel code if found runtime panics
 	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 
@@ -37,7 +37,7 @@ type IngressSnifferConfig struct {
 	Iface                           *netinet.NetIface
 	OnnxModel                       *model.OnnxModel
 	StreamClient                    *stream.StreamProducer
-	GlobalErrorKernelHandlerChannel chan<- agenterr.AgentError
+	GlobalErrorKernelHandlerChannel chan<- *agenterr.AgentError
 	InferenceServerSock             *inference.DNSOnnxInferenceService
 }
 

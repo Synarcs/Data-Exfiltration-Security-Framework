@@ -17,6 +17,10 @@ const (
 	STATIC_BENIGN_INFERENCING // node agent found no further deep lexical analysis required its benign and can be procceed to leave the user space
 )
 
+const (
+	DNS_FEATURES_COUNT = 1 << 3
+)
+
 type OnnxModel struct {
 	TopDomainsDNSServer *utils.TopDomains
 	InferenceServerSock *inference.DNSOnnxInferenceService // grpc socket l7 client connected to onnx inference server over UDS
@@ -38,7 +42,7 @@ func GenerateFloatVectors(features []DNSFeatures, onnx *OnnxModel) [][]float32 {
 			continue
 		} else {
 			// check if the tld is not already blacklisted and present in node egress LRU cache
-			perLabelFeatures := make([]float32, 8)
+			perLabelFeatures := make([]float32, DNS_FEATURES_COUNT)
 			perLabelFeatures[0] = float32(features[i].TotalChars)
 			perLabelFeatures[1] = float32(features[i].TotalCharsInSubdomain)
 			perLabelFeatures[2] = float32(features[i].NumberCount)
