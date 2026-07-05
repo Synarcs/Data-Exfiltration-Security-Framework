@@ -31,6 +31,14 @@ var vniPackTransferCount map[int]int = make(map[int]int)
 
 type VxlandEncapListner struct{}
 
+// use this to send an sig kill for pcap to clean packet socket over bpf from kernel sed for sniffing, especially cleaning the fd  from the map
+var (
+	dport_tunnel_pcap                 map[uint16]chan bool = make(map[uint16]chan bool)
+	dport_tunnel_pcap_rwlock          sync.RWMutex
+	isdport_chan_cleaned_sniff        map[uint16]chan bool = make(map[uint16]chan bool)
+	isdport_chan_cleaned_sniff_rwlock sync.RWMutex
+)
+
 const (
 	POLL_TICKER_VXLAN_DURATION      = 10 * time.Minute // poll the vxlan encap tunnel every 10 minute interval
 	POLL_TICKER_VXLAN_PCAP_DURATION = 5 * time.Minute  // poll the pcap handle over every 5 minute interval
@@ -195,16 +203,35 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 	return nil
 }
 
-// Ensure there are cancellable context or deadline to ensure optimized controlled over go routines and their cancellation
-func (tc *TCHandler) SniffPcapVxlanTrafficPort(event *events.DPIVxlanKernelEncapEvent,
-	controlChannelMap map[uint16]chan bool, isdport_chan_cleaned_sniff map[uint16]chan bool, ebpfMap *ebpf.Map) error {
-	runtime.LockOSThread()
+func (tc *TCHandler) getdportchanRLock(event *events.DPIVxlanKernelEncapEvent) chan bool {
+	isdport_chan_cleaned_sniff_rwlock.RLock()
+	defer isdport_chan_cleaned_sniff_rwlock.Unlock()
+	return isdport_chan_cleaned_sniff[event.Transport_Dest_Port]
+}
 
-	if _, fd := controlChannelMap[event.Transport_Dest_Port]; fd {
+// Ensure there are cancellable context or deadline to ensure optimized controlled over go routines and their cancellation
+func (tc *TCHandler) SniffPcapVxlanTrafficPort(
+	event *events.DPIVxlanKernelEncapEvent,
+	ebpfMap *ebpf.Map,
+) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	dport_tunnel_pcap_rwlock.Lock()
+	if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; fd {
 		// there is already an pcap live handler snifing traffic over pcap
+		dport_tunnel_pcap_rwlock.Unlock()
 		return nil
 	}
-	controlChannelMap[event.Transport_Dest_Port] = make(chan bool)
+	dport_tunnel_pcap_rwlock.Lock()
+
+	defer func() {
+		utils.Log("free the port for next sniff")
+		dport_tunnel_pcap[event.Transport_Dest_Port] <- true
+		dport_tunnel_pcap_rwlock.Unlock()
+	}()
+
+	dport_tunnel_pcap[event.Transport_Dest_Port] = make(chan bool)
 	// for now get the root physical based on egress if_index  later ensure it maps to skb egress link from kernel
 	utils.Log("Init Pcap hanle to live sniff for deep user-sapce inspacetion for any exfil traffic in vxlan encap", event)
 
@@ -234,10 +261,6 @@ func (tc *TCHandler) SniffPcapVxlanTrafficPort(event *events.DPIVxlanKernelEncap
 		}
 		go tc.DeepScanVxlanPacketencap(pack, ebpfMap)
 	}
-	defer func() {
-		utils.Log("free the port for next sniff")
-		controlChannelMap[event.Transport_Dest_Port] <- true
-	}()
 
 	return nil
 }
@@ -250,10 +273,6 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 		return nil
 	}
 
-	// use this to send an sig kill for pcap to clean packet socket over bpf from kernel sed for sniffing, especially cleaning the fd  from the map
-	var dport_tunnel_pcap map[uint16]chan bool = make(map[uint16]chan bool)
-	var isdport_chan_cleaned_sniff map[uint16]chan bool = make(map[uint16]chan bool)
-
 	ringbuffer, err := ringbuf.NewReader(vxlanEncapMap)
 	if err != nil {
 		return err
@@ -261,16 +280,23 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 
 	defer ringbuffer.Close()
 
-	closeSniffSignalHandler := func(event *events.DPIVxlanKernelEncapEvent, closeSniffSignalMap map[uint16]chan bool) {
-		// runs as the root cleanup sock event to ensure the associated fd are cleaned from the kernel
+	closeSniffSignalHandler := func(event *events.DPIVxlanKernelEncapEvent) {
+		var rxPollerLock chan bool = tc.getdportchanRLock(event)
+
 		for {
 			select {
-			case <-closeSniffSignalMap[event.Transport_Dest_Port]:
+			case <-rxPollerLock:
 				// we dont need mutex here since kernel own multiple fd per socket and at a time its not possible we sniff over same socket across multiple goroutines
-				close(closeSniffSignalMap[event.Transport_Dest_Port])
-				delete(closeSniffSignalMap, event.Transport_Dest_Port)
+				// cannot deadlock due to released lock prevent each dport fd starvation
+				dport_tunnel_pcap_rwlock.Lock()
+				close(dport_tunnel_pcap[event.Transport_Dest_Port])
+				delete(dport_tunnel_pcap, event.Transport_Dest_Port)
+				dport_tunnel_pcap_rwlock.Unlock()
+
+				isdport_chan_cleaned_sniff_rwlock.Lock()
 				isdport_chan_cleaned_sniff[event.Transport_Dest_Port] = make(chan bool)
 				isdport_chan_cleaned_sniff[event.Transport_Dest_Port] <- true
+				isdport_chan_cleaned_sniff_rwlock.Unlock()
 			default:
 				time.Sleep(time.Second)
 			}
@@ -293,23 +319,30 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 			err = binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
+				continue
 			}
+
+			var rxPollerLock chan bool = tc.getdportchanRLock(&event)
 
 			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
-			case <-isdport_chan_cleaned_sniff[event.Transport_Dest_Port]:
+			case <-rxPollerLock:
 				// it mean the sniff channel was cleaned post sniff interval
 				// start interval based sniffing again to sniff vxlan port for any vxlan encap traffic
+
+				isdport_chan_cleaned_sniff_rwlock.Lock()
 				close(isdport_chan_cleaned_sniff[event.Transport_Dest_Port])
 				delete(isdport_chan_cleaned_sniff, event.Transport_Dest_Port)
-				go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
+				isdport_chan_cleaned_sniff_rwlock.Unlock()
+
+				go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 			default:
 				if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; !fd {
 					utils.Log("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
-					go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
+					go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 				}
 			}
-			go closeSniffSignalHandler(&event, dport_tunnel_pcap)
+			go closeSniffSignalHandler(&event)
 		} else {
 			utils.Log("Polling the ring buffer for the x86 big endian systems")
 			err = binary.Read(bytes.NewReader(record.RawSample), binary.BigEndian, &event)
@@ -317,18 +350,28 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 
+			var rxPollerLock chan bool = tc.getdportchanRLock(&event)
+
 			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
-			case <-isdport_chan_cleaned_sniff[event.Transport_Dest_Port]:
+			case <-rxPollerLock:
 				// it mean the sniff channel was cleaned post sniff interval
 				// start interval based sniffing again to sniff vxlan port for any vxlan encap traffic
-				go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
+
+				isdport_chan_cleaned_sniff_rwlock.Lock()
+				close(isdport_chan_cleaned_sniff[event.Transport_Dest_Port])
+				delete(isdport_chan_cleaned_sniff, event.Transport_Dest_Port)
+				isdport_chan_cleaned_sniff_rwlock.Unlock()
+
+				go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 			default:
 				if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; !fd {
-					go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
+					utils.Log("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
+
+					go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 				}
 			}
-			go tc.SniffPcapVxlanTrafficPort(&event, dport_tunnel_pcap, isdport_chan_cleaned_sniff, ebpfMap)
+			go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 			utils.Log("Vxland Event polled from kernel non standard port init sniff to ensure the port is not exfiltrating data", event)
 		}
 	}
