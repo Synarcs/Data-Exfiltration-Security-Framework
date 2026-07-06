@@ -203,10 +203,16 @@ func (tc *TCHandler) DeepScanVxlanPacketencap(pack gopacket.Packet, ebpfMap *ebp
 	return nil
 }
 
-func (tc *TCHandler) getdportchanRLock(event *events.DPIVxlanKernelEncapEvent) chan bool {
+func (tc *TCHandler) getdportCleanedchanRLock(event *events.DPIVxlanKernelEncapEvent) chan bool {
 	isdport_chan_cleaned_sniff_rwlock.RLock()
 	defer isdport_chan_cleaned_sniff_rwlock.Unlock()
 	return isdport_chan_cleaned_sniff[event.Transport_Dest_Port]
+}
+
+func (tc *TCHandler) getdportchanRLock(event *events.DPIVxlanKernelEncapEvent) chan bool {
+	dport_tunnel_pcap_rwlock.RLock()
+	defer dport_tunnel_pcap_rwlock.Unlock()
+	return dport_tunnel_pcap[event.Transport_Dest_Port]
 }
 
 // Ensure there are cancellable context or deadline to ensure optimized controlled over go routines and their cancellation
@@ -217,21 +223,24 @@ func (tc *TCHandler) SniffPcapVxlanTrafficPort(
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	dport_tunnel_pcap_rwlock.Lock()
+	dport_tunnel_pcap_rwlock.RLock()
 	if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; fd {
 		// there is already an pcap live handler snifing traffic over pcap
-		dport_tunnel_pcap_rwlock.Unlock()
+		dport_tunnel_pcap_rwlock.RUnlock()
 		return nil
+	} else {
+		dport_tunnel_pcap_rwlock.RUnlock()
 	}
-	dport_tunnel_pcap_rwlock.Lock()
 
 	defer func() {
 		utils.Log("free the port for next sniff")
 		dport_tunnel_pcap[event.Transport_Dest_Port] <- true
-		dport_tunnel_pcap_rwlock.Unlock()
 	}()
 
+	dport_tunnel_pcap_rwlock.Lock()
 	dport_tunnel_pcap[event.Transport_Dest_Port] = make(chan bool)
+	dport_tunnel_pcap_rwlock.Unlock()
+
 	// for now get the root physical based on egress if_index  later ensure it maps to skb egress link from kernel
 	utils.Log("Init Pcap hanle to live sniff for deep user-sapce inspacetion for any exfil traffic in vxlan encap", event)
 
@@ -281,7 +290,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 	defer ringbuffer.Close()
 
 	closeSniffSignalHandler := func(event *events.DPIVxlanKernelEncapEvent) {
-		var rxPollerLock chan bool = tc.getdportchanRLock(event)
+		var rxPollerLock chan bool = tc.getdportCleanedchanRLock(event)
 
 		for {
 			select {
@@ -316,13 +325,13 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 
 		var event events.DPIVxlanKernelEncapEvent
 		if utils.CpuArch() == "arm64" || utils.CpuArch() == "amd64" {
-			err = binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &event)
+			err = binary.Read(bytes.NewBuffer(record.RawSample), binary.LittleEndian, &event)
 			if err != nil {
 				log.Fatalf("Failed to parse event: %v", err)
 				continue
 			}
 
-			var rxPollerLock chan bool = tc.getdportchanRLock(&event)
+			rxPollerLock := tc.getdportCleanedchanRLock(&event)
 
 			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
@@ -337,9 +346,16 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 
 				go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 			default:
+
+				dport_tunnel_pcap_rwlock.RLock()
 				if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; !fd {
 					utils.Log("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
+
+					// relase lock for concurrent fd from other sockt receiver fd process dpi handler
+					dport_tunnel_pcap_rwlock.RUnlock()
 					go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
+				} else {
+					dport_tunnel_pcap_rwlock.RUnlock()
 				}
 			}
 			go closeSniffSignalHandler(&event)
@@ -350,7 +366,7 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 				log.Fatalf("Failed to parse event: %v", err)
 			}
 
-			var rxPollerLock chan bool = tc.getdportchanRLock(&event)
+			var rxPollerLock chan bool = tc.getdportCleanedchanRLock(&event)
 
 			utils.Log("Polled an kernel event for vxlan encap from the kernel ringbuffer ", event.Transport_Dest_Port)
 			select {
@@ -365,10 +381,16 @@ func (tc *TCHandler) PollVxlanRingBuffer(ctx context.Context, ebpfMap *ebpf.Map)
 
 				go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
 			default:
+
+				dport_tunnel_pcap_rwlock.RLock()
 				if _, fd := dport_tunnel_pcap[event.Transport_Dest_Port]; !fd {
 					utils.Log("Start sniffing the port for vxlan encap traffic since the interval clean not found in map")
 
+					// relase lock for concurrent fd from other sockt receiver fd process dpi handler
+					dport_tunnel_pcap_rwlock.RUnlock()
 					go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
+				} else {
+					dport_tunnel_pcap_rwlock.RUnlock()
 				}
 			}
 			go tc.SniffPcapVxlanTrafficPort(&event, ebpfMap)
